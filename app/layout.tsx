@@ -16,6 +16,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "RefLab",
   description: "Referee Decision Lab",
+  applicationName: "RefLab",
+  appleWebApp: {
+    capable: true,
+    title: "RefLab",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({
