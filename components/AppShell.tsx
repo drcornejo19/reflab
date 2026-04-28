@@ -26,8 +26,8 @@ const navItems: NavItem[] = [
   { label: "Entrenamiento", href: "/training", icon: CircleAlert },
   { label: "Modo VAR", href: "/training/var", icon: MonitorCheck },
   { label: "Modo Inglés", href: "/training/english", icon: Languages },
-  { label: "Biblioteca IFAB", href: "/ifab", icon: BookOpen },
-  { label: "Exámenes", href: "/exam", icon: ShieldCheck },
+  { label: "Biblioteca IFAB", href: "/learning", icon: BookOpen },
+{ label: "Exámenes", href: "/training/exam", icon: ShieldCheck },
   { label: "Estadísticas", href: "/stats", icon: ChartNoAxesCombined },
   { label: "Ranking", href: "/ranking", icon: Trophy },
 
