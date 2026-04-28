@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "RefLab",
   description: "Referee Decision Lab",
+  manifest: "/manifest.json",
   applicationName: "RefLab",
   appleWebApp: {
     capable: true,
