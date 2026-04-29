@@ -36,10 +36,10 @@ const navItems: NavItem[] = [
 ];
 
 const mobileItems = [
-  { label: "Inicio", href: "/dashboard", icon: Home },
+  { label: "Inicio", href: "/mobile-dashboard", icon: Home },
   { label: "Train", href: "/training", icon: CircleAlert },
-  { label: "VAR", href: "/training/var", icon: MonitorCheck },
-  { label: "Stats", href: "/stats", icon: ChartNoAxesCombined },
+  { label: "VAR", href: "/mobile-var", icon: MonitorCheck },
+  { label: "Stats", href: "/mobile-stats", icon: ChartNoAxesCombined },
   { label: "Perfil", href: "/profile", icon: User },
 ];
 
@@ -70,7 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className="min-h-screen px-4 pb-28 pt-20 lg:ml-[260px] lg:px-8 lg:pb-8 lg:pt-8">
-        <div className="mx-auto w-full max-w-[1180px]">{children}</div>
+        <div className="mx-auto w-full lg:max-w-[1180px]">{children}</div>
       </main>
 
       <nav className="fixed bottom-0 left-0 z-50 grid h-20 w-full grid-cols-5 border-t border-white/10 bg-[#050b12]/95 px-2 pb-2 pt-2 backdrop-blur lg:hidden">
