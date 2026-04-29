@@ -80,14 +80,13 @@ export default function DashboardPage() {
 
   const criteria: Criterion[] = useMemo(() => {
     return [
-      { label: "DOGSO", value: topicAvg(attempts, "DOGSO") },
+      
       { label: "Manos", value: topicAvg(attempts, "Handball") },
       { label: "Faltas tácticas", value: topicAvg(attempts, "SPA") },
       { label: "Disputas", value: percent(attempts, "technical_correct") },
       { label: "Fuera de juego", value: topicAvg(attempts, "Offside") },
-      { label: "Entradas", value: percent(attempts, "discipline_correct") },
-      { label: "Conducta", value: percent(attempts, "var_correct") },
-      { label: "Área penal", value: topicAvg(attempts, "Penalty area") },
+      { label: "VAR", value: percent(attempts, "var_correct") },
+      
     ];
   }, [attempts]);
 
