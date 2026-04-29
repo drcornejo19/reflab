@@ -9,7 +9,7 @@ export default function SplashPage() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      router.replace("/dashboard");
+      router.replace("/home");
     }, 2600);
 
     return () => clearTimeout(timer);
@@ -26,13 +26,7 @@ export default function SplashPage() {
           width={1125}
           height={2436}
           priority
-          className="
-            h-auto
-            max-h-[92vh]
-            w-auto
-            max-w-[92vw]
-            object-contain
-          "
+          className="h-auto max-h-[92vh] w-auto max-w-[92vw] object-contain"
         />
       </div>
     </main>
