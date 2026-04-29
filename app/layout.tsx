@@ -16,12 +16,16 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "RefLab",
   description: "Referee Decision Lab",
-  manifest: "/manifest.json",
   applicationName: "RefLab",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     title: "RefLab",
     statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/icon-192.png",
   },
 };
 
