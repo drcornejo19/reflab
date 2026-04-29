@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "RefLab",
     short_name: "RefLab",
     description: "Referee Decision Lab",
-    start_url: "/",
+    start_url: "/dashboard",
     scope: "/",
     display: "standalone",
     background_color: "#030712",
