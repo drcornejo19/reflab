@@ -1,143 +1,137 @@
 "use client";
 
-import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import {
-  Home,
-  CircleAlert,
-  MonitorCheck,
-  Languages,
-  BookOpen,
-  ShieldCheck,
-  ChartNoAxesCombined,
-  Trophy,
-  User,
-  Clapperboard,
-} from "lucide-react";
+import { useUser } from "@clerk/nextjs";
+import { AppShell } from "@/components/AppShell";
+import { supabase } from "@/lib/supabase";
+import { Flame, Star, ClipboardList, BarChart3 } from "lucide-react";
 
-type NavItem = {
-  label: string;
-  href: string;
-  icon: any;
+type Attempt = {
+  id: string;
+  score: number;
+  topic: string | null;
+  created_at: string;
+  technical_correct: boolean | null;
+  restart_correct: boolean | null;
+  discipline_correct: boolean | null;
+  var_correct: boolean | null;
 };
 
-const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: Home },
-  { label: "Entrenamiento", href: "/training", icon: CircleAlert },
-  { label: "Modo VAR", href: "/training/var", icon: MonitorCheck },
-  { label: "Modo Inglés", href: "/training/english", icon: Languages },
-  { label: "Biblioteca IFAB", href: "/learning", icon: BookOpen },
-  { label: "Exámenes", href: "/training/exam", icon: ShieldCheck },
-  { label: "Estadísticas", href: "/stats", icon: ChartNoAxesCombined },
-  { label: "Ranking", href: "/ranking", icon: Trophy },
-  { label: "Admin Clips", href: "/admin-clips", icon: Clapperboard },
-  { label: "Mi Perfil", href: "/profile", icon: User },
-];
+export default function MobileDashboardPage() {
+  const { user, isLoaded } = useUser();
 
-const mobileItems = [
-  { label: "Inicio", href: "/mobile-dashboard", icon: Home },
-  { label: "Train", href: "/training", icon: CircleAlert },
-  { label: "VAR", href: "/training/var", icon: MonitorCheck },
-  { label: "Stats", href: "/stats", icon: ChartNoAxesCombined },
-  { label: "Perfil", href: "/profile", icon: User },
-];
+  const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [loading, setLoading] = useState(true);
 
-export function AppShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  useEffect(() => {
+    async function loadData() {
+      if (!isLoaded || !user) return;
+
+      const { data } = await supabase
+        .from("attempts")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      setAttempts(data ?? []);
+      setLoading(false);
+    }
+
+    loadData();
+  }, [isLoaded, user]);
+
+  const stats = useMemo(() => {
+    const total = attempts.length;
+
+    const avg =
+      total > 0
+        ? Math.round(attempts.reduce((acc, a) => acc + a.score, 0) / total)
+        : 0;
+
+    return {
+      total,
+      avg,
+      streak: Math.min(total, 7),
+    };
+  }, [attempts]);
 
   return (
-    <div className="min-h-screen bg-[#050b12] text-white">
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[260px] border-r border-white/10 bg-[#050b12] p-5 lg:block">
-        <Logo />
+    <AppShell>
+      <div className="max-w-md mx-auto space-y-6">
 
-        <nav className="mt-10 space-y-2">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              active={
-                pathname === item.href ||
-                (item.href !== "/dashboard" && pathname.startsWith(item.href))
-              }
-            />
-          ))}
-        </nav>
-      </aside>
+        {/* HEADER */}
+        <div className="flex items-center gap-3">
+          <img src="/rf-logo.png" className="w-10 h-10" />
+          <div>
+            <h1 className="text-xl font-black">¡Bienvenido, Árbitro!</h1>
+            <p className="text-sm text-zinc-400">
+              Entrená tus decisiones.
+            </p>
+          </div>
+        </div>
 
-      <header className="fixed left-0 top-0 z-40 flex h-16 w-full items-center justify-between border-b border-white/10 bg-[#050b12]/95 px-4 backdrop-blur lg:hidden">
-        <Logo compact />
-      </header>
+        {/* CTA */}
+        <Link
+          href="/training"
+          className="w-full flex items-center justify-center gap-2 bg-[#6fc11f] text-black font-black py-4 rounded-xl text-sm"
+        >
+          PRACTICAR AHORA
+        </Link>
 
-      <main className="min-h-screen px-4 pb-28 pt-20 lg:ml-[260px] lg:px-8 lg:pb-8 lg:pt-8">
-        <div className="mx-auto w-full max-w-[1180px]">{children}</div>
-      </main>
+        {/* STATS */}
+        <div className="grid grid-cols-2 gap-4">
 
-      <nav className="fixed bottom-0 left-0 z-50 grid h-20 w-full grid-cols-5 border-t border-white/10 bg-[#050b12]/95 px-2 pb-2 pt-2 backdrop-blur lg:hidden">
-        {mobileItems.map((item) => {
-          const Icon = item.icon;
-          const active =
-            pathname === item.href ||
-            (item.href !== "/dashboard" && pathname.startsWith(item.href));
+          <Card icon={<BarChart3 />} title="Nivel" value="12" subtitle="Intermedio" />
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col items-center justify-center gap-1 rounded-2xl text-[10px] font-black transition ${
-                active
-                  ? "bg-[#6fc11f] text-black"
-                  : "text-zinc-500 hover:text-white"
-              }`}
-            >
-              <Icon size={18} />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-    </div>
-  );
-}
+          <Card icon={<Star />} title="Promedio" value={`${stats.avg}%`} subtitle="Buen rendimiento" />
 
-function Logo({ compact = false }: { compact?: boolean }) {
-  return (
-    <Link href="/home" className="flex items-center gap-3">
-      <Image
-        src="/logo.png"
-        alt="RefLab"
-        width={compact ? 40 : 44}
-        height={compact ? 40 : 44}
-        priority
-        className="rounded-full object-cover shadow-[0_0_24px_rgba(111,193,31,0.18)]"
-      />
+          <Card icon={<Flame />} title="Racha" value={`${stats.streak} días`} subtitle="¡Seguí así!" />
 
-      <div>
-        <p className={`${compact ? "text-sm" : "text-lg"} font-black tracking-wide`}>
-          REF<span className="text-[#6fc11f]">LAB</span>
-        </p>
-        <p className={`${compact ? "text-[9px]" : "text-[10px]"} text-zinc-500`}>
-          Referee Decision Lab
-        </p>
+          <Card icon={<ClipboardList />} title="Ejercicios" value={stats.total} subtitle="Esta semana" />
+
+        </div>
+
+        {/* TITULO */}
+        <h2 className="text-lg font-black mt-6">
+          Rendimiento por tópico
+        </h2>
+
+        {/* RADAR SIMPLE (placeholder) */}
+        <div className="bg-[#111b24] rounded-2xl p-5 text-center text-zinc-400">
+          Radar PRO (lo integramos después con animación tipo FIFA 👀)
+        </div>
+
+        {/* BOTON */}
+        <Link
+          href="/stats"
+          className="w-full block text-center py-4 rounded-xl bg-[#121f28] text-sm text-white border border-white/10"
+        >
+          Ver detalles por tópico →
+        </Link>
+
       </div>
-    </Link>
+    </AppShell>
   );
 }
 
-function NavLink({ item, active }: { item: NavItem; active: boolean }) {
-  const Icon = item.icon;
-
+function Card({
+  icon,
+  title,
+  value,
+  subtitle,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: string | number;
+  subtitle: string;
+}) {
   return (
-    <Link
-      href={item.href}
-      className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-black transition ${
-        active
-          ? "bg-[#6fc11f] text-black shadow-[0_0_28px_rgba(111,193,31,0.25)]"
-          : "text-zinc-400 hover:bg-white/10 hover:text-white"
-      }`}
-    >
-      <Icon size={18} />
-      {item.label}
-    </Link>
+    <div className="bg-[#111b24] p-4 rounded-2xl border border-white/10">
+      <div className="text-[#6fc11f] mb-2">{icon}</div>
+      <p className="text-xs text-zinc-400">{title}</p>
+      <p className="text-xl font-black">{value}</p>
+      <p className="text-xs text-[#6fc11f]">{subtitle}</p>
+    </div>
   );
 }
