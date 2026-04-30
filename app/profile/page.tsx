@@ -8,6 +8,7 @@ import {
   BadgeCheck,
   ClipboardList,
   LogOut,
+  Save,
   ShieldCheck,
   Star,
   Trophy,
@@ -40,9 +41,12 @@ export default function ProfilePage() {
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
+  const [savingProfile, setSavingProfile] = useState(false);
 
-  const [refereeType, setRefereeType] = useState("AFA");
+  const [refereeType, setRefereeType] = useState("Amateur");
   const [mainRole, setMainRole] = useState("Árbitro principal");
+  const [association, setAssociation] = useState("");
+  const [category, setCategory] = useState("");
 
   useEffect(() => {
     async function loadProfile() {
@@ -55,27 +59,66 @@ export default function ProfilePage() {
 
       setLoading(true);
 
-      const [{ data: attemptsData }, { data: examsData }] = await Promise.all([
-        supabase
-          .from("attempts")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: true }),
+      const [{ data: attemptsData }, { data: examsData }, { data: profileData }] =
+        await Promise.all([
+          supabase
+            .from("attempts")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: true }),
 
-        supabase
-          .from("exam_results")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-      ]);
+          supabase
+            .from("exam_results")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false }),
+
+          supabase
+            .from("user_profiles")
+            .select("*")
+            .eq("user_id", user.id)
+            .maybeSingle(),
+        ]);
 
       setAttempts(attemptsData ?? []);
       setExams(examsData ?? []);
+
+      if (profileData) {
+        setRefereeType(profileData.referee_type ?? "Amateur");
+        setMainRole(profileData.main_role ?? "Árbitro principal");
+        setAssociation(profileData.association ?? "");
+        setCategory(profileData.category ?? "");
+      }
+
       setLoading(false);
     }
 
     loadProfile();
   }, [isLoaded, user]);
+
+  async function saveProfile() {
+    if (!user) return;
+
+    setSavingProfile(true);
+
+    const { error } = await supabase.from("user_profiles").upsert({
+      user_id: user.id,
+      referee_type: refereeType,
+      main_role: mainRole,
+      association,
+      category,
+      updated_at: new Date().toISOString(),
+    });
+
+    setSavingProfile(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    alert("Perfil guardado correctamente.");
+  }
 
   const stats = useMemo(() => {
     const totalAttempts = attempts.length;
@@ -206,7 +249,30 @@ export default function ProfilePage() {
               "Instructor",
             ]}
           />
+
+          <ProfileInput
+            label="Asociación / Liga"
+            value={association}
+            onChange={setAssociation}
+            placeholder="Ej: AFA, Liga regional, FAFI, etc."
+          />
+
+          <ProfileInput
+            label="Categoría"
+            value={category}
+            onChange={setCategory}
+            placeholder="Ej: Primera, Reserva, Amateur, Inferiores"
+          />
         </section>
+
+        <button
+          onClick={saveProfile}
+          disabled={savingProfile}
+          className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black transition hover:bg-[#82dc2a] disabled:opacity-50"
+        >
+          <Save size={22} />
+          {savingProfile ? "GUARDANDO..." : "GUARDAR PERFIL"}
+        </button>
 
         <section className="grid gap-3 md:grid-cols-4">
           <MetricCard
@@ -239,9 +305,11 @@ export default function ProfilePage() {
         </section>
 
         <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-          <Panel title="Identidad arbitral" subtitle="Datos operativos del perfil.">
-            <InfoRow label="Categoría" value={refereeType} />
+          <Panel title="Identidad arbitral" subtitle="Datos reales del perfil.">
+            <InfoRow label="Tipo" value={refereeType} />
             <InfoRow label="Función" value={mainRole} />
+            <InfoRow label="Asociación / Liga" value={association || "Sin cargar"} />
+            <InfoRow label="Categoría" value={category || "Sin cargar"} />
             <InfoRow label="Nivel RefLab" value={stats.level} />
             <InfoRow label="Módulo recomendado" value={recommendedModule(criteria)} />
           </Panel>
@@ -360,6 +428,33 @@ function ProfileSelect({
           <option key={option}>{option}</option>
         ))}
       </select>
+    </div>
+  );
+}
+
+function ProfileInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="rounded-[26px] border border-white/10 bg-[#101b24] p-5">
+      <p className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-[#6fc11f]">
+        {label}
+      </p>
+
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-white/10 bg-[#0b111b] px-4 py-3 text-white outline-none placeholder:text-zinc-600"
+      />
     </div>
   );
 }
