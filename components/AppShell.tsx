@@ -65,11 +65,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
 
-      <header className="fixed left-0 top-0 z-40 flex h-16 w-full items-center justify-between border-b border-white/10 bg-[#050b12]/95 px-4 backdrop-blur lg:hidden">
+      <header className="fixed left-0 top-0 z-50 flex h-[72px] w-full items-center justify-between border-b border-white/10 bg-[#050b12]/95 px-4 backdrop-blur">
         <Logo compact />
       </header>
 
-      <main className="min-h-screen px-4 pb-28 pt-20 lg:ml-[260px] lg:px-8 lg:pb-8 lg:pt-8">
+      <main className="min-h-screen px-3 pb-28 pt-[88px] lg:ml-[260px] lg:px-8 lg:pb-8 lg:pt-8">
         <div className="mx-auto w-full lg:max-w-[1180px]">{children}</div>
       </main>
 
