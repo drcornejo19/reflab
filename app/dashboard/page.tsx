@@ -127,8 +127,8 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-[760px] space-y-4 rounded-[28px] border border-white/10 bg-[#101820] p-5 shadow-2xl">
-        <header className="flex items-start justify-between gap-4">
+     <div className="w-full space-y-5 rounded-[24px] border border-white/10 bg-[#101820] p-4 shadow-2xl backdrop-blur-xl sm:p-5 lg:mx-auto lg:max-w-[900px]">
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-black">Dashboard</h1>
             <p className="mt-1 text-sm text-zinc-400">
@@ -136,7 +136,7 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex gap-3">
             <div className="rounded-xl bg-[#1b242d] px-4 py-3">
               <p className="text-xs text-zinc-400">🔥 Racha 7 días</p>
               <p className="text-sm font-black">{stats.streak}</p>
@@ -144,14 +144,14 @@ export default function DashboardPage() {
 
             <Link
               href="/training"
-              className="rounded-xl bg-[#6fc11f] px-5 py-4 text-sm font-black text-black transition hover:bg-[#82dc2a]"
+              className="flex-1 rounded-2xl bg-[#6fc11f] px-5 py-4 text-center text-base font-black text-black shadow-[0_10px_30px_rgba(111,193,31,0.3)] transition hover:bg-[#82dc2a]"
             >
               Practicar ahora
             </Link>
           </div>
         </header>
 
-        <section className="grid grid-cols-[1.1fr_1fr_1fr_1fr_1fr] overflow-hidden rounded-2xl border border-white/10 bg-[#17212a]">
+       <section className="grid grid-cols-2 overflow-hidden rounded-2xl border border-white/10 bg-[#17212a] sm:grid-cols-5">
           <TopMetric
             title="Puntuación general"
             value={stats.avg || 0}
@@ -302,7 +302,7 @@ function TopMetric({
   featured?: boolean;
 }) {
   return (
-    <div className="border-r border-white/10 p-4 last:border-r-0">
+    <div className="border-r border-b border-white/10 p-4 last:border-r-0 sm:border-b-0">
       <p className="text-[11px] text-zinc-400">{title}</p>
 
       <div className="mt-4 flex items-end justify-between">
