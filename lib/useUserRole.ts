@@ -23,10 +23,10 @@ export function useUserRole() {
       }
 
       const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
+  .from("user_roles")
+  .select("role")
+  .eq("user_id", user.id)
+  .maybeSingle();
 
       if (error || !data?.role) {
         setRole("user");
