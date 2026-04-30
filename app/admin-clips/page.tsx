@@ -4,9 +4,15 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/lib/supabase";
 import type { Clip, TrainingMode } from "@/lib/types";
+import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
+import { useUserRole } from "@/lib/useUserRole";
 
 export default function AdminClipsPage() {
-  const [clips, setClips] = useState<Clip[]>([]);
+  const router = useRouter();
+const { user, isLoaded } = useUser();
+const { isVideoAdmin, loadingRole } = useUserRole();
+const [clips, setClips] = useState<Clip[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -24,6 +30,29 @@ export default function AdminClipsPage() {
   const [correctVar, setCorrectVar] = useState(false);
 
   const [explanation, setExplanation] = useState("");
+
+useEffect(() => {
+  if (isLoaded && !user) {
+    router.replace("/sign-in");
+  }
+
+  if (!loadingRole && !isVideoAdmin) {
+    router.replace("/dashboard");
+  }
+}, [isLoaded, user, loadingRole, isVideoAdmin, router]);
+
+if (!isLoaded || loadingRole) {
+  return (
+    <AppShell>
+      <div className="text-zinc-400">Validando acceso...</div>
+    </AppShell>
+  );
+}
+
+if (!isVideoAdmin) {
+  return null;
+}
+  
 
   async function loadClips() {
     setLoading(true);
