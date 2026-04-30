@@ -156,23 +156,18 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
       level,
       activity: totalAttempts + totalExams,
     };
-  }, [attempts, exams]);
+}, [attempts, exams]);
 
-  async function uploadAvatar(file: File) {
+async function uploadAvatar(file: File) {
   if (!user) return;
 
   setUploadingAvatar(true);
 
-  const fileExt = file.name.split(".").pop();
-  const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-  const filePath = `${user.id}/${fileName}`;
+  const filePath = `${user.id}/${file.name}`;
 
   const { error: uploadError } = await supabase.storage
     .from("avatars")
-    .upload(filePath, file, {
-      cacheControl: "3600",
-      upsert: true,
-    });
+    .upload(filePath, file, { upsert: true });
 
   if (uploadError) {
     setUploadingAvatar(false);
@@ -182,19 +177,19 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
 
-  const publicUrl = data.publicUrl;
+  const publicUrl = data?.publicUrl ?? "";
 
   setAvatarUrl(publicUrl);
 
-  await supabase.from("user_profiles").upsert({
-    user_id: user.id,
-    avatar_url: publicUrl,
-    referee_type: refereeType,
-    main_role: mainRole,
-    association,
-    category,
-    updated_at: new Date().toISOString(),
-  });
+  const { error } = await supabase.from("user_profiles").upsert({
+  user_id: user.id,
+  referee_type: refereeType,
+  main_role: mainRole,
+  association,
+  category,
+  avatar_url: avatarUrl,
+  updated_at: new Date().toISOString(),
+});
 
   setUploadingAvatar(false);
 }
@@ -230,18 +225,18 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
           <div className="mt-6 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div className="flex flex-col items-center gap-5 text-center md:flex-row md:text-left">
-<div className="relative">
-  {avatarUrl || user?.imageUrl ? (
-    <img
-      src={avatarUrl || user?.imageUrl}
-      alt="Foto de perfil"
-      className="h-28 w-28 rounded-full border-4 border-[#6fc11f] object-cover shadow-[0_0_35px_rgba(111,193,31,0.28)]"
-    />
-  ) : (
-    <div className="grid h-28 w-28 place-items-center rounded-full border-4 border-[#6fc11f] bg-[#101b24]">
-      <UserRound className="text-[#6fc11f]" size={46} />
-    </div>
-  )}
+<div className="relative mb-12">
+ {avatarUrl || user?.imageUrl ? (
+  <img
+    src={avatarUrl || user?.imageUrl}
+    alt="Foto de perfil"
+    className="h-28 w-28 rounded-full border-4 border-[#6fc11f] object-cover shadow-[0_0_35px_rgba(111,193,31,0.28)]"
+  />
+) : (
+  <div className="grid h-28 w-28 place-items-center rounded-full border-4 border-[#6fc11f] bg-[#101b24]">
+    <UserRound className="text-[#6fc11f]" size={46} />
+  </div>
+)}
 
                 <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-[#6fc11f] px-3 py-1 text-[10px] font-black text-black">
                   RF
@@ -272,9 +267,8 @@ const [uploadingAvatar, setUploadingAvatar] = useState(false);
           </div>
         </section>
 
-        <label className="mt-5 inline-flex cursor-pointer items-center justify-center rounded-xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-xs font-black text-[#6fc11f] transition hover:bg-[#6fc11f]/20">
+<label className="absolute -bottom-12 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-xs font-black text-[#6fc11f]">
   {uploadingAvatar ? "SUBIENDO..." : "CAMBIAR FOTO"}
-
   <input
     type="file"
     accept="image/*"
