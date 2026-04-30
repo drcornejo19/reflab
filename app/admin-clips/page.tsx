@@ -50,9 +50,14 @@ if (!isLoaded || loadingRole) {
 }
 
 if (!isVideoAdmin) {
-  return null;
+  return (
+    <AppShell>
+      <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-red-300">
+        No tenés permisos para acceder a Admin Clips.
+      </div>
+    </AppShell>
+  );
 }
-  
 
   async function loadClips() {
     setLoading(true);
