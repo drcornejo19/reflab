@@ -105,15 +105,18 @@ export default function ProfilePage() {
 
     setSavingProfile(true);
 
-    const { error } = await supabase.from("user_profiles").upsert({
-      user_id: user.id,
-      referee_type: refereeType,
-      main_role: mainRole,
-      association,
-      category,
-      avatar_url: avatarUrl,
-      updated_at: new Date().toISOString(),
-    });
+   const { error } = await supabase.from("user_profiles").upsert(
+  {
+    user_id: user.id,
+    referee_type: refereeType,
+    main_role: mainRole,
+    association,
+    category,
+    avatar_url: avatarUrl,
+    updated_at: new Date().toISOString(),
+  },
+  { onConflict: "user_id" }
+);
 
     setSavingProfile(false);
 
@@ -153,16 +156,19 @@ export default function ProfilePage() {
       setAvatarUrl(publicUrl);
 
       const { error: profileError } = await supabase
-        .from("user_profiles")
-        .upsert({
-          user_id: user.id,
-          referee_type: refereeType,
-          main_role: mainRole,
-          association,
-          category,
-          avatar_url: publicUrl,
-          updated_at: new Date().toISOString(),
-        });
+  .from("user_profiles")
+  .upsert(
+    {
+      user_id: user.id,
+      referee_type: refereeType,
+      main_role: mainRole,
+      association,
+      category,
+      avatar_url: publicUrl,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" }
+  );
 
       if (profileError) {
         alert(profileError.message);
