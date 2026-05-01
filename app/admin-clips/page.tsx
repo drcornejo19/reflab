@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
@@ -8,31 +8,103 @@ import { supabase } from "@/lib/supabase";
 import { useUserRole } from "@/lib/useUserRole";
 import type { Clip, TrainingMode } from "@/lib/types";
 
+type ClipWithDetails = Clip & {
+  sub_type?: string | null;
+  decision_detail?: string | null;
+};
+
+const topicOptions = [
+  { value: "Dispute", label: "Disputas" },
+  { value: "Tactical foul", label: "Faltas tácticas" },
+  { value: "Offside", label: "Fuera de juego" },
+  { value: "Handball", label: "Manos" },
+  { value: "VAR", label: "VAR" },
+];
+
+const offsideSubTypes = [
+  { value: "interferir_juego", label: "Interfiere en el juego" },
+  { value: "interferir_adversario", label: "Interfiere en el adversario" },
+  { value: "sacar_ventaja", label: "Saca ventaja de su posición" },
+];
+
+const handballSubTypes = [
+  { value: "inmediatez", label: "Mano de inmediatez" },
+  { value: "deliberada", label: "Mano deliberada" },
+  { value: "bloqueo", label: "Mano de bloqueo / cuerpo antinatural" },
+];
+
+const handballDetails = [
+  { value: "movimiento_justificado", label: "Movimiento justificado por la acción" },
+  { value: "movimiento_no_justificado", label: "Movimiento no justificado" },
+  { value: "brazo_amplia_cuerpo", label: "Brazo amplía el volumen corporal" },
+  { value: "brazo_apoyo", label: "Brazo de apoyo" },
+];
+
 export default function AdminClipsPage() {
   const router = useRouter();
   const { user, isLoaded } = useUser();
   const { isVideoAdmin, loadingRole } = useUserRole();
 
-  const [clips, setClips] = useState<Clip[]>([]);
+  const [clips, setClips] = useState<ClipWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [mode, setMode] = useState<TrainingMode>("field");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
-  const [topic, setTopic] = useState("Tactical foul");
+  const [topic, setTopic] = useState("Offside");
+  const [subType, setSubType] = useState("interferir_juego");
+  const [decisionDetail, setDecisionDetail] = useState("");
   const [difficulty, setDifficulty] = useState("medium");
-  const [correctFoul, setCorrectFoul] = useState(true);
-  const [correctRestart, setCorrectRestart] = useState("Tiro libre directo");
-  const [correctDiscipline, setCorrectDiscipline] = useState("Amarilla");
+
+  const [correctFoul, setCorrectFoul] = useState(false);
+  const [correctRestart, setCorrectRestart] = useState("Tiro libre indirecto");
+  const [correctDiscipline, setCorrectDiscipline] = useState("Sin sanción");
   const [correctVar, setCorrectVar] = useState(false);
   const [explanation, setExplanation] = useState("");
 
+  const subTypeOptions = useMemo(() => {
+    if (topic === "Offside") return offsideSubTypes;
+    if (topic === "Handball") return handballSubTypes;
+    return [];
+  }, [topic]);
+
   useEffect(() => {
-    if (isLoaded && !user) {
-      router.replace("/sign-in");
+    if (topic === "Offside") {
+      setSubType("interferir_juego");
+      setDecisionDetail("");
+      setCorrectRestart("Tiro libre indirecto");
+      setCorrectDiscipline("Sin sanción");
     }
+
+    if (topic === "Handball") {
+      setSubType("inmediatez");
+      setDecisionDetail("movimiento_no_justificado");
+      setCorrectRestart("Tiro libre directo");
+    }
+
+    if (topic === "Tactical foul") {
+      setSubType("");
+      setDecisionDetail("");
+      setCorrectFoul(true);
+      setCorrectRestart("Tiro libre directo");
+      setCorrectDiscipline("Amarilla");
+    }
+
+    if (topic === "Dispute") {
+      setSubType("");
+      setDecisionDetail("");
+      setCorrectRestart("Tiro libre directo");
+    }
+
+    if (topic === "VAR") {
+      setSubType("");
+      setDecisionDetail("");
+      setCorrectVar(true);
+    }
+  }, [topic]);
+
+  useEffect(() => {
+    if (isLoaded && !user) router.replace("/sign-in");
   }, [isLoaded, user, router]);
 
   useEffect(() => {
@@ -43,7 +115,6 @@ export default function AdminClipsPage() {
 
   useEffect(() => {
     if (!isLoaded || loadingRole || !user || !isVideoAdmin) return;
-
     loadClips();
   }, [isLoaded, loadingRole, user, isVideoAdmin]);
 
@@ -59,26 +130,35 @@ export default function AdminClipsPage() {
       console.error("Error cargando clips:", error);
       setClips([]);
     } else {
-      setClips((data ?? []) as Clip[]);
+      setClips((data ?? []) as ClipWithDetails[]);
     }
 
     setLoading(false);
   }
 
   async function createClip() {
-    if (!title.trim() || !videoUrl.trim()) {
-      alert("Título y URL del video son obligatorios.");
+    if (!videoUrl.trim()) {
+      alert("La URL del video es obligatoria.");
+      return;
+    }
+
+    if ((topic === "Offside" || topic === "Handball") && !subType) {
+      alert("Tenés que elegir el subtipo técnico.");
       return;
     }
 
     setSaving(true);
 
+    const generatedTitle = generateClipTitle(topic, subType, decisionDetail);
+
     const { error } = await supabase.from("clips").insert([
       {
-        title,
-        description,
+        title: generatedTitle,
+        description: "",
         video_url: videoUrl,
         topic,
+        sub_type: subType || null,
+        decision_detail: decisionDetail || null,
         difficulty,
         mode,
         correct_foul: correctFoul,
@@ -101,10 +181,16 @@ export default function AdminClipsPage() {
   }
 
   function reset() {
-    setTitle("");
-    setDescription("");
     setVideoUrl("");
     setExplanation("");
+    setTopic("Offside");
+    setSubType("interferir_juego");
+    setDecisionDetail("");
+    setDifficulty("medium");
+    setCorrectFoul(false);
+    setCorrectRestart("Tiro libre indirecto");
+    setCorrectDiscipline("Sin sanción");
+    setCorrectVar(false);
   }
 
   async function deleteClip(id: string) {
@@ -129,9 +215,7 @@ export default function AdminClipsPage() {
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   if (!isVideoAdmin) {
     return (
@@ -148,7 +232,9 @@ export default function AdminClipsPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-black">Admin de Clips</h1>
-          <p className="text-zinc-400">Cargá jugadas para entrenamiento.</p>
+          <p className="text-zinc-400">
+            Cargá jugadas con decisión técnica validada.
+          </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
@@ -164,8 +250,6 @@ export default function AdminClipsPage() {
               ]}
             />
 
-            <Input label="Título" value={title} onChange={setTitle} />
-            <Textarea label="Descripción" value={description} onChange={setDescription} />
             <Input label="URL del video" value={videoUrl} onChange={setVideoUrl} />
 
             {videoUrl && (
@@ -178,18 +262,10 @@ export default function AdminClipsPage() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <Select
-                label="Categoría"
+                label="Categoría técnica"
                 value={topic}
                 onChange={setTopic}
-                options={[
-                  { value: "Tactical foul", label: "Faltas tácticas" },
-                  { value: "Handball", label: "Manos" },
-                  { value: "Offside", label: "Fuera de juego" },
-                  { value: "Dispute", label: "Disputas" },
-                  { value: "DOGSO", label: "DOGSO" },
-                  { value: "SPA", label: "SPA" },
-                  { value: "VAR", label: "VAR" },
-                ]}
+                options={topicOptions}
               />
 
               <Select
@@ -204,53 +280,75 @@ export default function AdminClipsPage() {
               />
             </div>
 
-            {mode === "field" && (
-              <>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <BooleanSelect
-                    label="¿Hubo infracción?"
-                    value={correctFoul}
-                    onChange={setCorrectFoul}
-                  />
-
-                  <BooleanSelect
-                    label="¿Revisable por VAR?"
-                    value={correctVar}
-                    onChange={setCorrectVar}
-                  />
-                </div>
-
-                <Select
-                  label="Reanudación"
-                  value={correctRestart}
-                  onChange={setCorrectRestart}
-                  options={[
-                    { value: "Tiro libre directo", label: "Tiro libre directo" },
-                    { value: "Tiro libre indirecto", label: "Tiro libre indirecto" },
-                    { value: "Penal", label: "Penal" },
-                    { value: "Saque de meta", label: "Saque de meta" },
-                    { value: "Saque de esquina", label: "Saque de esquina" },
-                    { value: "Saque de banda", label: "Saque de banda" },
-                    { value: "Balón a tierra", label: "Balón a tierra" },
-                    { value: "Gol", label: "Gol" },
-                    { value: "No gol", label: "No gol" },
-                  ]}
-                />
-
-                <Select
-                  label="Disciplina"
-                  value={correctDiscipline}
-                  onChange={setCorrectDiscipline}
-                  options={[
-                    { value: "Sin sanción", label: "Sin sanción" },
-                    { value: "Amarilla", label: "Amarilla" },
-                    { value: "Roja", label: "Roja" },
-                  ]}
-                />
-              </>
+            {subTypeOptions.length > 0 && (
+              <Select
+                label={
+                  topic === "Offside"
+                    ? "Tipo de fuera de juego"
+                    : "Tipo de mano"
+                }
+                value={subType}
+                onChange={setSubType}
+                options={subTypeOptions}
+              />
             )}
 
-            <Textarea label="Fundamento" value={explanation} onChange={setExplanation} />
+            {topic === "Handball" && (
+              <Select
+                label="Detalle de la mano"
+                value={decisionDetail}
+                onChange={setDecisionDetail}
+                options={handballDetails}
+              />
+            )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <BooleanSelect
+                label="¿Hubo infracción?"
+                value={correctFoul}
+                onChange={setCorrectFoul}
+              />
+
+              <BooleanSelect
+                label="¿Revisable por VAR?"
+                value={correctVar}
+                onChange={setCorrectVar}
+              />
+            </div>
+
+            <Select
+              label="Reanudación correcta"
+              value={correctRestart}
+              onChange={setCorrectRestart}
+              options={[
+                { value: "Tiro libre directo", label: "Tiro libre directo" },
+                { value: "Tiro libre indirecto", label: "Tiro libre indirecto" },
+                { value: "Penal", label: "Penal" },
+                { value: "Saque de meta", label: "Saque de meta" },
+                { value: "Saque de esquina", label: "Saque de esquina" },
+                { value: "Saque de banda", label: "Saque de banda" },
+                { value: "Balón a tierra", label: "Balón a tierra" },
+                { value: "Gol", label: "Gol" },
+                { value: "No gol", label: "No gol" },
+              ]}
+            />
+
+            <Select
+              label="Disciplina correcta"
+              value={correctDiscipline}
+              onChange={setCorrectDiscipline}
+              options={[
+                { value: "Sin sanción", label: "Sin sanción" },
+                { value: "Amarilla", label: "Amarilla" },
+                { value: "Roja", label: "Roja" },
+              ]}
+            />
+
+            <Textarea
+              label="Fundamento / aval de la decisión"
+              value={explanation}
+              onChange={setExplanation}
+            />
 
             <button
               onClick={createClip}
@@ -278,11 +376,19 @@ export default function AdminClipsPage() {
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="font-black">{clip.title}</p>
-                      <p className="mt-1 text-xs text-zinc-500">
-                        {clip.mode ?? "field"} · {clip.topic ?? "-"} ·{" "}
-                        {clip.difficulty ?? "-"}
+                      <p className="font-black">
+                        {clip.topic ?? "-"} · {labelFromValue(clip.sub_type)}
                       </p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {clip.mode ?? "field"} · {clip.difficulty ?? "-"} ·{" "}
+                        {clip.correct_restart ?? "-"} ·{" "}
+                        {clip.correct_discipline ?? "-"}
+                      </p>
+                      {clip.decision_detail && (
+                        <p className="mt-1 text-xs text-[#6fc11f]">
+                          {labelFromValue(clip.decision_detail)}
+                        </p>
+                      )}
                     </div>
 
                     <button
@@ -300,6 +406,41 @@ export default function AdminClipsPage() {
       </div>
     </AppShell>
   );
+}
+
+function generateClipTitle(topic: string, subType: string, detail: string) {
+  const base = labelFromValue(topic);
+  const sub = labelFromValue(subType);
+  const extra = labelFromValue(detail);
+
+  return [base, sub, extra].filter(Boolean).join(" · ");
+}
+
+function labelFromValue(value?: string | null) {
+  if (!value) return "";
+
+  const dictionary: Record<string, string> = {
+    Dispute: "Disputas",
+    "Tactical foul": "Faltas tácticas",
+    Offside: "Fuera de juego",
+    Handball: "Manos",
+    VAR: "VAR",
+
+    interferir_juego: "Interfiere en el juego",
+    interferir_adversario: "Interfiere en el adversario",
+    sacar_ventaja: "Saca ventaja",
+
+    inmediatez: "Mano de inmediatez",
+    deliberada: "Mano deliberada",
+    bloqueo: "Mano de bloqueo",
+
+    movimiento_justificado: "Movimiento justificado",
+    movimiento_no_justificado: "Movimiento no justificado",
+    brazo_amplia_cuerpo: "Brazo amplía el volumen corporal",
+    brazo_apoyo: "Brazo de apoyo",
+  };
+
+  return dictionary[value] ?? value;
 }
 
 function Input({
