@@ -49,7 +49,7 @@ export default function MobileDashboardPage() {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      setAttempts(data ?? []);
+      setAttempts((data ?? []) as Attempt[]);
       setLoading(false);
     }
 
@@ -58,19 +58,28 @@ export default function MobileDashboardPage() {
 
   const stats = useMemo(() => {
     const total = attempts.length;
-    const avg =
-      total > 0
-        ? Math.round(attempts.reduce((acc, a) => acc + a.score, 0) / total)
-        : 0;
+    const hasAttempts = total > 0;
+
+    const avg = hasAttempts
+      ? Math.round(attempts.reduce((acc, a) => acc + a.score, 0) / total)
+      : null;
 
     return {
       total,
+      hasAttempts,
       avg,
-      streak: Math.min(total, 7),
-      technical: percent(attempts, "technical_correct"),
-      discipline: percent(attempts, "discipline_correct"),
-      varPrecision: percent(attempts, "var_correct"),
+      streak: hasAttempts ? Math.min(total, 7) : null,
     };
+  }, [attempts]);
+
+  const topicPerformance = useMemo(() => {
+    return [
+      { label: "Disputas", value: topicAvgReal(attempts, "Dispute") },
+      { label: "Faltas tácticas", value: topicAvgReal(attempts, "Tactical foul") },
+      { label: "Fuera de juego", value: topicAvgReal(attempts, "Offside") },
+      { label: "Manos", value: topicAvgReal(attempts, "Handball") },
+      { label: "VAR", value: topicAvgReal(attempts, "VAR") },
+    ];
   }, [attempts]);
 
   if (loading) {
@@ -86,7 +95,6 @@ export default function MobileDashboardPage() {
   return (
     <AppShell>
       <div className="min-h-screen space-y-5 px-0 pb-4">
-        {/* HERO */}
         <section className="rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.22),transparent_38%),#0d1720] p-5 shadow-2xl">
           <div className="flex items-center gap-3">
             <img
@@ -114,19 +122,49 @@ export default function MobileDashboardPage() {
           </Link>
         </section>
 
-        {/* STATS */}
+        {!stats.hasAttempts && (
+          <section className="rounded-[28px] border border-dashed border-[#6fc11f]/25 bg-[#6fc11f]/5 p-5 text-center">
+            <p className="text-lg font-black text-white">Sin actividad todavía</p>
+            <p className="mt-2 text-sm text-zinc-400">
+              Cuando completes ejercicios, tus estadísticas reales aparecerán acá.
+            </p>
+          </section>
+        )}
+
         <section>
           <h2 className="mb-3 text-xl font-black">Tu progreso</h2>
 
           <div className="grid grid-cols-2 gap-3">
-            <MetricCard icon={BarChart3} title="Nivel" value="12" sub="Intermedio" />
-            <MetricCard icon={Star} title="Promedio" value={`${stats.avg}%`} sub="Buen rendimiento" />
-            <MetricCard icon={Flame} title="Racha actual" value={`${stats.streak} días`} sub="¡Seguí así!" />
-            <MetricCard icon={ClipboardList} title="Ejercicios" value={stats.total} sub="Registrados" />
+            <MetricCard
+              icon={BarChart3}
+              title="Nivel"
+              value={stats.hasAttempts ? getMobileLevel(stats.avg ?? 0) : "-"}
+              sub={stats.hasAttempts ? "Según rendimiento" : "Sin datos"}
+            />
+
+            <MetricCard
+              icon={Star}
+              title="Promedio"
+              value={stats.avg === null ? "-" : `${stats.avg}%`}
+              sub={stats.hasAttempts ? "Rendimiento real" : "Sin intentos"}
+            />
+
+            <MetricCard
+              icon={Flame}
+              title="Racha actual"
+              value={stats.streak === null ? "-" : `${stats.streak} días`}
+              sub={stats.hasAttempts ? "Actividad registrada" : "Sin actividad"}
+            />
+
+            <MetricCard
+              icon={ClipboardList}
+              title="Ejercicios"
+              value={stats.hasAttempts ? stats.total : "-"}
+              sub={stats.hasAttempts ? "Registrados" : "Sin registros"}
+            />
           </div>
         </section>
 
-        {/* PERFORMANCE */}
         <section className="rounded-[34px] border border-white/10 bg-[#0d1720] p-5 shadow-2xl">
           <div className="flex items-center justify-between">
             <div>
@@ -140,22 +178,19 @@ export default function MobileDashboardPage() {
           </div>
 
           <div className="mt-5 grid gap-3">
-            <ProgressRow label="Técnica" value={stats.technical} />
-            <ProgressRow label="Disciplina" value={stats.discipline} />
-            <ProgressRow label="VAR" value={stats.varPrecision} />
-            <ProgressRow label="Promedio general" value={stats.avg} />
+            {topicPerformance.map((item) => (
+              <ProgressRow key={item.label} label={item.label} value={item.value} />
+            ))}
           </div>
         </section>
 
-        {/* TOPIC PANEL */}
         <section className="rounded-[34px] border border-white/10 bg-[#0d1720] p-5 shadow-2xl">
           <h2 className="text-xl font-black">Rendimiento por tópico</h2>
 
           <div className="mt-5 grid grid-cols-2 gap-3">
-            <TopicCard title="Fuera de juego" value="86%" />
-            <TopicCard title="Manos" value="76%" />
-            <TopicCard title="Faltas tácticas" value="78%" />
-            <TopicCard title="Disputas" value="83%" />
+            {topicPerformance.map((item) => (
+              <TopicCard key={item.label} title={item.label} value={item.value} />
+            ))}
           </div>
 
           <Link
@@ -167,7 +202,6 @@ export default function MobileDashboardPage() {
           </Link>
         </section>
 
-        {/* QUICK ACTIONS */}
         <section className="grid grid-cols-2 gap-3">
           <QuickAction
             href="/training/var"
@@ -208,30 +242,48 @@ function MetricCard({
   );
 }
 
-function ProgressRow({ label, value }: { label: string; value: number }) {
+function ProgressRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | null;
+}) {
+  const safeValue = value ?? 0;
+
   return (
     <div>
       <div className="mb-2 flex items-center justify-between text-sm">
         <span className="font-bold text-zinc-300">{label}</span>
-        <span className="font-black text-[#6fc11f]">{value}%</span>
+        <span className="font-black text-[#6fc11f]">
+          {value === null ? "-" : `${value}%`}
+        </span>
       </div>
 
       <div className="h-3 rounded-full bg-white/10">
         <div
           className="h-3 rounded-full bg-[#6fc11f] shadow-[0_0_18px_rgba(111,193,31,0.45)]"
-          style={{ width: `${Math.min(value, 100)}%` }}
+          style={{ width: `${Math.min(safeValue, 100)}%` }}
         />
       </div>
     </div>
   );
 }
 
-function TopicCard({ title, value }: { title: string; value: string }) {
+function TopicCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: number | null;
+}) {
   return (
     <div className="rounded-2xl border border-white/10 bg-[#101b24] p-4">
       <ShieldCheck className="text-[#6fc11f]" size={26} />
       <p className="mt-3 text-sm font-bold text-zinc-300">{title}</p>
-      <p className="mt-1 text-3xl font-black text-[#6fc11f]">{value}</p>
+      <p className="mt-1 text-3xl font-black text-[#6fc11f]">
+        {value === null ? "-" : `${value}%`}
+      </p>
     </div>
   );
 }
@@ -259,11 +311,19 @@ function QuickAction({
   );
 }
 
-function percent(arr: Attempt[], key: keyof Attempt) {
-  const valid = arr.filter((a) => typeof a[key] === "boolean");
-  if (valid.length === 0) return 0;
+function topicAvgReal(attempts: Attempt[], topic: string) {
+  const filtered = attempts.filter((a) => a.topic === topic);
+
+  if (filtered.length === 0) return null;
 
   return Math.round(
-    (valid.filter((a) => a[key] === true).length / valid.length) * 100
+    filtered.reduce((acc, item) => acc + item.score, 0) / filtered.length
   );
+}
+
+function getMobileLevel(avg: number) {
+  if (avg >= 90) return "Elite";
+  if (avg >= 80) return "Avanzado";
+  if (avg >= 70) return "Intermedio";
+  return "Inicial";
 }
