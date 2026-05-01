@@ -267,17 +267,6 @@ export default function AdminClipsPage() {
                 onChange={setTopic}
                 options={topicOptions}
               />
-
-              <Select
-                label="Dificultad"
-                value={difficulty}
-                onChange={setDifficulty}
-                options={[
-                  { value: "easy", label: "Fácil" },
-                  { value: "medium", label: "Media" },
-                  { value: "hard", label: "Difícil" },
-                ]}
-              />
             </div>
 
             {subTypeOptions.length > 0 && (
@@ -290,15 +279,6 @@ export default function AdminClipsPage() {
                 value={subType}
                 onChange={setSubType}
                 options={subTypeOptions}
-              />
-            )}
-
-            {topic === "Handball" && (
-              <Select
-                label="Detalle de la mano"
-                value={decisionDetail}
-                onChange={setDecisionDetail}
-                options={handballDetails}
               />
             )}
 
