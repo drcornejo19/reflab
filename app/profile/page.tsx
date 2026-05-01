@@ -83,8 +83,8 @@ export default function ProfilePage() {
             .maybeSingle(),
         ]);
 
-      setAttempts(attemptsData ?? []);
-      setExams(examsData ?? []);
+      setAttempts((attemptsData ?? []) as Attempt[]);
+      setExams((examsData ?? []) as Exam[]);
 
       if (profileData) {
         setRefereeType(profileData.referee_type ?? "Amateur");
@@ -105,18 +105,18 @@ export default function ProfilePage() {
 
     setSavingProfile(true);
 
-   const { error } = await supabase.from("user_profiles").upsert(
-  {
-    user_id: user.id,
-    referee_type: refereeType,
-    main_role: mainRole,
-    association,
-    category,
-    avatar_url: avatarUrl,
-    updated_at: new Date().toISOString(),
-  },
-  { onConflict: "user_id" }
-);
+    const { error } = await supabase.from("user_profiles").upsert(
+      {
+        user_id: user.id,
+        referee_type: refereeType,
+        main_role: mainRole,
+        association,
+        category,
+        avatar_url: avatarUrl,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    );
 
     setSavingProfile(false);
 
@@ -156,19 +156,19 @@ export default function ProfilePage() {
       setAvatarUrl(publicUrl);
 
       const { error: profileError } = await supabase
-  .from("user_profiles")
-  .upsert(
-    {
-      user_id: user.id,
-      referee_type: refereeType,
-      main_role: mainRole,
-      association,
-      category,
-      avatar_url: publicUrl,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id" }
-  );
+        .from("user_profiles")
+        .upsert(
+          {
+            user_id: user.id,
+            referee_type: refereeType,
+            main_role: mainRole,
+            association,
+            category,
+            avatar_url: publicUrl,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" }
+        );
 
       if (profileError) {
         alert(profileError.message);
@@ -183,32 +183,32 @@ export default function ProfilePage() {
 
   const stats = useMemo(() => {
     const totalAttempts = attempts.length;
-
-    const avgAttempt =
-      totalAttempts > 0
-        ? Math.round(
-            attempts.reduce((acc, item) => acc + item.score, 0) / totalAttempts
-          )
-        : 0;
-
     const totalExams = exams.length;
+    const hasAttempts = totalAttempts > 0;
+    const hasExams = totalExams > 0;
+    const hasData = hasAttempts || hasExams;
 
-    const avgExam =
-      totalExams > 0
-        ? Math.round(
-            exams.reduce((acc, item) => acc + item.avg_score, 0) / totalExams
-          )
-        : 0;
+    const avgAttempt = hasAttempts
+      ? Math.round(attempts.reduce((acc, item) => acc + item.score, 0) / totalAttempts)
+      : null;
 
-    const bestExam =
-      totalExams > 0 ? Math.max(...exams.map((exam) => exam.avg_score)) : 0;
+    const avgExam = hasExams
+      ? Math.round(exams.reduce((acc, item) => acc + item.avg_score, 0) / totalExams)
+      : null;
 
-    const level = getProfileLevel(avgAttempt, avgExam, totalAttempts, totalExams);
+    const bestExam = hasExams ? Math.max(...exams.map((exam) => exam.avg_score)) : null;
+
+    const level = hasData
+      ? getProfileLevel(avgAttempt ?? 0, avgExam ?? 0, totalAttempts, totalExams)
+      : "Sin actividad";
 
     return {
+      hasData,
+      hasAttempts,
+      hasExams,
       totalAttempts,
-      avgAttempt,
       totalExams,
+      avgAttempt,
       avgExam,
       bestExam,
       level,
@@ -300,10 +300,19 @@ export default function ProfilePage() {
             <div className="grid grid-cols-3 gap-3">
               <SmallStat title="Intentos" value={stats.totalAttempts} />
               <SmallStat title="Exámenes" value={stats.totalExams} />
-              <SmallStat title="Best" value={stats.bestExam || "-"} />
+              <SmallStat title="Best" value={stats.bestExam ?? "-"} />
             </div>
           </div>
         </section>
+
+        {!stats.hasData && (
+          <section className="rounded-3xl border border-dashed border-[#6fc11f]/25 bg-[#6fc11f]/5 p-6 text-center">
+            <p className="text-lg font-black text-white">Todavía no hay actividad real.</p>
+            <p className="mt-2 text-sm text-zinc-400">
+              Cuando completes ejercicios o exámenes, tus estadísticas aparecerán acá.
+            </p>
+          </section>
+        )}
 
         <section className="grid gap-4 md:grid-cols-2">
           <ProfileSelect
@@ -357,29 +366,29 @@ export default function ProfilePage() {
           <MetricCard
             icon={<Star />}
             title="Promedio training"
-            value={`${stats.avgAttempt}/100`}
-            detail="Prácticas individuales"
+            value={stats.hasAttempts ? `${stats.avgAttempt}/100` : "-"}
+            detail={stats.hasAttempts ? "Prácticas individuales" : "Sin intentos"}
           />
 
           <MetricCard
             icon={<Trophy />}
             title="Promedio examen"
-            value={`${stats.avgExam}/100`}
-            detail="Simulaciones completas"
+            value={stats.hasExams ? `${stats.avgExam}/100` : "-"}
+            detail={stats.hasExams ? "Simulaciones completas" : "Sin exámenes"}
           />
 
           <MetricCard
             icon={<ClipboardList />}
             title="Actividad"
-            value={stats.activity.toString()}
-            detail="Total registrado"
+            value={stats.hasData ? stats.activity.toString() : "-"}
+            detail={stats.hasData ? "Total registrado" : "Sin actividad"}
           />
 
           <MetricCard
             icon={<BadgeCheck />}
             title="Estado"
-            value={stats.avgAttempt >= 80 ? "Sólido" : "En desarrollo"}
-            detail="Lectura general"
+            value={stats.hasData ? (Number(stats.avgAttempt ?? 0) >= 80 ? "Sólido" : "En desarrollo") : "-"}
+            detail={stats.hasData ? "Lectura general" : "Sin evaluación"}
           />
         </section>
 
@@ -390,21 +399,26 @@ export default function ProfilePage() {
             <InfoRow label="Asociación / Liga" value={association || "Sin cargar"} />
             <InfoRow label="Categoría" value={category || "Sin cargar"} />
             <InfoRow label="Nivel RefLab" value={stats.level} />
-            <InfoRow label="Módulo recomendado" value={recommendedModule(criteria)} />
+            <InfoRow
+              label="Módulo recomendado"
+              value={stats.hasData ? recommendedModule(criteria) : "Sin datos suficientes"}
+            />
           </Panel>
 
           <Panel title="Precisión por criterio" subtitle="Perfil técnico actual.">
-            {criteria.map((item) => (
-              <Bar key={item.label} label={item.label} value={item.value} />
-            ))}
+            {stats.hasAttempts ? (
+              criteria.map((item) => (
+                <Bar key={item.label} label={item.label} value={item.value} />
+              ))
+            ) : (
+              <Empty text="Completá ejercicios para calcular precisión por criterio." />
+            )}
           </Panel>
         </section>
 
         <section className="rounded-[30px] border border-white/10 bg-[#101b24] p-5 shadow-2xl">
           <h2 className="text-xl font-black">Evolución reciente</h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            Últimos intentos registrados.
-          </p>
+          <p className="mt-1 text-sm text-zinc-500">Últimos intentos registrados.</p>
 
           <div className="mt-5 space-y-3">
             {trend.length === 0 ? (
@@ -638,6 +652,7 @@ function getProfileLevel(
 
 function percent(attempts: Attempt[], key: keyof Attempt) {
   const valid = attempts.filter((a) => typeof a[key] === "boolean");
+
   if (valid.length === 0) return 0;
 
   return Math.round(
@@ -646,9 +661,12 @@ function percent(attempts: Attempt[], key: keyof Attempt) {
 }
 
 function recommendedModule(criteria: { label: string; value: number }[]) {
-  const weakest = [...criteria].sort((a, b) => a.value - b.value)[0];
+  const validCriteria = criteria.filter((item) => item.value > 0);
 
-  if (!weakest || weakest.value === 0) return "Entrenamiento técnico";
+  if (validCriteria.length === 0) return "Entrenamiento técnico";
+
+  const weakest = [...validCriteria].sort((a, b) => a.value - b.value)[0];
+
   if (weakest.label === "VAR") return "Modo VAR";
   if (weakest.label === "Disciplina") return "Faltas tácticas";
   if (weakest.label === "Reanudación") return "Fuera de juego";
