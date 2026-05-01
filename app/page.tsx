@@ -3,17 +3,25 @@
 import Image from "next/image";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 
 export default function SplashPage() {
   const router = useRouter();
+  const { isLoaded, isSignedIn } = useUser();
 
   useEffect(() => {
+    if (!isLoaded) return;
+
     const timer = setTimeout(() => {
-      router.replace("/mobile-dashboard");
+      if (isSignedIn) {
+        router.replace("/mobile-dashboard");
+      } else {
+        router.replace("/sign-in");
+      }
     }, 2600);
 
     return () => clearTimeout(timer);
-  }, [router]);
+  }, [isLoaded, isSignedIn, router]);
 
   return (
     <main className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[#020b14]">
