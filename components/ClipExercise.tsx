@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { calculateScore } from "@/lib/scoring";
 import { supabase } from "@/lib/supabase";
@@ -18,19 +18,23 @@ type ClipExerciseProps = {
   clip: Clip;
   examMode?: boolean;
   onComplete?: (data: ExamAnswer) => void;
+  onBack?: () => void;
 };
+
+const MAX_VIDEO_PLAYS = 3;
 
 export function ClipExercise({
   clip,
   examMode = false,
   onComplete,
+  onBack,
 }: ClipExerciseProps) {
   const { user } = useUser();
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const [foul, setFoul] = useState<boolean | null>(null);
   const [restart, setRestart] = useState("");
   const [discipline, setDiscipline] = useState("");
-  const [varReview, setVarReview] = useState<boolean | null>(null);
   const [justification, setJustification] = useState("");
   const [result, setResult] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -38,8 +42,43 @@ export function ClipExercise({
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
 
-  const canSubmit =
-    foul !== null && restart !== "" && discipline !== "" && varReview !== null;
+  const [playCount, setPlayCount] = useState(0);
+
+  const remainingPlays = Math.max(MAX_VIDEO_PLAYS - playCount, 0);
+  const videoLocked = remainingPlays <= 0;
+
+  const canSubmit = foul !== null && restart !== "" && discipline !== "";
+
+  useEffect(() => {
+    const savedCount = Number(localStorage.getItem(`clip-plays-${clip.id}`) ?? "0");
+    setPlayCount(savedCount);
+    reset(false);
+
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  }, [clip.id]);
+
+  function handleVideoPlay() {
+    if (videoLocked) {
+      videoRef.current?.pause();
+      return;
+    }
+
+    const nextCount = playCount + 1;
+    setPlayCount(nextCount);
+    localStorage.setItem(`clip-plays-${clip.id}`, String(nextCount));
+  }
+
+  function handleBack() {
+    if (onBack) {
+      onBack();
+      return;
+    }
+
+    window.history.back();
+  }
 
   async function submit() {
     if (!canSubmit || isSaving) return;
@@ -48,7 +87,7 @@ export function ClipExercise({
       foul,
       restart,
       discipline,
-      var: varReview,
+      var: clip.correct_var,
     };
 
     const correctAnswer = {
@@ -89,14 +128,14 @@ export function ClipExercise({
         foul,
         restart,
         discipline,
-        var_review: varReview,
+        var_review: clip.correct_var,
         score,
         topic: clip.topic,
         difficulty: clip.difficulty,
         technical_correct: foul === clip.correct_foul,
         restart_correct: restart === clip.correct_restart,
         discipline_correct: discipline === clip.correct_discipline,
-        var_correct: varReview === clip.correct_var,
+        var_correct: null,
       },
     ]);
 
@@ -148,16 +187,20 @@ export function ClipExercise({
     }
   }
 
-  function reset() {
+  function reset(resetVideoCount = false) {
     setFoul(null);
     setRestart("");
     setDiscipline("");
-    setVarReview(null);
     setJustification("");
     setResult(null);
     setSaveError(null);
     setAiFeedback(null);
     setLoadingAi(false);
+
+    if (resetVideoCount) {
+      setPlayCount(0);
+      localStorage.setItem(`clip-plays-${clip.id}`, "0");
+    }
   }
 
   if (result !== null && !examMode) {
@@ -174,11 +217,7 @@ export function ClipExercise({
           </h2>
 
           <p className="mt-2 text-2xl font-black">
-            {result >= 85
-              ? "¡Excelente!"
-              : result >= 60
-                ? "Buen intento"
-                : "A revisar"}
+            {result >= 85 ? "¡Excelente!" : result >= 60 ? "Buen intento" : "A revisar"}
           </p>
 
           <div className="mt-6 rounded-2xl border border-white/10 bg-black/25 p-4">
@@ -186,16 +225,15 @@ export function ClipExercise({
             <p className="mt-3 text-sm leading-6 text-zinc-300">
               Infracción: <b>{clip.correct_foul ? "Sí" : "No"}</b>.
               Reanudación: <b> {clip.correct_restart}</b>. Sanción:{" "}
-              <b>{clip.correct_discipline}</b>. VAR:{" "}
-              <b>{clip.correct_var ? "Revisable" : "No revisable"}</b>.
+              <b>{clip.correct_discipline}</b>.
             </p>
           </div>
 
           <button
-            onClick={reset}
+            onClick={() => reset(false)}
             className="mt-6 w-full rounded-xl bg-white/10 px-5 py-4 font-black text-white transition hover:bg-white/15"
           >
-            REINTENTAR
+            REINTENTAR RESPUESTA
           </button>
         </section>
 
@@ -211,9 +249,7 @@ export function ClipExercise({
             <h3 className="font-black text-blue-300">Feedback IA</h3>
 
             {loadingAi ? (
-              <p className="mt-3 text-sm text-zinc-300">
-                Generando análisis...
-              </p>
+              <p className="mt-3 text-sm text-zinc-300">Generando análisis...</p>
             ) : (
               <div className="mt-3 space-y-2 text-sm leading-6 text-zinc-300">
                 {(aiFeedback ?? "Sin feedback IA disponible.")
@@ -234,7 +270,10 @@ export function ClipExercise({
     <div className="rounded-[24px] border border-[#1e2a34] bg-[#0b131b] p-4 shadow-2xl">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <button className="grid h-8 w-8 place-items-center rounded-full bg-white/5 text-zinc-300">
+          <button
+            onClick={handleBack}
+            className="grid h-8 w-8 place-items-center rounded-full bg-white/5 text-zinc-300 transition hover:bg-white/10"
+          >
             ←
           </button>
 
@@ -242,35 +281,46 @@ export function ClipExercise({
             <p className="text-sm font-black">
               {examMode ? "Examen - Modo Árbitro" : "Ejercicio - Modo Árbitro"}
             </p>
-            <p className="mt-1 text-xs text-zinc-500">
-              {clip.topic} · {translateDifficulty(clip.difficulty)}
-            </p>
+            <p className="mt-1 text-xs text-zinc-500">{clip.topic}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-5 text-xs text-zinc-400">
-          <div className="text-right">
-            <p className="font-black text-[#6fc11f]">⏱ 00:28</p>
-            <p>Tiempo restante</p>
-          </div>
-
-          <div className="text-right">
-            <p className="font-black text-zinc-200">
-              {examMode ? "Examen" : "1/10"}
-            </p>
-            <p>Modo</p>
-          </div>
+        <div className="text-right text-xs">
+          <p className="font-black text-[#6fc11f]">
+            {remainingPlays}/{MAX_VIDEO_PLAYS}
+          </p>
+          <p className="text-zinc-400">Reproducciones disponibles</p>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.55fr_0.75fr]">
         <section className="space-y-4">
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-black">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black">
             <video
+              ref={videoRef}
               className="aspect-video w-full bg-black object-cover"
               src={clip.video_url}
-              controls
+              controls={!videoLocked}
+              playsInline
+              onPlay={handleVideoPlay}
             />
+
+            {videoLocked && (
+              <div className="absolute inset-0 grid place-items-center bg-black/75 p-6 text-center">
+                <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-5 text-yellow-300">
+                  <p className="text-lg font-black">Límite alcanzado</p>
+                  <p className="mt-2 text-sm">
+                    Ya usaste las 3 reproducciones disponibles para este clip.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-[#6fc11f]/20 bg-[#6fc11f]/10 p-4 text-sm text-zinc-300">
+            Tenés <b className="text-[#6fc11f]">3 reproducciones</b> para analizar
+            este video. Una vez agotadas, podés responder, pero no volver a
+            reproducirlo.
           </div>
 
           {clip.description && (
@@ -283,17 +333,11 @@ export function ClipExercise({
         <section className="space-y-3">
           <QuestionCard title="1. ¿Hay infracción?">
             <div className="grid grid-cols-2 gap-3">
-              <DecisionButton
-                active={foul === true}
-                onClick={() => setFoul(true)}
-              >
+              <DecisionButton active={foul === true} onClick={() => setFoul(true)}>
                 Sí
               </DecisionButton>
 
-              <DecisionButton
-                active={foul === false}
-                onClick={() => setFoul(false)}
-              >
+              <DecisionButton active={foul === false} onClick={() => setFoul(false)}>
                 No
               </DecisionButton>
             </div>
@@ -312,6 +356,7 @@ export function ClipExercise({
               <option>Saque de meta</option>
               <option>Córner</option>
               <option>Balón a tierra</option>
+              <option>Continuar juego</option>
             </select>
           </QuestionCard>
 
@@ -340,36 +385,14 @@ export function ClipExercise({
             </div>
           </QuestionCard>
 
-          <QuestionCard title="4. ¿Aplicable VAR?">
-            <div className="grid grid-cols-2 gap-3">
-              <DecisionButton
-                active={varReview === true}
-                onClick={() => setVarReview(true)}
-              >
-                Sí
-              </DecisionButton>
-
-              <DecisionButton
-                active={varReview === false}
-                onClick={() => setVarReview(false)}
-              >
-                No
-              </DecisionButton>
-            </div>
-          </QuestionCard>
-
           {!examMode && (
-            <QuestionCard title="5. Justificación (escrita u oral)">
+            <QuestionCard title="4. Justificación escrita">
               <textarea
                 value={justification}
                 onChange={(e) => setJustification(e.target.value)}
-                placeholder="Explica tu decisión..."
+                placeholder="Explicá tu decisión..."
                 className="min-h-20 w-full rounded-lg border border-white/10 bg-[#17222b] p-3 text-sm text-white outline-none placeholder:text-zinc-600"
               />
-
-              <button className="mt-2 w-full rounded-lg bg-[#17222b] px-3 py-3 text-left text-sm font-black text-zinc-300 hover:bg-white/10">
-                🎙 Grabar voz
-              </button>
             </QuestionCard>
           )}
 
@@ -394,16 +417,6 @@ export function ClipExercise({
       </div>
     </div>
   );
-}
-
-function translateDifficulty(value: string) {
-  const map: Record<string, string> = {
-    easy: "Fácil",
-    medium: "Media",
-    hard: "Difícil",
-  };
-
-  return map[value] ?? value;
 }
 
 function QuestionCard({
