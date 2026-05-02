@@ -31,6 +31,7 @@ const handballSubTypes = [
   { value: "inmediatez", label: "Mano de inmediatez" },
   { value: "deliberada", label: "Mano deliberada" },
   { value: "bloqueo", label: "Mano de bloqueo / cuerpo antinatural" },
+  { value: "no_sancionable", label: "No sancionable" },
 ];
 
 const handballDetails = [
@@ -313,12 +314,6 @@ export default function AdminClipsPage() {
                 value={correctFoul}
                 onChange={setCorrectFoul}
               />
-
-              <BooleanSelect
-                label="¿Revisable por VAR?"
-                value={correctVar}
-                onChange={setCorrectVar}
-              />
             </div>
 
             <Select
@@ -334,7 +329,7 @@ export default function AdminClipsPage() {
                 { value: "Saque de banda", label: "Saque de banda" },
                 { value: "Balón a tierra", label: "Balón a tierra" },
                 { value: "Gol", label: "Gol" },
-                { value: "No gol", label: "No gol" },
+                { value: "Seguir el juego", label: "Seguir el juego" },
               ]}
             />
 
