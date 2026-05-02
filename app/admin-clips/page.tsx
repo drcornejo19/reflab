@@ -266,15 +266,17 @@ export default function AdminClipsPage() {
         <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
           <section className="space-y-4 rounded-3xl border border-white/10 bg-[#0f1720] p-6">
             <Select
-              label="Modo"
-              value={mode}
-              onChange={(value) => setMode(value as TrainingMode)}
-              options={[
-                { value: "field", label: "Árbitro" },
-                { value: "var", label: "VAR" },
-                { value: "english", label: "Inglés" },
-              ]}
-            />
+  label="Modo del clip"
+  value={mode}
+  onChange={(value) => setMode(value as TrainingMode)}
+  options={[
+    { value: "field", label: "Árbitro" },
+    { value: "var", label: "VAR" },
+    { value: "english", label: "Inglés" },
+    { value: "exam", label: "Examen" },
+    { value: "training", label: "Entrenamiento general" },
+  ]}
+/>
 
             <Input label="URL del video" value={videoUrl} onChange={setVideoUrl} />
 

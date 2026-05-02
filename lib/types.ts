@@ -1,4 +1,9 @@
-export type TrainingMode = "field" | "var" | "english";
+export type TrainingMode =
+  | "field"
+  | "var"
+  | "english"
+  | "exam"
+  | "training";
 
 export type Clip = {
   id: string;
