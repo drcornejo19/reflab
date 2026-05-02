@@ -48,6 +48,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[#050b12] text-white">
+      
+      {/* DESKTOP SIDEBAR */}
       <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[260px] border-r border-white/10 bg-[#050b12] p-5 lg:block">
         <Logo />
 
@@ -65,20 +67,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
 
+      {/* MOBILE HEADER */}
       <header className="fixed left-0 top-0 z-50 flex h-[72px] w-full items-center justify-between border-b border-white/10 bg-[#050b12]/95 px-4 backdrop-blur lg:hidden">
         <Logo compact />
       </header>
 
+      {/* MAIN */}
       <main className="min-h-screen px-3 pb-28 pt-[88px] lg:ml-[260px] lg:px-8 lg:pb-8 lg:pt-8">
         <div className="mx-auto w-full lg:max-w-[1180px]">{children}</div>
       </main>
 
+      {/* MOBILE NAV */}
       <nav className="fixed bottom-0 left-0 z-50 grid h-20 w-full grid-cols-5 border-t border-white/10 bg-[#050b12]/95 px-2 pb-2 pt-2 backdrop-blur lg:hidden">
         {mobileItems.map((item) => {
           const Icon = item.icon;
+
           const active =
             pathname === item.href ||
-            (item.href !== "/dashboard" && pathname.startsWith(item.href));
+            (item.href === "/mobile-dashboard" && pathname === "/dashboard") ||
+            (item.href === "/training" && pathname === "/training") ||
+            (item.href === "/mobile-var" &&
+              (pathname === "/mobile-var" || pathname === "/training/var")) ||
+            (item.href === "/mobile-stats" &&
+              (pathname === "/mobile-stats" || pathname === "/stats")) ||
+            (item.href === "/profile" && pathname.startsWith("/profile"));
 
           return (
             <Link
@@ -100,9 +112,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+/* LOGO */
 function Logo({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/home" className="flex items-center gap-3">
+    <Link href="/mobile-dashboard" className="flex items-center gap-3">
       <Image
         src="/logo.png"
         alt="RefLab"
@@ -124,6 +137,7 @@ function Logo({ compact = false }: { compact?: boolean }) {
   );
 }
 
+/* NAV LINK DESKTOP */
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
 
