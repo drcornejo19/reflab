@@ -62,6 +62,21 @@ export default function AdminClipsPage() {
   const [correctVar, setCorrectVar] = useState(false);
   const [explanation, setExplanation] = useState("");
 
+  const [editingClipId, setEditingClipId] = useState<string | null>(null);
+
+  function startEdit(clip: ClipWithDetails) {
+  setEditingClipId(clip.id);
+  setVideoUrl(clip.video_url ?? "");
+  setTopic(clip.topic ?? "Offside");
+  setSubType(clip.sub_type ?? "");
+  setDecisionDetail(clip.decision_detail ?? "");
+  setCorrectFoul(Boolean(clip.correct_foul));
+  setCorrectRestart(clip.correct_restart ?? "");
+  setCorrectDiscipline(clip.correct_discipline ?? "Sin sanción");
+  setCorrectVar(Boolean(clip.correct_var));
+  setExplanation(clip.explanation ?? "");
+}
+
   const subTypeOptions = useMemo(() => {
     if (topic === "Offside") return offsideSubTypes;
     if (topic === "Handball") return handballSubTypes;
@@ -137,43 +152,52 @@ export default function AdminClipsPage() {
   }
 
   async function createClip() {
-    if (!videoUrl.trim()) {
-      alert("La URL del video es obligatoria.");
-      return;
-    }
+    if (editingClipId) {
+  const { error } = await supabase
+    .from("clips")
+    .update({
+      video_url: videoUrl,
+      topic,
+      sub_type: subType || null,
+      decision_detail: decisionDetail || null,
+      mode,
+      correct_foul: correctFoul,
+      correct_restart: correctRestart,
+      correct_discipline: correctDiscipline,
+      correct_var: correctVar,
+      explanation,
+    })
+    .eq("id", editingClipId);
 
-    if ((topic === "Offside" || topic === "Handball") && !subType) {
-      alert("Tenés que elegir el subtipo técnico.");
-      return;
-    }
+  if (error) {
+    alert(error.message);
+    setSaving(false);
+    return;
+  }
+} else {
+  const { error } = await supabase.from("clips").insert([
+    {
+      title: generateClipTitle(topic, subType, decisionDetail),
+      description: "",
+      video_url: videoUrl,
+      topic,
+      sub_type: subType || null,
+      decision_detail: decisionDetail || null,
+      mode,
+      correct_foul: correctFoul,
+      correct_restart: correctRestart,
+      correct_discipline: correctDiscipline,
+      correct_var: correctVar,
+      explanation,
+    },
+  ]);
 
-    setSaving(true);
-
-    const generatedTitle = generateClipTitle(topic, subType, decisionDetail);
-
-    const { error } = await supabase.from("clips").insert([
-      {
-        title: generatedTitle,
-        description: "",
-        video_url: videoUrl,
-        topic,
-        sub_type: subType || null,
-        decision_detail: decisionDetail || null,
-        difficulty,
-        mode,
-        correct_foul: correctFoul,
-        correct_restart: correctRestart,
-        correct_discipline: correctDiscipline,
-        correct_var: correctVar,
-        explanation,
-      },
-    ]);
-
-    if (error) {
-      alert(error.message);
-      setSaving(false);
-      return;
-    }
+  if (error) {
+    alert(error.message);
+    setSaving(false);
+    return;
+  }
+}
 
     reset();
     await loadClips();
@@ -191,6 +215,7 @@ export default function AdminClipsPage() {
     setCorrectRestart("Tiro libre indirecto");
     setCorrectDiscipline("Sin sanción");
     setCorrectVar(false);
+    setEditingClipId(null);
   }
 
   async function deleteClip(id: string) {
@@ -335,7 +360,7 @@ export default function AdminClipsPage() {
               disabled={saving}
               className="w-full rounded-xl bg-[#6fc11f] py-4 font-black text-black transition hover:bg-[#82dc2a] disabled:opacity-50"
             >
-              {saving ? "GUARDANDO..." : "CREAR CLIP"}
+              {saving ? "GUARDANDO..." : editingClipId ? "GUARDAR CAMBIOS" : "CREAR CLIP"}
             </button>
           </section>
 
@@ -377,6 +402,13 @@ export default function AdminClipsPage() {
                     >
                       Eliminar
                     </button>
+
+                    <button
+  onClick={() => startEdit(clip)}
+  className="rounded-xl bg-[#6fc11f]/10 px-3 py-2 text-xs font-black text-[#6fc11f] hover:bg-[#6fc11f]/20"
+>
+  Editar
+</button> 
                   </div>
                 </div>
               ))
