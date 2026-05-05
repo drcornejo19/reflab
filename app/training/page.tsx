@@ -1,57 +1,87 @@
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { TrainingClient } from "@/components/TrainingClient";
+import {
+  ClipboardCheck,
+  PlaySquare,
+  BookOpenCheck,
+  ChevronRight,
+} from "lucide-react";
+
+const modules = [
+  {
+    title: "Modo Entrenamiento",
+    subtitle: "Practicá decisiones técnicas con clips de juego.",
+    href: "/training/field",
+    icon: ClipboardCheck,
+    tag: "Decisión arbitral",
+  },
+  {
+    title: "Video Análisis",
+    subtitle: "Analizá jugadas, fundamentos y criterios de decisión.",
+    href: "/training/video-analysis",
+    icon: PlaySquare,
+    tag: "Análisis técnico",
+  },
+  {
+    title: "Examen Reglas de Juego",
+    subtitle: "Respondé preguntas tipo multiple choice sobre reglas IFAB.",
+    href: "/training/rules-exam",
+    icon: BookOpenCheck,
+    tag: "4 opciones",
+  },
+];
 
 export default function TrainingPage() {
   return (
     <AppShell>
-      <div className="mx-auto max-w-[1200px] space-y-6">
-        <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-6 shadow-2xl">
-          <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-            RefLab Training
+      <div className="space-y-6">
+        <section className="rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-7 shadow-2xl">
+          <p className="text-xs font-black uppercase tracking-[0.45em] text-[#6fc11f]">
+            REFLAB MODULES
           </p>
 
-          <h1 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">
-            Modo Entrenamiento
+          <h1 className="mt-5 text-4xl font-black md:text-6xl">
+            Centro de Entrenamiento
           </h1>
 
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-            Analizá clips de juego, tomá una decisión técnica, definí la
-            reanudación, la sanción disciplinaria y si la acción es revisable
-            por VAR.
+          <p className="mt-4 max-w-2xl text-lg leading-8 text-zinc-400">
+            Elegí un módulo para entrenar decisiones, analizar videos o responder
+            preguntas sobre las Reglas de Juego.
           </p>
-        </header>
+        </section>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <InfoCard
-            title="Objetivo"
-            text="Mejorar criterio arbitral mediante clips y feedback técnico."
-          />
+        <section className="grid gap-4 md:grid-cols-3">
+          {modules.map((module) => {
+            const Icon = module.icon;
 
-          <InfoCard
-            title="Evaluación"
-            text="Infracción, reanudación, disciplina, VAR y justificación."
-          />
+            return (
+              <Link
+                key={module.href}
+                href={module.href}
+                className="group rounded-[30px] border border-white/10 bg-[#101b24] p-6 shadow-2xl transition hover:border-[#6fc11f]/50 hover:bg-[#13212b]"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="grid h-14 w-14 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
+                    <Icon size={30} />
+                  </div>
 
-          <InfoCard
-            title="Feedback IA"
-            text="Análisis técnico automático con criterio arbitral."
-          />
-        </div>
+                  <ChevronRight className="text-zinc-600 transition group-hover:translate-x-1 group-hover:text-[#6fc11f]" />
+                </div>
 
-        <TrainingClient mode="field" />
+                <p className="mt-6 text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">
+                  {module.tag}
+                </p>
+
+                <h2 className="mt-3 text-2xl font-black">{module.title}</h2>
+
+                <p className="mt-3 text-sm leading-6 text-zinc-400">
+                  {module.subtitle}
+                </p>
+              </Link>
+            );
+          })}
+        </section>
       </div>
     </AppShell>
-  );
-}
-
-function InfoCard({ title, text }: { title: string; text: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-[#101b24] p-4">
-      <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6fc11f]">
-        {title}
-      </p>
-
-      <p className="mt-2 text-sm leading-6 text-zinc-400">{text}</p>
-    </div>
   );
 }
