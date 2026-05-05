@@ -111,7 +111,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 function Logo({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/mobile-dashboard" className="flex items-center gap-3">
+    <Link href="/home" className="flex items-center gap-3">
       <Image
         src="/logo.png"
         alt="RefLab"
