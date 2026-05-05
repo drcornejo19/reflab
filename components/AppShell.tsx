@@ -24,7 +24,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: Home },
-  { label: "Entrenamiento", href: "/training", icon: CircleAlert },
+  { label: "Módulos", href: "/training", icon: CircleAlert },
   { label: "Modo VAR", href: "/training/var", icon: MonitorCheck },
   { label: "Modo Inglés", href: "/training/english", icon: Languages },
   { label: "Biblioteca IFAB", href: "/learning", icon: BookOpen },
@@ -37,7 +37,7 @@ const navItems: NavItem[] = [
 
 const mobileItems = [
   { label: "Inicio", href: "/mobile-dashboard", icon: Home },
-  { label: "Entrená", href: "/training", icon: CircleAlert },
+  { label: "Módulos", href: "/training", icon: CircleAlert },
   { label: "Analizá", href: "/mobile-stats", icon: ChartNoAxesCombined },
   { label: "VAR", href: "/mobile-var", icon: MonitorCheck },
   { label: "Perfil", href: "/profile", icon: User },
@@ -65,7 +65,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
 
-      <header className="fixed left-0 top-0 z-50 flex h-[72px] w-full items-center justify-between border-b border-white/10 bg-[#050b12]/95 px-4 backdrop-blur lg:hidden">
+      <header className="fixed left-0 top-0 z-50 flex h-[72px] w-full items-center border-b border-white/10 bg-[#050b12]/95 px-4 backdrop-blur lg:hidden">
         <Logo compact />
       </header>
 
@@ -80,10 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           const active =
             pathname === item.href ||
             (item.href === "/mobile-dashboard" && pathname === "/dashboard") ||
-            (item.href === "/training" &&
-              (pathname === "/training" ||
-                pathname === "/training/exam" ||
-                pathname === "/training/english")) ||
+            (item.href === "/training" && pathname.startsWith("/training")) ||
             (item.href === "/mobile-var" &&
               (pathname === "/mobile-var" || pathname === "/training/var")) ||
             (item.href === "/mobile-stats" &&
@@ -125,18 +122,10 @@ function Logo({ compact = false }: { compact?: boolean }) {
       />
 
       <div>
-        <p
-          className={`${
-            compact ? "text-sm" : "text-lg"
-          } font-black tracking-wide`}
-        >
+        <p className={`${compact ? "text-sm" : "text-lg"} font-black tracking-wide`}>
           REF<span className="text-[#6fc11f]">LAB</span>
         </p>
-        <p
-          className={`${
-            compact ? "text-[9px]" : "text-[10px]"
-          } text-zinc-500`}
-        >
+        <p className={`${compact ? "text-[9px]" : "text-[10px]"} text-zinc-500`}>
           Referee Decision Lab
         </p>
       </div>
