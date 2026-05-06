@@ -53,7 +53,8 @@ export default function HomePage() {
             <div className="h-[2px] flex-1 bg-[#6fc11f]" />
           </div>
 
-          <div className="mt-10 flex w-full items-center justify-center gap-0 overflow-visible">
+          <div className="mt-10 w-full overflow-x-auto pb-2 scrollbar-hide">
+  <div className="mx-auto flex min-w-[720px] items-center justify-center">
             {heroItems.map((item, index) => {
               const Icon = item.icon;
 
@@ -79,12 +80,13 @@ export default function HomePage() {
               );
             })}
           </div>
+          </div>
 
           <p className="mt-12 text-xs font-black tracking-[0.45em] text-[#6fc11f] sm:text-lg">
             ENTRENÁ. ANALIZÁ. DECIDÍ. MEJORÁ.
           </p>
         </div>
       </section>
-    </main>
+    </main>    
   );
 }
