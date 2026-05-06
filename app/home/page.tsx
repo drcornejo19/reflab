@@ -1,62 +1,68 @@
-"use client";
-
 import Link from "next/link";
-import { Monitor, Activity, Target, BarChart3, BookOpen } from "lucide-react";
-
-const modules = [
-  { href: "/training/var", label: "ENTRENÁ", Icon: Monitor },
-  { href: "/training/english", label: "ANALIZÁ", Icon: Activity },
-  { href: "/training/exam", label: "DECIDÍ", Icon: Target },
-  { href: "/dashboard", label: "MEJORÁ", Icon: BarChart3 },
-  { href: "/learning", label: "APRENDÉ", Icon: BookOpen },
-];
+import {
+  BookOpen,
+  ChartNoAxesCombined,
+  Crosshair,
+  MonitorCheck,
+  Siren,
+} from "lucide-react";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-[#020b14] text-white flex flex-col items-center justify-center px-6 overflow-hidden">
-      <div className="text-center mb-14">
-        <h1 className="text-7xl md:text-8xl font-extrabold tracking-tight">
-          <span className="text-white">REF</span>
-          <span className="text-[#6fc11f]">LAB</span>
-        </h1>
+    <main className="min-h-screen bg-[#020b14] px-5 py-8 text-white">
+      <section className="mx-auto flex min-h-[calc(100vh-64px)] max-w-[1100px] flex-col items-center justify-center text-center">
+        <div className="w-full rounded-[36px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_34%),#050b12] px-6 py-10 shadow-2xl">
+          <h1 className="text-6xl font-black tracking-tight sm:text-8xl lg:text-9xl">
+            REF<span className="text-[#6fc11f]">LAB</span>
+          </h1>
 
-        <p className="mt-4 text-sm tracking-[0.35em] text-gray-400">
-          REFEREE DECISION LAB
-        </p>
+          <div className="mx-auto mt-5 flex max-w-[760px] items-center justify-center gap-4">
+            <div className="h-[3px] flex-1 bg-[#6fc11f]" />
+            <p className="text-sm font-black tracking-[0.45em] text-zinc-300 sm:text-xl">
+              REFEREE DECISION LAB
+            </p>
+            <div className="h-[3px] flex-1 bg-[#6fc11f]" />
+          </div>
 
-        <div className="flex items-center justify-center gap-6 mt-4">
-          <div className="w-16 h-[2px] bg-[#6fc11f]" />
-          <div className="w-16 h-[2px] bg-[#6fc11f]" />
-        </div>
-      </div>
+          <div className="mx-auto mt-12 grid max-w-[820px] grid-cols-5 gap-3">
+            <HeroItem icon={<MonitorCheck />} label="ENTRENÁ" />
+            <HeroItem icon={<Siren />} label="ANALIZÁ" />
+            <HeroItem icon={<Crosshair />} label="DECIDÍ" />
+            <HeroItem icon={<ChartNoAxesCombined />} label="MEJORÁ" />
+            <HeroItem icon={<BookOpen />} label="APRENDÉ" />
+          </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-10 md:gap-14">
-        {modules.map(({ href, label, Icon }, i) => (
+          <p className="mt-12 text-lg font-black tracking-[0.35em] text-[#6fc11f]">
+            ENTRENÁ. ANALIZÁ. DECIDÍ. MEJORÁ.
+          </p>
+
           <Link
-            key={i}
-            href={href}
-            className="group flex flex-col items-center gap-4 relative"
+            href="/training"
+            className="mx-auto mt-10 flex h-16 max-w-[360px] items-center justify-center rounded-2xl bg-[#6fc11f] px-8 font-black text-black shadow-[0_0_35px_rgba(111,193,31,0.3)] transition hover:bg-[#82dc2a]"
           >
-            <div className="relative flex items-center justify-center">
-              <div className="absolute top-[63%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-[#6fc11f] opacity-0 blur-2xl transition-all duration-300 group-hover:opacity-40" />
-
-              <Icon
-                size={48}
-                strokeWidth={2.2}
-                className="text-[#6fc11f] transition-all duration-300 group-hover:scale-110"
-              />
-            </div>
-
-            <span className="text-xs tracking-[0.4em] text-gray-300 group-hover:text-[#6fc11f] transition">
-              {label}
-            </span>
+            ENTRAR A MÓDULOS
           </Link>
-        ))}
-      </div>
-
-      <p className="mt-16 text-sm md:text-base tracking-[0.4em] text-[#6fc11f] text-center">
-        ENTRENÁ. ANALIZÁ. DECIDÍ. MEJORÁ.
-      </p>
+        </div>
+      </section>
     </main>
+  );
+}
+
+function HeroItem({
+  icon,
+  label,
+}: {
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-3 border-r border-white/15 last:border-r-0">
+      <div className="text-[#6fc11f] [&_svg]:h-9 [&_svg]:w-9 sm:[&_svg]:h-14 sm:[&_svg]:w-14">
+        {icon}
+      </div>
+      <p className="text-[10px] font-black tracking-[0.25em] text-zinc-300 sm:text-sm">
+        {label}
+      </p>
+    </div>
   );
 }

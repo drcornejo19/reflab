@@ -1,86 +1,117 @@
-import Link from "next/link";
+"use client";
+
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import {
-  ClipboardCheck,
-  PlaySquare,
-  BookOpenCheck,
-  ChevronRight,
-} from "lucide-react";
+import { ClipExercise } from "@/components/ClipExercise";
+import { supabase } from "@/lib/supabase";
+import type { Clip } from "@/lib/types";
 
-const modules = [
-  {
-    title: "Modo Entrenamiento",
-    subtitle: "Practicá decisiones técnicas con clips de juego.",
-    href: "/training/field",
-    icon: ClipboardCheck,
-    tag: "Decisión arbitral",
-  },
-  {
-    title: "Video Análisis",
-    subtitle: "Analizá jugadas, fundamentos y criterios de decisión.",
-    href: "/training/video-analysis",
-    icon: PlaySquare,
-    tag: "Análisis técnico",
-  },
-  {
-    title: "Examen Reglas de Juego",
-    subtitle: "Respondé preguntas tipo multiple choice sobre reglas IFAB.",
-    href: "/training/rules-exam",
-    icon: BookOpenCheck,
-    tag: "4 opciones",
-  },
-];
+export default function FieldTrainingPage() {
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-export default function TrainingPage() {
+  useEffect(() => {
+    async function loadClips() {
+      setLoading(true);
+
+      const { data, error } = await supabase
+        .from("clips")
+        .select("*")
+        .eq("mode", "field")
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        console.error("Error cargando clips:", error);
+        setClips([]);
+      } else {
+        setClips((data ?? []) as Clip[]);
+      }
+
+      setLoading(false);
+    }
+
+    loadClips();
+  }, []);
+
+  const currentClip = clips[currentIndex];
+
+  function nextClip() {
+    setCurrentIndex((prev) => {
+      if (prev >= clips.length - 1) return prev;
+      return prev + 1;
+    });
+  }
+
+  function previousClip() {
+    setCurrentIndex((prev) => {
+      if (prev <= 0) return prev;
+      return prev - 1;
+    });
+  }
+
   return (
     <AppShell>
-      <div className="space-y-6">
-        <section className="rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-7 shadow-2xl">
-          <p className="text-xs font-black uppercase tracking-[0.45em] text-[#6fc11f]">
-            REFLAB MODULES
-          </p>
+      <div className="mx-auto max-w-[1180px] space-y-5">
+        <header className="rounded-[24px] border border-white/10 bg-[#0b131b] p-5 shadow-2xl">
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
+                RefLab Training
+              </p>
 
-          <h1 className="mt-5 text-4xl font-black md:text-6xl">
-            Centro de Entrenamiento
-          </h1>
+              <h1 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">
+                Modo Entrenamiento
+              </h1>
 
-          <p className="mt-4 max-w-2xl text-lg leading-8 text-zinc-400">
-            Elegí un módulo para entrenar decisiones, analizar videos o responder
-            preguntas sobre las Reglas de Juego.
-          </p>
-        </section>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+                Analizá clips, tomá una decisión técnica, definí la reanudación
+                y la sanción disciplinaria.
+              </p>
+            </div>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          {modules.map((module) => {
-            const Icon = module.icon;
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3 text-center">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">
+                Clip
+              </p>
+              <p className="mt-1 text-sm font-black text-white">
+                {clips.length > 0 ? `${currentIndex + 1} / ${clips.length}` : "0 / 0"}
+              </p>
+            </div>
+          </div>
+        </header>
 
-            return (
-              <Link
-                key={module.href}
-                href={module.href}
-                className="group rounded-[30px] border border-white/10 bg-[#101b24] p-6 shadow-2xl transition hover:border-[#6fc11f]/50 hover:bg-[#13212b]"
+        {loading ? (
+          <div className="rounded-[24px] border border-white/10 bg-[#0b131b] p-8 text-zinc-400">
+            Cargando clips...
+          </div>
+        ) : !currentClip ? (
+          <div className="rounded-[24px] border border-white/10 bg-[#0b131b] p-8 text-zinc-400">
+            No hay clips cargados para modo entrenamiento.
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={previousClip}
+                disabled={currentIndex === 0}
+                className="rounded-xl bg-white/10 px-4 py-3 text-sm font-black text-white disabled:opacity-40"
               >
-                <div className="flex items-center justify-between">
-                  <div className="grid h-14 w-14 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
-                    <Icon size={30} />
-                  </div>
+                ← Anterior
+              </button>
 
-                  <ChevronRight className="text-zinc-600 transition group-hover:translate-x-1 group-hover:text-[#6fc11f]" />
-                </div>
+              <button
+                onClick={nextClip}
+                disabled={currentIndex >= clips.length - 1}
+                className="rounded-xl bg-[#6fc11f] px-4 py-3 text-sm font-black text-black disabled:opacity-40"
+              >
+                Siguiente →
+              </button>
+            </div>
 
-                <p className="mt-6 text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">
-                  {module.tag}
-                </p>
-
-                <h2 className="mt-3 text-2xl font-black">{module.title}</h2>
-
-                <p className="mt-3 text-sm leading-6 text-zinc-400">
-                  {module.subtitle}
-                </p>
-              </Link>
-            );
-          })}
-        </section>
+            <ClipExercise clip={currentClip} onBack={previousClip} />
+          </>
+        )}
       </div>
     </AppShell>
   );
