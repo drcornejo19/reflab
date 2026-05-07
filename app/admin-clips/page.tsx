@@ -664,8 +664,12 @@ function labelFromValue(
       interferir_adversario:
         "Interfiere en el adversario",
 
+        
       sacar_ventaja:
         "Saca ventaja",
+
+        No_fuera_de_juego:
+        "No es fuera de juego",
 
       inmediatez:
         "Mano de inmediatez",
