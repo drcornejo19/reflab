@@ -471,12 +471,6 @@ export default function AdminClipsPage() {
               />
             )}
 
-            <Input
-              label="Detalle de decisión"
-              value={decisionDetail}
-              onChange={setDecisionDetail}
-            />
-
             <BooleanSelect
               label="¿Hubo infracción?"
               value={correctFoul}
