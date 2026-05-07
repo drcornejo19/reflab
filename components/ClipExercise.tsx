@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { calculateScore } from "@/lib/scoring";
 import { supabase } from "@/lib/supabase";
@@ -21,7 +21,27 @@ type ClipExerciseProps = {
   onBack?: () => void;
 };
 
+type ClipWithDetails = Clip & {
+  sub_type?: string | null;
+  decision_detail?: string | null;
+};
+
 const MAX_VIDEO_PLAYS = 3;
+
+const foulRestartOptions = [
+  "Tiro libre directo",
+  "Tiro libre indirecto",
+  "Penal",
+];
+
+const noFoulRestartOptions = [
+  "Seguir el juego",
+  "Saque de meta",
+  "Saque de esquina",
+  "Saque de banda",
+  "Gol",
+  "Balón a tierra",
+];
 
 export function ClipExercise({
   clip,
@@ -29,6 +49,8 @@ export function ClipExercise({
   onComplete,
   onBack,
 }: ClipExerciseProps) {
+  const typedClip = clip as ClipWithDetails;
+
   const { user } = useUser();
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -41,8 +63,18 @@ export function ClipExercise({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
-
   const [playCount, setPlayCount] = useState(0);
+
+  const isOffside = typedClip.topic === "Offside";
+  const isVarClip = typedClip.topic === "VAR";
+  const isNoOffside =
+    typedClip.topic === "Offside" && typedClip.sub_type === "no_offside";
+
+  const restartOptions = useMemo(() => {
+    if (foul === true) return foulRestartOptions;
+    if (foul === false) return noFoulRestartOptions;
+    return [...foulRestartOptions, ...noFoulRestartOptions];
+  }, [foul]);
 
   const remainingPlays = Math.max(MAX_VIDEO_PLAYS - playCount, 0);
   const videoLocked = remainingPlays <= 0;
@@ -50,7 +82,10 @@ export function ClipExercise({
   const canSubmit = foul !== null && restart !== "" && discipline !== "";
 
   useEffect(() => {
-    const savedCount = Number(localStorage.getItem(`clip-plays-${clip.id}`) ?? "0");
+    const savedCount = Number(
+      localStorage.getItem(`clip-plays-${typedClip.id}`) ?? "0"
+    );
+
     setPlayCount(savedCount);
     reset(false);
 
@@ -58,7 +93,26 @@ export function ClipExercise({
       videoRef.current.pause();
       videoRef.current.currentTime = 0;
     }
-  }, [clip.id]);
+  }, [typedClip.id]);
+
+  useEffect(() => {
+    if (isNoOffside) {
+      setFoul(false);
+      setRestart("Seguir el juego");
+      setDiscipline("Sin sanción");
+    }
+  }, [isNoOffside]);
+
+  useEffect(() => {
+    if (foul === true && !foulRestartOptions.includes(restart)) {
+      setRestart("Tiro libre directo");
+    }
+
+    if (foul === false && !noFoulRestartOptions.includes(restart)) {
+      setRestart("Seguir el juego");
+      setDiscipline("Sin sanción");
+    }
+  }, [foul, restart]);
 
   function handleVideoPlay() {
     if (videoLocked) {
@@ -67,8 +121,9 @@ export function ClipExercise({
     }
 
     const nextCount = playCount + 1;
+
     setPlayCount(nextCount);
-    localStorage.setItem(`clip-plays-${clip.id}`, String(nextCount));
+    localStorage.setItem(`clip-plays-${typedClip.id}`, String(nextCount));
   }
 
   function handleBack() {
@@ -87,24 +142,24 @@ export function ClipExercise({
       foul,
       restart,
       discipline,
-      var: clip.correct_var,
+      var: typedClip.correct_var,
     };
 
     const correctAnswer = {
-      foul: clip.correct_foul,
-      restart: clip.correct_restart,
-      discipline: clip.correct_discipline,
-      var: clip.correct_var,
+      foul: typedClip.correct_foul,
+      restart: typedClip.correct_restart,
+      discipline: typedClip.correct_discipline,
+      var: typedClip.correct_var,
     };
 
     const score = calculateScore(userAnswer, correctAnswer);
 
     if (examMode && onComplete) {
       onComplete({
-        clipId: clip.id,
-        clipTitle: clip.title,
-        topic: clip.topic,
-        difficulty: clip.difficulty,
+        clipId: typedClip.id,
+        clipTitle: typedClip.title,
+        topic: typedClip.topic,
+        difficulty: typedClip.difficulty,
         score,
       });
 
@@ -124,17 +179,17 @@ export function ClipExercise({
     const { error } = await supabase.from("attempts").insert([
       {
         user_id: user.id,
-        clip_title: clip.title,
+        clip_title: typedClip.title,
         foul,
         restart,
         discipline,
-        var_review: clip.correct_var,
+        var_review: typedClip.correct_var,
         score,
-        topic: clip.topic,
-        difficulty: clip.difficulty,
-        technical_correct: foul === clip.correct_foul,
-        restart_correct: restart === clip.correct_restart,
-        discipline_correct: discipline === clip.correct_discipline,
+        topic: typedClip.topic,
+        difficulty: typedClip.difficulty,
+        technical_correct: foul === typedClip.correct_foul,
+        restart_correct: restart === typedClip.correct_restart,
+        discipline_correct: discipline === typedClip.correct_discipline,
         var_correct: null,
       },
     ]);
@@ -161,13 +216,15 @@ export function ClipExercise({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          clipTitle: clip.title,
-          topic: clip.topic,
-          difficulty: clip.difficulty,
+          clipTitle: typedClip.title,
+          topic: typedClip.topic,
+          subType: typedClip.sub_type,
+          decisionDetail: typedClip.decision_detail,
+          difficulty: typedClip.difficulty,
           userAnswer,
           correctAnswer,
           justification,
-          explanation: clip.explanation,
+          explanation: typedClip.explanation,
           score,
         }),
       });
@@ -199,7 +256,7 @@ export function ClipExercise({
 
     if (resetVideoCount) {
       setPlayCount(0);
-      localStorage.setItem(`clip-plays-${clip.id}`, "0");
+      localStorage.setItem(`clip-plays-${typedClip.id}`, "0");
     }
   }
 
@@ -217,16 +274,34 @@ export function ClipExercise({
           </h2>
 
           <p className="mt-2 text-2xl font-black">
-            {result >= 85 ? "¡Excelente!" : result >= 60 ? "Buen intento" : "A revisar"}
+            {result >= 85
+              ? "¡Excelente!"
+              : result >= 60
+                ? "Buen intento"
+                : "A revisar"}
           </p>
 
           <div className="mt-6 rounded-2xl border border-white/10 bg-black/25 p-4">
             <h3 className="font-black">Respuesta correcta</h3>
+
             <p className="mt-3 text-sm leading-6 text-zinc-300">
-              Infracción: <b>{clip.correct_foul ? "Sí" : "No"}</b>.
-              Reanudación: <b> {clip.correct_restart}</b>. Sanción:{" "}
-              <b>{clip.correct_discipline}</b>.
+              Infracción:{" "}
+              <b>{typedClip.correct_foul ? "Sí" : "No"}</b>. Reanudación:{" "}
+              <b>{typedClip.correct_restart}</b>. Sanción:{" "}
+              <b>{typedClip.correct_discipline}</b>.
             </p>
+
+            {typedClip.sub_type && (
+              <p className="mt-2 text-sm leading-6 text-zinc-400">
+                Tipo: <b>{labelFromValue(typedClip.sub_type)}</b>
+              </p>
+            )}
+
+            {typedClip.decision_detail && (
+              <p className="mt-2 text-sm leading-6 text-zinc-400">
+                Detalle: <b>{labelFromValue(typedClip.decision_detail)}</b>
+              </p>
+            )}
           </div>
 
           <button
@@ -240,8 +315,9 @@ export function ClipExercise({
         <section className="space-y-4">
           <div className="rounded-[22px] border border-[#23303b] bg-[#0f171f] p-5">
             <h3 className="font-black text-[#6fc11f]">Fundamento</h3>
+
             <p className="mt-3 text-sm leading-6 text-zinc-300">
-              {clip.explanation ?? "Sin explicación cargada."}
+              {typedClip.explanation ?? "Sin explicación cargada."}
             </p>
           </div>
 
@@ -249,7 +325,9 @@ export function ClipExercise({
             <h3 className="font-black text-blue-300">Feedback IA</h3>
 
             {loadingAi ? (
-              <p className="mt-3 text-sm text-zinc-300">Generando análisis...</p>
+              <p className="mt-3 text-sm text-zinc-300">
+                Generando análisis...
+              </p>
             ) : (
               <div className="mt-3 space-y-2 text-sm leading-6 text-zinc-300">
                 {(aiFeedback ?? "Sin feedback IA disponible.")
@@ -281,7 +359,13 @@ export function ClipExercise({
             <p className="text-sm font-black">
               {examMode ? "Examen - Modo Árbitro" : "Ejercicio - Modo Árbitro"}
             </p>
-            <p className="mt-1 text-xs text-zinc-500">{clip.topic}</p>
+
+            <p className="mt-1 text-xs text-zinc-500">
+              {typedClip.topic}
+              {typedClip.sub_type
+                ? ` · ${labelFromValue(typedClip.sub_type)}`
+                : ""}
+            </p>
           </div>
         </div>
 
@@ -289,6 +373,7 @@ export function ClipExercise({
           <p className="font-black text-[#6fc11f]">
             {remainingPlays}/{MAX_VIDEO_PLAYS}
           </p>
+
           <p className="text-zinc-400">Reproducciones disponibles</p>
         </div>
       </div>
@@ -299,7 +384,7 @@ export function ClipExercise({
             <video
               ref={videoRef}
               className="aspect-video w-full bg-black object-cover"
-              src={clip.video_url}
+              src={typedClip.video_url}
               controls={!videoLocked}
               playsInline
               onPlay={handleVideoPlay}
@@ -318,26 +403,45 @@ export function ClipExercise({
           </div>
 
           <div className="rounded-2xl border border-[#6fc11f]/20 bg-[#6fc11f]/10 p-4 text-sm text-zinc-300">
-            Tenés <b className="text-[#6fc11f]">3 reproducciones</b> para analizar
-            este video. Una vez agotadas, podés responder, pero no volver a
-            reproducirlo.
+            Tenés <b className="text-[#6fc11f]">3 reproducciones</b> para
+            analizar este video. Una vez agotadas, podés responder, pero no
+            volver a reproducirlo.
           </div>
 
-          {clip.description && (
+          {typedClip.description && (
             <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-zinc-400">
-              {clip.description}
+              {typedClip.description}
             </p>
           )}
         </section>
 
         <section className="space-y-3">
-          <QuestionCard title="1. ¿Hay infracción?">
+          <QuestionCard
+            title={
+              isOffside
+                ? "1. ¿Existe fuera de juego?"
+                : "1. ¿Hay infracción?"
+            }
+          >
             <div className="grid grid-cols-2 gap-3">
-              <DecisionButton active={foul === true} onClick={() => setFoul(true)}>
+              <DecisionButton
+                active={foul === true}
+                onClick={() => {
+                  setFoul(true);
+                  setRestart("Tiro libre directo");
+                }}
+              >
                 Sí
               </DecisionButton>
 
-              <DecisionButton active={foul === false} onClick={() => setFoul(false)}>
+              <DecisionButton
+                active={foul === false}
+                onClick={() => {
+                  setFoul(false);
+                  setRestart("Seguir el juego");
+                  setDiscipline("Sin sanción");
+                }}
+              >
                 No
               </DecisionButton>
             </div>
@@ -350,13 +454,12 @@ export function ClipExercise({
               className="w-full rounded-lg border border-white/10 bg-[#17222b] px-3 py-3 text-sm text-white outline-none"
             >
               <option value="">Seleccioná</option>
-              <option>Tiro libre directo</option>
-              <option>Tiro libre indirecto</option>
-              <option>Penal</option>
-              <option>Saque de meta</option>
-              <option>Córner</option>
-              <option>Balón a tierra</option>
-              <option>Continuar juego</option>
+
+              {restartOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
             </select>
           </QuestionCard>
 
@@ -370,14 +473,14 @@ export function ClipExercise({
               />
 
               <DisciplineButton
-                label="Amonestación"
+                label="Amarilla"
                 active={discipline === "Amarilla"}
                 onClick={() => setDiscipline("Amarilla")}
                 color="yellow"
               />
 
               <DisciplineButton
-                label="Expulsión"
+                label="Roja"
                 active={discipline === "Roja"}
                 onClick={() => setDiscipline("Roja")}
                 color="red"
@@ -385,8 +488,30 @@ export function ClipExercise({
             </div>
           </QuestionCard>
 
+          {isVarClip && (
+            <QuestionCard title="4. Modo VAR">
+              <div className="rounded-xl border border-blue-400/20 bg-blue-400/10 p-4 text-sm leading-6 text-blue-200">
+                <p>
+                  Situación VAR:{" "}
+                  <b>
+                    {typedClip.sub_type
+                      ? labelFromValue(typedClip.sub_type)
+                      : "Sin subtipo cargado"}
+                  </b>
+                </p>
+
+                {typedClip.decision_detail && (
+                  <p className="mt-2">
+                    Detalle:{" "}
+                    <b>{labelFromValue(typedClip.decision_detail)}</b>
+                  </p>
+                )}
+              </div>
+            </QuestionCard>
+          )}
+
           {!examMode && (
-            <QuestionCard title="4. Justificación escrita">
+            <QuestionCard title={isVarClip ? "5. Justificación escrita" : "4. Justificación escrita"}>
               <textarea
                 value={justification}
                 onChange={(e) => setJustification(e.target.value)}
@@ -493,7 +618,46 @@ function DisciplineButton({
               : "border border-zinc-400 bg-transparent"
         }`}
       />
+
       {label}
     </button>
   );
+}
+
+function labelFromValue(value?: string | null) {
+  if (!value) return "";
+
+  const dictionary: Record<string, string> = {
+    Dispute: "Disputas",
+    "Tactical foul": "Faltas tácticas",
+    Offside: "Fuera de juego",
+    Handball: "Manos",
+    VAR: "VAR",
+
+    no_offside: "No fuera de juego",
+    interferir_juego: "Interfiere en el juego",
+    interferir_adversario: "Interfiere en el adversario",
+    sacar_ventaja: "Saca ventaja de su posición",
+
+    inmediatez: "Mano de inmediatez",
+    deliberada: "Mano deliberada",
+    bloqueo: "Mano de bloqueo",
+    no_sancionable: "No sancionable",
+
+    check_complete: "Check complete",
+    review_recommended: "Review recommended",
+    on_field_review: "On-field review",
+    confirm_decision: "Confirm decision",
+    overturn_decision: "Overturn decision",
+    app_review: "APP review",
+    factual_review: "Factual review",
+    subjective_review: "Subjective review",
+
+    movimiento_justificado: "Movimiento justificado",
+    movimiento_no_justificado: "Movimiento no justificado",
+    brazo_amplia_cuerpo: "Brazo amplía el volumen corporal",
+    brazo_apoyo: "Brazo de apoyo",
+  };
+
+  return dictionary[value] ?? value;
 }

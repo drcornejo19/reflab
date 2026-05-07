@@ -13,7 +13,7 @@ export default function ExamPage() {
               </p>
 
               <h1 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">
-                Simulación de examen arbitral
+                Examen arbitral
               </h1>
 
               <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
