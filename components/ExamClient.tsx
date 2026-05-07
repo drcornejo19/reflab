@@ -22,6 +22,7 @@ type Answer = {
   restart: string;
   discipline: string;
   offsideReason?: string;
+  handballReason?: string;
   score: number;
 };
 
@@ -46,6 +47,12 @@ const offsideReasonOptions = [
   "sacar_ventaja",
 ];
 
+const handballReasonOptions = [
+  "inmediatez",
+  "bloqueo",
+  "deliberada",
+];
+
 export function ExamClient() {
   const { user } = useUser();
 
@@ -59,6 +66,7 @@ export function ExamClient() {
   const [restart, setRestart] = useState("");
   const [discipline, setDiscipline] = useState("");
   const [offsideReason, setOffsideReason] = useState("");
+  const [handballReason, setHandballReason] = useState("");
 
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
@@ -67,7 +75,10 @@ export function ExamClient() {
   const currentClip = clips[index];
 
   const isOffsideClip = currentClip?.topic === "Offside";
+  const isHandballClip = currentClip?.topic === "Handball";
+
   const mustAnswerOffsideReason = isOffsideClip && foul === true;
+  const mustAnswerHandballReason = isHandballClip && foul === true;
 
   const restartOptions = useMemo(() => {
     if (foul === true) return foulRestartOptions;
@@ -79,7 +90,8 @@ export function ExamClient() {
     foul !== null &&
     restart !== "" &&
     discipline !== "" &&
-    (!mustAnswerOffsideReason || offsideReason !== "");
+    (!mustAnswerOffsideReason || offsideReason !== "") &&
+    (!mustAnswerHandballReason || handballReason !== "");
 
   const examStats = useMemo(() => {
     const totalScore = answers.reduce((acc, a) => acc + a.score, 0);
@@ -122,11 +134,16 @@ export function ExamClient() {
     const isNoOffside =
       currentClip.topic === "Offside" && currentClip.sub_type === "no_offside";
 
-    if (isNoOffside) {
+    const isNoHandball =
+      currentClip.topic === "Handball" &&
+      currentClip.sub_type === "no_sancionable";
+
+    if (isNoOffside || isNoHandball) {
       setFoul(false);
       setRestart("Seguir el juego");
       setDiscipline("Sin sanción");
       setOffsideReason("");
+      setHandballReason("");
     }
   }, [currentClip]);
 
@@ -139,6 +156,7 @@ export function ExamClient() {
       setRestart("Seguir el juego");
       setDiscipline("Sin sanción");
       setOffsideReason("");
+      setHandballReason("");
     }
   }, [foul, restart]);
 
@@ -192,19 +210,28 @@ export function ExamClient() {
         ? offsideReason === currentClip.sub_type
         : true;
 
-    const score = offsideReasonCorrect
-      ? baseScore
-      : Math.max(baseScore - 20, 0);
+    const handballReasonCorrect =
+      currentClip.topic === "Handball" && foul === true
+        ? handballReason === currentClip.sub_type
+        : true;
+
+    let score = baseScore;
+
+    if (!offsideReasonCorrect) score -= 20;
+    if (!handballReasonCorrect) score -= 20;
+
+    score = Math.max(score, 0);
 
     const answer: Answer = {
       clipId: currentClip.id,
-      clipTitle: currentClip.title,
+      clipTitle: labelFromValue(currentClip.topic),
       topic: currentClip.topic,
       difficulty: currentClip.difficulty,
       foul,
       restart,
       discipline,
       offsideReason: offsideReason || undefined,
+      handballReason: handballReason || undefined,
       score,
     };
 
@@ -257,6 +284,7 @@ export function ExamClient() {
     setRestart("");
     setDiscipline("");
     setOffsideReason("");
+    setHandballReason("");
   }
 
   function restartExam() {
@@ -380,6 +408,12 @@ export function ExamClient() {
                         Motivo FDJ: {labelFromValue(a.offsideReason)}
                       </p>
                     )}
+
+                    {a.handballReason && (
+                      <p className="mt-1 text-xs text-[#6fc11f]">
+                        Tipo de mano: {labelFromValue(a.handballReason)}
+                      </p>
+                    )}
                   </div>
 
                   <p
@@ -410,6 +444,7 @@ export function ExamClient() {
             <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
               Examen en curso
             </p>
+
             <h2 className="mt-2 text-2xl font-black">
               Pregunta {index + 1} de {clips.length}
             </h2>
@@ -432,13 +467,13 @@ export function ExamClient() {
                 Clip de examen
               </p>
 
-              <h1 className="mt-2 text-2xl font-black">{currentClip.title}</h1>
+              <h1 className="mt-2 text-2xl font-black">
+                {labelFromValue(currentClip.topic)}
+              </h1>
 
-              {currentClip.sub_type && (
-                <p className="mt-1 text-xs text-zinc-500">
-                  {labelFromValue(currentClip.sub_type)}
-                </p>
-              )}
+              <p className="mt-1 text-xs text-zinc-500">
+                Analizá la acción y seleccioná la decisión correcta.
+              </p>
             </div>
 
             <span className="rounded-full border border-[#6fc11f]/40 px-3 py-1 text-xs font-bold text-[#6fc11f]">
@@ -453,7 +488,7 @@ export function ExamClient() {
           />
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
-            <InfoBox title="Tema" value={currentClip.topic} />
+            <InfoBox title="Tema" value={labelFromValue(currentClip.topic)} />
             <InfoBox title="Modo" value="Examen" />
             <InfoBox title="Feedback" value="Al final" />
           </div>
@@ -473,7 +508,11 @@ export function ExamClient() {
                   active={foul === true}
                   onClick={() => {
                     setFoul(true);
-                    setRestart("Tiro libre indirecto");
+                    setRestart(
+                      currentClip.topic === "Offside"
+                        ? "Tiro libre indirecto"
+                        : "Tiro libre directo"
+                    );
                   }}
                 >
                   SÍ
@@ -486,6 +525,7 @@ export function ExamClient() {
                     setRestart("Seguir el juego");
                     setDiscipline("Sin sanción");
                     setOffsideReason("");
+                    setHandballReason("");
                   }}
                 >
                   NO
@@ -534,8 +574,32 @@ export function ExamClient() {
               </DecisionBlock>
             )}
 
+            {mustAnswerHandballReason && (
+              <DecisionBlock title="3. Tipo de mano">
+                <div className="grid gap-3">
+                  {handballReasonOptions.map((reason) => (
+                    <button
+                      key={reason}
+                      onClick={() => setHandballReason(reason)}
+                      className={`rounded-xl px-4 py-3 text-sm font-black transition ${
+                        handballReason === reason
+                          ? "bg-[#6fc11f] text-black"
+                          : "bg-white/10 text-zinc-300 hover:bg-white/15"
+                      }`}
+                    >
+                      {labelFromValue(reason)}
+                    </button>
+                  ))}
+                </div>
+              </DecisionBlock>
+            )}
+
             <DecisionBlock
-              title={mustAnswerOffsideReason ? "4. Sanción disciplinaria" : "3. Sanción disciplinaria"}
+              title={
+                mustAnswerOffsideReason || mustAnswerHandballReason
+                  ? "4. Sanción disciplinaria"
+                  : "3. Sanción disciplinaria"
+              }
             >
               <div className="grid grid-cols-3 gap-3">
                 {["Sin sanción", "Amarilla", "Roja"].map((item) => (
