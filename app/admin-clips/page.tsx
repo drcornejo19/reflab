@@ -25,6 +25,7 @@ const offsideSubTypes = [
   { value: "interferir_juego", label: "Interfiere en el juego" },
   { value: "interferir_adversario", label: "Interfiere en el adversario" },
   { value: "sacar_ventaja", label: "Saca ventaja de su posición" },
+  {value: "no_offside", label: "No fuera de juego",},
 ];
 
 const handballSubTypes = [
@@ -32,6 +33,33 @@ const handballSubTypes = [
   { value: "deliberada", label: "Mano deliberada" },
   { value: "bloqueo", label: "Mano de bloqueo / cuerpo antinatural" },
   { value: "no_sancionable", label: "No sancionable" },
+];
+
+const varSubTypes = [
+  {
+    value: "check_complete",
+    label: "Check complete",
+  },
+
+  {
+    value: "on_field_review",
+    label: "On-field review",
+  },
+
+  {
+    value: "confirm_decision",
+    label: "Confirm decision",
+  },
+
+  {
+    value: "app_review",
+    label: "APP review",
+  },
+
+  {
+    value: "factual_review",
+    label: "Factual review",
+  },
 ];
 
 export default function AdminClipsPage() {
@@ -90,12 +118,20 @@ export default function AdminClipsPage() {
   }
 
   const subTypeOptions = useMemo(() => {
-    if (topic === "Offside") return offsideSubTypes;
+  if (topic === "Offside") {
+    return offsideSubTypes;
+  }
 
-    if (topic === "Handball") return handballSubTypes;
+  if (topic === "Handball") {
+    return handballSubTypes;
+  }
 
-    return [];
-  }, [topic]);
+  if (topic === "VAR") {
+    return varSubTypes;
+  }
+
+  return [];
+}, [topic]);
 
   const restartOptions = useMemo(() => {
     if (correctFoul) {
@@ -146,6 +182,12 @@ export default function AdminClipsPage() {
   useEffect(() => {
     if (editingClipId) return;
 
+    if (topic === "Offside" && subType === "no_offside") {
+  setCorrectFoul(false);
+  setCorrectRestart("Seguir el juego");
+  setCorrectDiscipline("Sin sanción");
+}
+
     if (topic === "Offside") {
       setSubType("interferir_juego");
       setDecisionDetail("");
@@ -182,11 +224,19 @@ export default function AdminClipsPage() {
       setCorrectVar(false);
     }
 
-    if (topic === "VAR") {
-      setSubType("");
-      setDecisionDetail("");
-      setCorrectVar(true);
-    }
+   if (topic === "VAR") {
+  setSubType("check_complete");
+
+  setDecisionDetail("");
+
+  setCorrectVar(true);
+
+  setCorrectFoul(false);
+
+  setCorrectRestart("Seguir el juego");
+
+  setCorrectDiscipline("Sin sanción");
+}
   }, [topic, editingClipId]);
 
   useEffect(() => {
@@ -668,9 +718,6 @@ function labelFromValue(
       sacar_ventaja:
         "Saca ventaja",
 
-        No_fuera_de_juego:
-        "No es fuera de juego",
-
       inmediatez:
         "Mano de inmediatez",
 
@@ -682,6 +729,18 @@ function labelFromValue(
 
       no_sancionable:
         "No sancionable",
+
+        no_offside: "No fuera de juego",
+
+check_complete: "Check complete",
+
+review_recommended: "Review recommended",
+
+on_field_review: "On-field review",
+
+confirm_decision: "Confirm decision",
+
+factual_review: "Factual review",
     };
 
   return dictionary[value] ?? value;
