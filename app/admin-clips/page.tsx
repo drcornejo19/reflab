@@ -81,7 +81,7 @@ export default function AdminClipsPage() {
   const [correctFoul, setCorrectFoul] = useState(false);
   const [correctRestart, setCorrectRestart] = useState("Seguir el juego");
   const [correctDiscipline, setCorrectDiscipline] =
-    useState("Sin sanción");
+    useState("Sin tarjeta");
   const [correctVar, setCorrectVar] = useState(false);
   const [explanation, setExplanation] = useState("");
 
@@ -109,7 +109,7 @@ export default function AdminClipsPage() {
     );
 
     setCorrectDiscipline(
-      clip.correct_discipline ?? "Sin sanción"
+      clip.correct_discipline ?? "Sin tarjeta"
     );
 
     setCorrectVar(Boolean(clip.correct_var));
@@ -185,7 +185,7 @@ export default function AdminClipsPage() {
     if (topic === "Offside" && subType === "no_offside") {
   setCorrectFoul(false);
   setCorrectRestart("Seguir el juego");
-  setCorrectDiscipline("Sin sanción");
+  setCorrectDiscipline("Sin tarjeta");
 }
 
     if (topic === "Offside") {
@@ -193,7 +193,7 @@ export default function AdminClipsPage() {
       setDecisionDetail("");
       setCorrectFoul(true);
       setCorrectRestart("Tiro libre indirecto");
-      setCorrectDiscipline("Sin sanción");
+      setCorrectDiscipline("Sin tarjeta");
       setCorrectVar(false);
     }
 
@@ -202,7 +202,7 @@ export default function AdminClipsPage() {
       setDecisionDetail("");
       setCorrectFoul(true);
       setCorrectRestart("Tiro libre directo");
-      setCorrectDiscipline("Sin sanción");
+      setCorrectDiscipline("Sin tarjeta");
       setCorrectVar(false);
     }
 
@@ -220,7 +220,7 @@ export default function AdminClipsPage() {
       setDecisionDetail("");
       setCorrectFoul(true);
       setCorrectRestart("Tiro libre directo");
-      setCorrectDiscipline("Sin sanción");
+      setCorrectDiscipline("Sin tarjeta");
       setCorrectVar(false);
     }
 
@@ -235,7 +235,7 @@ export default function AdminClipsPage() {
 
   setCorrectRestart("Seguir el juego");
 
-  setCorrectDiscipline("Sin sanción");
+  setCorrectDiscipline("Sin tarjeta");
 }
   }, [topic, editingClipId]);
 
@@ -383,7 +383,7 @@ export default function AdminClipsPage() {
 
     setCorrectRestart("Seguir el juego");
 
-    setCorrectDiscipline("Sin sanción");
+    setCorrectDiscipline("Sin tarjeta");
 
     setCorrectVar(false);
 
@@ -552,8 +552,8 @@ export default function AdminClipsPage() {
               onChange={setCorrectDiscipline}
               options={[
                 {
-                  value: "Sin sanción",
-                  label: "Sin sanción",
+                  value: "Sin tarjeta",
+                  label: "Sin tarjeta",
                 },
                 {
                   value: "Amarilla",
