@@ -6,17 +6,32 @@ import { useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/lib/supabase";
 
-type Attempt = {
-  id: string;
+type ExamAnswer = {
+  clipId: string;
+  clipTitle: string;
+  topic: string;
+  difficulty: string;
+  foul: boolean | null;
+  restart: string;
+  discipline: string;
+  offsideReason?: string;
+  handballReason?: string;
+  technicalCorrect?: boolean;
+  restartCorrect?: boolean;
+  disciplineCorrect?: boolean;
+  subtypeCorrect?: boolean | null;
   score: number;
-  clip_title: string | null;
-  topic: string | null;
-  difficulty: string | null;
+};
+
+type ExamResult = {
+  id: string;
+  user_id: string;
+  total_questions: number;
+  total_score: number;
+  avg_score: number;
+  correct_count: number;
+  details: ExamAnswer[] | null;
   created_at: string;
-  technical_correct: boolean | null;
-  restart_correct: boolean | null;
-  discipline_correct: boolean | null;
-  var_correct: boolean | null;
 };
 
 type Criterion = {
@@ -27,7 +42,7 @@ type Criterion = {
 export default function DashboardPage() {
   const { user, isLoaded } = useUser();
 
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [examResults, setExamResults] = useState<ExamResult[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,16 +50,16 @@ export default function DashboardPage() {
       if (!isLoaded || !user) return;
 
       const { data, error } = await supabase
-        .from("attempts")
+        .from("exam_results")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
       if (error) {
         console.error("Error cargando dashboard:", error);
-        setAttempts([]);
+        setExamResults([]);
       } else {
-        setAttempts(data ?? []);
+        setExamResults((data ?? []) as ExamResult[]);
       }
 
       setLoading(false);
@@ -53,134 +68,171 @@ export default function DashboardPage() {
     loadData();
   }, [isLoaded, user]);
 
+  const examAnswers = useMemo(() => {
+    return examResults.flatMap((exam) => exam.details ?? []);
+  }, [examResults]);
+
   const stats = useMemo(() => {
-    const total = attempts.length;
+    const totalExams = examResults.length;
+    const totalAnswers = examAnswers.length;
 
     const avg =
-      total > 0
-        ? Math.round(attempts.reduce((acc, a) => acc + a.score, 0) / total)
+      totalAnswers > 0
+        ? Math.round(
+            examAnswers.reduce((acc, a) => acc + a.score, 0) / totalAnswers
+          )
         : 0;
 
-    const last = attempts[0]?.score ?? 0;
+    const last = examResults[0]?.avg_score ?? 0;
 
-    const initialPrecision = percent(attempts, "technical_correct");
-    const disciplinePrecision = percent(attempts, "discipline_correct");
-    const varPrecision = percent(attempts, "var_correct");
+    const technicalPrecision = percent(examAnswers, "technicalCorrect");
+    const restartPrecision = percent(examAnswers, "restartCorrect");
+    const disciplinePrecision = percent(examAnswers, "disciplineCorrect");
+    const subtypePrecision = percent(examAnswers, "subtypeCorrect");
 
     return {
-      total,
+      totalExams,
+      totalAnswers,
       avg,
       last,
-      initialPrecision,
+      technicalPrecision,
+      restartPrecision,
       disciplinePrecision,
-      varPrecision,
-      streak: Math.min(total, 7),
+      subtypePrecision,
+      streak: Math.min(totalExams, 7),
     };
-  }, [attempts]);
+  }, [examResults, examAnswers]);
 
   const criteria: Criterion[] = useMemo(() => {
     return [
-      
-      { label: "Manos", value: topicAvg(attempts, "Handball") },
-      { label: "Faltas tácticas", value: topicAvg(attempts, "SPA") },
-      { label: "Disputas", value: percent(attempts, "technical_correct") },
-      { label: "Fuera de juego", value: topicAvg(attempts, "Offside") },
-      { label: "VAR", value: percent(attempts, "var_correct") },
-      
+      { label: "Manos", value: topicAvg(examAnswers, "Handball") },
+      { label: "Faltas tácticas", value: topicAvg(examAnswers, "Tactical foul") },
+      { label: "Disputas", value: topicAvg(examAnswers, "Dispute") },
+      { label: "Fuera de juego", value: topicAvg(examAnswers, "Offside") },
+      { label: "VAR", value: topicAvg(examAnswers, "VAR") },
     ];
-  }, [attempts]);
+  }, [examAnswers]);
 
   const criterionStats = useMemo(() => {
     return [
-      { label: "Decisión técnica", value: percent(attempts, "technical_correct") },
-      { label: "Reanudación", value: percent(attempts, "restart_correct") },
-      { label: "Disciplina", value: percent(attempts, "discipline_correct") },
-      { label: "Criterio VAR", value: percent(attempts, "var_correct") },
+      {
+        label: "Decisión técnica",
+        value: percent(examAnswers, "technicalCorrect"),
+      },
+      {
+        label: "Reanudación",
+        value: percent(examAnswers, "restartCorrect"),
+      },
+      {
+        label: "Disciplina",
+        value: percent(examAnswers, "disciplineCorrect"),
+      },
+      {
+        label: "Subtipo técnico",
+        value: percent(examAnswers, "subtypeCorrect"),
+      },
     ];
-  }, [attempts]);
+  }, [examAnswers]);
 
   const weakest = useMemo(() => {
-    if (attempts.length === 0) return null;
+    if (examAnswers.length === 0) return null;
     return [...criterionStats].sort((a, b) => a.value - b.value)[0];
-  }, [criterionStats, attempts.length]);
+  }, [criterionStats, examAnswers.length]);
 
   const strongest = useMemo(() => {
-    if (attempts.length === 0) return null;
+    if (examAnswers.length === 0) return null;
     return [...criterionStats].sort((a, b) => b.value - a.value)[0];
-  }, [criterionStats, attempts.length]);
+  }, [criterionStats, examAnswers.length]);
 
   const recommendation = useMemo(() => {
-    if (!weakest) return "Completá ejercicios para generar una recomendación automática.";
+    if (!weakest) {
+      return "Completá un examen arbitral para generar estadísticas reales.";
+    }
 
     if (weakest.value < 60) {
-      return `Reforzar ${weakest.label}. Es tu criterio más bajo y conviene entrenarlo con clips simples antes de avanzar.`;
+      return `Reforzar ${weakest.label}. Es tu criterio más bajo según tus exámenes.`;
     }
 
     if (weakest.value < 80) {
       return `Seguí trabajando ${weakest.label}. Estás cerca de consolidar ese criterio.`;
     }
 
-    return "Buen rendimiento general. Podés avanzar hacia clips más complejos o modo examen.";
+    return "Buen rendimiento general. Podés avanzar hacia exámenes más complejos.";
   }, [weakest]);
 
-  const nextProgress = Math.min(Math.round((stats.total / 18) * 100), 100);
+  const nextProgress = Math.min(Math.round((stats.totalAnswers / 50) * 100), 100);
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-zinc-400">
+          Cargando estadísticas...
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
-     <div className="w-full space-y-5 rounded-[24px] border border-white/10 bg-[#101820] p-4 shadow-2xl backdrop-blur-xl sm:p-5 lg:mx-auto lg:max-w-[900px]">
+      <div className="w-full space-y-5 rounded-[24px] border border-white/10 bg-[#101820] p-4 shadow-2xl backdrop-blur-xl sm:p-5 lg:mx-auto lg:max-w-[900px]">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-black">Dashboard</h1>
             <p className="mt-1 text-sm text-zinc-400">
-              Resumen de tu rendimiento
+              Estadísticas reales basadas en Examen Arbitral
             </p>
           </div>
 
           <div className="flex gap-3">
             <div className="rounded-xl bg-[#1b242d] px-4 py-3">
-              <p className="text-xs text-zinc-400">🔥 Racha 7 días</p>
+              <p className="text-xs text-zinc-400">🔥 Exámenes recientes</p>
               <p className="text-sm font-black">{stats.streak}</p>
             </div>
 
             <Link
-              href="/training"
+              href="/training/exam"
               className="flex-1 rounded-2xl bg-[#6fc11f] px-5 py-4 text-center text-base font-black text-black shadow-[0_10px_30px_rgba(111,193,31,0.3)] transition hover:bg-[#82dc2a]"
             >
-              Practicar ahora
+              Rendir examen
             </Link>
           </div>
         </header>
 
-       <section className="grid grid-cols-2 overflow-hidden rounded-2xl border border-white/10 bg-[#17212a] sm:grid-cols-5">
+        <section className="grid grid-cols-2 overflow-hidden rounded-2xl border border-white/10 bg-[#17212a] sm:grid-cols-5">
           <TopMetric
             title="Puntuación general"
-            value={stats.avg || 0}
-            suffix=""
+            value={stats.avg}
             detail={stats.avg >= 85 ? "Excelente" : "En progreso"}
             featured
           />
 
-          <TopMetric title="Ejercicios realizados" value={stats.total} />
+          <TopMetric title="Exámenes realizados" value={stats.totalExams} />
 
           <TopMetric
-            title="Precisión técnica"
-            value={stats.initialPrecision}
+            title="Decisión técnica"
+            value={stats.technicalPrecision}
             suffix="%"
           />
 
           <TopMetric
-            title="Precisión disciplinaria"
+            title="Disciplina"
             value={stats.disciplinePrecision}
             suffix="%"
           />
 
-          <TopMetric title="Precisión VAR" value={stats.varPrecision} suffix="%" />
+          <TopMetric
+            title="Subtipo técnico"
+            value={stats.subtypePrecision}
+            suffix="%"
+          />
         </section>
 
         <section className="rounded-2xl border border-white/10 bg-[#111b24] p-4">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-black">Rendimiento por categoría</h2>
-            <span className="text-xs font-black text-[#6fc11f]">Ver todas</span>
+            <h2 className="text-sm font-black">Rendimiento por tópico</h2>
+            <span className="text-xs font-black text-[#6fc11f]">
+              Solo exámenes
+            </span>
           </div>
 
           <div className="grid gap-5 md:grid-cols-[1.05fr_0.95fr]">
@@ -194,8 +246,12 @@ export default function DashboardPage() {
                 icon="🎯"
                 items={[
                   strongest?.label ?? "Sin datos",
-                  stats.varPrecision >= 80 ? "Decisiones VAR" : "Criterio en desarrollo",
-                  stats.disciplinePrecision >= 80 ? "Disciplina" : "Sanción disciplinaria",
+                  stats.technicalPrecision >= 80
+                    ? "Buena lectura técnica"
+                    : "Lectura técnica en desarrollo",
+                  stats.disciplinePrecision >= 80
+                    ? "Buen criterio disciplinario"
+                    : "Disciplina a reforzar",
                 ]}
                 color="green"
               />
@@ -203,10 +259,7 @@ export default function DashboardPage() {
               <InsightMini
                 title="A mejorar"
                 icon="↗"
-                items={[
-                  weakest?.label ?? "Sin datos",
-                  recommendation,
-                ]}
+                items={[weakest?.label ?? "Sin datos", recommendation]}
                 color="orange"
               />
             </div>
@@ -217,10 +270,10 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-sm font-black text-yellow-300">
-                Sigue entrenando para alcanzar el siguiente nivel
+                Estadísticas bloque premium
               </h2>
               <p className="mt-1 text-xs text-zinc-300">
-                Estás en el top estimado según tu rendimiento actual.
+                Estas métricas se generan únicamente con exámenes arbitrales.
               </p>
             </div>
 
@@ -259,8 +312,8 @@ export default function DashboardPage() {
             value={weakest?.label ?? "Sin datos"}
             detail={
               weakest
-                ? `${weakest.value}% de precisión. Requiere foco.`
-                : "Completá ejercicios."
+                ? `${weakest.value}% de precisión en exámenes.`
+                : "Completá un examen."
             }
             tone="danger"
           />
@@ -311,6 +364,7 @@ function TopMetric({
             {value}
             {suffix}
           </p>
+
           {detail && (
             <p
               className={`mt-1 text-xs font-bold ${
@@ -335,7 +389,7 @@ function RadarChart({ criteria }: { criteria: Criterion[] }) {
 
   const points = criteria.map((item, index) => {
     const angle = (Math.PI * 2 * index) / criteria.length - Math.PI / 2;
-    const r = radius * Math.max(item.value, 20) / 100;
+    const r = (radius * Math.max(item.value, 5)) / 100;
 
     return {
       x: center + Math.cos(angle) * r,
@@ -373,6 +427,7 @@ function RadarChart({ criteria }: { criteria: Criterion[] }) {
 
       {criteria.map((_, index) => {
         const angle = (Math.PI * 2 * index) / criteria.length - Math.PI / 2;
+
         return (
           <line
             key={index}
@@ -431,8 +486,10 @@ function InsightMini({
 
       <ul className="mt-3 space-y-1 text-xs text-zinc-300">
         {items.slice(0, 3).map((item, index) => (
-  <li key={`${item}-${index}`} className="flex gap-2">
-            <span className={color === "green" ? "text-[#6fc11f]" : "text-orange-400"}>
+          <li key={`${item}-${index}`} className="flex gap-2">
+            <span
+              className={color === "green" ? "text-[#6fc11f]" : "text-orange-400"}
+            >
               •
             </span>
             <span>{item}</span>
@@ -465,14 +522,17 @@ function BottomInsight({
       <p className="text-[10px] font-black uppercase tracking-[0.25em]">
         {title}
       </p>
+
       <p className="mt-2 text-lg font-black text-white">{value}</p>
+
       <p className="mt-1 text-xs leading-5 text-zinc-300">{detail}</p>
     </div>
   );
 }
 
-function percent(arr: Attempt[], key: keyof Attempt) {
+function percent(arr: ExamAnswer[], key: keyof ExamAnswer) {
   const valid = arr.filter((a) => typeof a[key] === "boolean");
+
   if (valid.length === 0) return 0;
 
   return Math.round(
@@ -480,9 +540,10 @@ function percent(arr: Attempt[], key: keyof Attempt) {
   );
 }
 
-function topicAvg(arr: Attempt[], topic: string) {
+function topicAvg(arr: ExamAnswer[], topic: string) {
   const filtered = arr.filter((a) => a.topic === topic);
-  if (filtered.length === 0) return 55;
+
+  if (filtered.length === 0) return 0;
 
   return Math.round(
     filtered.reduce((acc, item) => acc + item.score, 0) / filtered.length

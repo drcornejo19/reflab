@@ -23,6 +23,10 @@ type Answer = {
   discipline: string;
   offsideReason?: string;
   handballReason?: string;
+  technicalCorrect: boolean;
+  restartCorrect: boolean;
+  disciplineCorrect: boolean;
+  subtypeCorrect: boolean | null;
   score: number;
 };
 
@@ -47,11 +51,7 @@ const offsideReasonOptions = [
   "sacar_ventaja",
 ];
 
-const handballReasonOptions = [
-  "inmediatez",
-  "bloqueo",
-  "deliberada",
-];
+const handballReasonOptions = ["inmediatez", "bloqueo", "deliberada"];
 
 export function ExamClient() {
   const { user } = useUser();
@@ -148,8 +148,18 @@ export function ExamClient() {
   }, [currentClip]);
 
   useEffect(() => {
+    if (!currentClip) return;
+
     if (foul === true && !foulRestartOptions.includes(restart)) {
-      setRestart("Tiro libre directo");
+      setRestart(
+        currentClip.topic === "Offside"
+          ? "Tiro libre indirecto"
+          : "Tiro libre directo"
+      );
+
+      if (currentClip.topic === "Offside") {
+        setDiscipline("Sin sanción");
+      }
     }
 
     if (foul === false && !noFoulRestartOptions.includes(restart)) {
@@ -158,7 +168,7 @@ export function ExamClient() {
       setOffsideReason("");
       setHandballReason("");
     }
-  }, [foul, restart]);
+  }, [foul, restart, currentClip]);
 
   async function generateAIAnalysis() {
     setLoadingAi(true);
@@ -190,6 +200,17 @@ export function ExamClient() {
   function submitAnswer() {
     if (!currentClip || !canSubmit) return;
 
+    const technicalCorrect = foul === currentClip.correct_foul;
+    const restartCorrect = restart === currentClip.correct_restart;
+    const disciplineCorrect = discipline === currentClip.correct_discipline;
+
+    const subtypeCorrect =
+      currentClip.topic === "Offside" && foul === true
+        ? offsideReason === currentClip.sub_type
+        : currentClip.topic === "Handball" && foul === true
+          ? handballReason === currentClip.sub_type
+          : null;
+
     const baseScore = calculateScore(
       {
         foul,
@@ -205,20 +226,9 @@ export function ExamClient() {
       }
     );
 
-    const offsideReasonCorrect =
-      currentClip.topic === "Offside" && foul === true
-        ? offsideReason === currentClip.sub_type
-        : true;
-
-    const handballReasonCorrect =
-      currentClip.topic === "Handball" && foul === true
-        ? handballReason === currentClip.sub_type
-        : true;
-
     let score = baseScore;
 
-    if (!offsideReasonCorrect) score -= 20;
-    if (!handballReasonCorrect) score -= 20;
+    if (subtypeCorrect === false) score -= 20;
 
     score = Math.max(score, 0);
 
@@ -232,6 +242,10 @@ export function ExamClient() {
       discipline,
       offsideReason: offsideReason || undefined,
       handballReason: handballReason || undefined,
+      technicalCorrect,
+      restartCorrect,
+      disciplineCorrect,
+      subtypeCorrect,
       score,
     };
 
@@ -329,10 +343,7 @@ export function ExamClient() {
               title="Aprobadas"
               value={examStats.correctCount.toString()}
             />
-            <FinalStat
-              title="Score total"
-              value={examStats.totalScore.toString()}
-            />
+            <FinalStat title="Score total" value={examStats.totalScore.toString()} />
           </div>
 
           <div className="mt-8 flex gap-3">
@@ -508,11 +519,13 @@ export function ExamClient() {
                   active={foul === true}
                   onClick={() => {
                     setFoul(true);
-                    setRestart(
-                      currentClip.topic === "Offside"
-                        ? "Tiro libre indirecto"
-                        : "Tiro libre directo"
-                    );
+
+                    if (currentClip.topic === "Offside") {
+                      setRestart("Tiro libre indirecto");
+                      setDiscipline("Sin sanción");
+                    } else {
+                      setRestart("Tiro libre directo");
+                    }
                   }}
                 >
                   SÍ
@@ -536,9 +549,9 @@ export function ExamClient() {
             <DecisionBlock title="2. Reanudación">
               <select
                 value={restart}
-                disabled={foul === null}
+                disabled={foul === null || currentClip.topic === "Offside"}
                 onChange={(e) => setRestart(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#0b111b] px-4 py-3 text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full rounded-xl border border-white/10 bg-[#0b111b] px-4 py-3 text-white outline-none disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <option value="">
                   {foul === null
@@ -605,8 +618,9 @@ export function ExamClient() {
                 {["Sin sanción", "Amarilla", "Roja"].map((item) => (
                   <button
                     key={item}
+                    disabled={currentClip.topic === "Offside"}
                     onClick={() => setDiscipline(item)}
-                    className={`rounded-xl px-3 py-3 text-sm font-black transition ${
+                    className={`rounded-xl px-3 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-70 ${
                       discipline === item
                         ? item === "Amarilla"
                           ? "bg-yellow-400 text-black"
@@ -621,28 +635,6 @@ export function ExamClient() {
                 ))}
               </div>
             </DecisionBlock>
-
-            {currentClip.topic === "VAR" && (
-              <DecisionBlock title="Modo VAR">
-                <div className="rounded-2xl border border-blue-400/20 bg-blue-400/10 p-4 text-sm text-blue-200">
-                  <p>
-                    Situación:{" "}
-                    <b>
-                      {currentClip.sub_type
-                        ? labelFromValue(currentClip.sub_type)
-                        : "Sin subtipo cargado"}
-                    </b>
-                  </p>
-
-                  {currentClip.decision_detail && (
-                    <p className="mt-2">
-                      Detalle:{" "}
-                      <b>{labelFromValue(currentClip.decision_detail)}</b>
-                    </p>
-                  )}
-                </div>
-              </DecisionBlock>
-            )}
 
             <button
               disabled={!canSubmit}
@@ -697,15 +689,6 @@ function labelFromValue(value?: string | null) {
     deliberada: "Mano deliberada",
     bloqueo: "Mano de bloqueo",
     no_sancionable: "No sancionable",
-
-    check_complete: "Check complete",
-    review_recommended: "Review recommended",
-    on_field_review: "On-field review",
-    confirm_decision: "Confirm decision",
-    overturn_decision: "Overturn decision",
-    app_review: "APP review",
-    factual_review: "Factual review",
-    subjective_review: "Subjective review",
   };
 
   return dictionary[value] ?? value;
