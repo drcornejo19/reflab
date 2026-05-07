@@ -234,7 +234,37 @@ export default function DashboardPage() {
             ]}
           />
 
-          <AnalysisCard title="Plan recomendado" tone="warning" items={recommendation} />
+          <AnalysisCard
+            title="Plan recomendado"
+            tone="warning"
+            items={recommendation}
+          />
+        </section>
+
+        <section className="rounded-3xl border border-white/10 bg-[#111b24] p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-black">Perfil arbitral tipo jugador</h2>
+            <span className="text-xs font-black text-[#6fc11f]">
+              Rendimiento por tópico
+            </span>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-[1fr_0.9fr]">
+            <div className="flex items-center justify-center rounded-3xl border border-white/10 bg-black/20 p-4">
+              <RadarChart criteria={topicStats} />
+            </div>
+
+            <div className="space-y-4">
+              {topicStats.map((item) => (
+                <ProgressRow
+                  key={item.label}
+                  label={item.label}
+                  value={item.value}
+                  suffix="/100"
+                />
+              ))}
+            </div>
+          </div>
         </section>
 
         <section className="grid gap-5 lg:grid-cols-[1fr_1fr]">
@@ -251,48 +281,33 @@ export default function DashboardPage() {
             </div>
           </Panel>
 
-          <Panel title="Rendimiento por tópico">
-            <div className="space-y-4">
-              {topicStats.map((item) => (
-                <ProgressRow
-                  key={item.label}
-                  label={item.label}
-                  value={item.value}
-                  suffix="/100"
-                />
-              ))}
+          <Panel title="Lectura técnica del rendimiento">
+            <div className="grid gap-3">
+              <InsightBlock
+                title="Diagnóstico"
+                text={
+                  examAnswers.length === 0
+                    ? "Todavía no hay datos suficientes. Rendí al menos un examen arbitral para generar diagnóstico."
+                    : `Tu rendimiento actual es ${stats.avg}/100. El área más fuerte es ${
+                        strongestCriterion?.label ?? "sin datos"
+                      } y el principal foco de mejora es ${
+                        weakestCriterion?.label ?? "sin datos"
+                      }.`
+                }
+              />
+
+              <InsightBlock
+                title="Próximo foco"
+                text={
+                  weakestTopic
+                    ? `Trabajá clips de ${weakestTopic.label}, priorizando el criterio de ${
+                        weakestCriterion?.label ?? "decisión técnica"
+                      }.`
+                    : "Rendí exámenes con distintos tópicos para que RefLab pueda detectar patrones reales."
+                }
+              />
             </div>
           </Panel>
-        </section>
-
-        <section className="rounded-3xl border border-white/10 bg-[#111b24] p-5">
-          <h2 className="text-xl font-black">Lectura técnica del rendimiento</h2>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <InsightBlock
-              title="Diagnóstico"
-              text={
-                examAnswers.length === 0
-                  ? "Todavía no hay datos suficientes. Rendí al menos un examen arbitral para generar diagnóstico."
-                  : `Tu rendimiento actual es ${stats.avg}/100. El área más fuerte es ${
-                      strongestCriterion?.label ?? "sin datos"
-                    } y el principal foco de mejora es ${
-                      weakestCriterion?.label ?? "sin datos"
-                    }.`
-              }
-            />
-
-            <InsightBlock
-              title="Próximo foco"
-              text={
-                weakestTopic
-                  ? `Trabajá clips de ${weakestTopic.label}, priorizando el criterio de ${
-                      weakestCriterion?.label ?? "decisión técnica"
-                    }.`
-                  : "Rendí exámenes con distintos tópicos para que RefLab pueda detectar patrones reales."
-              }
-            />
-          </div>
         </section>
       </div>
     </AppShell>
@@ -477,6 +492,97 @@ function InsightBlock({ title, text }: { title: string; text: string }) {
       <p className="text-sm font-black text-[#6fc11f]">{title}</p>
       <p className="mt-2 text-sm leading-6 text-zinc-300">{text}</p>
     </div>
+  );
+}
+
+function RadarChart({ criteria }: { criteria: Metric[] }) {
+  const size = 310;
+  const center = size / 2;
+  const radius = 98;
+
+  const points = criteria.map((item, index) => {
+    const angle = (Math.PI * 2 * index) / criteria.length - Math.PI / 2;
+    const r = (radius * Math.max(item.value, 8)) / 100;
+
+    return {
+      x: center + Math.cos(angle) * r,
+      y: center + Math.sin(angle) * r,
+      labelX: center + Math.cos(angle) * (radius + 42),
+      labelY: center + Math.sin(angle) * (radius + 42),
+      ...item,
+    };
+  });
+
+  const polygon = points.map((p) => `${p.x},${p.y}`).join(" ");
+
+  return (
+    <svg
+      viewBox={`0 0 ${size} ${size}`}
+      className="h-[320px] w-full max-w-[380px]"
+    >
+      {[1, 0.75, 0.5, 0.25].map((scale) => {
+        const ring = criteria
+          .map((_, index) => {
+            const angle =
+              (Math.PI * 2 * index) / criteria.length - Math.PI / 2;
+
+            return `${center + Math.cos(angle) * radius * scale},${
+              center + Math.sin(angle) * radius * scale
+            }`;
+          })
+          .join(" ");
+
+        return (
+          <polygon
+            key={scale}
+            points={ring}
+            fill="none"
+            stroke="rgba(255,255,255,0.14)"
+            strokeWidth="1"
+          />
+        );
+      })}
+
+      {criteria.map((_, index) => {
+        const angle = (Math.PI * 2 * index) / criteria.length - Math.PI / 2;
+
+        return (
+          <line
+            key={index}
+            x1={center}
+            y1={center}
+            x2={center + Math.cos(angle) * radius}
+            y2={center + Math.sin(angle) * radius}
+            stroke="rgba(255,255,255,0.14)"
+          />
+        );
+      })}
+
+      <polygon
+        points={polygon}
+        fill="rgba(111,193,31,0.45)"
+        stroke="#b7ff8a"
+        strokeWidth="2.5"
+      />
+
+      {points.map((p) => (
+        <g key={p.label}>
+          <circle cx={p.x} cy={p.y} r="4.5" fill="#ffffff" />
+
+          <text
+            x={p.labelX}
+            y={p.labelY}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontSize="10"
+            fontWeight="800"
+            fill="rgba(255,255,255,0.78)"
+          >
+            {p.label}
+          </text>
+        </g>
+      ))}
+    </svg>
   );
 }
 
