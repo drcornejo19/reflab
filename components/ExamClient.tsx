@@ -8,6 +8,11 @@ import { calculateScore } from "@/lib/scoring";
 
 const TOTAL_QUESTIONS = 10;
 
+type ClipWithDetails = Clip & {
+  sub_type?: string | null;
+  decision_detail?: string | null;
+};
+
 type Answer = {
   clipId: string;
   clipTitle: string;
@@ -20,10 +25,25 @@ type Answer = {
   score: number;
 };
 
+const foulRestartOptions = [
+  "Tiro libre directo",
+  "Tiro libre indirecto",
+  "Penal",
+];
+
+const noFoulRestartOptions = [
+  "Seguir el juego",
+  "Saque de meta",
+  "Saque de esquina",
+  "Saque de banda",
+  "Gol",
+  "Balón a tierra",
+];
+
 export function ExamClient() {
   const { user } = useUser();
 
-  const [clips, setClips] = useState<Clip[]>([]);
+  const [clips, setClips] = useState<ClipWithDetails[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [finished, setFinished] = useState(false);
@@ -33,57 +53,18 @@ export function ExamClient() {
   const [restart, setRestart] = useState("");
   const [discipline, setDiscipline] = useState("");
   const [varReview, setVarReview] = useState<boolean | null>(null);
-  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
-const [loadingAi, setLoadingAi] = useState(false);
-
-async function generateAIAnalysis() {
-  setLoadingAi(true);
-
-  const res = await fetch("/api/ai-exam-analysis", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      avgScore: examStats.avgScore,
-      correctCount: examStats.correctCount,
-      totalQuestions: answers.length,
-      answers,
-    }),
-  });
-
-  const data = await res.json();
-
-  if (data.feedback) {
-    setAiAnalysis(data.feedback);
-  } else {
-    setAiAnalysis("No se pudo generar análisis IA.");
-  }
-
-  setLoadingAi(false);
-}
 
   const [answers, setAnswers] = useState<Answer[]>([]);
-
-  useEffect(() => {
-    async function loadClips() {
-      const { data, error } = await supabase.from("clips").select("*");
-
-      if (error) {
-        console.error("Error cargando clips:", error);
-        setClips([]);
-      } else {
-        const shuffled = [...(data ?? [])].sort(() => Math.random() - 0.5);
-        setClips(shuffled.slice(0, TOTAL_QUESTIONS));
-      }
-
-      setLoading(false);
-    }
-
-    loadClips();
-  }, []);
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [loadingAi, setLoadingAi] = useState(false);
 
   const currentClip = clips[index];
+
+  const restartOptions = useMemo(() => {
+    if (foul === true) return foulRestartOptions;
+    if (foul === false) return noFoulRestartOptions;
+    return [];
+  }, [foul]);
 
   const canSubmit =
     foul !== null && restart !== "" && discipline !== "" && varReview !== null;
@@ -101,6 +82,78 @@ async function generateAIAnalysis() {
       level: getExamLevel(avgScore),
     };
   }, [answers]);
+
+  useEffect(() => {
+    async function loadClips() {
+      const { data, error } = await supabase.from("clips").select("*");
+
+      if (error) {
+        console.error("Error cargando clips:", error);
+        setClips([]);
+      } else {
+        const shuffled = [...((data ?? []) as ClipWithDetails[])].sort(
+          () => Math.random() - 0.5
+        );
+
+        setClips(shuffled.slice(0, TOTAL_QUESTIONS));
+      }
+
+      setLoading(false);
+    }
+
+    loadClips();
+  }, []);
+
+  useEffect(() => {
+    if (!currentClip) return;
+
+    const isNoOffside =
+      currentClip.topic === "Offside" && currentClip.sub_type === "no_offside";
+
+    if (isNoOffside) {
+      setFoul(false);
+      setRestart("Seguir el juego");
+      setDiscipline("Sin sanción");
+    }
+  }, [currentClip]);
+
+  useEffect(() => {
+    if (foul === true && !foulRestartOptions.includes(restart)) {
+      setRestart("Tiro libre directo");
+    }
+
+    if (foul === false && !noFoulRestartOptions.includes(restart)) {
+      setRestart("Seguir el juego");
+      setDiscipline("Sin sanción");
+    }
+  }, [foul, restart]);
+
+  async function generateAIAnalysis() {
+    setLoadingAi(true);
+
+    const res = await fetch("/api/ai-exam-analysis", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        avgScore: examStats.avgScore,
+        correctCount: examStats.correctCount,
+        totalQuestions: answers.length,
+        answers,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (data.feedback) {
+      setAiAnalysis(data.feedback);
+    } else {
+      setAiAnalysis("No se pudo generar análisis IA.");
+    }
+
+    setLoadingAi(false);
+  }
 
   function submitAnswer() {
     if (!currentClip || !canSubmit) return;
@@ -226,53 +279,53 @@ async function generateAIAnalysis() {
             />
           </div>
 
-<div className="mt-8 flex gap-3">
-  <div className="flex-1 space-y-3">
-    <button
-      onClick={saveExam}
-      disabled={saving}
-      className="w-full rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black disabled:opacity-50"
-    >
-      {saving ? "GUARDANDO..." : "GUARDAR EXAMEN"}
-    </button>
+          <div className="mt-8 flex gap-3">
+            <div className="flex-1 space-y-3">
+              <button
+                onClick={saveExam}
+                disabled={saving}
+                className="w-full rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black disabled:opacity-50"
+              >
+                {saving ? "GUARDANDO..." : "GUARDAR EXAMEN"}
+              </button>
 
-    <button
-      onClick={generateAIAnalysis}
-      className="w-full rounded-2xl bg-blue-500 px-5 py-4 font-black text-white hover:bg-blue-600"
-    >
-      ANALIZAR CON IA
-    </button>
+              <button
+                onClick={generateAIAnalysis}
+                className="w-full rounded-2xl bg-blue-500 px-5 py-4 font-black text-white hover:bg-blue-600"
+              >
+                ANALIZAR CON IA
+              </button>
 
-    {loadingAi && (
-      <p className="mt-4 text-sm text-zinc-400">
-        Analizando desempeño...
-      </p>
-    )}
+              {loadingAi && (
+                <p className="mt-4 text-sm text-zinc-400">
+                  Analizando desempeño...
+                </p>
+              )}
 
-    {aiAnalysis && (
-      <div className="mt-4 rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-6">
-        <p className="text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">
-          Análisis IA del examen
-        </p>
+              {aiAnalysis && (
+                <div className="mt-4 rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-6">
+                  <p className="text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">
+                    Análisis IA del examen
+                  </p>
 
-        <div className="mt-4 whitespace-pre-line text-sm leading-7 text-zinc-200">
-         {aiAnalysis.split("\n").map((line, i) => (
-  <p key={i} className="mb-2">
-    {line}
-  </p>
-))}
-        </div>
-      </div>
-    )}
-  </div>
+                  <div className="mt-4 whitespace-pre-line text-sm leading-7 text-zinc-200">
+                    {aiAnalysis.split("\n").map((line, i) => (
+                      <p key={i} className="mb-2">
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
-  <button
-    onClick={restartExam}
-    className="flex-1 rounded-2xl bg-white/10 px-5 py-4 font-black text-white hover:bg-white/15"
-  >
-    NUEVO EXAMEN
-  </button>
-</div>
+            <button
+              onClick={restartExam}
+              className="flex-1 rounded-2xl bg-white/10 px-5 py-4 font-black text-white hover:bg-white/15"
+            >
+              NUEVO EXAMEN
+            </button>
+          </div>
         </section>
 
         <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
@@ -343,7 +396,14 @@ async function generateAIAnalysis() {
               <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#6fc11f]">
                 Clip de examen
               </p>
+
               <h1 className="mt-2 text-2xl font-black">{currentClip.title}</h1>
+
+              {currentClip.sub_type && (
+                <p className="mt-1 text-xs text-zinc-500">
+                  {labelFromValue(currentClip.sub_type)}
+                </p>
+              )}
             </div>
 
             <span className="rounded-full border border-[#6fc11f]/40 px-3 py-1 text-xs font-bold text-[#6fc11f]">
@@ -366,17 +426,31 @@ async function generateAIAnalysis() {
 
         <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <div className="space-y-6">
-            <DecisionBlock title="1. ¿Hubo infracción?">
+            <DecisionBlock
+              title={
+                currentClip.topic === "Offside"
+                  ? "1. ¿Existe fuera de juego?"
+                  : "1. ¿Hubo infracción?"
+              }
+            >
               <div className="grid grid-cols-2 gap-3">
                 <DecisionButton
                   active={foul === true}
-                  onClick={() => setFoul(true)}
+                  onClick={() => {
+                    setFoul(true);
+                    setRestart("Tiro libre directo");
+                  }}
                 >
                   SÍ
                 </DecisionButton>
+
                 <DecisionButton
                   active={foul === false}
-                  onClick={() => setFoul(false)}
+                  onClick={() => {
+                    setFoul(false);
+                    setRestart("Seguir el juego");
+                    setDiscipline("Sin sanción");
+                  }}
                 >
                   NO
                 </DecisionButton>
@@ -386,16 +460,21 @@ async function generateAIAnalysis() {
             <DecisionBlock title="2. Reanudación">
               <select
                 value={restart}
+                disabled={foul === null}
                 onChange={(e) => setRestart(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#0b111b] px-4 py-3 text-white outline-none"
+                className="w-full rounded-xl border border-white/10 bg-[#0b111b] px-4 py-3 text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <option value="">Seleccioná una opción</option>
-                <option>Tiro libre directo</option>
-                <option>Tiro libre indirecto</option>
-                <option>Penal</option>
-                <option>Saque de meta</option>
-                <option>Córner</option>
-                <option>Balón a tierra</option>
+                <option value="">
+                  {foul === null
+                    ? "Primero seleccioná si hubo infracción"
+                    : "Seleccioná una opción"}
+                </option>
+
+                {restartOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
               </select>
             </DecisionBlock>
 
@@ -429,6 +508,7 @@ async function generateAIAnalysis() {
                 >
                   SÍ
                 </DecisionButton>
+
                 <DecisionButton
                   active={varReview === false}
                   onClick={() => setVarReview(false)}
@@ -437,6 +517,28 @@ async function generateAIAnalysis() {
                 </DecisionButton>
               </div>
             </DecisionBlock>
+
+            {currentClip.topic === "VAR" && (
+              <DecisionBlock title="Modo VAR">
+                <div className="rounded-2xl border border-blue-400/20 bg-blue-400/10 p-4 text-sm text-blue-200">
+                  <p>
+                    Situación:{" "}
+                    <b>
+                      {currentClip.sub_type
+                        ? labelFromValue(currentClip.sub_type)
+                        : "Sin subtipo cargado"}
+                    </b>
+                  </p>
+
+                  {currentClip.decision_detail && (
+                    <p className="mt-2">
+                      Detalle:{" "}
+                      <b>{labelFromValue(currentClip.decision_detail)}</b>
+                    </p>
+                  )}
+                </div>
+              </DecisionBlock>
+            )}
 
             <button
               disabled={!canSubmit}
@@ -470,6 +572,39 @@ function translateDifficulty(value: string) {
   };
 
   return map[value] ?? value;
+}
+
+function labelFromValue(value?: string | null) {
+  if (!value) return "";
+
+  const dictionary: Record<string, string> = {
+    Dispute: "Disputas",
+    "Tactical foul": "Faltas tácticas",
+    Offside: "Fuera de juego",
+    Handball: "Manos",
+    VAR: "VAR",
+
+    no_offside: "No fuera de juego",
+    interferir_juego: "Interfiere en el juego",
+    interferir_adversario: "Interfiere en el adversario",
+    sacar_ventaja: "Saca ventaja de su posición",
+
+    inmediatez: "Mano de inmediatez",
+    deliberada: "Mano deliberada",
+    bloqueo: "Mano de bloqueo",
+    no_sancionable: "No sancionable",
+
+    check_complete: "Check complete",
+    review_recommended: "Review recommended",
+    on_field_review: "On-field review",
+    confirm_decision: "Confirm decision",
+    overturn_decision: "Overturn decision",
+    app_review: "APP review",
+    factual_review: "Factual review",
+    subjective_review: "Subjective review",
+  };
+
+  return dictionary[value] ?? value;
 }
 
 function InfoBox({ title, value }: { title: string; value: string }) {
