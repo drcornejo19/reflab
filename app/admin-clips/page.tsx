@@ -34,13 +34,6 @@ const handballSubTypes = [
   { value: "no_sancionable", label: "No sancionable" },
 ];
 
-const handballDetails = [
-  { value: "movimiento_justificado", label: "Movimiento justificado por la acción" },
-  { value: "movimiento_no_justificado", label: "Movimiento no justificado" },
-  { value: "brazo_amplia_cuerpo", label: "Brazo amplía el volumen corporal" },
-  { value: "brazo_apoyo", label: "Brazo de apoyo" },
-];
-
 export default function AdminClipsPage() {
   const router = useRouter();
   const { user, isLoaded } = useUser();
@@ -66,17 +59,19 @@ export default function AdminClipsPage() {
   const [editingClipId, setEditingClipId] = useState<string | null>(null);
 
   function startEdit(clip: ClipWithDetails) {
-  setEditingClipId(clip.id);
-  setVideoUrl(clip.video_url ?? "");
-  setTopic(clip.topic ?? "Offside");
-  setSubType(clip.sub_type ?? "");
-  setDecisionDetail(clip.decision_detail ?? "");
-  setCorrectFoul(Boolean(clip.correct_foul));
-  setCorrectRestart(clip.correct_restart ?? "");
-  setCorrectDiscipline(clip.correct_discipline ?? "Sin sanción");
-  setCorrectVar(Boolean(clip.correct_var));
-  setExplanation(clip.explanation ?? "");
-}
+    setEditingClipId(clip.id);
+    setVideoUrl(clip.video_url ?? "");
+    setTopic(clip.topic ?? "Offside");
+    setSubType(clip.sub_type ?? "");
+    setDecisionDetail(clip.decision_detail ?? "");
+    setMode((clip.mode as TrainingMode) ?? "field");
+    setDifficulty(clip.difficulty ?? "medium");
+    setCorrectFoul(Boolean(clip.correct_foul));
+    setCorrectRestart(clip.correct_restart ?? "Tiro libre indirecto");
+    setCorrectDiscipline(clip.correct_discipline ?? "Sin sanción");
+    setCorrectVar(Boolean(clip.correct_var));
+    setExplanation(clip.explanation ?? "");
+  }
 
   const subTypeOptions = useMemo(() => {
     if (topic === "Offside") return offsideSubTypes;
@@ -85,17 +80,22 @@ export default function AdminClipsPage() {
   }, [topic]);
 
   useEffect(() => {
+    if (editingClipId) return;
+
     if (topic === "Offside") {
       setSubType("interferir_juego");
       setDecisionDetail("");
       setCorrectRestart("Tiro libre indirecto");
       setCorrectDiscipline("Sin sanción");
+      setCorrectVar(false);
     }
 
     if (topic === "Handball") {
       setSubType("inmediatez");
       setDecisionDetail("movimiento_no_justificado");
       setCorrectRestart("Tiro libre directo");
+      setCorrectDiscipline("Sin sanción");
+      setCorrectVar(false);
     }
 
     if (topic === "Tactical foul") {
@@ -104,12 +104,15 @@ export default function AdminClipsPage() {
       setCorrectFoul(true);
       setCorrectRestart("Tiro libre directo");
       setCorrectDiscipline("Amarilla");
+      setCorrectVar(false);
     }
 
     if (topic === "Dispute") {
       setSubType("");
       setDecisionDetail("");
       setCorrectRestart("Tiro libre directo");
+      setCorrectDiscipline("Sin sanción");
+      setCorrectVar(false);
     }
 
     if (topic === "VAR") {
@@ -117,7 +120,7 @@ export default function AdminClipsPage() {
       setDecisionDetail("");
       setCorrectVar(true);
     }
-  }, [topic]);
+  }, [topic, editingClipId]);
 
   useEffect(() => {
     if (isLoaded && !user) router.replace("/sign-in");
@@ -153,52 +156,44 @@ export default function AdminClipsPage() {
   }
 
   async function createClip() {
-    if (editingClipId) {
-  const { error } = await supabase
-    .from("clips")
-    .update({
-      video_url: videoUrl,
-      topic,
-      sub_type: subType || null,
-      decision_detail: decisionDetail || null,
-      mode,
-      correct_foul: correctFoul,
-      correct_restart: correctRestart,
-      correct_discipline: correctDiscipline,
-      correct_var: correctVar,
-      explanation,
-    })
-    .eq("id", editingClipId);
+    setSaving(true);
 
-  if (error) {
-    alert(error.message);
-    setSaving(false);
-    return;
-  }
-} else {
-  const { error } = await supabase.from("clips").insert([
-    {
+    const payload = {
       title: generateClipTitle(topic, subType, decisionDetail),
       description: "",
       video_url: videoUrl,
       topic,
       sub_type: subType || null,
       decision_detail: decisionDetail || null,
+      difficulty,
       mode,
       correct_foul: correctFoul,
       correct_restart: correctRestart,
       correct_discipline: correctDiscipline,
       correct_var: correctVar,
       explanation,
-    },
-  ]);
+    };
 
-  if (error) {
-    alert(error.message);
-    setSaving(false);
-    return;
-  }
-}
+    if (editingClipId) {
+      const { error } = await supabase
+        .from("clips")
+        .update(payload)
+        .eq("id", editingClipId);
+
+      if (error) {
+        alert(error.message);
+        setSaving(false);
+        return;
+      }
+    } else {
+      const { error } = await supabase.from("clips").insert([payload]);
+
+      if (error) {
+        alert(error.message);
+        setSaving(false);
+        return;
+      }
+    }
 
     reset();
     await loadClips();
@@ -212,6 +207,7 @@ export default function AdminClipsPage() {
     setSubType("interferir_juego");
     setDecisionDetail("");
     setDifficulty("medium");
+    setMode("field");
     setCorrectFoul(false);
     setCorrectRestart("Tiro libre indirecto");
     setCorrectDiscipline("Sin sanción");
@@ -265,18 +261,24 @@ export default function AdminClipsPage() {
 
         <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
           <section className="space-y-4 rounded-3xl border border-white/10 bg-[#0f1720] p-6">
+            {editingClipId && (
+              <div className="rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-4 text-sm font-bold text-[#6fc11f]">
+                Estás editando un clip existente.
+              </div>
+            )}
+
             <Select
-  label="Modo del clip"
-  value={mode}
-  onChange={(value) => setMode(value as TrainingMode)}
-  options={[
-    { value: "field", label: "Árbitro" },
-    { value: "var", label: "VAR" },
-    { value: "english", label: "Inglés" },
-    { value: "exam", label: "Examen" },
-    { value: "training", label: "Entrenamiento general" },
-  ]}
-/>
+              label="Modo del clip"
+              value={mode}
+              onChange={(value) => setMode(value as TrainingMode)}
+              options={[
+                { value: "field", label: "Árbitro" },
+                { value: "var", label: "VAR" },
+                { value: "english", label: "Inglés" },
+                { value: "exam", label: "Examen" },
+                { value: "training", label: "Entrenamiento general" },
+              ]}
+            />
 
             <Input label="URL del video" value={videoUrl} onChange={setVideoUrl} />
 
@@ -295,6 +297,17 @@ export default function AdminClipsPage() {
                 onChange={setTopic}
                 options={topicOptions}
               />
+
+              <Select
+                label="Dificultad"
+                value={difficulty}
+                onChange={setDifficulty}
+                options={[
+                  { value: "easy", label: "Fácil" },
+                  { value: "medium", label: "Media" },
+                  { value: "hard", label: "Difícil" },
+                ]}
+              />
             </div>
 
             {subTypeOptions.length > 0 && (
@@ -310,13 +323,17 @@ export default function AdminClipsPage() {
               />
             )}
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <BooleanSelect
-                label="¿Hubo infracción?"
-                value={correctFoul}
-                onChange={setCorrectFoul}
-              />
-            </div>
+            <Input
+              label="Detalle de decisión"
+              value={decisionDetail}
+              onChange={setDecisionDetail}
+            />
+
+            <BooleanSelect
+              label="¿Hubo infracción?"
+              value={correctFoul}
+              onChange={setCorrectFoul}
+            />
 
             <Select
               label="Reanudación correcta"
@@ -346,19 +363,41 @@ export default function AdminClipsPage() {
               ]}
             />
 
+            <BooleanSelect
+              label="¿Intervención VAR correcta?"
+              value={correctVar}
+              onChange={setCorrectVar}
+            />
+
             <Textarea
               label="Fundamento / aval de la decisión"
               value={explanation}
               onChange={setExplanation}
             />
 
-            <button
-              onClick={createClip}
-              disabled={saving}
-              className="w-full rounded-xl bg-[#6fc11f] py-4 font-black text-black transition hover:bg-[#82dc2a] disabled:opacity-50"
-            >
-              {saving ? "GUARDANDO..." : editingClipId ? "GUARDAR CAMBIOS" : "CREAR CLIP"}
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={createClip}
+                disabled={saving}
+                className="w-full rounded-xl bg-[#6fc11f] py-4 font-black text-black transition hover:bg-[#82dc2a] disabled:opacity-50"
+              >
+                {saving
+                  ? "GUARDANDO..."
+                  : editingClipId
+                    ? "GUARDAR CAMBIOS"
+                    : "CREAR CLIP"}
+              </button>
+
+              {editingClipId && (
+                <button
+                  onClick={reset}
+                  disabled={saving}
+                  className="rounded-xl border border-white/10 px-5 py-4 font-black text-zinc-300 transition hover:bg-white/5 disabled:opacity-50"
+                >
+                  CANCELAR
+                </button>
+              )}
+            </div>
           </section>
 
           <section className="space-y-3 rounded-3xl border border-white/10 bg-[#0f1720] p-6">
@@ -377,35 +416,45 @@ export default function AdminClipsPage() {
                   className="rounded-2xl border border-white/10 bg-black/25 p-4"
                 >
                   <div className="flex items-start justify-between gap-4">
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-black">
                         {clip.topic ?? "-"} · {labelFromValue(clip.sub_type)}
                       </p>
+
                       <p className="mt-1 text-xs text-zinc-500">
                         {clip.mode ?? "field"} · {clip.difficulty ?? "-"} ·{" "}
                         {clip.correct_restart ?? "-"} ·{" "}
                         {clip.correct_discipline ?? "-"}
                       </p>
+
                       {clip.decision_detail && (
                         <p className="mt-1 text-xs text-[#6fc11f]">
                           {labelFromValue(clip.decision_detail)}
                         </p>
                       )}
+
+                      {clip.explanation && (
+                        <p className="mt-2 line-clamp-2 text-xs text-zinc-400">
+                          {clip.explanation}
+                        </p>
+                      )}
                     </div>
 
-                    <button
-                      onClick={() => deleteClip(clip.id)}
-                      className="rounded-xl bg-red-500/10 px-3 py-2 text-xs font-black text-red-300 hover:bg-red-500/20"
-                    >
-                      Eliminar
-                    </button>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        onClick={() => startEdit(clip)}
+                        className="rounded-xl bg-[#6fc11f]/10 px-3 py-2 text-xs font-black text-[#6fc11f] hover:bg-[#6fc11f]/20"
+                      >
+                        Editar
+                      </button>
 
-                    <button
-  onClick={() => startEdit(clip)}
-  className="rounded-xl bg-[#6fc11f]/10 px-3 py-2 text-xs font-black text-[#6fc11f] hover:bg-[#6fc11f]/20"
->
-  Editar
-</button> 
+                      <button
+                        onClick={() => deleteClip(clip.id)}
+                        className="rounded-xl bg-red-500/10 px-3 py-2 text-xs font-black text-red-300 hover:bg-red-500/20"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
@@ -442,6 +491,7 @@ function labelFromValue(value?: string | null) {
     inmediatez: "Mano de inmediatez",
     deliberada: "Mano deliberada",
     bloqueo: "Mano de bloqueo",
+    no_sancionable: "No sancionable",
 
     movimiento_justificado: "Movimiento justificado",
     movimiento_no_justificado: "Movimiento no justificado",
@@ -463,7 +513,9 @@ function Input({
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-xs font-bold text-zinc-400">{label}</span>
+      <span className="mb-2 block text-xs font-bold text-zinc-400">
+        {label}
+      </span>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -484,7 +536,9 @@ function Textarea({
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-xs font-bold text-zinc-400">{label}</span>
+      <span className="mb-2 block text-xs font-bold text-zinc-400">
+        {label}
+      </span>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -507,7 +561,9 @@ function Select({
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-xs font-bold text-zinc-400">{label}</span>
+      <span className="mb-2 block text-xs font-bold text-zinc-400">
+        {label}
+      </span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
