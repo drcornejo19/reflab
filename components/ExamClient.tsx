@@ -21,7 +21,6 @@ type Answer = {
   foul: boolean | null;
   restart: string;
   discipline: string;
-  varReview: boolean | null;
   score: number;
 };
 
@@ -52,7 +51,6 @@ export function ExamClient() {
   const [foul, setFoul] = useState<boolean | null>(null);
   const [restart, setRestart] = useState("");
   const [discipline, setDiscipline] = useState("");
-  const [varReview, setVarReview] = useState<boolean | null>(null);
 
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
@@ -67,7 +65,7 @@ export function ExamClient() {
   }, [foul]);
 
   const canSubmit =
-    foul !== null && restart !== "" && discipline !== "" && varReview !== null;
+  foul !== null && restart !== "" && discipline !== "";
 
   const examStats = useMemo(() => {
     const totalScore = answers.reduce((acc, a) => acc + a.score, 0);
@@ -159,7 +157,7 @@ export function ExamClient() {
     if (!currentClip || !canSubmit) return;
 
     const score = calculateScore(
-      { foul, restart, discipline, var: varReview },
+      { foul, restart, discipline, var: currentClip.correct_var },
       {
         foul: currentClip.correct_foul,
         restart: currentClip.correct_restart,
@@ -169,16 +167,15 @@ export function ExamClient() {
     );
 
     const answer: Answer = {
-      clipId: currentClip.id,
-      clipTitle: currentClip.title,
-      topic: currentClip.topic,
-      difficulty: currentClip.difficulty,
-      foul,
-      restart,
-      discipline,
-      varReview,
-      score,
-    };
+  clipId: currentClip.id,
+  clipTitle: currentClip.title,
+  topic: currentClip.topic,
+  difficulty: currentClip.difficulty,
+  foul,
+  restart,
+  discipline,
+  score,
+};
 
     const nextAnswers = [...answers, answer];
     setAnswers(nextAnswers);
@@ -228,7 +225,6 @@ export function ExamClient() {
     setFoul(null);
     setRestart("");
     setDiscipline("");
-    setVarReview(null);
   }
 
   function restartExam() {
@@ -500,23 +496,6 @@ export function ExamClient() {
               </div>
             </DecisionBlock>
 
-            <DecisionBlock title="4. ¿Es revisable por VAR?">
-              <div className="grid grid-cols-2 gap-3">
-                <DecisionButton
-                  active={varReview === true}
-                  onClick={() => setVarReview(true)}
-                >
-                  SÍ
-                </DecisionButton>
-
-                <DecisionButton
-                  active={varReview === false}
-                  onClick={() => setVarReview(false)}
-                >
-                  NO
-                </DecisionButton>
-              </div>
-            </DecisionBlock>
 
             {currentClip.topic === "VAR" && (
               <DecisionBlock title="Modo VAR">
