@@ -21,6 +21,7 @@ type Answer = {
   foul: boolean | null;
   restart: string;
   discipline: string;
+  offsideReason?: string;
   score: number;
 };
 
@@ -39,6 +40,12 @@ const noFoulRestartOptions = [
   "Balón a tierra",
 ];
 
+const offsideReasonOptions = [
+  "interferir_juego",
+  "interferir_adversario",
+  "sacar_ventaja",
+];
+
 export function ExamClient() {
   const { user } = useUser();
 
@@ -51,12 +58,16 @@ export function ExamClient() {
   const [foul, setFoul] = useState<boolean | null>(null);
   const [restart, setRestart] = useState("");
   const [discipline, setDiscipline] = useState("");
+  const [offsideReason, setOffsideReason] = useState("");
 
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
 
   const currentClip = clips[index];
+
+  const isOffsideClip = currentClip?.topic === "Offside";
+  const mustAnswerOffsideReason = isOffsideClip && foul === true;
 
   const restartOptions = useMemo(() => {
     if (foul === true) return foulRestartOptions;
@@ -65,7 +76,10 @@ export function ExamClient() {
   }, [foul]);
 
   const canSubmit =
-  foul !== null && restart !== "" && discipline !== "";
+    foul !== null &&
+    restart !== "" &&
+    discipline !== "" &&
+    (!mustAnswerOffsideReason || offsideReason !== "");
 
   const examStats = useMemo(() => {
     const totalScore = answers.reduce((acc, a) => acc + a.score, 0);
@@ -112,6 +126,7 @@ export function ExamClient() {
       setFoul(false);
       setRestart("Seguir el juego");
       setDiscipline("Sin sanción");
+      setOffsideReason("");
     }
   }, [currentClip]);
 
@@ -123,6 +138,7 @@ export function ExamClient() {
     if (foul === false && !noFoulRestartOptions.includes(restart)) {
       setRestart("Seguir el juego");
       setDiscipline("Sin sanción");
+      setOffsideReason("");
     }
   }, [foul, restart]);
 
@@ -156,8 +172,13 @@ export function ExamClient() {
   function submitAnswer() {
     if (!currentClip || !canSubmit) return;
 
-    const score = calculateScore(
-      { foul, restart, discipline, var: currentClip.correct_var },
+    const baseScore = calculateScore(
+      {
+        foul,
+        restart,
+        discipline,
+        var: currentClip.correct_var,
+      },
       {
         foul: currentClip.correct_foul,
         restart: currentClip.correct_restart,
@@ -166,16 +187,26 @@ export function ExamClient() {
       }
     );
 
+    const offsideReasonCorrect =
+      currentClip.topic === "Offside" && foul === true
+        ? offsideReason === currentClip.sub_type
+        : true;
+
+    const score = offsideReasonCorrect
+      ? baseScore
+      : Math.max(baseScore - 20, 0);
+
     const answer: Answer = {
-  clipId: currentClip.id,
-  clipTitle: currentClip.title,
-  topic: currentClip.topic,
-  difficulty: currentClip.difficulty,
-  foul,
-  restart,
-  discipline,
-  score,
-};
+      clipId: currentClip.id,
+      clipTitle: currentClip.title,
+      topic: currentClip.topic,
+      difficulty: currentClip.difficulty,
+      foul,
+      restart,
+      discipline,
+      offsideReason: offsideReason || undefined,
+      score,
+    };
 
     const nextAnswers = [...answers, answer];
     setAnswers(nextAnswers);
@@ -225,6 +256,7 @@ export function ExamClient() {
     setFoul(null);
     setRestart("");
     setDiscipline("");
+    setOffsideReason("");
   }
 
   function restartExam() {
@@ -338,9 +370,16 @@ export function ExamClient() {
                     <p className="font-black">
                       {i + 1}. {a.clipTitle}
                     </p>
+
                     <p className="mt-1 text-xs text-zinc-500">
                       {a.topic} · {translateDifficulty(a.difficulty)}
                     </p>
+
+                    {a.offsideReason && (
+                      <p className="mt-1 text-xs text-[#6fc11f]">
+                        Motivo FDJ: {labelFromValue(a.offsideReason)}
+                      </p>
+                    )}
                   </div>
 
                   <p
@@ -434,7 +473,7 @@ export function ExamClient() {
                   active={foul === true}
                   onClick={() => {
                     setFoul(true);
-                    setRestart("Tiro libre directo");
+                    setRestart("Tiro libre indirecto");
                   }}
                 >
                   SÍ
@@ -446,6 +485,7 @@ export function ExamClient() {
                     setFoul(false);
                     setRestart("Seguir el juego");
                     setDiscipline("Sin sanción");
+                    setOffsideReason("");
                   }}
                 >
                   NO
@@ -474,7 +514,29 @@ export function ExamClient() {
               </select>
             </DecisionBlock>
 
-            <DecisionBlock title="3. Sanción disciplinaria">
+            {mustAnswerOffsideReason && (
+              <DecisionBlock title="3. Motivo del fuera de juego">
+                <div className="grid gap-3">
+                  {offsideReasonOptions.map((reason) => (
+                    <button
+                      key={reason}
+                      onClick={() => setOffsideReason(reason)}
+                      className={`rounded-xl px-4 py-3 text-sm font-black transition ${
+                        offsideReason === reason
+                          ? "bg-[#6fc11f] text-black"
+                          : "bg-white/10 text-zinc-300 hover:bg-white/15"
+                      }`}
+                    >
+                      {labelFromValue(reason)}
+                    </button>
+                  ))}
+                </div>
+              </DecisionBlock>
+            )}
+
+            <DecisionBlock
+              title={mustAnswerOffsideReason ? "4. Sanción disciplinaria" : "3. Sanción disciplinaria"}
+            >
               <div className="grid grid-cols-3 gap-3">
                 {["Sin sanción", "Amarilla", "Roja"].map((item) => (
                   <button
@@ -495,7 +557,6 @@ export function ExamClient() {
                 ))}
               </div>
             </DecisionBlock>
-
 
             {currentClip.topic === "VAR" && (
               <DecisionBlock title="Modo VAR">
