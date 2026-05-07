@@ -17,70 +17,136 @@ import {
   Megaphone,
 } from "lucide-react";
 
-type Attempt = {
-  id: string;
+type ExamAnswer = {
+  clipId: string;
+  clipTitle: string;
+  topic: string;
+  difficulty: string;
+  foul: boolean | null;
+  restart: string;
+  discipline: string;
+  offsideReason?: string;
+  handballReason?: string;
+  technicalCorrect?: boolean;
+  restartCorrect?: boolean;
+  disciplineCorrect?: boolean;
+  subtypeCorrect?: boolean | null;
   score: number;
-  topic: string | null;
-  created_at: string;
-  technical_correct: boolean | null;
-  restart_correct: boolean | null;
-  discipline_correct: boolean | null;
-  var_correct: boolean | null;
 };
+
+type ExamResult = {
+  id: string;
+  user_id: string;
+  total_questions: number;
+  total_score: number;
+  avg_score: number;
+  correct_count: number;
+  details: ExamAnswer[] | null;
+  created_at: string;
+};
+
+const topicList = [
+  { key: "Dispute", label: "Disputas" },
+  { key: "Tactical foul", label: "Faltas tácticas" },
+  { key: "Offside", label: "Fuera de juego" },
+  { key: "Handball", label: "Manos" },
+  { key: "VAR", label: "VAR" },
+];
 
 export default function MobileDashboardPage() {
   const { user, isLoaded } = useUser();
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
+
+  const [examResults, setExamResults] = useState<ExamResult[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const displayName =
+    user?.fullName ||
+    user?.firstName ||
+    user?.username ||
+    user?.primaryEmailAddress?.emailAddress?.split("@")[0] ||
+    "Árbitro";
 
   useEffect(() => {
     async function loadData() {
       if (!isLoaded) return;
 
       if (!user) {
-        setAttempts([]);
+        setExamResults([]);
         setLoading(false);
         return;
       }
 
-      const { data } = await supabase
-        .from("attempts")
+      const { data, error } = await supabase
+        .from("exam_results")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      setAttempts((data ?? []) as Attempt[]);
+      if (error) {
+        console.error("Error cargando mobile dashboard:", error);
+        setExamResults([]);
+      } else {
+        setExamResults((data ?? []) as ExamResult[]);
+      }
+
       setLoading(false);
     }
 
     loadData();
   }, [isLoaded, user]);
 
-  const stats = useMemo(() => {
-    const total = attempts.length;
-    const hasAttempts = total > 0;
+  const examAnswers = useMemo(() => {
+    return examResults.flatMap((exam) => exam.details ?? []);
+  }, [examResults]);
 
-    const avg = hasAttempts
-      ? Math.round(attempts.reduce((acc, a) => acc + a.score, 0) / total)
+  const stats = useMemo(() => {
+    const totalExams = examResults.length;
+    const totalAnswers = examAnswers.length;
+    const hasData = totalAnswers > 0;
+
+    const avg = hasData
+      ? Math.round(
+          examAnswers.reduce((acc, answer) => acc + answer.score, 0) /
+            totalAnswers
+        )
       : null;
 
     return {
-      total,
-      hasAttempts,
+      totalExams,
+      totalAnswers,
+      hasData,
       avg,
-      streak: hasAttempts ? Math.min(total, 7) : null,
+      streak: totalExams > 0 ? Math.min(totalExams, 7) : null,
     };
-  }, [attempts]);
+  }, [examResults, examAnswers]);
 
   const topicPerformance = useMemo(() => {
+    return topicList.map((topic) => ({
+      label: topic.label,
+      value: topicAvgReal(examAnswers, topic.key),
+    }));
+  }, [examAnswers]);
+
+  const criterionPerformance = useMemo(() => {
     return [
-      { label: "Disputas", value: topicAvgReal(attempts, "Dispute") },
-      { label: "Faltas tácticas", value: topicAvgReal(attempts, "Tactical foul") },
-      { label: "Fuera de juego", value: topicAvgReal(attempts, "Offside") },
-      { label: "Manos", value: topicAvgReal(attempts, "Handball") },
-      { label: "VAR", value: topicAvgReal(attempts, "VAR") },
+      {
+        label: "Decisión técnica",
+        value: percent(examAnswers, "technicalCorrect"),
+      },
+      {
+        label: "Reanudación",
+        value: percent(examAnswers, "restartCorrect"),
+      },
+      {
+        label: "Disciplina",
+        value: percent(examAnswers, "disciplineCorrect"),
+      },
+      {
+        label: "Subtipo técnico",
+        value: percent(examAnswers, "subtypeCorrect"),
+      },
     ];
-  }, [attempts]);
+  }, [examAnswers]);
 
   if (loading) {
     return (
@@ -105,28 +171,29 @@ export default function MobileDashboardPage() {
 
             <div>
               <h1 className="text-2xl font-black leading-tight">
-                ¡Bienvenido, Árbitro!
+                ¡Bienvenido, {displayName}!
               </h1>
               <p className="mt-1 text-sm text-zinc-400">
-                Entrená tus decisiones.
+                Rendí exámenes para generar estadísticas reales.
               </p>
             </div>
           </div>
 
           <Link
-            href="/training"
+            href="/training/exam"
             className="mt-5 flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-[#6fc11f] text-base font-black text-black shadow-[0_0_35px_rgba(111,193,31,0.28)]"
           >
             <Megaphone size={28} />
-            PRACTICAR AHORA
+            RENDIR EXAMEN
           </Link>
         </section>
 
-        {!stats.hasAttempts && (
+        {!stats.hasData && (
           <section className="rounded-[28px] border border-dashed border-[#6fc11f]/25 bg-[#6fc11f]/5 p-5 text-center">
-            <p className="text-lg font-black text-white">Sin actividad todavía</p>
+            <p className="text-lg font-black text-white">Sin exámenes todavía</p>
             <p className="mt-2 text-sm text-zinc-400">
-              Cuando completes ejercicios, tus estadísticas reales aparecerán acá.
+              Cuando completes exámenes arbitrales, tus estadísticas reales
+              aparecerán acá.
             </p>
           </section>
         )}
@@ -138,29 +205,29 @@ export default function MobileDashboardPage() {
             <MetricCard
               icon={BarChart3}
               title="Nivel"
-              value={stats.hasAttempts ? getMobileLevel(stats.avg ?? 0) : "-"}
-              sub={stats.hasAttempts ? "Según rendimiento" : "Sin datos"}
+              value={stats.hasData ? getMobileLevel(stats.avg ?? 0) : "-"}
+              sub={stats.hasData ? "Según examen" : "Sin datos"}
             />
 
             <MetricCard
               icon={Star}
               title="Promedio"
               value={stats.avg === null ? "-" : `${stats.avg}%`}
-              sub={stats.hasAttempts ? "Rendimiento real" : "Sin intentos"}
+              sub={stats.hasData ? "Rendimiento real" : "Sin exámenes"}
             />
 
             <MetricCard
               icon={Flame}
               title="Racha actual"
               value={stats.streak === null ? "-" : `${stats.streak} días`}
-              sub={stats.hasAttempts ? "Actividad registrada" : "Sin actividad"}
+              sub={stats.hasData ? "Actividad registrada" : "Sin actividad"}
             />
 
             <MetricCard
               icon={ClipboardList}
-              title="Ejercicios"
-              value={stats.hasAttempts ? stats.total : "-"}
-              sub={stats.hasAttempts ? "Registrados" : "Sin registros"}
+              title="Exámenes"
+              value={stats.hasData ? stats.totalExams : "-"}
+              sub={stats.hasData ? "Registrados" : "Sin registros"}
             />
           </div>
         </section>
@@ -169,7 +236,9 @@ export default function MobileDashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-black">Rendimiento</h2>
-              <p className="mt-1 text-sm text-zinc-500">Resumen por criterio</p>
+              <p className="mt-1 text-sm text-zinc-500">
+                Resumen por criterio
+              </p>
             </div>
 
             <Link href="/stats" className="text-sm font-black text-[#6fc11f]">
@@ -178,8 +247,12 @@ export default function MobileDashboardPage() {
           </div>
 
           <div className="mt-5 grid gap-3">
-            {topicPerformance.map((item) => (
-              <ProgressRow key={item.label} label={item.label} value={item.value} />
+            {criterionPerformance.map((item) => (
+              <ProgressRow
+                key={item.label}
+                label={item.label}
+                value={item.value}
+              />
             ))}
           </div>
         </section>
@@ -189,7 +262,11 @@ export default function MobileDashboardPage() {
 
           <div className="mt-5 grid grid-cols-2 gap-3">
             {topicPerformance.map((item) => (
-              <TopicCard key={item.label} title={item.label} value={item.value} />
+              <TopicCard
+                key={item.label}
+                title={item.label}
+                value={item.value}
+              />
             ))}
           </div>
 
@@ -209,6 +286,7 @@ export default function MobileDashboardPage() {
             title="Modo VAR"
             text="APP, OFR, factual"
           />
+
           <QuickAction
             href="/training/exam"
             icon={Trophy}
@@ -311,13 +389,24 @@ function QuickAction({
   );
 }
 
-function topicAvgReal(attempts: Attempt[], topic: string) {
-  const filtered = attempts.filter((a) => a.topic === topic);
+function topicAvgReal(answers: ExamAnswer[], topic: string) {
+  const filtered = answers.filter((answer) => answer.topic === topic);
 
   if (filtered.length === 0) return null;
 
   return Math.round(
     filtered.reduce((acc, item) => acc + item.score, 0) / filtered.length
+  );
+}
+
+function percent(answers: ExamAnswer[], key: keyof ExamAnswer) {
+  const valid = answers.filter((answer) => typeof answer[key] === "boolean");
+
+  if (valid.length === 0) return null;
+
+  return Math.round(
+    (valid.filter((answer) => answer[key] === true).length / valid.length) *
+      100
   );
 }
 
