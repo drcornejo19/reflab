@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useUser } from "@clerk/nextjs";
 import { supabase } from "@/lib/supabase";
 import type { Clip } from "@/lib/types";
 import { ClipExercise } from "@/components/ClipExercise";
@@ -10,15 +9,10 @@ import { VarExercise } from "@/components/VarExercise";
 type TrainingMode = "field" | "var" | "english";
 
 type ClipWithMode = Clip & {
-  mode?: TrainingMode;
+  mode?: TrainingMode | string | null;
 };
 
-type TrainingTopic =
-  | "Dispute"
-  | "Tactical foul"
-  | "Offside"
-  | "Handball"
-  | "VAR";
+type TrainingTopic = "ALL" | "Dispute" | "Tactical foul" | "Offside" | "Handball";
 
 type TrainingClientProps = {
   mode?: TrainingMode;
@@ -29,6 +23,11 @@ const trainingTopics: {
   label: string;
   description: string;
 }[] = [
+  {
+    value: "ALL",
+    label: "Todos los clips",
+    description: "Entrenamiento general con todos los videos disponibles.",
+  },
   {
     value: "Dispute",
     label: "Disputas",
@@ -49,59 +48,54 @@ const trainingTopics: {
     label: "Manos",
     description: "Deliberada, bloqueo, inmediatez y posición antinatural.",
   },
-  {
-    value: "VAR",
-    label: "VAR",
-    description: "APP, OFR, factual review, subjective review y check complete.",
-  },
 ];
 
-export function TrainingClient({ mode = "field" }: TrainingClientProps) {
-  const { user, isLoaded } = useUser();
+const topicAliases: Record<TrainingTopic, string[]> = {
+  ALL: [],
+  Dispute: ["Dispute", "Challenge"],
+  "Tactical foul": ["Tactical foul", "SPA", "DOGSO"],
+  Offside: ["Offside"],
+  Handball: ["Handball"],
+};
 
+export function TrainingClient({ mode = "field" }: TrainingClientProps) {
   const [allClips, setAllClips] = useState<ClipWithMode[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<TrainingTopic | null>(null);
-
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadTrainingClips() {
-      if (!isLoaded) return;
-
       setLoading(true);
       setCurrentIndex(0);
 
-      let query = supabase.from("clips").select("*");
-
-      if (mode === "var") {
-        query = query.eq("topic", "VAR");
-      } else if (mode === "english") {
-        query = query.eq("mode", "english");
-      } else {
-        query = query.in("topic", [
-          "Dispute",
-          "Tactical foul",
-          "Offside",
-          "Handball",
-          "VAR",
-        ]);
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await supabase.from("clips").select("*");
 
       if (error) {
         console.error("Error cargando clips:", error);
         setAllClips([]);
-      } else {
-        setAllClips(shuffleClips((data ?? []) as ClipWithMode[]));
+        setLoading(false);
+        return;
       }
 
+      const clips = ((data ?? []) as ClipWithMode[]).filter((clip) => {
+        if (mode === "var") {
+          return clip.topic === "VAR" || clip.mode === "var";
+        }
+
+        if (mode === "english") {
+          return clip.mode === "english";
+        }
+
+        return clip.topic !== "VAR" && clip.mode !== "var";
+      });
+
+      setAllClips(shuffleClips(clips));
       setLoading(false);
     }
 
     loadTrainingClips();
-  }, [isLoaded, user, mode]);
+  }, [mode]);
 
   useEffect(() => {
     window.scrollTo({
@@ -113,9 +107,11 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
   const topicCounts = useMemo(() => {
     return trainingTopics.reduce(
       (acc, topic) => {
-        acc[topic.value] = allClips.filter(
-          (clip) => clip.topic === topic.value
-        ).length;
+        acc[topic.value] =
+          topic.value === "ALL"
+            ? allClips.length
+            : allClips.filter((clip) => matchTopic(clip, topic.value)).length;
+
         return acc;
       },
       {} as Record<TrainingTopic, number>
@@ -123,23 +119,34 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
   }, [allClips]);
 
   const clips = useMemo(() => {
+    if (mode === "var") return allClips;
+
     if (!selectedTopic) return [];
 
-    return allClips.filter((clip) => clip.topic === selectedTopic);
-  }, [allClips, selectedTopic]);
+    if (selectedTopic === "ALL") return allClips;
+
+    return allClips.filter((clip) => matchTopic(clip, selectedTopic));
+  }, [allClips, selectedTopic, mode]);
 
   const currentClip = clips[currentIndex];
 
   const selectedTopicLabel =
-    trainingTopics.find((topic) => topic.value === selectedTopic)?.label ??
-    "Tópico";
+    mode === "var"
+      ? "VAR"
+      : trainingTopics.find((topic) => topic.value === selectedTopic)?.label ??
+        "Tópico";
 
   const recommendationText = useMemo(() => {
+    if (mode === "var") {
+      return "Modo VAR: analizá APP, OFR, error claro y manifiesto, revisión factual o subjetiva.";
+    }
+
     if (!selectedTopic) {
       return "Elegí un tópico para entrenar clips específicos.";
     }
 
     const map: Record<TrainingTopic, string> = {
+      ALL: "Entrenamiento general con todos los clips disponibles.",
       Dispute:
         "Disputas: evaluá intensidad, punto de contacto, disputa normal vs infracción y consecuencia de la acción.",
       "Tactical foul":
@@ -148,12 +155,10 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
         "Fuera de juego: identificá interferencia en el juego, interferencia en adversario o sacar ventaja.",
       Handball:
         "Manos: diferenciá mano deliberada, bloqueo, inmediatez y posición antinatural del brazo.",
-      VAR:
-        "VAR: analizá APP, OFR, error claro y manifiesto, revisión factual o subjetiva.",
     };
 
     return map[selectedTopic];
-  }, [selectedTopic]);
+  }, [selectedTopic, mode]);
 
   function selectTopic(topic: TrainingTopic) {
     setSelectedTopic(topic);
@@ -161,7 +166,7 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
   }
 
   function backToTopics() {
-    setSelectedTopic(mode === "var" ? "VAR" : null);
+    setSelectedTopic(null);
     setCurrentIndex(0);
   }
 
@@ -169,7 +174,7 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
     if (currentIndex < clips.length - 1) {
       setCurrentIndex((prev) => prev + 1);
     } else {
-      alert("Terminaste todos los clips disponibles de este tópico.");
+      alert("Terminaste todos los clips disponibles.");
     }
   }
 
@@ -181,12 +186,12 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
     );
   }
 
-  if (!selectedTopic) {
+  if (mode !== "var" && !selectedTopic) {
     return (
       <div className="space-y-5">
         <div className="rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-5">
           <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-            Training Mode
+            TRAINING MODE
           </p>
 
           <h2 className="mt-3 text-2xl font-black">
@@ -194,8 +199,7 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
           </h2>
 
           <p className="mt-2 text-sm text-zinc-300">
-            Seleccioná una categoría técnica para practicar solo clips de ese
-            tema.
+            Seleccioná una categoría técnica para practicar solo clips de ese tema.
           </p>
         </div>
 
@@ -226,25 +230,10 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
     );
   }
 
-  if (mode === "var" && !selectedTopic) {
-  setSelectedTopic("VAR");
-}
-
   if (!currentClip) {
     return (
-      <div className="space-y-4">
-        {mode !== "var" && (
-          <button
-            onClick={backToTopics}
-            className="rounded-xl bg-white/10 px-5 py-3 font-black text-white transition hover:bg-white/15"
-          >
-            ← Cambiar tópico
-          </button>
-        )}
-
-        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-zinc-400">
-          No hay clips cargados para este tópico.
-        </div>
+      <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-zinc-400">
+        No hay clips cargados para este modo.
       </div>
     );
   }
@@ -253,7 +242,7 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
     <div className="space-y-5">
       <div className="rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-5">
         <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-          {selectedTopic === "VAR" ? "VAR Training" : "Topic Training"}
+          {mode === "var" ? "VAR TRAINING" : "TOPIC TRAINING"}
         </p>
 
         <div className="mt-3 flex flex-col justify-between gap-4 md:flex-row md:items-center">
@@ -262,9 +251,7 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
               Entrenamiento: {selectedTopicLabel}
             </h2>
 
-            <p className="mt-2 text-sm text-zinc-300">
-              {recommendationText}
-            </p>
+            <p className="mt-2 text-sm text-zinc-300">{recommendationText}</p>
           </div>
 
           <div className="rounded-2xl bg-black/30 px-5 py-3 text-sm font-black">
@@ -291,13 +278,19 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
         </button>
       </div>
 
-      {selectedTopic === "VAR" || currentClip.mode === "var" ? (
+      {mode === "var" || currentClip.topic === "VAR" || currentClip.mode === "var" ? (
         <VarExercise clip={currentClip} />
       ) : (
         <ClipExercise clip={currentClip} />
       )}
     </div>
   );
+}
+
+function matchTopic(clip: ClipWithMode, topic: TrainingTopic) {
+  if (topic === "ALL") return true;
+
+  return topicAliases[topic].includes(clip.topic);
 }
 
 function shuffleClips(clips: ClipWithMode[]) {
