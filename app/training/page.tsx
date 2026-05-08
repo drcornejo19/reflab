@@ -5,29 +5,54 @@ import {
   PlaySquare,
   BookOpenCheck,
   ChevronRight,
+  Trophy,
+  GraduationCap,
 } from "lucide-react";
 
 const modules = [
   {
     title: "Modo Entrenamiento",
-    subtitle: "Practicá decisiones técnicas con clips de juego.",
+    subtitle:
+      "Practicá decisiones técnicas con clips divididos por tópicos arbitrales.",
     href: "/training/field",
     icon: ClipboardCheck,
     tag: "Decisión arbitral",
   },
+
   {
     title: "Video Análisis",
-    subtitle: "Analizá jugadas, fundamentos y criterios de decisión.",
+    subtitle:
+      "Analizá jugadas, fundamentos y criterios técnicos sin límite de tiempo.",
     href: "/training/video-analysis",
     icon: PlaySquare,
     tag: "Análisis técnico",
   },
+
   {
-    title: "Examen Reglas de Juego",
-    subtitle: "Respondé preguntas tipo multiple choice sobre reglas IFAB.",
+    title: "Práctica Reglas",
+    subtitle:
+      "Entrenamiento rápido con preguntas IFAB y feedback inmediato.",
+    href: "/training/rules-practice",
+    icon: GraduationCap,
+    tag: "Gratis",
+  },
+
+  {
+    title: "Examen Reglas",
+    subtitle:
+      "20 preguntas exigentes, 30 minutos y resultado final detallado.",
     href: "/training/rules-exam",
     icon: BookOpenCheck,
-    tag: "4 opciones",
+    tag: "Evaluación",
+  },
+
+  {
+    title: "Reglas Premium",
+    subtitle:
+      "Accedé a práctica avanzada con las 100 preguntas del sistema.",
+    href: "/training/rules-premium-practice",
+    icon: Trophy,
+    tag: "Premium",
   },
 ];
 
@@ -45,12 +70,12 @@ export default function TrainingPage() {
           </h1>
 
           <p className="mt-4 max-w-2xl text-lg leading-8 text-zinc-400">
-            Elegí un módulo para entrenar decisiones, analizar videos o responder
-            preguntas sobre las Reglas de Juego.
+            Elegí un módulo para entrenar decisiones arbitrales, analizar clips
+            o rendir evaluaciones basadas en las Reglas IFAB.
           </p>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {modules.map((module) => {
             const Icon = module.icon;
 
@@ -72,7 +97,9 @@ export default function TrainingPage() {
                   {module.tag}
                 </p>
 
-                <h2 className="mt-3 text-2xl font-black">{module.title}</h2>
+                <h2 className="mt-3 text-2xl font-black">
+                  {module.title}
+                </h2>
 
                 <p className="mt-3 text-sm leading-6 text-zinc-400">
                   {module.subtitle}
