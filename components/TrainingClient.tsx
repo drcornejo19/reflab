@@ -60,9 +60,8 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
   const { user, isLoaded } = useUser();
 
   const [allClips, setAllClips] = useState<ClipWithMode[]>([]);
-  const [selectedTopic, setSelectedTopic] = useState<TrainingTopic | null>(
-    mode === "var" ? "VAR" : null
-  );
+  const [selectedTopic, setSelectedTopic] = useState<TrainingTopic | null>(null);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -182,7 +181,7 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
     );
   }
 
-  if (mode !== "var" && !selectedTopic) {
+  if (!selectedTopic) {
     return (
       <div className="space-y-5">
         <div className="rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-5">
@@ -226,6 +225,10 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
       </div>
     );
   }
+
+  if (mode === "var" && !selectedTopic) {
+  setSelectedTopic("VAR");
+}
 
   if (!currentClip) {
     return (
