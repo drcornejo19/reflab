@@ -7,6 +7,7 @@ import type { Clip } from "@/lib/types";
 import { calculateScore } from "@/lib/scoring";
 
 const TOTAL_QUESTIONS = 10;
+const MAX_VIDEO_PLAYS = 2;
 
 type ClipWithDetails = Clip & {
   sub_type?: string | null;
@@ -61,6 +62,7 @@ export function ExamClient() {
   const [loading, setLoading] = useState(true);
   const [finished, setFinished] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [videoPlays, setVideoPlays] = useState(0);
 
   const [foul, setFoul] = useState<boolean | null>(null);
   const [restart, setRestart] = useState("");
@@ -73,6 +75,8 @@ export function ExamClient() {
   const [loadingAi, setLoadingAi] = useState(false);
 
   const currentClip = clips[index];
+  const remainingVideoPlays = Math.max(MAX_VIDEO_PLAYS - videoPlays, 0);
+const videoLocked = remainingVideoPlays <= 0;
 
   const isOffsideClip = currentClip?.topic === "Offside";
   const isHandballClip = currentClip?.topic === "Handball";
@@ -134,6 +138,10 @@ export function ExamClient() {
     behavior: "smooth",
   });
 }, [index, finished]); 
+
+useEffect(() => {
+  setVideoPlays(0);
+}, [currentClip?.id]);
 
   useEffect(() => {
     if (!currentClip) return;
@@ -207,6 +215,17 @@ export function ExamClient() {
 
     setLoadingAi(false);
   }
+
+  function handleVideoPlay(event: React.SyntheticEvent<HTMLVideoElement>) {
+  if (videoLocked) {
+    event.currentTarget.pause();
+    event.currentTarget.currentTime = 0;
+  }
+}
+
+function handleVideoEnded() {
+  setVideoPlays((prev) => Math.min(prev + 1, MAX_VIDEO_PLAYS));
+}
 
   function submitAnswer() {
     if (!currentClip || !canSubmit) return;
@@ -503,11 +522,33 @@ export function ExamClient() {
             </span>
           </div>
 
-          <video
-            className="aspect-video w-full rounded-2xl bg-black object-cover"
-            src={currentClip.video_url}
-            controls
-          />
+          <div className="relative overflow-hidden rounded-2xl bg-black">
+  <video
+    className="aspect-video w-full bg-black object-cover"
+    src={currentClip.video_url}
+    controls={!videoLocked}
+    onPlay={handleVideoPlay}
+    onEnded={handleVideoEnded}
+  />
+
+  {videoLocked && (
+    <div className="absolute inset-0 grid place-items-center bg-black/75 p-6 text-center">
+      <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-5 text-yellow-300">
+        <p className="text-lg font-black">Límite alcanzado</p>
+        <p className="mt-2 text-sm">
+          Ya viste este video 2 veces. Ahora tenés que tomar la decisión.
+        </p>
+      </div>
+    </div>
+  )}
+</div>
+
+<p className="mt-3 text-xs font-bold text-zinc-400">
+  Reproducciones disponibles:{" "}
+  <span className="text-[#6fc11f]">
+    {remainingVideoPlays}/{MAX_VIDEO_PLAYS}
+  </span>
+</p>
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <InfoBox title="Tema" value={labelFromValue(currentClip.topic)} />
