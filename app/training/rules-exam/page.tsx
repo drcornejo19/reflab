@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
 import { rulesQuestions } from "@/lib/rulesQuestions";
+import { supabase } from "@/lib/supabase";
 
 const EXAM_LIMIT = 20;
 const EXAM_TIME = 30 * 60;
@@ -19,6 +21,8 @@ function shuffle<T>(arr: T[]) {
 }
 
 export default function RulesExamPage() {
+  const { user } = useUser();
+
   const questions = useMemo(() => {
     const heavyTopics = [
       "Fuera de juego",
@@ -63,6 +67,8 @@ export default function RulesExamPage() {
   const [finished, setFinished] = useState(false);
   const [finishReason, setFinishReason] = useState<FinishReason>(null);
   const [timeLeft, setTimeLeft] = useState(EXAM_TIME);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const currentQuestion = questions[currentIndex];
 
@@ -126,6 +132,7 @@ export default function RulesExamPage() {
     setSelected(null);
     setAnswers([]);
     setTimeLeft(EXAM_TIME);
+    setSaved(false);
 
     window.scrollTo({
       top: 0,
@@ -194,11 +201,71 @@ export default function RulesExamPage() {
     return {
       correct,
       percentage,
-      unanswered: questions.length - answers.filter((a) => a !== undefined).length,
+      unanswered:
+        questions.length - answers.filter((answer) => answer !== undefined).length,
       strongest: topicPerformance[0],
       weakest: topicPerformance[topicPerformance.length - 1],
       topicPerformance,
     };
+  }
+
+  async function saveRulesExam() {
+    if (!user) {
+      alert("Tenés que iniciar sesión para guardar el resultado.");
+      return;
+    }
+
+    if (saved) {
+      alert("Este resultado ya fue guardado.");
+      return;
+    }
+
+    const result = calculateResults();
+
+    const details = questions.map((question, questionIndex) => {
+      const selectedAnswer = answers[questionIndex];
+      const isAnswered = selectedAnswer !== undefined;
+      const isCorrect = selectedAnswer === question.correct;
+
+      return {
+        question_id: question.id,
+        topic: question.topic,
+        question: question.question,
+        selected_option: isAnswered ? selectedAnswer : null,
+        selected_text: isAnswered ? question.options[selectedAnswer] : null,
+        correct_option: question.correct,
+        correct_text: question.options[question.correct],
+        is_correct: isCorrect,
+        unanswered: !isAnswered,
+        explanation: question.explanation,
+      };
+    });
+
+    setSaving(true);
+
+    const { error } = await supabase.from("rules_exam_results").insert([
+      {
+        user_id: user.id,
+        total_questions: questions.length,
+        correct_count: result.correct,
+        percentage: result.percentage,
+        unanswered_count: result.unanswered,
+        finish_reason: finishReason,
+        level: getLevel(result.percentage),
+        details,
+        topic_performance: result.topicPerformance,
+      },
+    ]);
+
+    if (error) {
+      console.error("Error guardando examen de reglas:", error);
+      alert(error.message);
+    } else {
+      setSaved(true);
+      alert("Resultado guardado correctamente.");
+    }
+
+    setSaving(false);
   }
 
   function formatTime(seconds: number) {
@@ -383,12 +450,26 @@ export default function RulesExamPage() {
             </p>
           </section>
 
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black"
-          >
-            RENDIR NUEVAMENTE
-          </button>
+          <div className="grid gap-3 md:grid-cols-2">
+            <button
+              onClick={saveRulesExam}
+              disabled={saving || saved}
+              className="w-full rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving
+                ? "GUARDANDO..."
+                : saved
+                  ? "RESULTADO GUARDADO"
+                  : "GUARDAR RESULTADO"}
+            </button>
+
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full rounded-2xl bg-white/10 px-5 py-4 font-black text-white hover:bg-white/15"
+            >
+              RENDIR NUEVAMENTE
+            </button>
+          </div>
         </div>
       </AppShell>
     );
@@ -433,13 +514,13 @@ export default function RulesExamPage() {
           </p>
 
           <div className="mt-6 space-y-3">
-            {currentQuestion.options.map((option, index) => {
-              const active = selected === index;
+            {currentQuestion.options.map((option, optionIndex) => {
+              const active = selected === optionIndex;
 
               return (
                 <button
                   key={`${currentQuestion.id}-${option}`}
-                  onClick={() => setSelected(index)}
+                  onClick={() => setSelected(optionIndex)}
                   className={`w-full rounded-2xl border px-5 py-4 text-left transition ${
                     active
                       ? "border-[#6fc11f] bg-[#6fc11f]/10"
@@ -447,7 +528,7 @@ export default function RulesExamPage() {
                   }`}
                 >
                   <span className="font-black">
-                    {String.fromCharCode(65 + index)}.
+                    {String.fromCharCode(65 + optionIndex)}.
                   </span>{" "}
                   {option}
                 </button>
