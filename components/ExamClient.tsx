@@ -129,6 +129,13 @@ export function ExamClient() {
   }, []);
 
   useEffect(() => {
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
+}, [index, finished]); 
+
+  useEffect(() => {
     if (!currentClip) return;
 
     const isNoOffside =
@@ -169,12 +176,7 @@ export function ExamClient() {
       setHandballReason("");
     }
 
-    useEffect(() => {
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth",
-  });
-}, [index, finished]); 
+    
 
 
   }, [foul, restart, currentClip]);
