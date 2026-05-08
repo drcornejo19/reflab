@@ -168,6 +168,15 @@ export function ExamClient() {
       setOffsideReason("");
       setHandballReason("");
     }
+
+    useEffect(() => {
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
+}, [index, finished]); 
+
+
   }, [foul, restart, currentClip]);
 
   async function generateAIAnalysis() {
