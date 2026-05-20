@@ -21,6 +21,50 @@ const topicOptions = [
   { value: "VAR", label: "VAR" },
 ];
 
+const englishTopicOptions = [
+  { value: "Communication", label: "General Communication" },
+
+  { value: "foul_explanation", label: "Foul Explanation" },
+
+  {
+    value: "disciplinary",
+    label: "Disciplinary Communication",
+  },
+
+  {
+    value: "var_communication",
+    label: "VAR Communication",
+  },
+
+  {
+    value: "team_management",
+    label: "Team Management",
+  },
+
+  {
+    value: "offside_communication",
+    label: "Offside Communication",
+  },
+
+  {
+    value: "penalty_incident",
+    label: "Penalty Incident",
+  },
+
+  {
+    value: "report_language",
+    label: "Report / Post-Match Language",
+  },
+
+  { value: "DOGSO", label: "DOGSO" },
+
+  { value: "SPA", label: "SPA" },
+
+  { value: "Handball", label: "Handball" },
+
+  { value: "Offside", label: "Offside" },
+];
+
 const offsideSubTypes = [
   { value: "interferir_juego", label: "Interfiere en el juego" },
   { value: "interferir_adversario", label: "Interfiere en el adversario" },
@@ -518,36 +562,14 @@ correct_var: isEnglishMode
   value={topic}
   onChange={setTopic}
   options={
-    isEnglishMode
-      ? [
-          {
-            value: "Communication",
-            label: "Communication",
-          },
-          {
-            value: "DOGSO",
-            label: "DOGSO",
-          },
-          {
-            value: "SPA",
-            label: "SPA",
-          },
-          {
-            value: "Handball",
-            label: "Handball",
-          },
-          {
-            value: "Offside",
-            label: "Offside",
-          },
-          {
-            value: "VAR Communication",
-            label: "VAR Communication",
-          },
-        ]
-      : topicOptions
-  }
+  isEnglishMode
+    ? englishTopicOptions
+    : topicOptions
+}
+  
 />
+
+
 
             </div>
 
@@ -758,6 +780,28 @@ function labelFromValue(
 
   const dictionary: Record<string, string> =
     {
+
+      Communication: "General Communication",
+
+foul_explanation: "Foul Explanation",
+
+disciplinary:
+  "Disciplinary Communication",
+
+var_communication:
+  "VAR Communication",
+
+team_management:
+  "Team Management",
+
+offside_communication:
+  "Offside Communication",
+
+penalty_incident:
+  "Penalty Incident",
+
+report_language:
+  "Report / Post-Match Language",
       Dispute: "Disputas",
 
       "Tactical foul":
