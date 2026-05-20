@@ -87,6 +87,8 @@ export default function AdminClipsPage() {
 
   const [editingClipId, setEditingClipId] = useState<string | null>(null);
 
+  const isEnglishMode = mode === "english";
+
   function startEdit(clip: ClipWithDetails) {
     setEditingClipId(clip.id);
 
@@ -323,13 +325,21 @@ export default function AdminClipsPage() {
 
       mode,
 
-      correct_foul: correctFoul,
+      correct_foul: isEnglishMode
+  ? null
+  : correctFoul,
 
-      correct_restart: correctRestart,
+correct_restart: isEnglishMode
+  ? null
+  : correctRestart,
 
-      correct_discipline: correctDiscipline,
+correct_discipline: isEnglishMode
+  ? null
+  : correctDiscipline,
 
-      correct_var: correctVar,
+correct_var: isEnglishMode
+  ? null
+  : correctVar,
 
       explanation,
     };
@@ -500,78 +510,129 @@ export default function AdminClipsPage() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <Select
-                label="Categoría técnica"
-                value={topic}
-                onChange={setTopic}
-                options={topicOptions}
-              />
+  label={
+    isEnglishMode
+      ? "Categoría de comunicación"
+      : "Categoría técnica"
+  }
+  value={topic}
+  onChange={setTopic}
+  options={
+    isEnglishMode
+      ? [
+          {
+            value: "Communication",
+            label: "Communication",
+          },
+          {
+            value: "DOGSO",
+            label: "DOGSO",
+          },
+          {
+            value: "SPA",
+            label: "SPA",
+          },
+          {
+            value: "Handball",
+            label: "Handball",
+          },
+          {
+            value: "Offside",
+            label: "Offside",
+          },
+          {
+            value: "VAR Communication",
+            label: "VAR Communication",
+          },
+        ]
+      : topicOptions
+  }
+/>
 
             </div>
 
-            {subTypeOptions.length > 0 && (
-              <Select
-                label={
-                  topic === "Offside"
-                    ? "Tipo de fuera de juego"
-                    : "Tipo de mano"
-                }
-                value={subType}
-                onChange={setSubType}
-                options={subTypeOptions}
-              />
-            )}
+            {isEnglishMode ? (
+  <>
+    <Textarea
+      label="Expected answer / IA feedback"
+      value={explanation}
+      onChange={setExplanation}
+    />
 
-            <BooleanSelect
-              label="¿Hubo infracción?"
-              value={correctFoul}
-              onChange={(value) => {
-                setCorrectFoul(value);
+    <div className="rounded-2xl border border-[#6fc11f]/20 bg-[#6fc11f]/10 p-4 text-sm leading-6 text-[#6fc11f]">
+      Este clip pertenece al módulo de inglés arbitral.
+      El usuario podrá responder por escrito y por voz.
+      La IA devolverá feedback técnico para mejorar comunicación,
+      pronunciación y vocabulario arbitral.
+    </div>
+  </>
+) : (
+  <>
+    {subTypeOptions.length > 0 && (
+      <Select
+        label={
+          topic === "Offside"
+            ? "Tipo de fuera de juego"
+            : "Tipo de mano"
+        }
+        value={subType}
+        onChange={setSubType}
+        options={subTypeOptions}
+      />
+    )}
 
-                if (value) {
-                  setCorrectRestart(
-                    "Tiro libre directo"
-                  );
-                } else {
-                  setCorrectRestart(
-                    "Seguir el juego"
-                  );
-                }
-              }}
-            />
+    <BooleanSelect
+      label="¿Hubo infracción?"
+      value={correctFoul}
+      onChange={(value) => {
+        setCorrectFoul(value);
 
-            <Select
-              label="Reanudación correcta"
-              value={correctRestart}
-              onChange={setCorrectRestart}
-              options={restartOptions}
-            />
+        if (value) {
+          setCorrectRestart(
+            "Tiro libre directo"
+          );
+        } else {
+          setCorrectRestart(
+            "Seguir el juego"
+          );
+        }
+      }}
+    />
 
-            <Select
-              label="Disciplina correcta"
-              value={correctDiscipline}
-              onChange={setCorrectDiscipline}
-              options={[
-                {
-                  value: "Sin tarjeta",
-                  label: "Sin tarjeta",
-                },
-                {
-                  value: "Amarilla",
-                  label: "Amarilla",
-                },
-                {
-                  value: "Roja",
-                  label: "Roja",
-                },
-              ]}
-            />
+    <Select
+      label="Reanudación correcta"
+      value={correctRestart}
+      onChange={setCorrectRestart}
+      options={restartOptions}
+    />
 
+    <Select
+      label="Disciplina correcta"
+      value={correctDiscipline}
+      onChange={setCorrectDiscipline}
+      options={[
+        {
+          value: "Sin tarjeta",
+          label: "Sin tarjeta",
+        },
+        {
+          value: "Amarilla",
+          label: "Amarilla",
+        },
+        {
+          value: "Roja",
+          label: "Roja",
+        },
+      ]}
+    />
 
-            <Textarea
-              label="Fundamento / aval de la decisión"
-              value={explanation}
-              onChange={setExplanation}
-            />
+    <Textarea
+      label="Fundamento / aval de la decisión"
+      value={explanation}
+      onChange={setExplanation}
+    />
+  </>
+)}
 
             <div className="flex gap-3">
               <button
