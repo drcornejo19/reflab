@@ -1,39 +1,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import {
-  ArrowRight,
-  BarChart3,
-  BookOpen,
-  Brain,
-  CheckCircle2,
-  Megaphone,
-  MonitorCheck,
-  PlaySquare,
-  ShieldCheck,
-  Target,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
-
-type Feature = {
-  title: string;
-  icon: LucideIcon;
-};
+import { AboutFeatureExplorer } from "@/components/AboutFeatureExplorer";
+import { FounderPhoto } from "@/components/FounderPhoto";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 
 type StoryBlock = {
   title: string;
   text: string;
 };
-
-const features: Feature[] = [
-  { title: "VAR", icon: MonitorCheck },
-  { title: "Entrená", icon: ShieldCheck },
-  { title: "Analizá", icon: PlaySquare },
-  { title: "Decidí", icon: Target },
-  { title: "Mejorá", icon: BarChart3 },
-  { title: "Aprendé", icon: BookOpen },
-];
 
 const trainingAreas = [
   "Decisión arbitral",
@@ -57,6 +32,13 @@ const storyBlocks: StoryBlock[] = [
     title: "Nuestra visión",
     text: "Entrenar árbitros capaces de decidir mejor, comunicar mejor y evolucionar con datos.",
   },
+];
+
+const originParagraphs = [
+  "RefLab nace mucho antes de ser una plataforma. Nace en un cuartito, viendo la Regla 11 junto a mi padre, cuando el arbitraje apareció en mi vida como una manera de empezar a construir algo propio.",
+  "Lo que empezó por necesidad, con el tiempo se transformó en pasión, formación y propósito. Desde mi ciudad natal, dentro de una estructura arbitral con poca infraestructura y muchas limitaciones, entendí que no siempre alcanza con tener ganas, saber el reglamento o esforzarse. También hace falta acceso, guía, oportunidades y una estructura que acompañe el crecimiento real del árbitro.",
+  "Después de formarme en una de las escuelas más prestigiosas de Argentina, y de haber podido entrenar, capacitarme y recorrer categorías durante más de 16 años, comprendí que el arbitraje es mucho más que tomar decisiones dentro de una cancha. Es lectura, comunicación, liderazgo, percepción, preparación mental, manejo del conflicto, ética y capacidad de sostenerse bajo presión.",
+  "RefLab nace para transformar esa experiencia en una herramienta para otros árbitros. Una plataforma pensada para profesionalizar el entrenamiento arbitral en todos los niveles, desde quienes recién empiezan hasta quienes buscan crecer en estructuras más competitivas.",
 ];
 
 export default function AboutPage() {
@@ -133,32 +115,13 @@ export default function AboutPage() {
           </div>
         </section>
 
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-          {features.map((feature) => {
-            const Icon = feature.icon;
-
-            return (
-              <div
-                key={feature.title}
-                className="rounded-[24px] border border-white/10 bg-[#101b24] p-4 text-center shadow-xl"
-              >
-                <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
-                  <Icon className="h-6 w-6" />
-                </div>
-
-                <p className="mt-3 text-xs font-black uppercase tracking-[0.22em] text-white">
-                  {feature.title}
-                </p>
-              </div>
-            );
-          })}
-        </section>
+        <AboutFeatureExplorer />
 
         <section className="grid gap-4 lg:grid-cols-3">
           {storyBlocks.map((block) => (
             <article
               key={block.title}
-              className="rounded-[30px] border border-white/10 bg-[#0d1720] p-5 shadow-2xl lg:p-6"
+              className="rounded-[30px] border border-white/10 bg-[#0d1720] p-5 shadow-2xl transition hover:border-[#6fc11f]/30 lg:p-6"
             >
               <p className="text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">
                 {block.title}
@@ -205,42 +168,40 @@ export default function AboutPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-3">
-          <IdentityCard
-            icon={Brain}
-            title="Preparación mental"
-            text="Lectura, concentración, control emocional y preparación pre-partido."
-          />
-          <IdentityCard
-            icon={Megaphone}
-            title="Comunicación"
-            text="Autoridad, liderazgo, manejo de protestas y explicación de decisiones."
-          />
-          <IdentityCard
-            icon={Users}
-            title="Desarrollo"
-            text="Una estructura para crecer con evidencia, hábitos y seguimiento."
-          />
+        <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_right,rgba(111,193,31,0.1),transparent_34%),#05070d] p-5 shadow-2xl lg:p-10">
+          <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
+                Nuestra historia
+              </p>
+
+              <h2 className="mt-4 text-3xl font-black leading-tight text-white sm:text-4xl lg:text-5xl">
+                Cómo nació RefLab
+              </h2>
+
+              <div className="mt-6 space-y-4 text-sm leading-7 text-zinc-300 sm:text-base sm:leading-8">
+                {originParagraphs.map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
+              </div>
+
+              <blockquote className="mt-7 border-l-4 border-[#6fc11f] pl-5 text-lg font-black leading-7 text-white lg:text-xl">
+                “RefLab existe para visualizar lo que no se ve y profesionalizar
+                el camino del árbitro.”
+              </blockquote>
+
+              <div className="mt-7">
+                <p className="text-base font-black text-white">David Cornejo</p>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Árbitro de fútbol — Fundador de RefLab
+                </p>
+              </div>
+            </div>
+
+            <FounderPhoto />
+          </div>
         </section>
       </div>
     </AppShell>
-  );
-}
-
-function IdentityCard({
-  icon: Icon,
-  title,
-  text,
-}: {
-  icon: LucideIcon;
-  title: string;
-  text: string;
-}) {
-  return (
-    <article className="rounded-[28px] border border-[#6fc11f]/20 bg-[#6fc11f]/10 p-5">
-      <Icon className="h-8 w-8 text-[#6fc11f]" />
-      <h3 className="mt-4 text-xl font-black text-white">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-zinc-300">{text}</p>
-    </article>
   );
 }
