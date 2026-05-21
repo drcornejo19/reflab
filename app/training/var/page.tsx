@@ -11,11 +11,12 @@ export default function VarPage() {
           </p>
 
           <h1 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">
-            Modo VAR
+            VAR Lab
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-            Analizá incidentes revisables, definí si corresponde intervención y justificá el criterio VAR.
+            Practicá protocolo VAR, OFR, APP, errores claros y obvios,
+            factual vs interpretativo y decisión final.
           </p>
         </header>
 

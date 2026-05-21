@@ -13,12 +13,12 @@ export default function EnglishPage() {
           </p>
 
           <h1 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">
-            Modo Inglés Arbitral
+            Inglés arbitral
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-            Describí decisiones arbitrales en inglés técnico.
-            Mejorá tu comunicación para contextos FIFA.
+            Explicá decisiones en inglés técnico arbitral con vocabulario FIFA,
+            VAR y reportes.
           </p>
         </header>
 

@@ -177,8 +177,8 @@ export default function DashboardPage() {
             </p>
             <h1 className="mt-2 text-3xl font-black">Análisis arbitral</h1>
             <p className="mt-2 text-sm text-zinc-400">
-              Fortalezas, debilidades y plan de mejora basado solo en Examen
-              Arbitral.
+              Resumen técnico de tu rendimiento arbitral, fortalezas, puntos
+              críticos y plan recomendado.
             </p>
           </div>
 

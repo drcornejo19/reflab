@@ -87,12 +87,12 @@ export default function LearningPage() {
           <div className="mt-3 flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>
               <h1 className="text-3xl font-black tracking-tight md:text-4xl">
-                Biblioteca IFAB
+                Biblioteca
               </h1>
 
               <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
-                Reglamento actualizado, protocolo VAR, cambios oficiales y
-                circulares para consulta arbitral.
+                Consultá reglas, protocolo VAR, circulares, cambios de
+                temporada y material de estudio.
               </p>
             </div>
 

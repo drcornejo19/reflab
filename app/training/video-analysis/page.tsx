@@ -15,7 +15,8 @@ export default function VideoAnalysisPage() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-            Analizá clips, tomá decisiones técnicas y justificá el criterio arbitral.
+            Analizá clips reales, justificá decisiones y trabajá la lectura
+            técnica de jugadas.
           </p>
         </header>
 

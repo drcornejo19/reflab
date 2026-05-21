@@ -6,47 +6,114 @@ import { usePathname } from "next/navigation";
 import {
   Home,
   CircleAlert,
-  MonitorCheck,
-  Languages,
   BookOpen,
   ShieldCheck,
   ChartNoAxesCombined,
-  Trophy,
   User,
   Clapperboard,
-  Info,
+  type LucideIcon,
 } from "lucide-react";
+import { useUserRole } from "@/lib/useUserRole";
 
 type NavItem = {
   label: string;
   href: string;
-  icon: any;
+  icon: LucideIcon;
+  activePaths?: string[];
+  activePrefixes?: string[];
+  adminOnly?: boolean;
 };
+
+const trainingActivePaths = ["/training", "/mobile-var"];
+const trainingActivePrefixes = [
+  "/training/decision",
+  "/training/video-analysis",
+  "/training/var",
+  "/training/english",
+  "/training/communication",
+  "/training/referee-preparation",
+  "/training/field",
+  "/training/rules-practice",
+  "/training/rules-premium-practice",
+];
 
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: Home },
-  { label: "Módulos", href: "/training", icon: CircleAlert },
-  { label: "Modo VAR", href: "/training/var", icon: MonitorCheck },
-  { label: "Modo Inglés", href: "/training/english", icon: Languages },
-  { label: "Biblioteca IFAB", href: "/learning", icon: BookOpen },
-  { label: "Exámenes", href: "/training/exam", icon: ShieldCheck },
-  { label: "Estadísticas", href: "/stats", icon: ChartNoAxesCombined },
-  { label: "Ranking", href: "/ranking", icon: Trophy },
-  { label: "Admin Clips", href: "/admin-clips", icon: Clapperboard },
-  { label: "Nuestra historia", href: "/about", icon: Info },
-  { label: "Mi Perfil", href: "/profile", icon: User },
+  {
+    label: "Entrenamiento",
+    href: "/training",
+    icon: CircleAlert,
+    activePaths: trainingActivePaths,
+    activePrefixes: trainingActivePrefixes,
+  },
+  {
+    label: "Evaluaciones",
+    href: "/evaluations",
+    icon: ShieldCheck,
+    activePaths: ["/evaluations", "/training/exam", "/training/rules-exam"],
+    activePrefixes: ["/evaluations"],
+  },
+  {
+    label: "Rendimiento",
+    href: "/performance",
+    icon: ChartNoAxesCombined,
+    activePaths: ["/performance", "/stats", "/ranking", "/mobile-stats"],
+    activePrefixes: ["/performance"],
+  },
+  {
+    label: "Biblioteca",
+    href: "/learning",
+    icon: BookOpen,
+    activePaths: ["/learning"],
+  },
+  { label: "Perfil", href: "/profile", icon: User },
+  {
+    label: "Admin",
+    href: "/admin",
+    icon: Clapperboard,
+    activePaths: ["/admin", "/admin-clips"],
+    activePrefixes: ["/admin"],
+    adminOnly: true,
+  },
 ];
 
-const mobileItems = [
-  { label: "Inicio", href: "/mobile-dashboard", icon: Home },
-  { label: "Módulos", href: "/training", icon: CircleAlert },
-  { label: "Analizá", href: "/mobile-stats", icon: ChartNoAxesCombined },
-  { label: "VAR", href: "/mobile-var", icon: MonitorCheck },
+const mobileItems: NavItem[] = [
+  {
+    label: "Inicio",
+    href: "/mobile-dashboard",
+    icon: Home,
+    activePaths: ["/mobile-dashboard", "/dashboard"],
+  },
+  {
+    label: "Entrenar",
+    href: "/training",
+    icon: CircleAlert,
+    activePaths: trainingActivePaths,
+    activePrefixes: trainingActivePrefixes,
+  },
+  {
+    label: "Evaluar",
+    href: "/evaluations",
+    icon: ShieldCheck,
+    activePaths: ["/evaluations", "/training/exam", "/training/rules-exam"],
+    activePrefixes: ["/evaluations"],
+  },
+  {
+    label: "Rendimiento",
+    href: "/performance",
+    icon: ChartNoAxesCombined,
+    activePaths: ["/performance", "/stats", "/ranking", "/mobile-stats"],
+    activePrefixes: ["/performance"],
+  },
   { label: "Perfil", href: "/profile", icon: User },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { isVideoAdmin, loadingRole } = useUserRole();
+  const visibleNavItems = navItems.filter(
+    (item) => !item.adminOnly || (!loadingRole && isVideoAdmin)
+  );
 
   return (
     <div className="min-h-screen bg-[#050b12] text-white">
@@ -54,14 +121,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Logo />
 
         <nav className="mt-10 space-y-2">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.href}
               item={item}
-              active={
-                pathname === item.href ||
-                (item.href !== "/dashboard" && pathname.startsWith(item.href))
-              }
+              active={isItemActive(pathname, item)}
             />
           ))}
         </nav>
@@ -78,18 +142,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <nav className="fixed bottom-0 left-0 z-50 grid h-20 w-full grid-cols-5 border-t border-white/10 bg-[#050b12]/95 px-2 pb-2 pt-2 backdrop-blur lg:hidden">
         {mobileItems.map((item) => {
           const Icon = item.icon;
-
-          const active =
-            pathname === item.href ||
-            (item.href === "/mobile-dashboard" && pathname === "/dashboard") ||
-            (item.href === "/training" && pathname.startsWith("/training")) ||
-            (item.href === "/mobile-var" &&
-              (pathname === "/mobile-var" || pathname === "/training/var")) ||
-            (item.href === "/mobile-stats" &&
-              (pathname === "/mobile-stats" ||
-                pathname === "/stats" ||
-                pathname === "/ranking")) ||
-            (item.href === "/profile" && pathname.startsWith("/profile"));
+          const active = isItemActive(pathname, item);
 
           return (
             <Link
@@ -113,7 +166,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 function Logo({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/home" className="flex items-center gap-3">
+    <Link href="/dashboard" className="flex items-center gap-3">
       <Image
         src="/logo.png"
         alt="RefLab"
@@ -124,7 +177,9 @@ function Logo({ compact = false }: { compact?: boolean }) {
       />
 
       <div>
-        <p className={`${compact ? "text-sm" : "text-lg"} font-black tracking-wide`}>
+        <p
+          className={`${compact ? "text-sm" : "text-lg"} font-black tracking-wide`}
+        >
           REF<span className="text-[#6fc11f]">LAB</span>
         </p>
         <p className={`${compact ? "text-[9px]" : "text-[10px]"} text-zinc-500`}>
@@ -150,5 +205,17 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       <Icon size={18} />
       {item.label}
     </Link>
+  );
+}
+
+function isItemActive(pathname: string, item: NavItem) {
+  const activePaths = item.activePaths ?? [item.href];
+  const activePrefixes = item.activePrefixes ?? [];
+
+  return (
+    activePaths.includes(pathname) ||
+    activePrefixes.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+    )
   );
 }
