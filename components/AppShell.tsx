@@ -14,6 +14,7 @@ import {
   Trophy,
   User,
   Clapperboard,
+  Info,
 } from "lucide-react";
 
 type NavItem = {
@@ -32,6 +33,7 @@ const navItems: NavItem[] = [
   { label: "Estadísticas", href: "/stats", icon: ChartNoAxesCombined },
   { label: "Ranking", href: "/ranking", icon: Trophy },
   { label: "Admin Clips", href: "/admin-clips", icon: Clapperboard },
+  { label: "Nuestra historia", href: "/about", icon: Info },
   { label: "Mi Perfil", href: "/profile", icon: User },
 ];
 
