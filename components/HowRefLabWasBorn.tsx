@@ -63,10 +63,10 @@ export function HowRefLabWasBorn() {
 
           <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5">
             <img
-              src="/david-referee.jpg"
-              alt="David Cornejo, fundador de RefLab"
-              className="h-[420px] w-full object-cover grayscale"
-            />
+  src="/david-referee.jpeg"
+  alt="David Cornejo, fundador de RefLab"
+  className="h-[420px] w-full object-cover grayscale"
+/>
           </div>
         </div>
       </div>
