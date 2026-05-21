@@ -4,7 +4,6 @@ import Image from "next/image";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
-import { HowRefLabWasBorn } from "@/components/HowRefLabWasBorn";
 
 export default function SplashPage() {
   const router = useRouter();
@@ -12,8 +11,6 @@ export default function SplashPage() {
 
   useEffect(() => {
     if (!isLoaded) return;
-
-    <HowRefLabWasBorn />
 
     const timer = setTimeout(() => {
       if (isSignedIn) {
