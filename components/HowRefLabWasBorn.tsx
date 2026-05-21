@@ -3,7 +3,7 @@ export function HowRefLabWasBorn() {
     <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#05070d] px-6 py-12 text-white shadow-2xl md:px-10">
       <div className="grid gap-10 md:grid-cols-[1fr_0.9fr] md:items-center">
         <div>
-          <p className="mb-3 text-sm font-semibold uppercase tracking-[0.3em] text-cyan-400">
+          <p className="mb-3 text-sm font-semibold uppercase tracking-[0.3em] text-green-400">
             Nuestra historia
           </p>
 
@@ -14,12 +14,12 @@ export function HowRefLabWasBorn() {
           <div className="space-y-4 text-sm leading-7 text-white/75 md:text-base">
             <p>
               RefLab nace mucho antes de ser una plataforma. Nace en un cuartito,
-  viendo la Regla 11 junto a mi padre, cuando el arbitraje apareció
-  en mi vida como una manera de empezar a construir algo propio
+              viendo la Regla 11 junto a mi padre, cuando el arbitraje apareció
+              en mi vida como una manera de empezar a construir algo propio.
             </p>
 
             <p>
-              Lo que empezó por necesidad, con el tiempo se transformó en
+              Lo que empezó como una oportunidad, con el tiempo se transformó en
               pasión, formación y propósito. Desde mi ciudad natal, dentro de una
               estructura arbitral con poca infraestructura y muchas limitaciones,
               entendí que no siempre alcanza con tener ganas, saber el reglamento
@@ -28,12 +28,12 @@ export function HowRefLabWasBorn() {
             </p>
 
             <p>
-              Después de formarme en una de las escuelas mas prestigiosas de Argentina, y de haber podido
-              entrenar, capacitarme y recorrer categorías durante más de 16 años,
-              comprendí que el arbitraje es mucho más que tomar decisiones dentro
-              de una cancha. Es lectura, comunicación, liderazgo, percepción,
-              preparación mental, manejo del conflicto, ética y capacidad de
-              sostenerse bajo presión.
+              Después de formarme en una de las escuelas más prestigiosas de
+              Argentina, entrenar, capacitarme y recorrer categorías durante más
+              de 16 años, comprendí que el arbitraje es mucho más que tomar
+              decisiones dentro de una cancha. Es lectura, comunicación,
+              liderazgo, percepción, preparación mental, manejo del conflicto,
+              ética y capacidad de sostenerse bajo presión.
             </p>
 
             <p>
@@ -45,7 +45,7 @@ export function HowRefLabWasBorn() {
             </p>
           </div>
 
-          <blockquote className="mt-8 border-l-4 border-cyan-400 pl-5 text-lg font-semibold text-white md:text-xl">
+          <blockquote className="mt-8 border-l-4 border-green-400 pl-5 text-lg font-semibold text-white md:text-xl">
             “RefLab existe para visualizar lo que no se ve y profesionalizar el
             camino del árbitro.”
           </blockquote>
@@ -59,14 +59,14 @@ export function HowRefLabWasBorn() {
         </div>
 
         <div className="relative">
-          <div className="absolute -inset-4 rounded-3xl bg-cyan-500/20 blur-2xl" />
+          <div className="absolute -inset-4 rounded-3xl bg-green-500/20 blur-2xl" />
 
           <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5">
             <img
-  src="/david-referee.jpeg"
-  alt="David Cornejo, fundador de RefLab"
-  className="h-[420px] w-full object-cover grayscale"
-/>
+              src="/david-referee.jpg"
+              alt="David Cornejo, fundador de RefLab"
+              className="h-[500px] w-full object-cover grayscale"
+            />
           </div>
         </div>
       </div>
