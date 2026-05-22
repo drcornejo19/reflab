@@ -79,7 +79,7 @@ export default function AboutPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-center lg:justify-end">
+            <div className="flex items-center justify-center lg:-translate-y-6 lg:justify-end xl:-translate-y-7">
               <div className="relative w-full max-w-[820px] overflow-hidden rounded-[28px] border border-[#6fc11f]/25 bg-[#02060b] shadow-[0_0_55px_rgba(111,193,31,0.13)]">
                 <div className="relative aspect-[1536/448] min-h-[152px] overflow-hidden rounded-[24px] sm:min-h-0">
                   <Image
