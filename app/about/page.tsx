@@ -46,9 +46,9 @@ export default function AboutPage() {
     <AppShell>
       <div className="space-y-5 pb-3 lg:space-y-7">
         <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.12),transparent_34%),#05070d] p-5 shadow-2xl sm:p-7 lg:p-8">
-          <div className="grid gap-7 lg:grid-cols-[0.76fr_1.24fr] lg:items-center">
+          <div className="grid gap-7 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-center">
             <div className="text-center lg:text-left">
-              <h1 className="text-5xl font-black leading-none tracking-normal text-white sm:text-6xl lg:text-7xl">
+              <h1 className="text-4xl font-black leading-none tracking-normal text-white sm:text-5xl lg:text-6xl">
                 Ref<span className="text-[#6fc11f]">Lab</span>
               </h1>
 
@@ -56,7 +56,7 @@ export default function AboutPage() {
                 Referee Decision Lab
               </p>
 
-              <p className="mx-auto mt-6 max-w-xl text-base leading-7 text-zinc-300 lg:mx-0 lg:text-lg lg:leading-8">
+              <p className="mx-auto mt-6 max-w-md text-base leading-7 text-zinc-300 lg:mx-0 lg:text-lg lg:leading-8">
                 Plataforma integral de entrenamiento, evaluación y desarrollo
                 profesional para árbitros de fútbol.
               </p>
@@ -64,7 +64,7 @@ export default function AboutPage() {
               <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:flex">
                 <Link
                   href="/dashboard"
-                  className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#82dc2a] active:scale-[0.98]"
+                  className="inline-flex min-h-14 items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#82dc2a] active:scale-[0.98]"
                 >
                   Ir al Dashboard
                   <ArrowRight className="h-4 w-4" />
@@ -72,22 +72,22 @@ export default function AboutPage() {
 
                 <Link
                   href="/training"
-                  className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-5 text-sm font-black text-white transition hover:bg-white/10 active:scale-[0.98]"
+                  className="inline-flex min-h-14 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-white/10 bg-white/[0.06] px-5 text-sm font-black text-white transition hover:bg-white/10 active:scale-[0.98]"
                 >
                   Comenzar entrenamiento
                 </Link>
               </div>
             </div>
 
-            <div>
-              <div className="relative overflow-hidden rounded-[28px] border border-[#6fc11f]/25 bg-[#02060b] shadow-[0_0_55px_rgba(111,193,31,0.13)] lg:-mr-3">
-                <div className="relative aspect-[1536/448] min-h-[156px] overflow-hidden rounded-[24px] sm:min-h-[210px] lg:min-h-[240px] xl:min-h-[278px]">
+            <div className="flex items-center justify-center lg:justify-end">
+              <div className="relative w-full max-w-[820px] overflow-hidden rounded-[28px] border border-[#6fc11f]/25 bg-[#02060b] shadow-[0_0_55px_rgba(111,193,31,0.13)]">
+                <div className="relative aspect-[1536/448] min-h-[152px] overflow-hidden rounded-[24px] sm:min-h-0">
                   <Image
                     src="/reflab-wordmark-wide.png"
                     alt="Imagen institucional de RefLab"
                     fill
                     priority
-                    className="object-cover"
+                    className="object-contain"
                     sizes="(max-width: 768px) 100vw, 760px"
                   />
                 </div>
