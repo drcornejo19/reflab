@@ -243,7 +243,7 @@ export default function DashboardPage() {
 
         <section className="rounded-3xl border border-white/10 bg-[#111b24] p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-black">Perfil arbitral tipo jugador</h2>
+            <h2 className="text-xl font-black">Perfil arbitral </h2>
             <span className="text-xs font-black text-[#6fc11f]">
               Rendimiento por tópico
             </span>
