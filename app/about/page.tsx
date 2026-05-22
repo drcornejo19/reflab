@@ -45,70 +45,73 @@ export default function AboutPage() {
   return (
     <AppShell>
       <div className="space-y-5 pb-3 lg:space-y-7">
-        <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[#05070d] shadow-2xl">
-          <div className="relative min-h-[360px] p-5 sm:p-7 lg:min-h-[560px] lg:p-10">
-            <div className="absolute inset-0 opacity-30">
-              <Image
-                src="/reflab-hero.png"
-                alt=""
-                fill
-                priority
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 1180px"
-              />
-            </div>
-
-            <div className="relative flex min-h-[320px] flex-col justify-between lg:min-h-[500px]">
+        <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.14),transparent_36%),#05070d] p-5 shadow-2xl sm:p-7 lg:p-9">
+          <div className="grid gap-7 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+            <div className="order-2 text-center lg:order-1 lg:text-left">
               <div className="flex justify-center lg:justify-start">
                 <span className="rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.28em] text-[#6fc11f]">
                   Referee Decision Lab
                 </span>
               </div>
 
-              <div className="mx-auto max-w-[760px] text-center lg:mx-0 lg:text-left">
-                <div className="flex items-center justify-center gap-3 lg:justify-start">
-                  <Image
-                    src="/logo.png"
-                    alt="RefLab"
-                    width={76}
-                    height={76}
-                    className="rounded-full shadow-[0_0_34px_rgba(111,193,31,0.24)]"
-                    priority
-                  />
+              <div className="mt-6 flex items-center justify-center gap-3 lg:justify-start">
+                <Image
+                  src="/logo.png"
+                  alt="RefLab"
+                  width={56}
+                  height={56}
+                  className="rounded-full shadow-[0_0_34px_rgba(111,193,31,0.24)]"
+                  priority
+                />
+
+                <div>
+                  <p className="text-lg font-black tracking-wide text-white">
+                    REF<span className="text-[#6fc11f]">LAB</span>
+                  </p>
+                  <p className="text-[10px] uppercase tracking-[0.28em] text-zinc-500">
+                    Referee Decision Lab
+                  </p>
                 </div>
+              </div>
 
-                <h1 className="mt-6 text-[54px] font-black leading-none tracking-normal text-white sm:text-[72px] lg:text-[126px]">
-                  REF<span className="text-[#6fc11f]">LAB</span>
-                </h1>
+              <h1 className="mt-7 text-4xl font-black leading-[1.02] tracking-normal text-white sm:text-5xl lg:text-7xl">
+                Entrená. Analizá. Decidí. Mejorá.
+              </h1>
 
-                <p className="mt-3 text-xs font-black uppercase tracking-[0.42em] text-white sm:text-sm">
-                  Referee Decision Lab
-                </p>
+              <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-zinc-300 lg:mx-0 lg:text-lg lg:leading-8">
+                RefLab es una plataforma integral de entrenamiento, evaluación
+                y desarrollo profesional para árbitros de fútbol.
+              </p>
 
-                <p className="mt-5 text-2xl font-black leading-tight text-white sm:text-3xl lg:text-5xl">
-                  Entrená. Analizá. Decidí. Mejorá.
-                </p>
+              <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:flex">
+                <Link
+                  href="/dashboard"
+                  className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#82dc2a] active:scale-[0.98]"
+                >
+                  Ir al Dashboard
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
 
-                <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-zinc-300 sm:text-base lg:mx-0 lg:text-lg lg:leading-8">
-                  RefLab es una plataforma integral de entrenamiento,
-                  evaluación y desarrollo profesional para árbitros de fútbol.
-                </p>
+                <Link
+                  href="/training"
+                  className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-5 text-sm font-black text-white transition hover:bg-white/10 active:scale-[0.98]"
+                >
+                  Comenzar entrenamiento
+                </Link>
+              </div>
+            </div>
 
-                <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:flex">
-                  <Link
-                    href="/dashboard"
-                    className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#82dc2a] active:scale-[0.98]"
-                  >
-                    Ir al Dashboard
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-
-                  <Link
-                    href="/training"
-                    className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-5 text-sm font-black text-white transition hover:bg-white/10 active:scale-[0.98]"
-                  >
-                    Comenzar entrenamiento
-                  </Link>
+            <div className="order-1 lg:order-2">
+              <div className="relative overflow-hidden rounded-[30px] border border-[#6fc11f]/25 bg-black/35 p-3 shadow-[0_0_55px_rgba(111,193,31,0.12)]">
+                <div className="relative aspect-[1.08/1] overflow-hidden rounded-[24px] bg-[#03070c]">
+                  <Image
+                    src="/reflab-hero.png"
+                    alt="Imagen institucional de RefLab"
+                    fill
+                    priority
+                    className="object-contain p-4"
+                    sizes="(max-width: 768px) 100vw, 560px"
+                  />
                 </div>
               </div>
             </div>
