@@ -45,42 +45,20 @@ export default function AboutPage() {
   return (
     <AppShell>
       <div className="space-y-5 pb-3 lg:space-y-7">
-        <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.14),transparent_36%),#05070d] p-5 shadow-2xl sm:p-7 lg:p-9">
-          <div className="grid gap-7 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-            <div className="order-2 text-center lg:order-1 lg:text-left">
-              <div className="flex justify-center lg:justify-start">
-                <span className="rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.28em] text-[#6fc11f]">
-                  Referee Decision Lab
-                </span>
-              </div>
-
-              <div className="mt-6 flex items-center justify-center gap-3 lg:justify-start">
-                <Image
-                  src="/logo.png"
-                  alt="RefLab"
-                  width={56}
-                  height={56}
-                  className="rounded-full shadow-[0_0_34px_rgba(111,193,31,0.24)]"
-                  priority
-                />
-
-                <div>
-                  <p className="text-lg font-black tracking-wide text-white">
-                    REF<span className="text-[#6fc11f]">LAB</span>
-                  </p>
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-zinc-500">
-                    Referee Decision Lab
-                  </p>
-                </div>
-              </div>
-
-              <h1 className="mt-7 text-4xl font-black leading-[1.02] tracking-normal text-white sm:text-5xl lg:text-7xl">
-                Entrená. Analizá. Decidí. Mejorá.
+        <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.12),transparent_34%),#05070d] p-5 shadow-2xl sm:p-7 lg:p-8">
+          <div className="grid gap-7 lg:grid-cols-[0.76fr_1.24fr] lg:items-center">
+            <div className="text-center lg:text-left">
+              <h1 className="text-5xl font-black leading-none tracking-normal text-white sm:text-6xl lg:text-7xl">
+                Ref<span className="text-[#6fc11f]">Lab</span>
               </h1>
 
-              <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-zinc-300 lg:mx-0 lg:text-lg lg:leading-8">
-                RefLab es una plataforma integral de entrenamiento, evaluación
-                y desarrollo profesional para árbitros de fútbol.
+              <p className="mt-3 text-xs font-black uppercase tracking-[0.34em] text-zinc-400 sm:text-sm">
+                Referee Decision Lab
+              </p>
+
+              <p className="mx-auto mt-6 max-w-xl text-base leading-7 text-zinc-300 lg:mx-0 lg:text-lg lg:leading-8">
+                Plataforma integral de entrenamiento, evaluación y desarrollo
+                profesional para árbitros de fútbol.
               </p>
 
               <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:flex">
@@ -101,16 +79,16 @@ export default function AboutPage() {
               </div>
             </div>
 
-            <div className="order-1 lg:order-2">
-              <div className="relative overflow-hidden rounded-[30px] border border-[#6fc11f]/25 bg-black/35 p-3 shadow-[0_0_55px_rgba(111,193,31,0.12)]">
-                <div className="relative aspect-[1.08/1] overflow-hidden rounded-[24px] bg-[#03070c]">
+            <div>
+              <div className="relative overflow-hidden rounded-[28px] border border-[#6fc11f]/25 bg-[#02060b] shadow-[0_0_55px_rgba(111,193,31,0.13)] lg:-mr-3">
+                <div className="relative aspect-[1536/448] min-h-[156px] overflow-hidden rounded-[24px] sm:min-h-[210px] lg:min-h-[240px] xl:min-h-[278px]">
                   <Image
-                    src="/reflab-hero.png"
+                    src="/reflab-wordmark-wide.png"
                     alt="Imagen institucional de RefLab"
                     fill
                     priority
-                    className="object-contain p-4"
-                    sizes="(max-width: 768px) 100vw, 560px"
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 760px"
                   />
                 </div>
               </div>
