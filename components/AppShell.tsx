@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BookOpen,
   ChartNoAxesCombined,
@@ -11,12 +11,15 @@ import {
   Clapperboard,
   Home,
   Info,
+  Languages,
   Menu,
   ShieldCheck,
+  Settings,
   User,
   X,
   type LucideIcon,
 } from "lucide-react";
+import { languageOptions, getStoredLanguage, setStoredLanguage, subscribeToLanguageChange, type AppLanguage } from "@/lib/languagePreference";
 import { useUserRole } from "@/lib/useUserRole";
 
 type NavItem = {
@@ -138,6 +141,7 @@ const secondaryMobileItems: NavItem[] = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [language, setLanguage] = useState<AppLanguage>("es");
   const { isVideoAdmin, loadingRole } = useUserRole();
   const visibleNavItems = filterAdminItems(navItems, isVideoAdmin, loadingRole);
   const visibleSecondaryItems = filterAdminItems(
@@ -145,6 +149,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     isVideoAdmin,
     loadingRole
   );
+
+  useEffect(() => {
+    setLanguage(getStoredLanguage());
+    return subscribeToLanguageChange(setLanguage);
+  }, []);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#050b12] text-white">
@@ -193,6 +202,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 />
               ))}
             </div>
+
+            <LanguageSettings language={language} onChange={setLanguage} />
           </div>
         </div>
       )}
@@ -320,5 +331,52 @@ function isItemActive(pathname: string, item: NavItem) {
     activePrefixes.some(
       (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
     )
+  );
+}
+
+function LanguageSettings({
+  language,
+  onChange,
+}: {
+  language: AppLanguage;
+  onChange: (language: AppLanguage) => void;
+}) {
+  function changeLanguage(nextLanguage: AppLanguage) {
+    setStoredLanguage(nextLanguage);
+    onChange(nextLanguage);
+  }
+
+  return (
+    <div className="mt-3 rounded-[24px] border border-white/10 bg-white/[0.04] p-3">
+      <div className="flex items-center gap-3 px-1 pb-3">
+        <div className="grid h-10 w-10 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
+          <Settings size={18} />
+        </div>
+        <div>
+          <p className="text-sm font-black text-white">Configuracion</p>
+          <p className="text-xs text-zinc-500">Idioma de la app y feedback</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2" aria-label="Seleccionar idioma">
+        {languageOptions.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => changeLanguage(option.value)}
+            className={`min-h-12 rounded-2xl border px-2 text-xs font-black transition active:scale-95 ${
+              language === option.value
+                ? "border-[#6fc11f] bg-[#6fc11f] text-black"
+                : "border-white/10 bg-black/20 text-zinc-300"
+            }`}
+          >
+            <span className="mb-1 flex items-center justify-center gap-1">
+              <Languages size={14} /> {option.shortLabel}
+            </span>
+            <span className="block truncate">{option.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

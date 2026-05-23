@@ -1,7 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useUser, SignOutButton } from "@clerk/nextjs";
+import { SignOutButton, useUser } from "@clerk/nextjs";
+import {
+  BadgeCheck,
+  ClipboardList,
+  Gauge,
+  LogOut,
+  Save,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  Target,
+  Trophy,
+  UserRound,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/lib/supabase";
 import {
@@ -13,16 +26,6 @@ import {
   type ExamResultRecord,
   type RulesExamResultRecord,
 } from "@/lib/performance";
-import {
-  BadgeCheck,
-  ClipboardList,
-  LogOut,
-  Save,
-  ShieldCheck,
-  Star,
-  Trophy,
-  UserRound,
-} from "lucide-react";
 
 type Attempt = AttemptRecord;
 type Exam = ExamResultRecord;
@@ -33,7 +36,6 @@ export default function ProfilePage() {
 
   const [avatarUrl, setAvatarUrl] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [rulesResults, setRulesResults] = useState<RulesExam[]>([]);
@@ -41,7 +43,7 @@ export default function ProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false);
 
   const [refereeType, setRefereeType] = useState("Amateur");
-  const [mainRole, setMainRole] = useState("Ãrbitro principal");
+  const [mainRole, setMainRole] = useState("Arbitro principal");
   const [association, setAssociation] = useState("");
   const [category, setCategory] = useState("");
 
@@ -56,47 +58,43 @@ export default function ProfilePage() {
 
       setLoading(true);
 
-      const [{ data: attemptsData }, { data: examsData }, { data: rulesData, error: rulesError }, { data: profileData }] =
-        await Promise.all([
-          supabase
-            .from("attempts")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: true }),
+      const [attemptsRes, examsRes, rulesRes, profileRes] = await Promise.all([
+        supabase
+          .from("attempts")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("exam_results")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("rules_exam_results")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("user_profiles")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+      ]);
 
-          supabase
-            .from("exam_results")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false }),
+      setAttempts((attemptsRes.data ?? []) as Attempt[]);
+      setExams((examsRes.data ?? []) as Exam[]);
+      setRulesResults(rulesRes.error ? [] : ((rulesRes.data ?? []) as RulesExam[]));
 
-          supabase
-            .from("rules_exam_results")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false }),
-
-          supabase
-            .from("user_profiles")
-            .select("*")
-            .eq("user_id", user.id)
-            .maybeSingle(),
-        ]);
-
-      setAttempts((attemptsData ?? []) as Attempt[]);
-      setExams((examsData ?? []) as Exam[]);
-      setRulesResults(rulesError ? [] : ((rulesData ?? []) as RulesExam[]));
-
-      if (rulesError) {
-        console.warn("Rules exam profile metrics unavailable:", rulesError.message);
+      if (rulesRes.error) {
+        console.warn("Rules exam profile metrics unavailable:", rulesRes.error.message);
       }
 
-      if (profileData) {
-        setRefereeType(profileData.referee_type ?? "Amateur");
-        setMainRole(profileData.main_role ?? "Ãrbitro principal");
-        setAssociation(profileData.association ?? "");
-        setCategory(profileData.category ?? "");
-        setAvatarUrl(profileData.avatar_url ?? "");
+      if (profileRes.data) {
+        setRefereeType(profileRes.data.referee_type ?? "Amateur");
+        setMainRole(profileRes.data.main_role ?? "Arbitro principal");
+        setAssociation(profileRes.data.association ?? "");
+        setCategory(profileRes.data.category ?? "");
+        setAvatarUrl(profileRes.data.avatar_url ?? "");
       }
 
       setLoading(false);
@@ -157,23 +155,20 @@ export default function ProfilePage() {
 
       const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
       const publicUrl = `${data.publicUrl}?v=${Date.now()}`;
-
       setAvatarUrl(publicUrl);
 
-      const { error: profileError } = await supabase
-        .from("user_profiles")
-        .upsert(
-          {
-            user_id: user.id,
-            referee_type: refereeType,
-            main_role: mainRole,
-            association,
-            category,
-            avatar_url: publicUrl,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" }
-        );
+      const { error: profileError } = await supabase.from("user_profiles").upsert(
+        {
+          user_id: user.id,
+          referee_type: refereeType,
+          main_role: mainRole,
+          association,
+          category,
+          avatar_url: publicUrl,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
 
       if (profileError) {
         alert(profileError.message);
@@ -223,11 +218,11 @@ export default function ProfilePage() {
       level: summary.hasData ? `Nivel ${summary.status}` : "Sin actividad",
       activity: summary.totalTrainings + summary.totalEvaluations,
       state: summary.status,
+      rating: summary.avgScore ?? 0,
     };
   }, [dataset.sessions, summary]);
 
   const criteria = useMemo(() => getCriterionPerformance(dataset.items), [dataset.items]);
-
   const trend = useMemo(() => getRecentHistory(dataset.items, 6), [dataset.items]);
 
   if (!isLoaded || loading) {
@@ -240,87 +235,69 @@ export default function ProfilePage() {
     );
   }
 
+  const displayName = user?.fullName || "Arbitro RefLab";
+  const email = user?.primaryEmailAddress?.emailAddress ?? "Sin email";
+  const photo = avatarUrl || user?.imageUrl || "";
+
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-[980px] space-y-5">
-        <section className="rounded-[34px] border border-[#6fc11f]/25 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.2),transparent_36%),#0d1720] p-6 shadow-2xl">
-          <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-            Perfil arbitral
-          </p>
+      <div className="mx-auto w-full max-w-[1120px] space-y-5">
+        <section className="grid gap-5 lg:grid-cols-[390px_minmax(0,1fr)] lg:items-stretch">
+          <PlayerCard
+            name={displayName}
+            email={email}
+            photo={photo}
+            rating={stats.rating}
+            level={stats.level}
+            refereeType={refereeType}
+            mainRole={mainRole}
+            association={association || "Sin liga"}
+            category={category || "Sin categoria"}
+            uploadingAvatar={uploadingAvatar}
+            onUpload={uploadAvatar}
+          />
 
-          <div className="mt-6 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-col items-center gap-5 text-center md:flex-row md:text-left">
-              <div className="flex flex-col items-center gap-3">
-                <div className="relative">
-                  {avatarUrl || user?.imageUrl ? (
-                    <img
-                      src={avatarUrl || user?.imageUrl}
-                      alt="Foto de perfil"
-                      className="h-28 w-28 rounded-full border-4 border-[#6fc11f] object-cover shadow-[0_0_35px_rgba(111,193,31,0.28)]"
-                    />
-                  ) : (
-                    <div className="grid h-28 w-28 place-items-center rounded-full border-4 border-[#6fc11f] bg-[#101b24]">
-                      <UserRound className="text-[#6fc11f]" size={46} />
-                    </div>
-                  )}
+          <div className="space-y-4 rounded-[34px] border border-white/10 bg-[#071019] p-5 shadow-2xl lg:p-6">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
+                Ficha tecnica
+              </p>
+              <h1 className="mt-3 text-3xl font-black lg:text-5xl">
+                Perfil arbitral
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-zinc-400">
+                Identidad, rol, categoria y lectura rapida de rendimiento. La ficha conserva tus datos reales y usa las mismas metricas que Rendimiento.
+              </p>
+            </div>
 
-                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-[#6fc11f] px-3 py-1 text-[10px] font-black text-black">
-                    RF
-                  </div>
-                </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard icon={<Star />} title="Promedio training" value={stats.hasAttempts ? `${stats.avgAttempt}/100` : "-"} detail={stats.hasAttempts ? "Practicas individuales" : "Sin intentos"} />
+              <MetricCard icon={<Trophy />} title="Promedio examen" value={stats.hasExams ? `${stats.avgExam}/100` : "-"} detail={stats.hasExams ? "Evaluaciones formales" : "Sin examenes"} />
+              <MetricCard icon={<ClipboardList />} title="Actividad" value={stats.hasData ? stats.activity.toString() : "-"} detail={stats.hasData ? "Total registrado" : "Sin actividad"} />
+              <MetricCard icon={<BadgeCheck />} title="Estado" value={stats.hasData ? stats.state : "-"} detail={stats.hasData ? "Lectura general" : "Sin evaluacion"} />
+            </div>
 
-                <label className="mt-2 cursor-pointer rounded-xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-xs font-black text-[#6fc11f] transition hover:bg-[#6fc11f]/20">
-                  {uploadingAvatar ? "SUBIENDO..." : "CAMBIAR FOTO"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    disabled={uploadingAvatar}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) uploadAvatar(file);
-                    }}
-                  />
-                </label>
-              </div>
-
-              <div>
-                <h1 className="text-3xl font-black md:text-5xl">
-                  {user?.fullName || "Ãrbitro RefLab"}
-                </h1>
-
+            {!stats.hasData && (
+              <div className="rounded-3xl border border-dashed border-[#6fc11f]/25 bg-[#6fc11f]/5 p-5 text-center">
+                <p className="font-black text-white">Todavia no hay actividad real.</p>
                 <p className="mt-2 text-sm text-zinc-400">
-                  {user?.primaryEmailAddress?.emailAddress}
+                  Cuando completes ejercicios o examenes, tus estadisticas apareceran aca.
                 </p>
-
-                <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-sm font-black text-[#6fc11f]">
-                  <BadgeCheck size={18} />
-                  {stats.level}
-                </div>
               </div>
-            </div>
+            )}
 
-            <div className="grid grid-cols-3 gap-3">
-              <SmallStat title="Intentos" value={stats.totalAttempts} />
-              <SmallStat title="ExÃ¡menes" value={stats.totalExams} />
-              <SmallStat title="Best" value={stats.bestExam ?? "-"} />
-            </div>
+            <Panel title="Plan recomendado" subtitle="Sugerido con datos reales disponibles.">
+              <InfoRow label="Modulo recomendado" value={stats.hasData ? summary.recommendedModule : "Sin datos suficientes"} />
+              <InfoRow label="Topico fuerte" value={summary.strongestTopic?.topic ?? "Sin datos"} />
+              <InfoRow label="Topico a mejorar" value={summary.weakestTopic?.topic ?? "Sin datos"} />
+            </Panel>
           </div>
         </section>
-
-        {!stats.hasData && (
-          <section className="rounded-3xl border border-dashed border-[#6fc11f]/25 bg-[#6fc11f]/5 p-6 text-center">
-            <p className="text-lg font-black text-white">TodavÃ­a no hay actividad real.</p>
-            <p className="mt-2 text-sm text-zinc-400">
-              Cuando completes ejercicios o exÃ¡menes, tus estadÃ­sticas aparecerÃ¡n acÃ¡.
-            </p>
-          </section>
-        )}
 
         <section className="grid gap-4 md:grid-cols-2">
           <ProfileSelect
             icon={<ShieldCheck />}
-            label="Tipo de Ã¡rbitro"
+            label="Tipo de arbitro"
             value={refereeType}
             onChange={setRefereeType}
             options={["AFA", "Amateur", "Liga regional", "Instructor", "VAR"]}
@@ -331,29 +308,11 @@ export default function ProfilePage() {
             label="Rol principal"
             value={mainRole}
             onChange={setMainRole}
-            options={[
-              "Ãrbitro principal",
-              "Ãrbitro asistente",
-              "Cuarto Ã¡rbitro",
-              "VAR",
-              "AVAR",
-              "Instructor",
-            ]}
+            options={["Arbitro principal", "Arbitro asistente", "Cuarto arbitro", "VAR", "AVAR", "Instructor"]}
           />
 
-          <ProfileInput
-            label="AsociaciÃ³n / Liga"
-            value={association}
-            onChange={setAssociation}
-            placeholder="Ej: AFA, Liga regional, FAFI, etc."
-          />
-
-          <ProfileInput
-            label="CategorÃ­a"
-            value={category}
-            onChange={setCategory}
-            placeholder="Ej: Primera, Reserva, Amateur, Inferiores"
-          />
+          <ProfileInput label="Asociacion / Liga" value={association} onChange={setAssociation} placeholder="Ej: AFA, Liga regional, FAFI" />
+          <ProfileInput label="Categoria" value={category} onChange={setCategory} placeholder="Ej: Primera, Reserva, Amateur, Inferiores" />
         </section>
 
         <button
@@ -365,133 +324,168 @@ export default function ProfilePage() {
           {savingProfile ? "GUARDANDO..." : "GUARDAR PERFIL"}
         </button>
 
-        <section className="grid gap-3 md:grid-cols-4">
-          <MetricCard
-            icon={<Star />}
-            title="Promedio training"
-            value={stats.hasAttempts ? `${stats.avgAttempt}/100` : "-"}
-            detail={stats.hasAttempts ? "PrÃ¡cticas individuales" : "Sin intentos"}
-          />
-
-          <MetricCard
-            icon={<Trophy />}
-            title="Promedio examen"
-            value={stats.hasExams ? `${stats.avgExam}/100` : "-"}
-            detail={stats.hasExams ? "Simulaciones completas" : "Sin exÃ¡menes"}
-          />
-
-          <MetricCard
-            icon={<ClipboardList />}
-            title="Actividad"
-            value={stats.hasData ? stats.activity.toString() : "-"}
-            detail={stats.hasData ? "Total registrado" : "Sin actividad"}
-          />
-
-          <MetricCard
-            icon={<BadgeCheck />}
-            title="Estado"
-            value={stats.hasData ? stats.state : "-"}
-            detail={stats.hasData ? "Lectura general" : "Sin evaluaciÃ³n"}
-          />
-        </section>
-
         <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
           <Panel title="Identidad arbitral" subtitle="Datos reales del perfil.">
             <InfoRow label="Tipo" value={refereeType} />
-            <InfoRow label="FunciÃ³n" value={mainRole} />
-            <InfoRow label="AsociaciÃ³n / Liga" value={association || "Sin cargar"} />
-            <InfoRow label="CategorÃ­a" value={category || "Sin cargar"} />
+            <InfoRow label="Funcion" value={mainRole} />
+            <InfoRow label="Asociacion / Liga" value={association || "Sin cargar"} />
+            <InfoRow label="Categoria" value={category || "Sin cargar"} />
             <InfoRow label="Nivel RefLab" value={stats.level} />
-            <InfoRow
-              label="MÃ³dulo recomendado"
-              value={stats.hasData ? summary.recommendedModule : "Sin datos suficientes"}
-            />
           </Panel>
 
-          <Panel title="PrecisiÃ³n por criterio" subtitle="Perfil tÃ©cnico actual.">
+          <Panel title="Precision por criterio" subtitle="Perfil tecnico actual.">
             {criteria.some((item) => item.accuracy !== null) ? (
-              criteria.map((item) => (
-                <Bar key={item.label} label={item.label} value={item.accuracy ?? 0} />
-              ))
+              criteria.map((item) => <Bar key={item.label} label={item.label} value={item.accuracy ?? 0} />)
             ) : (
-              <Empty text="CompletÃ¡ ejercicios para calcular precisiÃ³n por criterio." />
+              <Empty text="Completa ejercicios para calcular precision por criterio." />
             )}
           </Panel>
         </section>
 
-        <section className="rounded-[30px] border border-white/10 bg-[#101b24] p-5 shadow-2xl">
-          <h2 className="text-xl font-black">EvoluciÃ³n reciente</h2>
-          <p className="mt-1 text-sm text-zinc-500">Ãšltimos intentos registrados.</p>
+        <section className="grid gap-5 lg:grid-cols-[1fr_1fr]">
+          <Panel title="Evolucion reciente" subtitle="Ultimos intentos registrados.">
+            <div className="space-y-3">
+              {trend.length === 0 ? (
+                <Empty text="Todavia no hay intentos." />
+              ) : (
+                trend.map((item, index) => (
+                  <HistoryRow
+                    key={item.id}
+                    title={`Intento #${index + 1}`}
+                    date={item.date}
+                    meta={`${item.topic ?? "Sin tema"} - ${item.modeLabel}`}
+                    score={item.score}
+                  />
+                ))
+              )}
+            </div>
+          </Panel>
 
-          <div className="mt-5 space-y-3">
-            {trend.length === 0 ? (
-              <Empty text="TodavÃ­a no hay intentos." />
-            ) : (
-              trend.map((item, index) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/25 p-4"
-                >
-                  <div>
-                    <p className="font-black">Intento #{index + 1}</p>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      {item.date ? new Date(item.date).toLocaleString("es-AR") : "Sin fecha"}
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-400">
-                      {item.topic ?? "Sin tema"} Â· {item.modeLabel}
-                    </p>
-                  </div>
-
-                  <p className="text-2xl font-black text-[#6fc11f]">
-                    {item.score ?? "-"}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-
-        <section className="rounded-[30px] border border-white/10 bg-[#101b24] p-5 shadow-2xl">
-          <h2 className="text-xl font-black">Historial de exÃ¡menes</h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            Resultados guardados del modo examen.
-          </p>
-
-          <div className="mt-5 space-y-3">
-            {exams.length === 0 ? (
-              <Empty text="TodavÃ­a no hay exÃ¡menes guardados." />
-            ) : (
-              exams.map((exam) => (
-                <div
-                  key={exam.id}
-                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/25 p-4"
-                >
-                  <div>
-                    <p className="font-black">
-                      Examen Â· {exam.correct_count}/{exam.total_questions}
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      {exam.created_at ? new Date(exam.created_at).toLocaleString("es-AR") : "Sin fecha"}
-                    </p>
-                  </div>
-
-                  <p className="text-2xl font-black text-[#6fc11f]">
-                    {exam.avg_score ?? "-"}/100
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
+          <Panel title="Historial de examenes" subtitle="Resultados guardados del modo examen.">
+            <div className="space-y-3">
+              {exams.length === 0 ? (
+                <Empty text="Todavia no hay examenes guardados." />
+              ) : (
+                exams.slice(0, 6).map((exam) => (
+                  <HistoryRow
+                    key={exam.id}
+                    title={`Examen - ${exam.correct_count ?? 0}/${exam.total_questions ?? 0}`}
+                    date={exam.created_at}
+                    meta="Evaluacion formal"
+                    score={exam.avg_score ?? null}
+                  />
+                ))
+              )}
+            </div>
+          </Panel>
         </section>
 
         <SignOutButton>
           <button className="flex w-full items-center justify-center gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 font-black text-red-300 transition hover:bg-red-500/20">
             <LogOut size={22} />
-            CERRAR SESIÃ“N
+            CERRAR SESION
           </button>
         </SignOutButton>
       </div>
     </AppShell>
+  );
+}
+
+function PlayerCard({
+  name,
+  email,
+  photo,
+  rating,
+  level,
+  refereeType,
+  mainRole,
+  association,
+  category,
+  uploadingAvatar,
+  onUpload,
+}: {
+  name: string;
+  email: string;
+  photo: string;
+  rating: number;
+  level: string;
+  refereeType: string;
+  mainRole: string;
+  association: string;
+  category: string;
+  uploadingAvatar: boolean;
+  onUpload: (file: File) => void;
+}) {
+  return (
+    <article className="relative mx-auto w-full max-w-[390px] overflow-hidden rounded-[38px] border border-[#6fc11f]/35 bg-[radial-gradient(circle_at_20%_0%,rgba(111,193,31,0.32),transparent_34%),linear-gradient(145deg,#152213,#071019_54%,#02060b)] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.5)]">
+      <div className="absolute inset-x-8 top-0 h-px bg-[#b7ff8a]/70" />
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[#b7ff8a]">RefLab Card</p>
+          <p className="mt-2 text-5xl font-black leading-none text-white">{rating || "--"}</p>
+          <p className="mt-1 text-xs font-black uppercase tracking-[0.28em] text-zinc-400">REF</p>
+        </div>
+        <div className="rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-3 py-2 text-right">
+          <p className="text-xs font-black text-[#6fc11f]">{refereeType}</p>
+          <p className="mt-1 text-[10px] text-zinc-400">{category}</p>
+        </div>
+      </div>
+
+      <div className="mt-6 flex flex-col items-center text-center">
+        <div className="relative">
+          {photo ? (
+            <img
+              src={photo}
+              alt="Foto de perfil"
+              className="h-36 w-36 rounded-full border-4 border-[#6fc11f] object-cover shadow-[0_0_45px_rgba(111,193,31,0.35)] sm:h-40 sm:w-40"
+            />
+          ) : (
+            <div className="grid h-36 w-36 place-items-center rounded-full border-4 border-[#6fc11f] bg-[#101b24] sm:h-40 sm:w-40">
+              <UserRound className="text-[#6fc11f]" size={58} />
+            </div>
+          )}
+          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-[#6fc11f] px-4 py-1 text-[10px] font-black text-black">
+            MATCH OFFICIAL
+          </div>
+        </div>
+
+        <h2 className="mt-6 max-w-full text-3xl font-black leading-tight text-white">{name}</h2>
+        <p className="mt-2 max-w-full truncate text-sm text-zinc-400">{email}</p>
+        <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-sm font-black text-[#b7ff8a]">
+          <Sparkles size={17} /> {level}
+        </p>
+      </div>
+
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <CardInfo label="Rol" value={mainRole} />
+        <CardInfo label="Liga" value={association} />
+        <CardInfo label="Tipo" value={refereeType} />
+        <CardInfo label="Categoria" value={category} />
+      </div>
+
+      <label className="mt-5 flex min-h-12 cursor-pointer items-center justify-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 text-xs font-black text-[#b7ff8a] transition hover:bg-[#6fc11f]/20">
+        {uploadingAvatar ? "SUBIENDO FOTO..." : "CAMBIAR FOTO"}
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          disabled={uploadingAvatar}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) onUpload(file);
+          }}
+        />
+      </label>
+    </article>
+  );
+}
+
+function CardInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">{label}</p>
+      <p className="mt-1 truncate text-sm font-black text-white">{value}</p>
+    </div>
   );
 }
 
@@ -514,100 +508,48 @@ function ProfileSelect({
         {icon}
         <p className="text-sm font-black uppercase tracking-[0.2em]">{label}</p>
       </div>
-
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-white/10 bg-[#0b111b] px-4 py-3 text-white outline-none"
-      >
-        {options.map((option) => (
-          <option key={option}>{option}</option>
-        ))}
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-white/10 bg-[#0b111b] px-4 py-3 text-white outline-none">
+        {options.map((option) => <option key={option}>{option}</option>)}
       </select>
     </div>
   );
 }
 
-function ProfileInput({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-}) {
+function ProfileInput({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
   return (
     <div className="rounded-[26px] border border-white/10 bg-[#101b24] p-5">
-      <p className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-[#6fc11f]">
-        {label}
-      </p>
-
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-white/10 bg-[#0b111b] px-4 py-3 text-white outline-none placeholder:text-zinc-600"
-      />
+      <p className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-[#6fc11f]">{label}</p>
+      <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="w-full rounded-xl border border-white/10 bg-[#0b111b] px-4 py-3 text-white outline-none placeholder:text-zinc-600" />
     </div>
   );
 }
 
-function SmallStat({ title, value }: { title: string; value: string | number }) {
+function MetricCard({ icon, title, value, detail }: { icon: React.ReactNode; title: string; value: string; detail: string }) {
   return (
-    <div className="rounded-2xl bg-black/30 p-4 text-center">
-      <p className="text-xs text-zinc-500">{title}</p>
-      <p className="mt-2 text-2xl font-black">{value}</p>
-    </div>
-  );
-}
-
-function MetricCard({
-  icon,
-  title,
-  value,
-  detail,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="rounded-[26px] border border-white/10 bg-[#101b24] p-5">
+    <div className="rounded-[24px] border border-white/10 bg-[#101b24] p-4">
       <div className="text-[#6fc11f]">{icon}</div>
-      <p className="mt-4 text-sm text-zinc-500">{title}</p>
+      <p className="mt-3 text-xs text-zinc-500">{title}</p>
       <p className="mt-2 text-2xl font-black">{value}</p>
-      <p className="mt-2 text-sm text-[#6fc11f]">{detail}</p>
+      <p className="mt-2 text-xs text-[#6fc11f]">{detail}</p>
     </div>
   );
 }
 
-function Panel({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-}) {
+function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-[30px] border border-white/10 bg-[#101b24] p-5 shadow-2xl">
+    <section className="rounded-[30px] border border-white/10 bg-[#101b24] p-5 shadow-2xl">
       <h2 className="text-xl font-black">{title}</h2>
       <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
       <div className="mt-5 space-y-4">{children}</div>
-    </div>
+    </section>
   );
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between rounded-2xl bg-black/25 px-4 py-3">
+    <div className="flex items-center justify-between gap-4 rounded-2xl bg-black/25 px-4 py-3">
       <span className="text-sm text-zinc-400">{label}</span>
-      <span className="text-sm font-black text-white">{value}</span>
+      <span className="min-w-0 truncate text-right text-sm font-black text-white">{value}</span>
     </div>
   );
 }
@@ -615,27 +557,32 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 function Bar({ label, value }: { label: string; value: number }) {
   return (
     <div>
-      <div className="mb-2 flex justify-between text-sm">
+      <div className="mb-2 flex justify-between gap-3 text-sm">
         <p className="font-black">{label}</p>
         <p className="text-[#6fc11f]">{value}%</p>
       </div>
-
       <div className="h-3 rounded-full bg-white/10">
-        <div
-          className="h-3 rounded-full bg-[#6fc11f] shadow-[0_0_18px_rgba(111,193,31,0.35)]"
-          style={{ width: `${value}%` }}
-        />
+        <div className="h-3 rounded-full bg-[#6fc11f] shadow-[0_0_18px_rgba(111,193,31,0.35)]" style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }} />
       </div>
     </div>
   );
 }
 
-function Empty({ text }: { text: string }) {
+function HistoryRow({ title, date, meta, score }: { title: string; date?: string | null; meta: string; score?: number | null }) {
   return (
-    <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-zinc-500">
-      {text}
+    <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/25 p-4">
+      <div className="min-w-0">
+        <p className="truncate font-black">{title}</p>
+        <p className="mt-1 text-xs text-zinc-500">{date ? new Date(date).toLocaleString("es-AR") : "Sin fecha"}</p>
+        <p className="mt-1 truncate text-xs text-zinc-400">{meta}</p>
+      </div>
+      <p className="text-2xl font-black text-[#6fc11f]">{score ?? "-"}</p>
     </div>
   );
+}
+
+function Empty({ text }: { text: string }) {
+  return <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-zinc-500">{text}</div>;
 }
 
 function isFiniteNumber(value: number | null | undefined): value is number {
@@ -646,4 +593,3 @@ function averageNumbers(values: number[]) {
   if (values.length === 0) return null;
   return Math.round(values.reduce((acc, value) => acc + value, 0) / values.length);
 }
-

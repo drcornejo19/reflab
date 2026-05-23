@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useUser } from "@clerk/nextjs";
 import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { supabase } from "@/lib/supabase";
@@ -35,48 +35,13 @@ const incidentButtons: {
   sub: string;
   color: string;
 }[] = [
-  {
-    key: "possible_goal",
-    label: "Posible gol / no gol",
-    sub: "Gol, balÃ³n no en juego, APP",
-    color: "bg-emerald-500",
-  },
-  {
-    key: "possible_penalty",
-    label: "Posible penal",
-    sub: "Penal / no penal",
-    color: "bg-yellow-400",
-  },
-  {
-    key: "possible_red_card",
-    label: "Posible roja directa",
-    sub: "SFP, VC, DOGSO",
-    color: "bg-red-500",
-  },
-  {
-    key: "mistaken_identity",
-    label: "Identidad errÃ³nea",
-    sub: "Jugador equivocado",
-    color: "bg-purple-500",
-  },
-  {
-    key: "possible_offside",
-    label: "Posible FDJ",
-    sub: "PosiciÃ³n / interferencia",
-    color: "bg-blue-400",
-  },
-  {
-    key: "app_offence",
-    label: "Falta en APP",
-    sub: "Ataque previo revisable",
-    color: "bg-orange-400",
-  },
-  {
-    key: "ball_out",
-    label: "BalÃ³n no en juego",
-    sub: "Previo a gol/penal/DOGSO",
-    color: "bg-cyan-400",
-  },
+  { key: "possible_goal", label: "Posible gol / no gol", sub: "Gol, balon no en juego, APP", color: "bg-emerald-500" },
+  { key: "possible_penalty", label: "Posible penal", sub: "Penal / no penal", color: "bg-yellow-400" },
+  { key: "possible_red_card", label: "Posible roja directa", sub: "SFP, VC, DOGSO", color: "bg-red-500" },
+  { key: "mistaken_identity", label: "Identidad erronea", sub: "Jugador equivocado", color: "bg-purple-500" },
+  { key: "possible_offside", label: "Posible FDJ", sub: "Posicion / interferencia", color: "bg-blue-400" },
+  { key: "app_offence", label: "Falta en APP", sub: "Ataque previo revisable", color: "bg-orange-400" },
+  { key: "ball_out", label: "Balon no en juego", sub: "Previo a gol/penal/DOGSO", color: "bg-cyan-400" },
 ];
 
 export function VarExercise({ clip }: VarExerciseProps) {
@@ -91,19 +56,20 @@ export function VarExercise({ clip }: VarExerciseProps) {
   const [submitted, setSubmitted] = useState(false);
   const [savingAttempt, setSavingAttempt] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
   useEffect(() => {
     startedAtRef.current = Date.now();
   }, [clip.id]);
 
   const protocolAdvice = useMemo(() => {
-    if (!selectedIncident) return "SeleccionÃ¡ primero quÃ© estÃ¡ chequeando el VAR.";
+    if (!selectedIncident) return "Selecciona primero que esta chequeando el VAR.";
 
     if (clearError === "no") {
       return "Si no hay error claro y manifiesto, corresponde Check Complete.";
     }
 
     if (selectedIncident === "possible_offside" || selectedIncident === "ball_out") {
-      return "DecisiÃ³n factual: ubicaciÃ³n, balÃ³n en juego/no en juego o posiciÃ³n. Puede resolverse con informaciÃ³n VAR.";
+      return "Decision factual: ubicacion, balon en juego/no en juego o posicion. Puede resolverse con informacion VAR.";
     }
 
     if (
@@ -111,10 +77,10 @@ export function VarExercise({ clip }: VarExerciseProps) {
       selectedIncident === "possible_red_card" ||
       selectedIncident === "app_offence"
     ) {
-      return "DecisiÃ³n interpretativa: intensidad, mano, contacto o APP. Normalmente requiere OFR si hay error claro.";
+      return "Decision interpretativa: intensidad, mano, contacto o APP. Normalmente requiere OFR si hay error claro.";
     }
 
-    return "AplicÃ¡ mÃ­nima interferencia, mÃ¡ximo beneficio.";
+    return "Aplica minima interferencia, maximo beneficio.";
   }, [selectedIncident, clearError]);
 
   const suggestedDecision: VarDecision = useMemo(() => {
@@ -276,7 +242,7 @@ export function VarExercise({ clip }: VarExerciseProps) {
       <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
         <section className="rounded-[26px] border border-[#6fc11f]/30 bg-[#07130b] p-7 shadow-2xl">
           <p className="text-xs font-black uppercase tracking-[0.4em] text-[#6fc11f]">
-            VAR Review Result
+            Resultado revision VAR
           </p>
 
           <h2 className="mt-5 text-7xl font-black text-white">
@@ -288,8 +254,8 @@ export function VarExercise({ clip }: VarExerciseProps) {
             {score >= 85
               ? "Nivel VOR avanzado"
               : score >= 65
-              ? "Criterio aceptable"
-              : "RevisiÃ³n dÃ©bil"}
+                ? "Criterio aceptable"
+                : "Revision debil"}
           </p>
 
           {saveMessage && (
@@ -299,13 +265,13 @@ export function VarExercise({ clip }: VarExerciseProps) {
           )}
 
           <div className="mt-6 rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-zinc-300">
-            <p className="font-black text-white">DecisiÃ³n recomendada:</p>
+            <p className="font-black text-white">Decision recomendada:</p>
             <p className="mt-1 text-[#6fc11f]">{translateVarDecision(correctVarDecision)}</p>
 
             <p className="mt-4 font-black text-white">Fundamento:</p>
             <p className="mt-1">
               {clip.explanation ||
-                "Aplicar protocolo VAR: categorÃ­a revisable, APP, error claro y manifiesto y tipo de revisiÃ³n."}
+                "Aplicar protocolo VAR: categoria revisable, APP, error claro y manifiesto y tipo de revision."}
             </p>
           </div>
 
@@ -324,8 +290,8 @@ export function VarExercise({ clip }: VarExerciseProps) {
             <ReviewLine label="Incidente chequeado" value={selectedIncident ? translateIncident(selectedIncident) : "Sin marcar"} />
             <ReviewLine label="APP" value={appStatus ? translateApp(appStatus) : "Sin definir"} />
             <ReviewLine label="Error claro y manifiesto" value={clearError ? translateClearError(clearError) : "Sin definir"} />
-            <ReviewLine label="IntervenciÃ³n VAR" value={varDecision ? translateVarDecision(varDecision) : "Sin definir"} />
-            <ReviewLine label="ComunicaciÃ³n" value={communication || "Sin comunicaciÃ³n registrada"} />
+            <ReviewLine label="Intervencion VAR" value={varDecision ? translateVarDecision(varDecision) : "Sin definir"} />
+            <ReviewLine label="Comunicacion" value={communication || "Sin comunicacion registrada"} />
           </div>
         </section>
       </div>
@@ -337,26 +303,26 @@ export function VarExercise({ clip }: VarExerciseProps) {
       <header className="mb-4 flex items-center justify-between gap-4">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.4em] text-[#6fc11f]">
-            VOR Console
+            Consola VAR
           </p>
           <h2 className="mt-2 text-2xl font-black">Modo VAR</h2>
           <p className="mt-1 text-xs text-zinc-500">
-            Check automÃ¡tico Â· Error claro y manifiesto Â· APP Â· OFR / factual
+            Chequeo automatico - error claro y manifiesto - APP - OFR / factual
           </p>
         </div>
 
         <div className="rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-3 text-right">
-          <p className="text-xs font-black text-[#6fc11f]">LIVE CHECK</p>
+          <p className="text-xs font-black text-[#6fc11f]">CHEQUEO EN VIVO</p>
           <p className="text-[11px] text-zinc-400">VOR activo</p>
         </div>
       </header>
 
       <div className="grid gap-4 xl:grid-cols-[1.35fr_0.9fr]">
         <section className="space-y-4">
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-black">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black">
             <div className="absolute z-10 m-4 rounded-full bg-black/75 px-4 py-2 text-xs font-black">
-              <span className="mr-2 text-[#6fc11f]">â—</span>
-              MAIN CAMERA
+              <span className="mr-2 text-[#6fc11f]">REC</span>
+              Camara principal
             </div>
 
             <video
@@ -368,16 +334,16 @@ export function VarExercise({ clip }: VarExerciseProps) {
 
           <div className="grid gap-3 md:grid-cols-2">
             <InfoBox title="Principio">
-              MÃ­nima interferencia, mÃ¡ximo beneficio. El VAR no busca la mejor decisiÃ³n, corrige errores claros.
+              Minima interferencia, maximo beneficio. El VAR no busca la mejor decision, corrige errores claros.
             </InfoBox>
             <InfoBox title="APP">
-              Para gol, penal o DOGSO, revisÃ¡ el inicio de la fase de ataque y cÃ³mo se obtuvo la posesiÃ³n.
+              Para gol, penal o DOGSO, revisa el inicio de la fase de ataque y como se obtuvo la posesion.
             </InfoBox>
           </div>
         </section>
 
         <section className="space-y-3">
-          <Panel title="1. BotÃ³n VOR: incidente a chequear">
+          <Panel title="1. Boton VOR: incidente a chequear">
             <div className="grid grid-cols-2 gap-3">
               {incidentButtons.map((btn) => (
                 <button
@@ -399,15 +365,15 @@ export function VarExercise({ clip }: VarExerciseProps) {
 
           <Panel title="2. APP">
             <div className="grid gap-2">
-              <Choice active={appStatus === "same_app"} onClick={() => setAppStatus("same_app")} title="Misma APP" sub="La fase de ataque continÃºa." />
-              <Choice active={appStatus === "new_app"} onClick={() => setAppStatus("new_app")} title="Nueva APP" sub="Hubo posesiÃ³n controlada defensiva o reinicio." />
+              <Choice active={appStatus === "same_app"} onClick={() => setAppStatus("same_app")} title="Misma APP" sub="La fase de ataque continua." />
+              <Choice active={appStatus === "new_app"} onClick={() => setAppStatus("new_app")} title="Nueva APP" sub="Hubo posesion controlada defensiva o reinicio." />
               <Choice active={appStatus === "not_relevant"} onClick={() => setAppStatus("not_relevant")} title="No aplica" sub="Roja directa / identidad / incidente aislado." />
             </div>
           </Panel>
 
           <Panel title="3. Error claro y manifiesto">
             <div className="grid grid-cols-3 gap-2">
-              <MiniChoice active={clearError === "yes"} onClick={() => setClearError("yes")} label="SÃ­" />
+              <MiniChoice active={clearError === "yes"} onClick={() => setClearError("yes")} label="Si" />
               <MiniChoice active={clearError === "no"} onClick={() => setClearError("no")} label="No" />
               <MiniChoice active={clearError === "unclear"} onClick={() => setClearError("unclear")} label="Dudoso" />
             </div>
@@ -417,26 +383,26 @@ export function VarExercise({ clip }: VarExerciseProps) {
             </p>
           </Panel>
 
-          <Panel title="4. IntervenciÃ³n VAR">
+          <Panel title="4. Intervencion VAR">
             <div className="grid gap-2">
               <Choice active={varDecision === "check_complete"} onClick={() => setVarDecision("check_complete")} title="Check complete" sub="No hay error claro." />
-              <Choice active={varDecision === "recommend_ofr"} onClick={() => setVarDecision("recommend_ofr")} title="Recomendar OFR" sub="DecisiÃ³n interpretativa." />
-              <Choice active={varDecision === "factual_review"} onClick={() => setVarDecision("factual_review")} title="Factual review" sub="Dato objetivo: lugar, FDJ, balÃ³n." />
+              <Choice active={varDecision === "recommend_ofr"} onClick={() => setVarDecision("recommend_ofr")} title="Recomendar OFR" sub="Decision interpretativa." />
+              <Choice active={varDecision === "factual_review"} onClick={() => setVarDecision("factual_review")} title="Factual review" sub="Dato objetivo: lugar, FDJ, balon." />
             </div>
           </Panel>
 
-          <Panel title="5. ComunicaciÃ³n VAR">
+          <Panel title="5. Comunicacion VAR">
             <textarea
               value={communication}
-              onChange={(e) => setCommunication(e.target.value)}
-              placeholder='Ej: "Chequeando posible penal de blanco 5. Punto de contacto dentro del Ã¡rea. Recomiendo OFR. Cambio."'
+              onChange={(event) => setCommunication(event.target.value)}
+              placeholder='Ej: "Chequeando posible penal de blanco 5. Punto de contacto dentro del area. Recomiendo OFR. Cambio."'
               className="min-h-24 w-full rounded-xl border border-white/10 bg-[#17222b] p-3 text-sm text-white outline-none placeholder:text-zinc-600"
             />
 
             <input
               value={finalDecision}
-              onChange={(e) => setFinalDecision(e.target.value)}
-              placeholder="DecisiÃ³n final del Ã¡rbitro..."
+              onChange={(event) => setFinalDecision(event.target.value)}
+              placeholder="Decision final del arbitro..."
               className="mt-3 w-full rounded-xl border border-white/10 bg-[#17222b] p-3 text-sm text-white outline-none placeholder:text-zinc-600"
             />
           </Panel>
@@ -454,7 +420,7 @@ export function VarExercise({ clip }: VarExerciseProps) {
   );
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-[#0f1a23] p-4">
       <h3 className="mb-3 text-sm font-black uppercase tracking-wide">{title}</h3>
@@ -463,17 +429,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function Choice({
-  active,
-  onClick,
-  title,
-  sub,
-}: {
-  active: boolean;
-  onClick: () => void;
-  title: string;
-  sub: string;
-}) {
+function Choice({ active, onClick, title, sub }: { active: boolean; onClick: () => void; title: string; sub: string }) {
   return (
     <button
       onClick={onClick}
@@ -489,15 +445,7 @@ function Choice({
   );
 }
 
-function MiniChoice({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
+function MiniChoice({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
     <button
       onClick={onClick}
@@ -512,7 +460,7 @@ function MiniChoice({
   );
 }
 
-function InfoBox({ title, children }: { title: string; children: React.ReactNode }) {
+function InfoBox({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-[#101b24] p-4">
       <p className="text-sm font-black text-[#6fc11f]">{title}</p>
@@ -576,18 +524,26 @@ function buildVarFeedback({
   correctVarDecision: VarDecision;
   explanation?: string | null;
 }) {
-  const level = score >= 85 ? "Aplicacion VAR solida." : score >= 65 ? "Criterio VAR aceptable, con puntos a ajustar." : "Revisar protocolo VAR y comunicacion.";
-  return `${level} Decision recomendada: ${translateVarDecision(correctVarDecision)}. ${explanation ?? "Aplicar categoria revisable, APP, error claro y manifiesto y tipo de revision."}`;
+  const level = score >= 85
+    ? "Aplicacion VAR solida."
+    : score >= 65
+      ? "Criterio VAR aceptable, con puntos a ajustar."
+      : "Revisar protocolo VAR y comunicacion.";
+
+  return `${level} Decision recomendada: ${translateVarDecision(correctVarDecision)}. ${
+    explanation ?? "Aplicar categoria revisable, APP, error claro y manifiesto y tipo de revision."
+  }`;
 }
+
 function translateIncident(value: Incident) {
   const map: Record<Incident, string> = {
     possible_goal: "Posible gol / no gol",
     possible_penalty: "Posible penal",
     possible_red_card: "Posible roja directa",
-    mistaken_identity: "Identidad errÃ³nea",
+    mistaken_identity: "Identidad erronea",
     possible_offside: "Posible fuera de juego",
     app_offence: "Falta en APP",
-    ball_out: "BalÃ³n no en juego",
+    ball_out: "Balon no en juego",
   };
 
   return map[value];
@@ -605,7 +561,7 @@ function translateApp(value: AppStatus) {
 
 function translateClearError(value: ClearError) {
   const map: Record<ClearError, string> = {
-    yes: "SÃ­",
+    yes: "Si",
     no: "No",
     unclear: "Dudoso",
   };
@@ -622,9 +578,3 @@ function translateVarDecision(value: VarDecision) {
 
   return map[value];
 }
-
-
-
-
-
-
