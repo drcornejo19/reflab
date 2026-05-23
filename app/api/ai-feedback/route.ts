@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { feedbackLanguageInstruction } from "@/lib/feedbackLanguage";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -15,19 +16,19 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+    const languageInstruction = feedbackLanguageInstruction(body.feedbackLanguage);
 
     const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content:
-            "Sos un instructor arbitral profesional experto en IFAB y VAR FIFA.",
+          content: `Sos un instructor arbitral profesional experto en IFAB y VAR FIFA. ${languageInstruction}`,
         },
         {
           role: "user",
           content: `
-Evaluá la decisión arbitral con rigor técnico.
+Evalua la decision arbitral con rigor tecnico.
 
 Datos:
 Clip: ${body.clipTitle}
@@ -41,23 +42,24 @@ ${JSON.stringify(body.userAnswer)}
 Respuesta correcta:
 ${JSON.stringify(body.correctAnswer)}
 
-Justificación del usuario:
-${body.justification || "Sin justificación"}
+Justificacion del usuario:
+${body.justification || "Sin justificacion"}
 
 Fundamento oficial:
 ${body.explanation || "Sin fundamento"}
 
 Instrucciones:
-- Detectá errores concretos
+- Detecta errores concretos
 - No generalices
 - No contradigas la respuesta correcta
-- Usá criterio IFAB
+- Usa criterio IFAB
+- Respeta el idioma de feedback indicado por el sistema
 
 Formato:
 1. Veredicto
 2. Error principal
-3. Análisis técnico
-4. Recomendación
+3. Analisis tecnico
+4. Recomendacion
 `,
         },
       ],
@@ -68,13 +70,13 @@ Formato:
       "No se pudo generar el feedback.";
 
     return NextResponse.json({ feedback });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("AI FEEDBACK ERROR:", error);
 
     return NextResponse.json(
       {
         error:
-          error?.message ?? "Error desconocido generando feedback IA.",
+          error instanceof Error ? error.message : "Error desconocido generando feedback IA.",
       },
       { status: 500 }
     );

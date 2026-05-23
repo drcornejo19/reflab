@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useUser } from "@clerk/nextjs";
+import { insertAttemptSafely } from "@/lib/attemptPersistence";
+import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
 import { supabase } from "@/lib/supabase";
 
 type EnglishClip = {
@@ -14,6 +17,8 @@ type EnglishClip = {
 };
 
 export function EnglishExercise() {
+  const { user } = useUser();
+  const startedAtRef = useRef<number>(0);
   const [clips, setClips] = useState<EnglishClip[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loadingClips, setLoadingClips] = useState(true);
@@ -21,6 +26,7 @@ export function EnglishExercise() {
   const [answer, setAnswer] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const [recording, setRecording] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -31,27 +37,37 @@ export function EnglishExercise() {
   const currentClip = clips[currentIndex];
 
   useEffect(() => {
-    loadEnglishClips();
-  }, []);
+    let active = true;
 
-  async function loadEnglishClips() {
-    setLoadingClips(true);
+    async function loadClips() {
+      setLoadingClips(true);
 
-    const { data, error } = await supabase
-      .from("clips")
-      .select("id,title,description,video_url,topic,explanation,created_at")
-      .eq("mode", "english")
-      .order("created_at", { ascending: true });
+      const { data, error } = await supabase
+        .from("clips")
+        .select("id,title,description,video_url,topic,explanation,created_at")
+        .eq("mode", "english")
+        .order("created_at", { ascending: true });
 
-    if (error) {
-      console.error("Error loading english clips:", error);
-      setClips([]);
-    } else {
-      setClips((data ?? []) as EnglishClip[]);
+      if (!active) return;
+
+      if (error) {
+        console.error("Error loading english clips:", error);
+        setClips([]);
+      } else {
+        setClips((data ?? []) as EnglishClip[]);
+      }
+
+      setLoadingClips(false);
     }
 
-    setLoadingClips(false);
-  }
+    void loadClips();
+
+    return () => {
+      active = false;
+    };
+  }, []);  useEffect(() => {
+    startedAtRef.current = Date.now();
+  }, [currentClip?.id]);
 
   async function evaluate() {
     if ((!answer.trim() && !audioBlob) || loadingAi) return;
@@ -71,6 +87,7 @@ export function EnglishExercise() {
           answer,
           expected: currentClip?.explanation,
           hasVoiceRecording: Boolean(audioBlob),
+          feedbackLanguage: getBrowserFeedbackLanguage(),
         }),
       });
 
@@ -79,7 +96,9 @@ export function EnglishExercise() {
       if (!res.ok) {
         setFeedback(data.error ?? "No se pudo generar feedback.");
       } else {
-        setFeedback(data.feedback ?? "Sin feedback disponible.");
+        const feedbackText = data.feedback ?? "Sin feedback disponible.";
+        setFeedback(feedbackText);
+        await saveEnglishAttempt(feedbackText);
       }
     } catch (error) {
       console.error("English feedback error:", error);
@@ -87,6 +106,72 @@ export function EnglishExercise() {
     } finally {
       setLoadingAi(false);
     }
+  }
+
+  async function saveEnglishAttempt(feedbackText: string) {
+    if (!currentClip) return;
+
+    if (!user) {
+      setSaveMessage("Feedback generado. Inicia sesion para guardar la respuesta en Rendimiento.");
+      return;
+    }
+
+    const timeSpentSeconds = Math.max(
+      1,
+      Math.round((Date.now() - startedAtRef.current) / 1000)
+    );
+
+    const primaryPayload = {
+      user_id: user.id,
+      clip_id: currentClip.id,
+      clip_title: currentClip.title ?? "English Referee Mode",
+      module: "english_referee",
+      mode: "english",
+      topic: currentClip.topic ?? "Ingles arbitral",
+      answer_text: answer.trim() || (audioBlob ? "Respuesta de voz registrada" : null),
+      score: null,
+      feedback: feedbackText,
+      english_score: null,
+      vocabulary_score: null,
+      clarity_score: null,
+      terminology_score: null,
+      grammar_score: null,
+      technical_accuracy_score: null,
+      pronunciation_score: audioBlob ? null : undefined,
+      time_spent_seconds: timeSpentSeconds,
+      created_at: new Date().toISOString(),
+    };
+
+    const fallbackPayload = {
+      user_id: user.id,
+      clip_title: currentClip.title ?? "English Referee Mode",
+      foul: null,
+      restart: null,
+      discipline: null,
+      var_review: null,
+      score: null,
+      topic: currentClip.topic ?? "Ingles arbitral",
+      difficulty: "english",
+      technical_correct: null,
+      restart_correct: null,
+      discipline_correct: null,
+      var_correct: null,
+    };
+
+    const result = await insertAttemptSafely(supabase, primaryPayload, fallbackPayload);
+
+    if (result.saved) {
+      setSaveMessage(
+        result.usedFallback
+          ? "Respuesta guardada con la estructura actual. Las metricas finas quedan preparadas."
+          : "Respuesta de ingles guardada para Rendimiento."
+      );
+      return;
+    }
+
+    setSaveMessage(
+      "Feedback generado. Registro de intento pendiente hasta habilitar campos opcionales de ingles en Supabase."
+    );
   }
 
   async function startRecording() {
@@ -123,7 +208,7 @@ export function EnglishExercise() {
       setRecording(true);
     } catch (error) {
       console.error("Recording error:", error);
-      alert("No se pudo iniciar la grabación. Revisá permisos del micrófono.");
+      alert("No se pudo iniciar la grabaciÃ³n. RevisÃ¡ permisos del micrÃ³fono.");
     }
   }
 
@@ -137,6 +222,7 @@ export function EnglishExercise() {
   function resetAnswer() {
     setAnswer("");
     setFeedback(null);
+    setSaveMessage(null);
     setLoadingAi(false);
     setAudioBlob(null);
 
@@ -184,7 +270,7 @@ export function EnglishExercise() {
             disabled={currentIndex === 0}
             className="rounded-xl bg-white/10 px-4 py-2 text-sm font-black text-white disabled:opacity-40"
           >
-            ← Previous
+            â† Previous
           </button>
 
           <p className="text-sm font-black text-zinc-300">
@@ -196,13 +282,13 @@ export function EnglishExercise() {
             disabled={currentIndex >= clips.length - 1}
             className="rounded-xl bg-[#6fc11f] px-4 py-2 text-sm font-black text-black disabled:opacity-40"
           >
-            Next →
+            Next â†’
           </button>
         </div>
 
         <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black">
           <div className="absolute z-10 m-4 rounded-full bg-black/70 px-4 py-2 text-xs font-black">
-            <span className="mr-2 text-[#6fc11f]">●</span>
+            <span className="mr-2 text-[#6fc11f]">â—</span>
             MAIN CAMERA
           </div>
 
@@ -270,14 +356,14 @@ export function EnglishExercise() {
               onClick={startRecording}
               className="rounded-xl border border-red-400/30 bg-red-500/10 px-5 py-4 font-black text-red-300 hover:bg-red-500/20"
             >
-              🎙 Start voice answer
+              ðŸŽ™ Start voice answer
             </button>
           ) : (
             <button
               onClick={stopRecording}
               className="rounded-xl bg-red-500 px-5 py-4 font-black text-white"
             >
-              ⏹ Stop recording
+              â¹ Stop recording
             </button>
           )}
 
@@ -307,6 +393,11 @@ export function EnglishExercise() {
           {loadingAi ? "ANALYZING..." : "SUBMIT ANSWER"}
         </button>
 
+        {saveMessage && (
+          <div className="rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4 text-sm font-bold text-[#b7ff8a]">
+            {saveMessage}
+          </div>
+        )}
         {feedback && (
           <div className="rounded-2xl border border-blue-400/25 bg-blue-400/10 p-5">
             <h3 className="font-black text-blue-300">AI English Feedback</h3>
@@ -325,3 +416,8 @@ export function EnglishExercise() {
     </div>
   );
 }
+
+
+
+
+

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { calculateScore } from "@/lib/scoring";
+import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
 import { supabase } from "@/lib/supabase";
 import type { Clip } from "@/lib/types";
 
@@ -226,6 +227,7 @@ export function ClipExercise({
           justification,
           explanation: typedClip.explanation,
           score,
+          feedbackLanguage: getBrowserFeedbackLanguage(),
         }),
       });
 

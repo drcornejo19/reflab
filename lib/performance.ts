@@ -3,11 +3,58 @@ export type ModuleKey = "decision" | "video" | "var" | "english" | "communicatio
 export type CriterionKey = "technical" | "restart" | "discipline" | "subtype" | "justification" | "var";
 
 export type AttemptRecord = {
-  id?: string; user_id?: string | null; clip_title?: string | null;
-  foul?: boolean | null; restart?: string | null; discipline?: string | null;
-  score?: number | null; topic?: string | null; difficulty?: string | null;
-  technical_correct?: boolean | null; restart_correct?: boolean | null;
-  discipline_correct?: boolean | null; var_correct?: boolean | null; created_at?: string | null;
+  id?: string;
+  user_id?: string | null;
+  clip_id?: string | null;
+  clip_title?: string | null;
+  module?: string | null;
+  mode?: string | null;
+  foul?: boolean | null;
+  restart?: string | null;
+  discipline?: string | null;
+  score?: number | null;
+  topic?: string | null;
+  difficulty?: string | null;
+  is_correct?: boolean | null;
+  selected_decision?: string | null;
+  correct_decision?: string | null;
+  selected_restart?: string | null;
+  correct_restart?: string | null;
+  selected_discipline?: string | null;
+  correct_discipline?: string | null;
+  answer_text?: string | null;
+  feedback?: string | null;
+  workout_name?: string | null;
+  total_duration?: number | null;
+  completed_rounds?: number | null;
+  total_rounds?: number | null;
+  completed?: boolean | null;
+  perceived_effort?: number | null;
+  fatigue_level?: number | null;
+  notes?: string | null;
+  time_spent?: number | null;
+  time_spent_seconds?: number | null;
+  technical_correct?: boolean | null;
+  restart_correct?: boolean | null;
+  discipline_correct?: boolean | null;
+  subtype_correct?: boolean | null;
+  justification_correct?: boolean | null;
+  var_correct?: boolean | null;
+  app_correct?: boolean | null;
+  ofr_correct?: boolean | null;
+  var_intervention_correct?: boolean | null;
+  factual_vs_interpretative_correct?: boolean | null;
+  final_decision_correct?: boolean | null;
+  english_score?: number | null;
+  vocabulary_score?: number | null;
+  clarity_score?: number | null;
+  terminology_score?: number | null;
+  grammar_score?: number | null;
+  technical_accuracy_score?: number | null;
+  justification_score?: number | null;
+  pronunciation_score?: number | null;
+  protocol_score?: number | null;
+  created_at?: string | null;
 };
 export type ExamAnswerRecord = {
   clipId?: string; clipTitle?: string; topic?: string | null; difficulty?: string | null;
@@ -35,7 +82,8 @@ export type PerformanceItem = {
   result: "Correcto" | "Parcial" | "Incorrecto" | "Sin datos";
   selectedDecision?: string | null; correctDecision?: string | null; selectedRestart?: string | null;
   correctRestart?: string | null; selectedDiscipline?: string | null; correctDiscipline?: string | null;
-  feedback?: string | null; criteria: Partial<Record<CriterionKey, boolean>>;
+  answerText?: string | null; feedback?: string | null; timeSpentSeconds?: number | null;
+  criteria: Partial<Record<CriterionKey, boolean>>;
 };
 export type PerformanceSession = { id: string; source: PerformanceSource; label: string; date: string; score: number | null; totalItems: number; };
 export type SummaryMetric = { label: string; value: string; detail: string; tone?: "success" | "warning" | "danger" | "neutral"; };
@@ -59,26 +107,64 @@ export function buildPerformanceDataset({ attempts, examResults, rulesExamResult
     const score = cleanScore(attempt.score);
     const topic = normalizeTopic(attempt.topic);
     const date = attempt.created_at ?? "";
+    const moduleKey = normalizeModule(attempt.module, attempt.mode, topic);
+    const modeLabel = getModeLabel(moduleKey, attempt.mode, topic);
+    const title = attempt.clip_title ?? attempt.workout_name ?? fallbackTitleForModule(moduleKey);
+    const timeSpentSeconds = cleanDuration(attempt.time_spent_seconds ?? attempt.time_spent);
+
     items.push({
       id: attempt.id ?? `attempt-${index}`,
       source: "training",
-      module: topic === "VAR" ? "var" : "decision",
-      modeLabel: topic === "VAR" ? "VAR Lab" : "Entrenamiento",
+      module: moduleKey,
+      modeLabel,
       date,
-      title: attempt.clip_title ?? "Ejercicio de entrenamiento",
+      title,
       topic,
       rawTopic: attempt.topic ?? topic,
       difficulty: attempt.difficulty,
       score,
-      result: resultFromScore(score),
-      selectedDecision: decisionFromBoolean(attempt.foul),
-      selectedRestart: attempt.restart,
-      selectedDiscipline: attempt.discipline,
-      criteria: { technical: attempt.technical_correct ?? undefined, restart: attempt.restart_correct ?? undefined, discipline: attempt.discipline_correct ?? undefined, var: attempt.var_correct ?? undefined },
+      result: resultFromAttempt(attempt, score),
+      selectedDecision: attempt.selected_decision ?? decisionFromBoolean(attempt.foul),
+      correctDecision: attempt.correct_decision,
+      selectedRestart: attempt.selected_restart ?? attempt.restart,
+      correctRestart: attempt.correct_restart,
+      selectedDiscipline: attempt.selected_discipline ?? attempt.discipline,
+      correctDiscipline: attempt.correct_discipline,
+      answerText: attempt.answer_text,
+      feedback: attempt.feedback,
+      timeSpentSeconds,
+      criteria: {
+        technical:
+          attempt.technical_correct ??
+          attempt.final_decision_correct ??
+          attempt.is_correct ??
+          booleanFromScore(attempt.technical_accuracy_score),
+        restart: attempt.restart_correct ?? undefined,
+        discipline: attempt.discipline_correct ?? undefined,
+        subtype: attempt.subtype_correct ?? undefined,
+        justification:
+          attempt.justification_correct ??
+          booleanFromScore(attempt.justification_score) ??
+          booleanFromScore(attempt.clarity_score),
+        var:
+          attempt.var_intervention_correct ??
+          attempt.var_correct ??
+          attempt.ofr_correct ??
+          attempt.app_correct ??
+          attempt.factual_vs_interpretative_correct ??
+          undefined,
+      },
     });
-    sessions.push({ id: attempt.id ?? `attempt-session-${index}`, source: "training", label: topic === "VAR" ? "VAR Lab" : "Entrenamiento", date, score, totalItems: 1 });
-  });
 
+    sessions.push({
+      id: attempt.id ?? `attempt-session-${index}`,
+      source: "training",
+      label: modeLabel,
+      date,
+      score,
+      totalItems: 1,
+    });
+  });
   examResults.forEach((exam, examIndex) => {
     const date = exam.created_at ?? "";
     const score = cleanScore(exam.avg_score);
@@ -225,52 +311,108 @@ export function getCriterionPerformance(items: PerformanceItem[]): CriterionMetr
 export function getModulePerformance(items: PerformanceItem[]): ModulePerformance[] {
   const topicMetrics = getTopicPerformance(items);
   const criteria = getCriterionPerformance(items);
+  const preparationItems = items.filter((item) => item.module === "preparation");
+  const preparationSeconds = preparationItems
+    .map((item) => item.timeSpentSeconds)
+    .filter(isNumber)
+    .reduce((acc, value) => acc + value, 0);
+
   return [
     {
       key: "decision",
       title: "Decision arbitral",
       description: "Mide como resolves decisiones tecnicas dentro del partido: infraccion, reanudacion y disciplina.",
       status: moduleStatus(items, "decision"),
-      metrics: [metricFromItems("Intentos realizados", items.filter((item) => item.module === "decision")), metricFromAverage("Promedio del modulo", moduleAverage(items, "decision")), metricFromCriterion("Precision tecnica", criteria.find((item) => item.key === "technical")), metricFromCriterion("Precision disciplinaria", criteria.find((item) => item.key === "discipline")), metricFromCriterion("Precision en reanudacion", criteria.find((item) => item.key === "restart")), metricFromTopic("Aciertos en manos", topicMetrics.find((item) => item.topic === "Manos")), metricFromTopic("Aciertos en faltas", topicMetrics.find((item) => item.topic === "Faltas tacticas")), metricFromTopic("Aciertos en fuera de juego", topicMetrics.find((item) => item.topic === "Fuera de juego")), metricUnavailable("Tiempo promedio de decision", "Disponible cuando se registre tiempo por intento.")],
+      metrics: [
+        metricFromItems("Intentos realizados", items.filter((item) => item.module === "decision")),
+        metricFromAverage("Promedio del modulo", moduleAverage(items, "decision")),
+        metricFromCriterion("Precision tecnica", criteria.find((item) => item.key === "technical")),
+        metricFromCriterion("Precision disciplinaria", criteria.find((item) => item.key === "discipline")),
+        metricFromCriterion("Precision en reanudacion", criteria.find((item) => item.key === "restart")),
+        metricFromTopic("Aciertos en manos", topicMetrics.find((item) => item.topic === "Manos")),
+        metricFromTopic("Aciertos en faltas", topicMetrics.find((item) => item.topic === "Faltas tacticas")),
+        metricFromTopic("Aciertos en fuera de juego", topicMetrics.find((item) => item.topic === "Fuera de juego")),
+        metricUnavailable("Tiempo promedio de decision", "Disponible cuando se registre tiempo por intento."),
+      ],
     },
     {
       key: "video",
       title: "Video analisis",
       description: "Mide observacion de clips, lectura de contexto y justificacion tecnica de una decision.",
       status: moduleStatus(items, "video"),
-      metrics: [metricFromItems("Clips analizados", items.filter((item) => item.module === "video")), metricFromAverage("Promedio de analisis", moduleAverage(items, "video")), metricFromCriterion("Deteccion correcta de infraccion", criteria.find((item) => item.key === "technical")), metricUnavailable("Lectura de intensidad", "Requiere registrar intensidad o punto de contacto."), metricUnavailable("Punto de contacto", "Metrica preparada para carga futura."), metricUnavailable("Calidad de justificacion", "Disponible cuando se guarde rubrica de justificacion.")],
+      metrics: [
+        metricFromItems("Clips analizados", items.filter((item) => item.module === "video")),
+        metricFromAverage("Promedio de analisis", moduleAverage(items, "video")),
+        metricFromCriterion("Deteccion correcta de infraccion", criteria.find((item) => item.key === "technical")),
+        metricUnavailable("Lectura de intensidad", "Requiere registrar intensidad o punto de contacto."),
+        metricUnavailable("Punto de contacto", "Metrica preparada para carga futura."),
+        metricFromCriterion("Calidad de justificacion", criteria.find((item) => item.key === "justification")),
+      ],
     },
     {
       key: "var",
       title: "VAR Lab",
       description: "Mide aplicacion de protocolo VAR, APP, OFR, revision factual e intervencion final.",
       status: moduleStatus(items, "var"),
-      metrics: [metricFromItems("Casos VAR analizados", items.filter((item) => item.module === "var" || item.topic === "VAR")), metricFromAverage("Precision VAR", moduleAverage(items, "var")), metricFromCriterion("Criterio VAR", criteria.find((item) => item.key === "var")), metricUnavailable("Aciertos en OFR", "Disponible cuando el ejercicio VAR guarde OFR."), metricUnavailable("Aciertos en APP", "Disponible cuando el ejercicio VAR guarde APP."), metricUnavailable("Factual vs interpretativo", "Metrica preparada para VAR Lab.")],
+      metrics: [
+        metricFromItems("Casos VAR analizados", items.filter((item) => item.module === "var" || item.topic === "VAR")),
+        metricFromAverage("Precision VAR", moduleAverage(items, "var")),
+        metricFromCriterion("Criterio VAR", criteria.find((item) => item.key === "var")),
+        metricUnavailable("Aciertos en OFR", "Disponible cuando el ejercicio VAR guarde OFR."),
+        metricUnavailable("Aciertos en APP", "Disponible cuando el ejercicio VAR guarde APP."),
+        metricUnavailable("Factual vs interpretativo", "Metrica preparada para VAR Lab."),
+      ],
     },
     {
       key: "english",
       title: "Ingles arbitral",
       description: "Mide capacidad para explicar decisiones arbitrales en ingles tecnico.",
-      status: "Metricas en construccion",
-      metrics: [metricUnavailable("Respuestas en ingles", "Disponible cuando se guarden respuestas de ingles."), metricUnavailable("Vocabulario FIFA", "Requiere rubrica de feedback en ingles."), metricUnavailable("Claridad comunicacional", "Metrica preparada para evaluacion IA."), metricUnavailable("Terminologia VAR", "Metrica preparada para respuestas VAR en ingles.")],
+      status: moduleStatus(items, "english"),
+      metrics: [
+        metricFromItems("Respuestas en ingles", items.filter((item) => item.module === "english")),
+        metricFromAverage("Promedio del modulo", moduleAverage(items, "english")),
+        metricFromCriterion("Precision tecnica del texto", criteria.find((item) => item.key === "technical")),
+        metricFromCriterion("Claridad comunicacional", criteria.find((item) => item.key === "justification")),
+        metricUnavailable("Vocabulario FIFA", "Requiere rubrica especifica del feedback de ingles."),
+        metricUnavailable("Terminologia VAR", "Metrica preparada para respuestas VAR en ingles."),
+      ],
     },
     {
       key: "communication",
       title: "Comunicacion y liderazgo",
       description: "Este modulo medira autoridad, comunicacion, liderazgo, lenguaje corporal y manejo de conflictos dentro del partido.",
       status: "Metricas en construccion",
-      metrics: [metricUnavailable("Manejo de protestas", "Metrica futura."), metricUnavailable("Puesta de limites", "Metrica futura."), metricUnavailable("Comunicacion verbal", "Metrica futura."), metricUnavailable("Comunicacion no verbal", "Metrica futura."), metricUnavailable("Control emocional", "Metrica futura."), metricUnavailable("Resolucion de conflictos", "Metrica futura.")],
+      metrics: [
+        metricUnavailable("Manejo de protestas", "Metrica futura."),
+        metricUnavailable("Puesta de limites", "Metrica futura."),
+        metricUnavailable("Comunicacion verbal", "Metrica futura."),
+        metricUnavailable("Comunicacion no verbal", "Metrica futura."),
+        metricUnavailable("Control emocional", "Metrica futura."),
+        metricUnavailable("Resolucion de conflictos", "Metrica futura."),
+      ],
     },
     {
       key: "preparation",
       title: "Preparacion del arbitro",
-      description: "Este modulo integrara indicadores de preparacion mental, fisica y profesional: pre-partido, recuperacion, habitos, foco y confianza.",
-      status: "Metricas en construccion",
-      metrics: [metricUnavailable("Preparacion pre-partido", "Metrica futura."), metricUnavailable("Estado fisico percibido", "Metrica futura."), metricUnavailable("Carga semanal", "Metrica futura."), metricUnavailable("Recuperacion y descanso", "Metrica futura."), metricUnavailable("Foco mental", "Metrica futura."), metricUnavailable("Confianza pre-partido", "Metrica futura."), metricUnavailable("Autoevaluacion post-partido", "Metrica futura.")],
+      description: "Integra indicadores fisicos, mentales y profesionales: pre-partido, recuperacion, habitos, foco y confianza.",
+      status: preparationItems.length > 0 ? "Disponible" : "Metricas en construccion",
+      metrics: [
+        metricFromItems("Sesiones fisicas completadas", preparationItems),
+        {
+          label: "Minutos entrenados",
+          value: preparationSeconds > 0 ? formatDuration(preparationSeconds) : "Sin datos",
+          detail: preparationSeconds > 0 ? "Suma de sesiones registradas." : "Disponible cuando se guarden sesiones fisicas.",
+          available: preparationSeconds > 0,
+        },
+        metricUnavailable("Rutina mas realizada", "Disponible cuando haya mas sesiones registradas."),
+        metricUnavailable("Cumplimiento semanal", "Metrica futura."),
+        metricUnavailable("Carga percibida", "Metrica futura."),
+        metricUnavailable("Fatiga percibida", "Metrica futura."),
+        metricUnavailable("Foco y confianza pre-partido", "Metrica futura."),
+      ],
     },
   ];
 }
-
 export function getRecentHistory(items: PerformanceItem[], limit = 12) {
   return sortByDateDesc(items).slice(0, limit);
 }
@@ -307,6 +449,63 @@ export function formatDate(value: string | null | undefined) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
   return parsed.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+function normalizeModule(module?: string | null, mode?: string | null, topic?: string | null): ModuleKey {
+  const value = `${module ?? ""} ${mode ?? ""} ${topic ?? ""}`.toLowerCase();
+
+  if (value.includes("english") || value.includes("ingles")) return "english";
+  if (value.includes("var")) return "var";
+  if (value.includes("preparation") || value.includes("physical") || value.includes("fisic")) return "preparation";
+  if (value.includes("communication") || value.includes("liderazgo")) return "communication";
+  if (value.includes("video")) return "video";
+
+  return "decision";
+}
+
+function getModeLabel(module: ModuleKey, mode?: string | null, topic?: string | null) {
+  if (module === "var") return "VAR Lab";
+  if (module === "english") return "Ingles arbitral";
+  if (module === "preparation") return mode === "physical_training" ? "Entrenamiento fisico" : "Preparacion del arbitro";
+  if (module === "communication") return "Comunicacion y liderazgo";
+  if (module === "video") return "Video analisis";
+  return topic === "VAR" ? "VAR Lab" : "Entrenamiento";
+}
+
+function fallbackTitleForModule(module: ModuleKey) {
+  const titles: Record<ModuleKey, string> = {
+    decision: "Ejercicio de entrenamiento",
+    video: "Analisis de video",
+    var: "Caso VAR Lab",
+    english: "Respuesta de ingles arbitral",
+    communication: "Comunicacion y liderazgo",
+    preparation: "Sesion de preparacion del arbitro",
+  };
+
+  return titles[module];
+}
+
+function resultFromAttempt(attempt: AttemptRecord, score: number | null): PerformanceItem["result"] {
+  if (typeof attempt.is_correct === "boolean") return attempt.is_correct ? "Correcto" : "Incorrecto";
+  if (typeof attempt.completed === "boolean" && attempt.module === "referee_preparation") return attempt.completed ? "Correcto" : "Parcial";
+  return resultFromScore(score);
+}
+
+function booleanFromScore(value?: number | null) {
+  if (!isNumber(value)) return undefined;
+  return value >= 70;
+}
+
+function cleanDuration(value?: number | null) {
+  if (!isNumber(value)) return null;
+  return Math.max(0, Math.round(value));
+}
+
+function formatDuration(seconds: number | null | undefined) {
+  if (!isNumber(seconds)) return "Sin datos";
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  if (minutes <= 0) return `${rest}s`;
+  return rest > 0 ? `${minutes}m ${rest}s` : `${minutes}m`;
 }
 function normalizeTopic(topic?: string | null) {
   if (!topic) return "Sin topico";
@@ -449,3 +648,12 @@ function metricFromTopic(label: string, metric?: TopicMetric): ModuleMetric {
 function metricUnavailable(label: string, detail: string): ModuleMetric {
   return { label, value: "En construccion", detail, available: false };
 }
+
+
+
+
+
+
+
+
+

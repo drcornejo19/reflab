@@ -113,7 +113,7 @@ export default function PerformancePage() {
       const [attemptsRes, examsRes, rulesRes, rankingRes] = await Promise.all([
         supabase
           .from("attempts")
-          .select("id,user_id,clip_title,foul,restart,discipline,score,topic,difficulty,technical_correct,restart_correct,discipline_correct,var_correct,created_at")
+          .select("*")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false }),
         supabase
@@ -128,7 +128,7 @@ export default function PerformancePage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("attempts")
-          .select("user_id,score,topic,difficulty,created_at")
+          .select("*")
           .order("created_at", { ascending: false })
           .limit(800),
       ]);
@@ -383,7 +383,7 @@ function TopicRow({ topic }: { topic: TopicMetric }) {
         <div>
           <p className="font-black text-white">{topic.topic}</p>
           <p className="mt-1 text-xs text-zinc-500">
-            {topic.attempts} intentos Â· {topic.correct} aciertos Â· {topic.errors} errores
+            {topic.attempts} intentos Ã‚Â· {topic.correct} aciertos Ã‚Â· {topic.errors} errores
           </p>
         </div>
         <span className="rounded-full border border-[#6fc11f]/25 bg-[#6fc11f]/10 px-3 py-1 text-xs font-black text-[#6fc11f]">
@@ -543,7 +543,7 @@ function HistoryItem({ item }: { item: PerformanceItem }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-black text-white">{item.title}</p>
-          <p className="mt-1 text-xs text-zinc-500">{formatDate(item.date)} Â· {item.modeLabel} Â· {item.topic}</p>
+          <p className="mt-1 text-xs text-zinc-500">{formatDate(item.date)} Ã‚Â· {item.modeLabel} Ã‚Â· {item.topic}</p>
         </div>
         <div className="text-left sm:text-right">
           <p className="text-2xl font-black text-[#6fc11f]">{item.score ?? "-"}</p>
@@ -579,7 +579,7 @@ function RankingPanel({ ranking, currentRanking }: { ranking: RankingRow[]; curr
             <p className="text-xs font-black uppercase tracking-[0.25em] text-[#6fc11f]">Tu posicion</p>
             <p className="mt-2 text-4xl font-black">{currentRanking ? `#${currentRanking.position}` : "Sin datos"}</p>
             <p className="mt-2 text-sm text-zinc-300">
-              {currentRanking ? `${currentRanking.avgScore}/100 promedio Â· ${currentRanking.attempts} intentos` : "Completa entrenamientos para aparecer en el ranking."}
+              {currentRanking ? `${currentRanking.avgScore}/100 promedio Ã‚Â· ${currentRanking.attempts} intentos` : "Completa entrenamientos para aparecer en el ranking."}
             </p>
           </div>
 
@@ -651,3 +651,4 @@ function LoadingCard() {
 function InfoChip({ label, value }: { label: string; value: string }) {
   return <div className="rounded-xl bg-white/[0.04] px-3 py-2"><p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{label}</p><p className="mt-1 font-bold text-zinc-300">{value}</p></div>;
 }
+
