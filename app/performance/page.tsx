@@ -1,437 +1,653 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AppShell } from "@/components/AppShell";
+import { useUser } from "@clerk/nextjs";
 import {
   Activity,
+  AlertTriangle,
+  ArrowRight,
   BarChart3,
-  Brain,
-  ChartNoAxesCombined,
-  ChevronRight,
   ClipboardCheck,
   Dumbbell,
   History,
   Languages,
+  LineChart,
+  ListChecks,
   MessageCircle,
   MonitorCheck,
   PlaySquare,
+  RefreshCw,
   Target,
   Trophy,
   type LucideIcon,
 } from "lucide-react";
+import { AppShell } from "@/components/AppShell";
+import { supabase } from "@/lib/supabase";
+import {
+  buildPerformanceDataset,
+  formatDate,
+  formatPercent,
+  formatScore,
+  getCriterionPerformance,
+  getEvolutionData,
+  getModulePerformance,
+  getPerformanceSummary,
+  getRankingRows,
+  getRecentHistory,
+  getRecommendedPlan,
+  getTopicPerformance,
+  type AttemptRecord,
+  type CriterionMetric,
+  type ExamResultRecord,
+  type ModulePerformance,
+  type PerformanceItem,
+  type RankingRow,
+  type RulesExamResultRecord,
+  type SummaryMetric,
+  type TopicMetric,
+} from "@/lib/performance";
 
-type PerformanceArea = {
-  title: string;
-  category: string;
-  description: string;
-  href: string;
-  status: "Disponible" | "Agrupado" | "Preparado";
-  icon: LucideIcon;
-  metrics: string[];
-  insight: string;
+type HistoryMode = "ALL" | "training" | "exam" | "rules_exam";
+type HistoryResult = "ALL" | PerformanceItem["result"];
+
+type LoadState = {
+  attempts: AttemptRecord[];
+  examResults: ExamResultRecord[];
+  rulesResults: RulesExamResultRecord[];
+  rankingAttempts: AttemptRecord[];
 };
 
-type ModuleMetricArea = {
-  title: string;
-  status: "Datos actuales" | "Métricas futuras" | "Métricas en construcción";
-  description: string;
-  icon: LucideIcon;
-  metrics: string[];
+const initialData: LoadState = {
+  attempts: [],
+  examResults: [],
+  rulesResults: [],
+  rankingAttempts: [],
 };
 
-const performanceAreas: PerformanceArea[] = [
-  {
-    title: "Mi evolución",
-    category: "Progreso general",
-    description:
-      "Visualizá tu progreso general, tendencia de rendimiento y evolución a lo largo del tiempo.",
-    href: "/stats",
-    status: "Disponible",
-    icon: Activity,
-    insight: "Ideal para entender si tu rendimiento sube, se estabiliza o necesita refuerzo.",
-    metrics: [
-      "Promedio general",
-      "Entrenamientos realizados",
-      "Evaluaciones completadas",
-      "Mejor score",
-      "Último score",
-      "Tendencia semanal o mensual",
-      "Racha de entrenamiento",
-    ],
-  },
-  {
-    title: "Por tópicos",
-    category: "Tipo de jugada",
-    description:
-      "Analizá tu rendimiento según el tipo de jugada o situación arbitral.",
-    href: "/stats",
-    status: "Disponible",
-    icon: ChartNoAxesCombined,
-    insight: "Separa el rendimiento por temas para detectar qué situación entrenar después.",
-    metrics: [
-      "Manos",
-      "Faltas tácticas",
-      "Disputas",
-      "Fuera de juego",
-      "VAR",
-      "Mejor tópico",
-      "Tópico recomendado",
-    ],
-  },
-  {
-    title: "Por criterio",
-    category: "Precisión técnica",
-    description:
-      "Medí la precisión de tus decisiones según el criterio arbitral aplicado.",
-    href: "/dashboard",
-    status: "Agrupado",
-    icon: Target,
-    insight: "No mide el tema de la jugada: mide cómo resolvés técnicamente cada decisión.",
-    metrics: [
-      "Decisión técnica",
-      "Reanudación",
-      "Sanción disciplinaria",
-      "Subtipo técnico",
-      "Interpretación",
-      "Justificación",
-      "Criterio VAR",
-    ],
-  },
-  {
-    title: "Historial",
-    category: "Intentos concretos",
-    description:
-      "Revisá tus últimos intentos y detectá patrones en tus respuestas.",
-    href: "/stats",
-    status: "Preparado",
-    icon: History,
-    insight: "Pensado para revisar registros reales, no promedios repetidos.",
-    metrics: [
-      "Últimas respuestas",
-      "Fecha",
-      "Tópico",
-      "Decisión tomada",
-      "Decisión correcta",
-      "Puntaje",
-      "Modo usado",
-      "Resultado",
-    ],
-  },
-  {
-    title: "Ranking",
-    category: "Comunidad",
-    description:
-      "Compará tu rendimiento con otros árbitros dentro de la comunidad RefLab.",
-    href: "/ranking",
-    status: "Disponible",
-    icon: Trophy,
-    insight: "Agrupa comparación comunitaria sin mezclarla con el análisis individual.",
-    metrics: [
-      "Posición general",
-      "Promedio",
-      "Mejor score",
-      "Cantidad de tests",
-      "Entrenamientos",
-      "Nivel RefLab",
-      "Ranking semanal / mensual",
-    ],
-  },
-];
+const sourceLabels: Record<HistoryMode, string> = {
+  ALL: "Todos los modos",
+  training: "Entrenamiento",
+  exam: "Examen arbitral",
+  rules_exam: "Examen de reglas",
+};
 
-const moduleMetricAreas: ModuleMetricArea[] = [
-  {
-    title: "Decisión arbitral",
-    status: "Datos actuales",
-    description:
-      "Mide precisión técnica, disciplina y reanudación en jugadas de campo.",
-    icon: ClipboardCheck,
-    metrics: [
-      "Precisión técnica",
-      "Precisión disciplinaria",
-      "Precisión en reanudación",
-      "Tiempo promedio de decisión",
-      "Aciertos en SPA / DOGSO",
-      "Aciertos en manos",
-      "Aciertos en fuera de juego",
-    ],
-  },
-  {
-    title: "Video análisis",
-    status: "Métricas futuras",
-    description:
-      "Preparado para medir lectura técnica y calidad de justificación sobre clips reales.",
-    icon: PlaySquare,
-    metrics: [
-      "Clips analizados",
-      "Precisión de lectura técnica",
-      "Calidad de justificación",
-      "Detección de infracción",
-      "Detección de intensidad",
-      "Punto de contacto",
-      "Errores frecuentes",
-    ],
-  },
-  {
-    title: "VAR Lab",
-    status: "Datos actuales",
-    description:
-      "Enfocado en protocolo, intervención, revisión y decisión final dentro del flujo VAR.",
-    icon: MonitorCheck,
-    metrics: [
-      "Precisión en intervención VAR",
-      "Aciertos en OFR",
-      "Aciertos en APP",
-      "Factual vs interpretativo",
-      "Decisión final correcta",
-      "Uso correcto del protocolo",
-    ],
-  },
-  {
-    title: "Inglés arbitral",
-    status: "Métricas futuras",
-    description:
-      "Preparado para evaluar claridad, vocabulario FIFA y terminología arbitral en inglés.",
-    icon: Languages,
-    metrics: [
-      "Precisión técnica del texto",
-      "Uso de vocabulario FIFA",
-      "Claridad comunicacional",
-      "Gramática básica",
-      "Terminología VAR",
-      "Respuestas habladas o escritas",
-    ],
-  },
-  {
-    title: "Comunicación y liderazgo",
-    status: "Métricas en construcción",
-    description:
-      "Este módulo medirá habilidades de comunicación, liderazgo, lenguaje corporal y manejo de conflictos dentro del partido.",
-    icon: MessageCircle,
-    metrics: [
-      "Manejo de protestas",
-      "Puesta de límites",
-      "Comunicación verbal",
-      "Comunicación no verbal",
-      "Control emocional",
-      "Manejo de cuerpos técnicos",
-      "Resolución de conflictos",
-    ],
-  },
-  {
-    title: "Preparación del árbitro",
-    status: "Métricas en construcción",
-    description:
-      "Este módulo integrará indicadores de preparación mental, física y profesional del árbitro: pre-partido, recuperación, hábitos, foco, confianza y evolución personal.",
-    icon: Dumbbell,
-    metrics: [
-      "Preparación pre-partido",
-      "Estado físico percibido",
-      "Carga de entrenamiento",
-      "Recuperación",
-      "Descanso e hidratación",
-      "Foco mental",
-      "Confianza y ansiedad pre-partido",
-      "Autoevaluación post-partido",
-      "Rutina semanal",
-    ],
-  },
-];
+const resultLabels: Record<HistoryResult, string> = {
+  ALL: "Todos los resultados",
+  Correcto: "Correctos",
+  Parcial: "Parciales",
+  Incorrecto: "Incorrectos",
+  "Sin datos": "Sin datos",
+};
 
+const moduleIcons: Record<string, LucideIcon> = {
+  decision: ClipboardCheck,
+  video: PlaySquare,
+  var: MonitorCheck,
+  english: Languages,
+  communication: MessageCircle,
+  preparation: Dumbbell,
+};
 export default function PerformancePage() {
+  const { user, isLoaded } = useUser();
+  const [data, setData] = useState<LoadState>(initialData);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [historyMode, setHistoryMode] = useState<HistoryMode>("ALL");
+  const [historyResult, setHistoryResult] = useState<HistoryResult>("ALL");
+
+  useEffect(() => {
+    async function loadPerformance() {
+      if (!isLoaded) return;
+
+      if (!user) {
+        setData(initialData);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setLoadError(null);
+
+      const [attemptsRes, examsRes, rulesRes, rankingRes] = await Promise.all([
+        supabase
+          .from("attempts")
+          .select("id,user_id,clip_title,foul,restart,discipline,score,topic,difficulty,technical_correct,restart_correct,discipline_correct,var_correct,created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("exam_results")
+          .select("id,user_id,total_questions,total_score,avg_score,correct_count,details,created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("rules_exam_results")
+          .select("id,user_id,total_questions,correct_count,percentage,unanswered_count,finish_reason,level,details,topic_performance,created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("attempts")
+          .select("user_id,score,topic,difficulty,created_at")
+          .order("created_at", { ascending: false })
+          .limit(800),
+      ]);
+
+      if (attemptsRes.error || examsRes.error) {
+        setLoadError("No se pudieron cargar todas las metricas principales. RefLab mantiene la pantalla sin inventar datos.");
+      }
+
+      if (rulesRes.error) {
+        console.warn("Rules exam metrics unavailable:", rulesRes.error.message);
+      }
+
+      setData({
+        attempts: (attemptsRes.data ?? []) as AttemptRecord[],
+        examResults: (examsRes.data ?? []) as ExamResultRecord[],
+        rulesResults: rulesRes.error ? [] : ((rulesRes.data ?? []) as RulesExamResultRecord[]),
+        rankingAttempts: (rankingRes.data ?? []) as AttemptRecord[],
+      });
+
+      setLoading(false);
+    }
+
+    loadPerformance();
+  }, [isLoaded, user]);
+
+  const dataset = useMemo(
+    () =>
+      buildPerformanceDataset({
+        attempts: data.attempts,
+        examResults: data.examResults,
+        rulesExamResults: data.rulesResults,
+      }),
+    [data.attempts, data.examResults, data.rulesResults]
+  );
+
+  const summary = useMemo(() => getPerformanceSummary(dataset.items, dataset.sessions), [dataset.items, dataset.sessions]);
+  const evolution = useMemo(() => getEvolutionData(dataset.sessions), [dataset.sessions]);
+  const topics = useMemo(() => getTopicPerformance(dataset.items), [dataset.items]);
+  const criteria = useMemo(() => getCriterionPerformance(dataset.items), [dataset.items]);
+  const modules = useMemo(() => getModulePerformance(dataset.items), [dataset.items]);
+  const plan = useMemo(() => getRecommendedPlan(summary), [summary]);
+  const ranking = useMemo(() => getRankingRows(data.rankingAttempts, user?.id), [data.rankingAttempts, user?.id]);
+  const currentRanking = ranking.find((row) => row.userId === user?.id);
+
+  const history = useMemo(() => {
+    return getRecentHistory(dataset.items, 30).filter((item) => {
+      const modeMatch = historyMode === "ALL" || item.source === historyMode;
+      const resultMatch = historyResult === "ALL" || item.result === historyResult;
+      return modeMatch && resultMatch;
+    });
+  }, [dataset.items, historyMode, historyResult]);
+
+  if (!isLoaded || loading) {
+    return (
+      <AppShell>
+        <LoadingCard />
+      </AppShell>
+    );
+  }
+
+  if (!user) {
+    return (
+      <AppShell>
+        <EmptyState
+          title="Inicia sesion para ver tu rendimiento"
+          text="Las metricas de RefLab se calculan con tus intentos, examenes y actividad guardada."
+          actionHref="/sign-in"
+          actionLabel="Iniciar sesion"
+        />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
-      <div className="space-y-6">
-        <header className="rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-6 shadow-2xl lg:p-7">
-          <p className="text-xs font-black uppercase tracking-[0.45em] text-[#6fc11f]">
-            REFLAB PERFORMANCE
-          </p>
+      <div className="mx-auto w-full max-w-[1180px] space-y-6">
+        <PerformanceHero summary={summary} />
 
-          <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
-            <div>
-              <h1 className="text-4xl font-black md:text-5xl">Rendimiento</h1>
-
-              <p className="mt-4 max-w-3xl text-lg leading-8 text-zinc-400">
-                Centro de análisis para evolución, tópicos, criterios técnicos,
-                historial y comparación comunitaria.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 px-4 py-3">
-              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#6fc11f]">
-                Sin datos inventados
-              </p>
-              <p className="mt-1 max-w-[260px] text-sm font-bold leading-5 text-zinc-200">
-                Las métricas futuras quedan preparadas como estructura visual.
-              </p>
-            </div>
+        {loadError && (
+          <div className="rounded-3xl border border-yellow-400/25 bg-yellow-400/10 p-4 text-sm font-bold leading-6 text-yellow-100">
+            {loadError}
           </div>
-        </header>
+        )}
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {performanceAreas.map((area) => (
-            <PerformanceCard key={area.title} area={area} />
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {summary.metrics.slice(0, 12).map((metric) => (
+            <SummaryCard key={metric.label} metric={metric} />
           ))}
         </section>
 
-        <section className="rounded-[34px] border border-white/10 bg-[#071019] p-5 shadow-2xl lg:p-7">
-          <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-                Métricas por módulo
-              </p>
-              <h2 className="mt-3 text-3xl font-black leading-tight">
-                Cada entrenamiento necesita medir algo distinto.
-              </h2>
-              <p className="mt-4 text-sm leading-7 text-zinc-400">
-                Esta estructura deja preparado el crecimiento de RefLab sin
-                mezclar métricas de campo, video, VAR, inglés, comunicación y
-                preparación arbitral.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <MetricPrinciple icon={Brain} title="Criterio" text="Qué decidió el árbitro." />
-              <MetricPrinciple icon={BarChart3} title="Evolución" text="Cómo cambia con el tiempo." />
-              <MetricPrinciple icon={Target} title="Precisión" text="Qué tan correcto fue el criterio." />
-              <MetricPrinciple icon={History} title="Historial" text="Qué ocurrió en cada intento." />
-            </div>
-          </div>
+        <section className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
+          <EvolutionPanel evolution={evolution} />
+          <RecommendedPlanPanel plan={plan} />
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {moduleMetricAreas.map((module) => (
-            <ModuleMetricCard key={module.title} module={module} />
-          ))}
+        <section className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+          <TopicsPanel topics={topics} />
+          <CriteriaPanel criteria={criteria} />
         </section>
 
-        <section className="rounded-3xl border border-white/10 bg-[#071019] p-5 shadow-2xl">
-          <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-            Rutas preservadas
-          </p>
-          <p className="mt-3 text-sm leading-6 text-zinc-400">
-            Las páginas originales de estadísticas y ranking siguen disponibles
-            en /stats y /ranking. Este hub organiza el acceso principal y deja
-            preparada la evolución analítica de cada módulo.
-          </p>
+        <ModulesPanel modules={modules} />
+
+        <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+          <HistoryPanel
+            history={history}
+            historyMode={historyMode}
+            historyResult={historyResult}
+            setHistoryMode={setHistoryMode}
+            setHistoryResult={setHistoryResult}
+          />
+          <RankingPanel ranking={ranking} currentRanking={currentRanking} />
         </section>
       </div>
     </AppShell>
   );
 }
-
-function PerformanceCard({ area }: { area: PerformanceArea }) {
-  const Icon = area.icon;
-
+function PerformanceHero({ summary }: { summary: ReturnType<typeof getPerformanceSummary> }) {
   return (
-    <Link
-      href={area.href}
-      className="group flex min-h-[360px] flex-col justify-between rounded-[30px] border border-white/10 bg-[#101b24] p-5 shadow-2xl transition hover:border-[#6fc11f]/50 hover:bg-[#13212b] lg:p-6"
-    >
-      <div>
-        <div className="flex items-start justify-between gap-4">
-          <div className="grid h-14 w-14 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
-            <Icon size={30} />
-          </div>
-
-          <span className="rounded-full border border-[#6fc11f]/25 bg-[#6fc11f]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#6fc11f]">
-            {area.status}
-          </span>
+    <header className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-6 shadow-2xl lg:p-7">
+      <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.45em] text-[#6fc11f]">REFLAB PERFORMANCE</p>
+          <h1 className="mt-4 text-4xl font-black md:text-5xl">Rendimiento</h1>
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 md:text-base">
+            Centro de analisis profundo: evolucion, topicos, criterios, modulos, historial, ranking y plan recomendado con datos reales.
+          </p>
         </div>
 
-        <p className="mt-6 text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">
-          {area.category}
-        </p>
-
-        <h2 className="mt-3 text-2xl font-black">{area.title}</h2>
-
-        <p className="mt-3 text-sm leading-6 text-zinc-400">
-          {area.description}
-        </p>
-
-        <p className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3 text-xs font-bold leading-5 text-zinc-300">
-          {area.insight}
-        </p>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          {area.metrics.map((metric) => (
-            <MetricPill key={metric}>{metric}</MetricPill>
-          ))}
+        <div className="rounded-3xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-5 lg:min-w-[280px]">
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#6fc11f]">Estado general</p>
+          <p className="mt-2 text-3xl font-black text-white">{summary.status}</p>
+          <p className="mt-2 text-xs leading-5 text-zinc-300">{summary.sampleNote}</p>
         </div>
       </div>
-
-      <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4">
-        <span className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">
-          Abrir análisis
-        </span>
-        <ChevronRight className="text-zinc-600 transition group-hover:translate-x-1 group-hover:text-[#6fc11f]" />
-      </div>
-    </Link>
+    </header>
   );
 }
 
-function ModuleMetricCard({ module }: { module: ModuleMetricArea }) {
-  const Icon = module.icon;
+function SummaryCard({ metric }: { metric: SummaryMetric }) {
+  const tone = {
+    success: "border-[#6fc11f]/30 bg-[#6fc11f]/10",
+    warning: "border-yellow-400/25 bg-yellow-400/10",
+    danger: "border-red-500/25 bg-red-500/10",
+    neutral: "border-white/10 bg-[#101b24]",
+    undefined: "border-white/10 bg-[#101b24]",
+  }[String(metric.tone) as "success" | "warning" | "danger" | "neutral" | "undefined"];
 
   return (
-    <article className="flex min-h-[330px] flex-col justify-between rounded-[30px] border border-white/10 bg-[#0d1720] p-5 shadow-2xl lg:p-6">
-      <div>
-        <div className="flex items-start justify-between gap-4">
-          <div className="grid h-14 w-14 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
-            <Icon size={28} />
-          </div>
-
-          <span
-            className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
-              module.status === "Métricas en construcción"
-                ? "border-yellow-300/25 bg-yellow-300/10 text-yellow-200"
-                : "border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]"
-            }`}
-          >
-            {module.status}
-          </span>
-        </div>
-
-        <h3 className="mt-5 text-xl font-black text-white">{module.title}</h3>
-        <p className="mt-3 text-sm leading-6 text-zinc-400">{module.description}</p>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          {module.metrics.map((metric) => (
-            <MetricPill key={metric}>{metric}</MetricPill>
-          ))}
-        </div>
-      </div>
-
-      {(module.status === "Métricas en construcción" ||
-        module.status === "Métricas futuras") && (
-        <p className="mt-5 rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-3 text-xs font-bold text-zinc-500">
-          Sin datos todavía. Esta card prepara la estructura visual y conceptual.
-        </p>
-      )}
+    <article className={`min-h-[150px] rounded-[26px] border p-4 shadow-2xl ${tone}`}>
+      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">{metric.label}</p>
+      <p className="mt-3 text-2xl font-black text-white">{metric.value}</p>
+      <p className="mt-2 text-xs leading-5 text-zinc-400">{metric.detail}</p>
     </article>
   );
 }
 
-function MetricPrinciple({
-  icon: Icon,
-  title,
-  text,
-}: {
-  icon: LucideIcon;
-  title: string;
-  text: string;
-}) {
+function EvolutionPanel({ evolution }: { evolution: ReturnType<typeof getEvolutionData> }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-      <Icon className="h-6 w-6 text-[#6fc11f]" />
-      <p className="mt-3 text-sm font-black text-white">{title}</p>
-      <p className="mt-1 text-xs leading-5 text-zinc-500">{text}</p>
+    <Panel
+      eyebrow="Mi evolucion"
+      title="Como cambia tu rendimiento en el tiempo"
+      description="Compara ultimos intentos contra el historial disponible y evita diagnosticos cuando la muestra todavia es baja."
+      icon={LineChart}
+    >
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MiniMetric label="Promedio historico" value={formatScore(evolution.historicalAverage)} />
+        <MiniMetric label="Ultimos 5" value={formatScore(evolution.lastAverage)} />
+        <MiniMetric label="Variacion" value={evolution.variation === null ? "Sin datos" : `${evolution.variation > 0 ? "+" : ""}${evolution.variation} pts`} />
+        <MiniMetric label="Tendencia" value={evolution.trend} />
+        <MiniMetric label="Semana" value={`${evolution.weeklyCount} sesiones`} />
+        <MiniMetric label="Mes" value={`${evolution.monthlyCount} sesiones`} />
+        <MiniMetric label="Mejor marca" value={formatScore(evolution.bestScore)} />
+        <MiniMetric label="Regularidad" value={evolution.regularity} />
+      </div>
+
+      {evolution.series.length === 0 ? (
+        <InlineEmpty text="Completa entrenamientos o evaluaciones para activar la linea de evolucion." />
+      ) : (
+        <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 p-4">
+          <EvolutionBars series={evolution.series} />
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function EvolutionBars({ series }: { series: ReturnType<typeof getEvolutionData>["series"] }) {
+  return (
+    <div className="flex h-44 items-end gap-2 overflow-x-auto pb-2">
+      {series.map((item) => (
+        <div key={item.id} className="flex min-w-12 flex-1 flex-col items-center gap-2">
+          <div className="flex h-32 w-full items-end rounded-full bg-white/5 p-1">
+            <div
+              className="w-full rounded-full bg-[#6fc11f] shadow-[0_0_18px_rgba(111,193,31,0.35)]"
+              style={{ height: `${Math.max(item.score ?? 0, 4)}%` }}
+            />
+          </div>
+          <span className="text-[10px] font-bold text-zinc-500">{item.score ?? "-"}</span>
+        </div>
+      ))}
     </div>
   );
 }
 
-function MetricPill({ children }: { children: ReactNode }) {
+function RecommendedPlanPanel({ plan }: { plan: ReturnType<typeof getRecommendedPlan> }) {
   return (
-    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-bold text-zinc-300">
-      {children}
-    </span>
+    <Panel
+      eyebrow="Plan recomendado"
+      title="Que deberias entrenar despues"
+      description="La recomendacion sale de los registros actuales. Si falta informacion, la pantalla lo declara."
+      icon={Target}
+    >
+      <div className="space-y-3">
+        <PlanLine label="Diagnostico" value={plan.diagnosis} />
+        <PlanLine label="Prioridad 1" value={plan.priority1} />
+        <PlanLine label="Prioridad 2" value={plan.priority2} />
+        <PlanLine label="Motivo tecnico" value={plan.reason} />
+      </div>
+
+      <Link href={plan.href} className="mt-5 flex min-h-14 items-center justify-between rounded-2xl bg-[#6fc11f] px-5 font-black text-black transition hover:bg-[#82dc2a]">
+        <span>{plan.nextStep}</span>
+        <ArrowRight size={20} />
+      </Link>
+    </Panel>
   );
+}
+function TopicsPanel({ topics }: { topics: TopicMetric[] }) {
+  return (
+    <Panel
+      eyebrow="Por topicos"
+      title="En que jugadas rendis mejor o peor"
+      description="Agrupa por tipo de situacion: manos, faltas tacticas, disputas, fuera de juego, VAR y otros topicos reales cargados."
+      icon={BarChart3}
+    >
+      {topics.length === 0 ? (
+        <InlineEmpty text="Todavia no hay topicos suficientes. Completa ejercicios para activar este analisis." />
+      ) : (
+        <div className="space-y-3">
+          {topics.map((topic) => (
+            <TopicRow key={topic.topic} topic={topic} />
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function TopicRow({ topic }: { topic: TopicMetric }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="font-black text-white">{topic.topic}</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            {topic.attempts} intentos Â· {topic.correct} aciertos Â· {topic.errors} errores
+          </p>
+        </div>
+        <span className="rounded-full border border-[#6fc11f]/25 bg-[#6fc11f]/10 px-3 py-1 text-xs font-black text-[#6fc11f]">
+          {topic.status}
+        </span>
+      </div>
+      <ProgressBar value={topic.accuracy ?? 0} label={`${formatPercent(topic.accuracy)} acierto`} />
+      <div className="mt-3 grid gap-2 text-xs text-zinc-400 sm:grid-cols-3">
+        <span>Promedio: {formatScore(topic.avgScore)}</span>
+        <span>Ultimo: {formatScore(topic.lastScore)}</span>
+        <span>Tendencia: {topic.trend}</span>
+      </div>
+    </div>
+  );
+}
+
+function CriteriaPanel({ criteria }: { criteria: CriterionMetric[] }) {
+  return (
+    <Panel
+      eyebrow="Por criterio"
+      title="Que parte de la decision estas resolviendo mal"
+      description="Separa decision tecnica, reanudacion, disciplina, subtipo, justificacion y criterio VAR cuando esos campos existen."
+      icon={ListChecks}
+    >
+      <div className="space-y-3">
+        {criteria.map((criterion) => (
+          <CriterionRow key={criterion.key} criterion={criterion} />
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function CriterionRow({ criterion }: { criterion: CriterionMetric }) {
+  const hasData = criterion.accuracy !== null;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="font-black text-white">{criterion.label}</p>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">{criterion.description}</p>
+        </div>
+        <span className={`rounded-full border px-3 py-1 text-xs font-black ${hasData ? "border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]" : "border-yellow-400/20 bg-yellow-400/10 text-yellow-200"}`}>
+          {criterion.status}
+        </span>
+      </div>
+      {hasData ? (
+        <>
+          <ProgressBar value={criterion.accuracy ?? 0} label={`${formatPercent(criterion.accuracy)} precision`} />
+          <p className="mt-2 text-xs text-zinc-500">{criterion.correct}/{criterion.attempts} aciertos registrados.</p>
+        </>
+      ) : (
+        <InlineEmpty text="Metrica en construccion o sin datos suficientes para este criterio." compact />
+      )}
+    </div>
+  );
+}
+
+function ModulesPanel({ modules }: { modules: ModulePerformance[] }) {
+  return (
+    <section className="rounded-[34px] border border-white/10 bg-[#071019] p-5 shadow-2xl lg:p-7">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">Por modulo</p>
+          <h2 className="mt-3 text-3xl font-black">Cada modulo mide algo distinto</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">
+            RefLab queda preparado para metricas especificas de Decision arbitral, Video analisis, VAR Lab, Ingles, Comunicacion y Preparacion.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-4 xl:grid-cols-2">
+        {modules.map((module) => (
+          <ModuleCard key={module.key} module={module} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ModuleCard({ module }: { module: ModulePerformance }) {
+  const Icon = moduleIcons[module.key] ?? Activity;
+  const construction = module.status === "Metricas en construccion";
+
+  return (
+    <article className="rounded-[28px] border border-white/10 bg-[#101b24] p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="grid h-12 w-12 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
+          <Icon size={25} />
+        </div>
+        <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${construction ? "border-yellow-400/25 bg-yellow-400/10 text-yellow-200" : "border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]"}`}>
+          {module.status}
+        </span>
+      </div>
+
+      <h3 className="mt-4 text-xl font-black">{module.title}</h3>
+      <p className="mt-2 text-sm leading-6 text-zinc-400">{module.description}</p>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        {module.metrics.map((metric) => (
+          <div key={`${module.key}-${metric.label}`} className="rounded-2xl border border-white/10 bg-black/20 p-3">
+            <p className="text-[11px] font-bold text-zinc-500">{metric.label}</p>
+            <p className={metric.available ? "mt-1 font-black text-white" : "mt-1 font-black text-zinc-500"}>{metric.value}</p>
+            <p className="mt-1 text-[11px] leading-4 text-zinc-500">{metric.detail}</p>
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+function HistoryPanel({
+  history,
+  historyMode,
+  historyResult,
+  setHistoryMode,
+  setHistoryResult,
+}: {
+  history: PerformanceItem[];
+  historyMode: HistoryMode;
+  historyResult: HistoryResult;
+  setHistoryMode: (value: HistoryMode) => void;
+  setHistoryResult: (value: HistoryResult) => void;
+}) {
+  return (
+    <Panel
+      eyebrow="Historial"
+      title="Registros concretos de tus intentos"
+      description="Muestra fecha, modo, topico, decision tomada, decision correcta cuando existe, score y resultado."
+      icon={History}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <select value={historyMode} onChange={(event) => setHistoryMode(event.target.value as HistoryMode)} className="rounded-2xl border border-white/10 bg-[#111b24] px-4 py-3 text-sm font-bold text-white outline-none">
+          {Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+        <select value={historyResult} onChange={(event) => setHistoryResult(event.target.value as HistoryResult)} className="rounded-2xl border border-white/10 bg-[#111b24] px-4 py-3 text-sm font-bold text-white outline-none">
+          {Object.entries(resultLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+      </div>
+
+      {history.length === 0 ? (
+        <InlineEmpty text="No hay registros para estos filtros. Completa mas ejercicios para ampliar el historial." />
+      ) : (
+        <div className="mt-4 space-y-3">
+          {history.map((item) => (
+            <HistoryItem key={item.id} item={item} />
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function HistoryItem({ item }: { item: PerformanceItem }) {
+  return (
+    <article className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="font-black text-white">{item.title}</p>
+          <p className="mt-1 text-xs text-zinc-500">{formatDate(item.date)} Â· {item.modeLabel} Â· {item.topic}</p>
+        </div>
+        <div className="text-left sm:text-right">
+          <p className="text-2xl font-black text-[#6fc11f]">{item.score ?? "-"}</p>
+          <p className="text-xs font-bold text-zinc-500">{item.result}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 text-xs text-zinc-400 sm:grid-cols-3">
+        <InfoChip label="Decision tomada" value={item.selectedDecision ?? "No disponible"} />
+        <InfoChip label="Decision correcta" value={item.correctDecision ?? "No disponible"} />
+        <InfoChip label="Reanudacion" value={item.selectedRestart ?? "No disponible"} />
+        <InfoChip label="Disciplina" value={item.selectedDiscipline ?? "No disponible"} />
+        <InfoChip label="Dificultad" value={item.difficulty ?? "No disponible"} />
+        <InfoChip label="Fuente" value={item.modeLabel} />
+      </div>
+    </article>
+  );
+}
+
+function RankingPanel({ ranking, currentRanking }: { ranking: RankingRow[]; currentRanking?: RankingRow }) {
+  return (
+    <Panel
+      eyebrow="Ranking"
+      title="Comparacion comunitaria"
+      description="El ranking se calcula separado del analisis personal y usa intentos reales de entrenamiento disponibles."
+      icon={Trophy}
+    >
+      {ranking.length === 0 ? (
+        <InlineEmpty text="Ranking disponible cuando existan mas usuarios con actividad registrada." />
+      ) : (
+        <>
+          <div className="rounded-3xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4">
+            <p className="text-xs font-black uppercase tracking-[0.25em] text-[#6fc11f]">Tu posicion</p>
+            <p className="mt-2 text-4xl font-black">{currentRanking ? `#${currentRanking.position}` : "Sin datos"}</p>
+            <p className="mt-2 text-sm text-zinc-300">
+              {currentRanking ? `${currentRanking.avgScore}/100 promedio Â· ${currentRanking.attempts} intentos` : "Completa entrenamientos para aparecer en el ranking."}
+            </p>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            {ranking.slice(0, 6).map((row) => (
+              <div key={row.userId} className="grid grid-cols-[48px_1fr_auto] items-center gap-3 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm">
+                <p className="font-black text-[#6fc11f]">#{row.position}</p>
+                <div>
+                  <p className="font-black text-white">{row.name}</p>
+                  <p className="text-xs text-zinc-500">Ultima actividad: {formatDate(row.lastAttempt)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-black text-white">{row.avgScore}</p>
+                  <p className="text-xs text-zinc-500">prom.</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <Link href="/ranking" className="mt-4 flex min-h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-white transition hover:border-[#6fc11f]/40 hover:text-[#6fc11f]">
+            Abrir ranking completo
+          </Link>
+        </>
+      )}
+    </Panel>
+  );
+}
+
+function Panel({ eyebrow, title, description, icon: Icon, children }: { eyebrow: string; title: string; description: string; icon: LucideIcon; children: ReactNode }) {
+  return (
+    <section className="rounded-[32px] border border-white/10 bg-[#071019] p-5 shadow-2xl lg:p-6">
+      <div className="flex items-start gap-4">
+        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]"><Icon size={25} /></div>
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">{eyebrow}</p>
+          <h2 className="mt-2 text-2xl font-black leading-tight">{title}</h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-400">{description}</p>
+        </div>
+      </div>
+      <div className="mt-5">{children}</div>
+    </section>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><p className="text-[11px] text-zinc-500">{label}</p><p className="mt-1 font-black text-white">{value}</p></div>;
+}
+
+function PlanLine({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#6fc11f]">{label}</p><p className="mt-2 text-sm leading-6 text-zinc-300">{value}</p></div>;
+}
+
+function ProgressBar({ value, label }: { value: number; label: string }) {
+  return <div className="mt-3"><div className="mb-1 flex justify-between text-xs text-zinc-500"><span>{label}</span><span>{Math.min(Math.max(value, 0), 100)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[#6fc11f]" style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }} /></div></div>;
+}
+
+function InlineEmpty({ text, compact = false }: { text: string; compact?: boolean }) {
+  return <div className={`mt-4 rounded-2xl border border-dashed border-white/10 bg-white/[0.03] text-center text-sm leading-6 text-zinc-500 ${compact ? "p-4" : "p-6"}`}>{text}</div>;
+}
+
+function EmptyState({ title, text, actionHref, actionLabel }: { title: string; text: string; actionHref: string; actionLabel: string }) {
+  return <div className="mx-auto max-w-[720px] rounded-[34px] border border-white/10 bg-[#071019] p-8 text-center shadow-2xl"><AlertTriangle className="mx-auto h-12 w-12 text-[#6fc11f]" /><h1 className="mt-4 text-3xl font-black">{title}</h1><p className="mt-3 text-sm leading-6 text-zinc-400">{text}</p><Link href={actionHref} className="mt-6 inline-flex min-h-12 items-center rounded-2xl bg-[#6fc11f] px-6 font-black text-black">{actionLabel}</Link></div>;
+}
+
+function LoadingCard() {
+  return <div className="rounded-[32px] border border-white/10 bg-[#071019] p-8 text-zinc-400"><div className="flex items-center gap-3"><RefreshCw className="h-5 w-5 animate-spin text-[#6fc11f]" /><span>Cargando centro de rendimiento...</span></div></div>;
+}
+
+function InfoChip({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl bg-white/[0.04] px-3 py-2"><p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{label}</p><p className="mt-1 font-bold text-zinc-300">{value}</p></div>;
 }
