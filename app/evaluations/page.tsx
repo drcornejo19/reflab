@@ -7,7 +7,6 @@ import {
   Languages,
   MonitorCheck,
   ShieldCheck,
-  Sparkles,
   Timer,
   type LucideIcon,
 } from "lucide-react";
@@ -16,7 +15,7 @@ type EvaluationCard = {
   title: string;
   category: string;
   description: string;
-  status: "Disponible" | "Próximamente" | "Beta";
+  status: "Disponible" | "Proximamente" | "Beta";
   href?: string;
   icon: LucideIcon;
 };
@@ -25,8 +24,7 @@ const evaluations: EvaluationCard[] = [
   {
     title: "Examen arbitral",
     category: "Formal",
-    description:
-      "Clips consecutivos sin feedback inmediato, score final y análisis global con IA.",
+    description: "Clips consecutivos sin feedback inmediato, score final y cierre tecnico del examen.",
     status: "Disponible",
     href: "/training/exam",
     icon: ShieldCheck,
@@ -34,8 +32,7 @@ const evaluations: EvaluationCard[] = [
   {
     title: "Examen de reglas",
     category: "IFAB",
-    description:
-      "20 preguntas exigentes para medir interpretación reglamentaria bajo tiempo.",
+    description: "20 preguntas exigentes para medir interpretacion reglamentaria bajo tiempo.",
     status: "Disponible",
     href: "/training/rules-exam",
     icon: BookOpenCheck,
@@ -43,35 +40,23 @@ const evaluations: EvaluationCard[] = [
   {
     title: "Examen VAR",
     category: "VAR",
-    description:
-      "Evaluación formal de protocolo VAR, OFR, APP, factual e interpretativo.",
-    status: "Próximamente",
+    description: "Evaluacion formal de protocolo VAR, OFR, APP, factual e interpretativo.",
+    status: "Proximamente",
     icon: MonitorCheck,
   },
   {
-    title: "Examen de inglés",
-    category: "Comunicación",
-    description:
-      "Situaciones para explicar decisiones en inglés técnico arbitral.",
-    status: "Próximamente",
+    title: "Examen de ingles",
+    category: "Comunicacion",
+    description: "Situaciones para explicar decisiones en ingles tecnico arbitral.",
+    status: "Proximamente",
     icon: Languages,
   },
   {
-    title: "Simulación cronometrada",
+    title: "Simulacion cronometrada",
     category: "Tiempo real",
-    description:
-      "Práctica bajo presión con reloj, bloques de clips y cierre de rendimiento.",
-    status: "Próximamente",
+    description: "Practica bajo presion con reloj, bloques de clips y cierre de rendimiento.",
+    status: "Proximamente",
     icon: Timer,
-  },
-  {
-    title: "Feedback final con IA",
-    category: "Analisis",
-    description:
-      "Lectura final de fortalezas, puntos críticos y plan recomendado luego del examen.",
-    status: "Beta",
-    href: "/training/exam",
-    icon: Sparkles,
   },
 ];
 
@@ -81,18 +66,15 @@ export default function EvaluationsPage() {
       <div className="space-y-6">
         <header className="rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-7 shadow-2xl">
           <p className="text-xs font-black uppercase tracking-[0.45em] text-[#6fc11f]">
-            REFLAB EVALUATIONS
+            EVALUACIONES
           </p>
 
           <div className="mt-5 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
             <div>
-              <h1 className="text-4xl font-black md:text-5xl">
-                Evaluaciones
-              </h1>
+              <h1 className="text-4xl font-black md:text-5xl">Evaluaciones</h1>
 
               <p className="mt-4 max-w-3xl text-lg leading-8 text-zinc-400">
-                Rendí simulaciones y exámenes para medir tu criterio arbitral
-                bajo condiciones formales.
+                Rendi simulaciones y examenes para medir tu criterio arbitral bajo condiciones formales.
               </p>
             </div>
 
@@ -103,9 +85,7 @@ export default function EvaluationsPage() {
                   <p className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500">
                     Acceso principal
                   </p>
-                  <p className="text-sm font-black text-white">
-                    /evaluations
-                  </p>
+                  <p className="text-sm font-black text-white">/evaluations</p>
                 </div>
               </div>
             </div>
@@ -143,14 +123,12 @@ function EvaluationModuleCard({ item }: { item: EvaluationCard }) {
 
         <h2 className="mt-3 text-2xl font-black">{item.title}</h2>
 
-        <p className="mt-3 text-sm leading-6 text-zinc-400">
-          {item.description}
-        </p>
+        <p className="mt-3 text-sm leading-6 text-zinc-400">{item.description}</p>
       </div>
 
       <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4">
         <span className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">
-          {item.href ? "Abrir" : "Próximamente"}
+          {item.href ? "Abrir" : "Proximamente"}
         </span>
         <ChevronRight
           className={`text-zinc-600 transition ${

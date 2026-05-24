@@ -5,6 +5,7 @@ import { SignOutButton, useUser } from "@clerk/nextjs";
 import {
   BadgeCheck,
   ClipboardList,
+  Download,
   Gauge,
   LogOut,
   Save,
@@ -239,6 +240,29 @@ export default function ProfilePage() {
   const email = user?.primaryEmailAddress?.emailAddress ?? "Sin email";
   const photo = avatarUrl || user?.imageUrl || "";
 
+  function downloadRefCard() {
+    const svg = createRefCardSvg({
+      name: displayName,
+      email,
+      rating: stats.rating,
+      level: stats.level,
+      refereeType,
+      mainRole,
+      association: association || "Sin liga",
+      category: category || "Sin categoria",
+      photo,
+    });
+    const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${slugify(displayName)}-ref-card.svg`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <AppShell>
       <div className="mx-auto w-full max-w-[1120px] space-y-5">
@@ -255,6 +279,7 @@ export default function ProfilePage() {
             category={category || "Sin categoria"}
             uploadingAvatar={uploadingAvatar}
             onUpload={uploadAvatar}
+            onDownload={downloadRefCard}
           />
 
           <div className="space-y-4 rounded-[34px] border border-white/10 bg-[#071019] p-5 shadow-2xl lg:p-6">
@@ -403,6 +428,7 @@ function PlayerCard({
   category,
   uploadingAvatar,
   onUpload,
+  onDownload,
 }: {
   name: string;
   email: string;
@@ -415,13 +441,14 @@ function PlayerCard({
   category: string;
   uploadingAvatar: boolean;
   onUpload: (file: File) => void;
+  onDownload: () => void;
 }) {
   return (
     <article className="relative mx-auto w-full max-w-[390px] overflow-hidden rounded-[38px] border border-[#6fc11f]/35 bg-[radial-gradient(circle_at_20%_0%,rgba(111,193,31,0.32),transparent_34%),linear-gradient(145deg,#152213,#071019_54%,#02060b)] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.5)]">
       <div className="absolute inset-x-8 top-0 h-px bg-[#b7ff8a]/70" />
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[#b7ff8a]">RefLab Card</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[#b7ff8a]">REF CARD</p>
           <p className="mt-2 text-5xl font-black leading-none text-white">{rating || "--"}</p>
           <p className="mt-1 text-xs font-black uppercase tracking-[0.28em] text-zinc-400">REF</p>
         </div>
@@ -432,22 +459,35 @@ function PlayerCard({
       </div>
 
       <div className="mt-6 flex flex-col items-center text-center">
-        <div className="relative">
+        <label className="group relative cursor-pointer" title="Cambiar foto">
           {photo ? (
             <img
               src={photo}
               alt="Foto de perfil"
-              className="h-36 w-36 rounded-full border-4 border-[#6fc11f] object-cover shadow-[0_0_45px_rgba(111,193,31,0.35)] sm:h-40 sm:w-40"
+              className="h-36 w-36 rounded-full border-4 border-[#6fc11f] object-cover shadow-[0_0_45px_rgba(111,193,31,0.35)] transition group-hover:scale-[1.02] sm:h-40 sm:w-40"
             />
           ) : (
-            <div className="grid h-36 w-36 place-items-center rounded-full border-4 border-[#6fc11f] bg-[#101b24] sm:h-40 sm:w-40">
+            <div className="grid h-36 w-36 place-items-center rounded-full border-4 border-[#6fc11f] bg-[#101b24] transition group-hover:scale-[1.02] sm:h-40 sm:w-40">
               <UserRound className="text-[#6fc11f]" size={58} />
             </div>
           )}
+          <span className="absolute inset-0 grid place-items-center rounded-full bg-black/0 text-[10px] font-black uppercase tracking-[0.14em] text-white opacity-0 transition group-hover:bg-black/45 group-hover:opacity-100">
+            Cambiar foto
+          </span>
           <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-[#6fc11f] px-4 py-1 text-[10px] font-black text-black">
             MATCH OFFICIAL
           </div>
-        </div>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={uploadingAvatar}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) onUpload(file);
+            }}
+          />
+        </label>
 
         <h2 className="mt-6 max-w-full text-3xl font-black leading-tight text-white">{name}</h2>
         <p className="mt-2 max-w-full truncate text-sm text-zinc-400">{email}</p>
@@ -476,6 +516,15 @@ function PlayerCard({
           }}
         />
       </label>
+
+      <button
+        type="button"
+        onClick={onDownload}
+        className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-4 text-xs font-black text-black transition hover:bg-[#82dc2a]"
+      >
+        <Download size={17} />
+        DESCARGAR REF CARD
+      </button>
     </article>
   );
 }
@@ -592,4 +641,84 @@ function isFiniteNumber(value: number | null | undefined): value is number {
 function averageNumbers(values: number[]) {
   if (values.length === 0) return null;
   return Math.round(values.reduce((acc, value) => acc + value, 0) / values.length);
+}
+function createRefCardSvg({
+  name,
+  email,
+  rating,
+  level,
+  refereeType,
+  mainRole,
+  association,
+  category,
+  photo,
+}: {
+  name: string;
+  email: string;
+  rating: number;
+  level: string;
+  refereeType: string;
+  mainRole: string;
+  association: string;
+  category: string;
+  photo: string;
+}) {
+  const initials = name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "RF";
+  const safePhoto = photo ? `<image href="${escapeXml(photo)}" x="160" y="170" width="280" height="280" clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice" />` : `<text x="300" y="330" text-anchor="middle" font-size="76" font-weight="900" fill="#6fc11f">${escapeXml(initials)}</text>`;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="900" viewBox="0 0 600 900">
+  <defs>
+    <linearGradient id="cardBg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#172613"/>
+      <stop offset="0.5" stop-color="#071019"/>
+      <stop offset="1" stop-color="#02060b"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="30%" cy="8%" r="65%">
+      <stop offset="0" stop-color="#6fc11f" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#6fc11f" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="avatarClip"><circle cx="300" cy="310" r="140"/></clipPath>
+  </defs>
+  <rect width="600" height="900" rx="44" fill="url(#cardBg)"/>
+  <rect width="600" height="900" rx="44" fill="url(#glow)"/>
+  <rect x="22" y="22" width="556" height="856" rx="36" fill="none" stroke="#6fc11f" stroke-opacity="0.45" stroke-width="3"/>
+  <text x="48" y="82" font-family="Arial, sans-serif" font-size="23" font-weight="900" letter-spacing="8" fill="#b7ff8a">REF CARD</text>
+  <text x="48" y="142" font-family="Arial, sans-serif" font-size="68" font-weight="900" fill="#ffffff">${rating || "--"}</text>
+  <text x="48" y="176" font-family="Arial, sans-serif" font-size="22" font-weight="900" letter-spacing="10" fill="#7b8794">REF</text>
+  <circle cx="300" cy="310" r="148" fill="#101b24" stroke="#6fc11f" stroke-width="8"/>
+  ${safePhoto}
+  <rect x="188" y="438" width="224" height="34" rx="17" fill="#6fc11f"/>
+  <text x="300" y="462" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="900" fill="#05070d">MATCH OFFICIAL</text>
+  <text x="300" y="535" text-anchor="middle" font-family="Arial, sans-serif" font-size="42" font-weight="900" fill="#ffffff">${escapeXml(name)}</text>
+  <text x="300" y="570" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#b6c2cf">${escapeXml(email)}</text>
+  <text x="300" y="620" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="900" fill="#b7ff8a">${escapeXml(level)}</text>
+  ${svgInfoBox(58, 675, "ROL", mainRole)}
+  ${svgInfoBox(320, 675, "LIGA", association)}
+  ${svgInfoBox(58, 760, "TIPO", refereeType)}
+  ${svgInfoBox(320, 760, "CATEGORIA", category)}
+</svg>`;
+}
+
+function svgInfoBox(x: number, y: number, label: string, value: string) {
+  return `<rect x="${x}" y="${y}" width="222" height="62" rx="18" fill="#050b12" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="${x + 18}" y="${y + 24}" font-family="Arial, sans-serif" font-size="12" font-weight="900" letter-spacing="3" fill="#7b8794">${label}</text>
+  <text x="${x + 18}" y="${y + 48}" font-family="Arial, sans-serif" font-size="18" font-weight="900" fill="#ffffff">${escapeXml(value).slice(0, 24)}</text>`;
+}
+
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function slugify(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "ref-card";
 }

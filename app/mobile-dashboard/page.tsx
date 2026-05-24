@@ -148,7 +148,7 @@ export default function MobileDashboardPage() {
         value: percent(examAnswers, "disciplineCorrect"),
       },
       {
-        label: "Subtipo técnico",
+        label: "Interpretacion",
         value: percent(examAnswers, "subtypeCorrect"),
       },
     ];

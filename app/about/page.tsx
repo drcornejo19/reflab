@@ -11,57 +11,56 @@ type StoryBlock = {
 };
 
 const trainingAreas = [
-  "Decisión arbitral",
-  "Video análisis",
+  "Decision arbitral",
+  "Video analisis",
   "VAR Lab",
-  "Inglés arbitral",
-  "Comunicación y liderazgo",
-  "Preparación del árbitro",
+  "Ingles arbitral",
+  "Comunicacion y liderazgo",
+  "Preparacion del arbitro",
 ];
 
 const storyBlocks: StoryBlock[] = [
   {
-    title: "Qué es RefLab",
-    text: "Una plataforma diseñada para profesionalizar el entrenamiento arbitral mediante simulación, análisis, evaluación y seguimiento del rendimiento.",
+    title: "Que es",
+    text: "Una plataforma disenada para profesionalizar el entrenamiento arbitral mediante simulacion, analisis, evaluacion y seguimiento del rendimiento.",
   },
   {
-    title: "Qué problema resuelve",
-    text: "El arbitraje amateur y semiprofesional muchas veces no cuenta con una estructura accesible, continua e integral para entrenar toma de decisiones, comunicación, preparación mental, análisis técnico y evolución individual.",
+    title: "Que problema resuelve",
+    text: "El arbitraje amateur y semiprofesional muchas veces no cuenta con una estructura accesible, continua e integral para entrenar toma de decisiones, comunicacion, preparacion mental, analisis tecnico y evolucion individual.",
   },
   {
-    title: "Nuestra visión",
-    text: "Entrenar árbitros capaces de decidir mejor, comunicar mejor y evolucionar con datos.",
+    title: "Nuestra vision",
+    text: "Entrenar arbitros capaces de decidir mejor, comunicar mejor y evolucionar con datos.",
   },
 ];
 
 const originParagraphs = [
-  "RefLab nace mucho antes de ser una plataforma. Nace en un cuartito, viendo la Regla 11 junto a mi padre, cuando el arbitraje apareció en mi vida como una manera de empezar a construir algo propio.",
-  "Lo que empezó por necesidad, con el tiempo se transformó en pasión, formación y propósito. Desde mi ciudad natal, dentro de una estructura arbitral con poca infraestructura y muchas limitaciones, entendí que no siempre alcanza con tener ganas, saber el reglamento o esforzarse. También hace falta acceso, guía, oportunidades y una estructura que acompañe el crecimiento real del árbitro.",
-  "Después de formarme en una de las escuelas más prestigiosas de Argentina, y de haber podido entrenar, capacitarme y recorrer categorías durante más de 16 años, comprendí que el arbitraje es mucho más que tomar decisiones dentro de una cancha. Es lectura, comunicación, liderazgo, percepción, preparación mental, manejo del conflicto, ética y capacidad de sostenerse bajo presión.",
-  "RefLab nace para transformar esa experiencia en una herramienta para otros árbitros. Una plataforma pensada para profesionalizar el entrenamiento arbitral en todos los niveles, desde quienes recién empiezan hasta quienes buscan crecer en estructuras más competitivas.",
+  "RefLab nace mucho antes de ser una plataforma. Nace en un cuartito, viendo la Regla 11 junto a mi padre, cuando el arbitraje aparecio en mi vida como una manera de empezar a construir algo propio.",
+  "Lo que empezo por necesidad, con el tiempo se transformo en pasion, formacion y proposito. Desde mi ciudad natal, dentro de una estructura arbitral con poca infraestructura y muchas limitaciones, entendi que no siempre alcanza con tener ganas, saber el reglamento o esforzarse. Tambien hace falta acceso, guia, oportunidades y una estructura que acompane el crecimiento real del arbitro.",
+  "Despues de formarme en una de las escuelas mas prestigiosas de Argentina, y de haber podido entrenar, capacitarme y recorrer categorias durante mas de 16 anos, comprendi que el arbitraje es mucho mas que tomar decisiones dentro de una cancha. Es lectura, comunicacion, liderazgo, percepcion, preparacion mental, manejo del conflicto, etica y capacidad de sostenerse bajo presion.",
+  "RefLab nace para transformar esa experiencia en una herramienta para otros arbitros. Una plataforma pensada para profesionalizar el entrenamiento arbitral en todos los niveles, desde quienes recien empiezan hasta quienes buscan crecer en estructuras mas competitivas.",
 ];
 
 export default function AboutPage() {
   return (
     <AppShell>
       <div className="space-y-5 pb-3 lg:space-y-7">
-        <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.12),transparent_34%),#05070d] p-5 shadow-2xl sm:p-7 lg:p-8">
-          <div className="grid gap-7 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-center">
-            <div className="text-center lg:text-left">
-              <h1 className="text-4xl font-black leading-none tracking-normal text-white sm:text-5xl lg:text-6xl">
+        <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.12),transparent_34%),#05070d] p-4 shadow-2xl sm:p-7 lg:p-8">
+          <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-center">
+            <div className="order-2 text-center lg:order-1 lg:text-left">
+              <h1 className="sr-only text-4xl font-black leading-none tracking-normal text-white sm:text-5xl lg:not-sr-only lg:text-6xl">
                 Ref<span className="text-[#6fc11f]">Lab</span>
               </h1>
 
-              <p className="mt-3 text-xs font-black uppercase tracking-[0.34em] text-zinc-400 sm:text-sm">
+              <p className="hidden text-xs font-black uppercase tracking-[0.34em] text-zinc-400 sm:text-sm lg:mt-3 lg:block">
                 Referee Decision Lab
               </p>
 
-              <p className="mx-auto mt-6 max-w-md text-base leading-7 text-zinc-300 lg:mx-0 lg:text-lg lg:leading-8">
-                Plataforma integral de entrenamiento, evaluación y desarrollo
-                profesional para árbitros de fútbol.
+              <p className="mx-auto max-w-md text-base leading-7 text-zinc-300 lg:mx-0 lg:mt-6 lg:text-lg lg:leading-8">
+                Plataforma integral de entrenamiento, evaluacion y desarrollo profesional para arbitros de futbol.
               </p>
 
-              <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:flex">
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:flex">
                 <Link
                   href="/dashboard"
                   className="inline-flex min-h-14 items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#82dc2a] active:scale-[0.98]"
@@ -79,16 +78,16 @@ export default function AboutPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-center lg:-translate-y-6 lg:justify-end xl:-translate-y-7">
-              <div className="relative w-full max-w-[820px] overflow-hidden rounded-[28px] border border-[#6fc11f]/25 bg-[#02060b] shadow-[0_0_55px_rgba(111,193,31,0.13)]">
-                <div className="relative aspect-[1536/448] w-full min-h-[112px] overflow-hidden rounded-[24px] sm:min-h-0">
+            <div className="order-1 flex items-center justify-center lg:order-2 lg:justify-end">
+              <div className="relative w-full max-w-[860px] overflow-hidden rounded-[26px] border border-[#6fc11f]/25 bg-[#02060b] shadow-[0_0_55px_rgba(111,193,31,0.13)]">
+                <div className="relative aspect-[1536/448] w-full min-h-[126px] overflow-hidden rounded-[22px] sm:min-h-[170px] lg:min-h-0">
                   <Image
                     src="/reflab-wordmark-wide.png"
                     alt="Imagen institucional de RefLab"
                     fill
                     priority
-                    className="object-contain p-2 sm:p-3"
-                    sizes="(max-width: 768px) 100vw, 760px"
+                    className="object-contain p-3 sm:p-4"
+                    sizes="(max-width: 768px) 100vw, 800px"
                   />
                 </div>
               </div>
@@ -108,9 +107,7 @@ export default function AboutPage() {
                 {block.title}
               </p>
 
-              <p className="mt-4 text-sm leading-7 text-zinc-300">
-                {block.text}
-              </p>
+              <p className="mt-4 text-sm leading-7 text-zinc-300">{block.text}</p>
             </article>
           ))}
         </section>
@@ -119,7 +116,7 @@ export default function AboutPage() {
           <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-                Áreas de entrenamiento
+                Areas de entrenamiento
               </p>
 
               <h2 className="mt-4 text-3xl font-black leading-tight lg:text-4xl">
@@ -127,9 +124,7 @@ export default function AboutPage() {
               </h2>
 
               <p className="mt-4 text-sm leading-7 text-zinc-400">
-                La plataforma combina clips, reglas, evaluaciones, comunicación,
-                datos y desarrollo profesional en una experiencia diseñada para
-                árbitros.
+                La plataforma combina clips, reglas, evaluaciones, comunicacion, datos y desarrollo profesional en una experiencia disenada para arbitros.
               </p>
             </div>
 
@@ -140,9 +135,7 @@ export default function AboutPage() {
                   className="flex min-h-14 items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3"
                 >
                   <CheckCircle2 className="h-5 w-5 shrink-0 text-[#6fc11f]" />
-                  <span className="text-sm font-black text-zinc-200">
-                    {area}
-                  </span>
+                  <span className="text-sm font-black text-zinc-200">{area}</span>
                 </div>
               ))}
             </div>
@@ -152,12 +145,10 @@ export default function AboutPage() {
         <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_right,rgba(111,193,31,0.1),transparent_34%),#05070d] p-5 shadow-2xl lg:p-10">
           <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-                Nuestra historia
-              </p>
+              <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">Nuestra historia</p>
 
               <h2 className="mt-4 text-3xl font-black leading-tight text-white sm:text-4xl lg:text-5xl">
-                Cómo nació RefLab
+                Como nacio RefLab
               </h2>
 
               <div className="mt-6 space-y-4 text-sm leading-7 text-zinc-300 sm:text-base sm:leading-8">
@@ -167,15 +158,12 @@ export default function AboutPage() {
               </div>
 
               <blockquote className="mt-7 border-l-4 border-[#6fc11f] pl-5 text-lg font-black leading-7 text-white lg:text-xl">
-                “RefLab existe para visualizar lo que no se ve y profesionalizar
-                el camino del árbitro.”
+                "RefLab existe para visualizar lo que no se ve y profesionalizar el camino del arbitro."
               </blockquote>
 
               <div className="mt-7">
                 <p className="text-base font-black text-white">David Cornejo</p>
-                <p className="mt-1 text-sm text-zinc-500">
-                  Árbitro de fútbol — Fundador de RefLab
-                </p>
+                <p className="mt-1 text-sm text-zinc-500">Arbitro de futbol - Fundador de RefLab</p>
               </div>
             </div>
 

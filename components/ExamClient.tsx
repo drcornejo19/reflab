@@ -12,6 +12,10 @@ const MAX_VIDEO_PLAYS = 2;
 type ClipWithDetails = Clip & {
   sub_type?: string | null;
   decision_detail?: string | null;
+  module?: string | null;
+  type?: string | null;
+  category?: string | null;
+  training_type?: string | null;
 };
 
 type Answer = {
@@ -119,9 +123,10 @@ const videoLocked = remainingVideoPlays <= 0;
         console.error("Error cargando clips:", error);
         setClips([]);
       } else {
-        const shuffled = [...((data ?? []) as ClipWithDetails[])].sort(
-          () => Math.random() - 0.5
+        const examClips = ((data ?? []) as ClipWithDetails[]).filter(
+          (clip) => !isEnglishClip(clip)
         );
+        const shuffled = [...examClips].sort(() => Math.random() - 0.5);
 
         setClips(shuffled.slice(0, TOTAL_QUESTIONS));
       }
@@ -704,6 +709,33 @@ function handleVideoEnded() {
   );
 }
 
+function isEnglishClip(clip: ClipWithDetails) {
+  const values = [
+    clip.mode,
+    clip.module,
+    clip.type,
+    clip.category,
+    clip.training_type,
+    clip.topic,
+    clip.title,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  return [
+    "english",
+    "ingles",
+    "english_referee",
+    "modo ingles",
+    "modo_ingles",
+    "modulo ingles",
+    "modulo_ingles",
+    "ingles arbitral",
+  ].some((term) => values.includes(term));
+}
 function getExamLevel(avg: number) {
   if (avg >= 90) return "Nivel FIFA";
   if (avg >= 80) return "Nivel Elite";

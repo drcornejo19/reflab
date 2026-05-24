@@ -207,6 +207,8 @@ export default function PerformancePage() {
       <div className="mx-auto w-full max-w-[1180px] space-y-6">
         <PerformanceHero summary={summary} />
 
+        <PerformanceEntryGrid />
+
         {loadError && (
           <div className="rounded-3xl border border-yellow-400/25 bg-yellow-400/10 p-4 text-sm font-bold leading-6 text-yellow-100">
             {loadError}
@@ -219,12 +221,12 @@ export default function PerformancePage() {
           ))}
         </section>
 
-        <section className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
+        <section id="mi-evolucion" className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
           <EvolutionPanel evolution={evolution} />
           <RecommendedPlanPanel plan={plan} />
         </section>
 
-        <section className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+        <section id="por-topico" className="grid gap-5 xl:grid-cols-[1fr_1fr]">
           <TopicsPanel topics={topics} />
           <CriteriaPanel criteria={criteria} />
         </section>
@@ -243,6 +245,58 @@ export default function PerformancePage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+function PerformanceEntryGrid() {
+  const entries = [
+    {
+      title: "Mi evolucion",
+      description: "Progreso general del usuario a lo largo del tiempo.",
+      icon: LineChart,
+      href: "#mi-evolucion",
+    },
+    {
+      title: "Plan recomendado",
+      description: "Foco proximo segun errores, patrones y desempeno.",
+      icon: Target,
+      href: "#plan-recomendado",
+    },
+    {
+      title: "Por topico",
+      description: "Rendimiento segun tipo de jugada arbitral.",
+      icon: BarChart3,
+      href: "#por-topico",
+    },
+    {
+      title: "Por criterio",
+      description: "Calidad tecnica de como se resuelve la decision.",
+      icon: ListChecks,
+      href: "#por-criterio",
+    },
+  ];
+
+  return (
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {entries.map((entry) => {
+        const Icon = entry.icon;
+        return (
+          <a
+            key={entry.title}
+            href={entry.href}
+            className="group rounded-[26px] border border-white/10 bg-[#101b24] p-4 shadow-2xl transition hover:border-[#6fc11f]/45 hover:bg-[#13212b]"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
+                <Icon size={22} />
+              </div>
+              <ArrowRight className="h-4 w-4 text-zinc-600 transition group-hover:translate-x-1 group-hover:text-[#6fc11f]" />
+            </div>
+            <h2 className="mt-4 text-xl font-black text-white">{entry.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-400">{entry.description}</p>
+          </a>
+        );
+      })}
+    </section>
   );
 }
 function PerformanceHero({ summary }: { summary: ReturnType<typeof getPerformanceSummary> }) {
@@ -335,7 +389,8 @@ function EvolutionBars({ series }: { series: ReturnType<typeof getEvolutionData>
 
 function RecommendedPlanPanel({ plan }: { plan: ReturnType<typeof getRecommendedPlan> }) {
   return (
-    <Panel
+    <div id="plan-recomendado">
+      <Panel
       eyebrow="Plan recomendado"
       title="Que deberias entrenar despues"
       description="La recomendacion sale de los registros actuales. Si falta informacion, la pantalla lo declara."
@@ -352,7 +407,8 @@ function RecommendedPlanPanel({ plan }: { plan: ReturnType<typeof getRecommended
         <span>{plan.nextStep}</span>
         <ArrowRight size={20} />
       </Link>
-    </Panel>
+      </Panel>
+    </div>
   );
 }
 function TopicsPanel({ topics }: { topics: TopicMetric[] }) {
@@ -402,10 +458,11 @@ function TopicRow({ topic }: { topic: TopicMetric }) {
 
 function CriteriaPanel({ criteria }: { criteria: CriterionMetric[] }) {
   return (
-    <Panel
+    <div id="por-criterio">
+      <Panel
       eyebrow="Por criterio"
       title="Que parte de la decision estas resolviendo mal"
-      description="Separa decision tecnica, reanudacion, disciplina, subtipo, justificacion y criterio VAR cuando esos campos existen."
+      description="Separa decision tecnica, reanudacion, sancion disciplinaria, interpretacion, justificacion y criterio VAR cuando esos campos existen."
       icon={ListChecks}
     >
       <div className="space-y-3">
@@ -413,7 +470,8 @@ function CriteriaPanel({ criteria }: { criteria: CriterionMetric[] }) {
           <CriterionRow key={criterion.key} criterion={criterion} />
         ))}
       </div>
-    </Panel>
+      </Panel>
+    </div>
   );
 }
 
@@ -451,7 +509,7 @@ function ModulesPanel({ modules }: { modules: ModulePerformance[] }) {
           <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">Por modulo</p>
           <h2 className="mt-3 text-3xl font-black">Cada modulo mide algo distinto</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">
-            RefLab queda preparado para metricas especificas de Decision arbitral, Video analisis, VAR Lab, Ingles, Comunicacion y Preparacion.
+            Cada modulo mide una dimension distinta: decision arbitral, lectura de video, protocolo VAR, comunicacion en ingles y preparacion integral.
           </p>
         </div>
       </div>

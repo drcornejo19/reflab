@@ -1,6 +1,6 @@
 export type PerformanceSource = "training" | "exam" | "rules_exam";
 export type ModuleKey = "decision" | "video" | "var" | "english" | "communication" | "preparation";
-export type CriterionKey = "technical" | "restart" | "discipline" | "subtype" | "justification" | "var";
+export type CriterionKey = "technical" | "restart" | "discipline" | "interpretation" | "justification" | "var";
 
 export type AttemptRecord = {
   id?: string;
@@ -96,8 +96,8 @@ export type PerformanceSummary = { hasData: boolean; avgScore: number | null; to
 export type RecommendedPlan = { diagnosis: string; priority1: string; priority2: string; nextStep: string; reason: string; href: string; };
 export type RankingRow = { userId: string; position: number; name: string; attempts: number; avgScore: number; bestScore: number; lastAttempt: string; };
 
-const criterionLabels: Record<CriterionKey, string> = { technical: "Decision tecnica", restart: "Reanudacion", discipline: "Sancion disciplinaria", subtype: "Subtipo tecnico", justification: "Justificacion", var: "Criterio VAR" };
-const criterionDescriptions: Record<CriterionKey, string> = { technical: "Si la decision principal fue correcta.", restart: "Si la reanudacion reglamentaria fue correcta.", discipline: "Si la sancion disciplinaria fue correcta.", subtype: "Si identifico el subtipo tecnico.", justification: "Calidad del fundamento tecnico.", var: "Aplicacion de protocolo o criterio VAR." };
+const criterionLabels: Record<CriterionKey, string> = { technical: "Decision tecnica", restart: "Reanudacion", discipline: "Sancion disciplinaria", interpretation: "Interpretacion", justification: "Justificacion", var: "Criterio VAR" };
+const criterionDescriptions: Record<CriterionKey, string> = { technical: "Si la decision principal fue correcta.", restart: "Si la reanudacion reglamentaria fue correcta.", discipline: "Si la sancion disciplinaria fue correcta.", interpretation: "Si interpreto correctamente contexto, intensidad y consecuencia.", justification: "Calidad del fundamento tecnico.", var: "Aplicacion de protocolo o criterio VAR." };
 const topicDictionary: Record<string, string> = { Dispute: "Disputas", Challenge: "Disputas", "Tactical foul": "Faltas tacticas", Handball: "Manos", Mano: "Manos", Offside: "Fuera de juego", VAR: "VAR", "SPA / DOGSO": "SPA / DOGSO", SPA: "SPA / DOGSO", DOGSO: "SPA / DOGSO", Disciplina: "Disciplina" };
 export function buildPerformanceDataset({ attempts, examResults, rulesExamResults }: { attempts: AttemptRecord[]; examResults: ExamResultRecord[]; rulesExamResults: RulesExamResultRecord[]; }) {
   const items: PerformanceItem[] = [];
@@ -141,7 +141,7 @@ export function buildPerformanceDataset({ attempts, examResults, rulesExamResult
           booleanFromScore(attempt.technical_accuracy_score),
         restart: attempt.restart_correct ?? undefined,
         discipline: attempt.discipline_correct ?? undefined,
-        subtype: attempt.subtype_correct ?? undefined,
+        interpretation: undefined,
         justification:
           attempt.justification_correct ??
           booleanFromScore(attempt.justification_score) ??
@@ -188,7 +188,7 @@ export function buildPerformanceDataset({ attempts, examResults, rulesExamResult
         selectedDecision: decisionFromBoolean(answer.foul),
         selectedRestart: answer.restart,
         selectedDiscipline: answer.discipline,
-        criteria: { technical: answer.technicalCorrect ?? undefined, restart: answer.restartCorrect ?? undefined, discipline: answer.disciplineCorrect ?? undefined, subtype: answer.subtypeCorrect ?? undefined },
+        criteria: { technical: answer.technicalCorrect ?? undefined, restart: answer.restartCorrect ?? undefined, discipline: answer.disciplineCorrect ?? undefined, interpretation: undefined },
       });
     });
   });
@@ -300,7 +300,7 @@ export function getTopicPerformance(items: PerformanceItem[]): TopicMetric[] {
 }
 
 export function getCriterionPerformance(items: PerformanceItem[]): CriterionMetric[] {
-  const keys: CriterionKey[] = ["technical", "restart", "discipline", "subtype", "justification", "var"];
+  const keys: CriterionKey[] = ["technical", "restart", "discipline", "interpretation", "justification", "var"];
   return keys.map((key) => {
     const values = items.map((item) => item.criteria[key]).filter((value): value is boolean => typeof value === "boolean");
     const correct = values.filter(Boolean).length;
@@ -321,7 +321,7 @@ export function getModulePerformance(items: PerformanceItem[]): ModulePerformanc
     {
       key: "decision",
       title: "Decision arbitral",
-      description: "Mide como resolves decisiones tecnicas dentro del partido: infraccion, reanudacion y disciplina.",
+      description: "Evalua si cobraste bien, la reanudacion, la sancion disciplinaria y la interpretacion de la jugada.",
       status: moduleStatus(items, "decision"),
       metrics: [
         metricFromItems("Intentos realizados", items.filter((item) => item.module === "decision")),
@@ -338,7 +338,7 @@ export function getModulePerformance(items: PerformanceItem[]): ModulePerformanc
     {
       key: "video",
       title: "Video analisis",
-      description: "Mide observacion de clips, lectura de contexto y justificacion tecnica de una decision.",
+      description: "Evalua lectura tecnica, comprension de la jugada, contexto, observacion y justificacion.",
       status: moduleStatus(items, "video"),
       metrics: [
         metricFromItems("Clips analizados", items.filter((item) => item.module === "video")),
@@ -352,7 +352,7 @@ export function getModulePerformance(items: PerformanceItem[]): ModulePerformanc
     {
       key: "var",
       title: "VAR Lab",
-      description: "Mide aplicacion de protocolo VAR, APP, OFR, revision factual e intervencion final.",
+      description: "Evalua APP, OFR, factual vs interpretativo, intervencion VAR y uso correcto del protocolo.",
       status: moduleStatus(items, "var"),
       metrics: [
         metricFromItems("Casos VAR analizados", items.filter((item) => item.module === "var" || item.topic === "VAR")),
@@ -366,7 +366,7 @@ export function getModulePerformance(items: PerformanceItem[]): ModulePerformanc
     {
       key: "english",
       title: "Ingles arbitral",
-      description: "Mide capacidad para explicar decisiones arbitrales en ingles tecnico.",
+      description: "Evalua vocabulario, claridad, terminologia FIFA/VAR y comunicacion tecnica en ingles.",
       status: moduleStatus(items, "english"),
       metrics: [
         metricFromItems("Respuestas en ingles", items.filter((item) => item.module === "english")),
@@ -394,7 +394,7 @@ export function getModulePerformance(items: PerformanceItem[]): ModulePerformanc
     {
       key: "preparation",
       title: "Preparacion del arbitro",
-      description: "Integra indicadores fisicos, mentales y profesionales: pre-partido, recuperacion, habitos, foco y confianza.",
+      description: "Evalua adherencia, constancia, sesiones completadas y progreso de preparacion fisica y mental.",
       status: preparationItems.length > 0 ? "Disponible" : "Metricas en construccion",
       metrics: [
         metricFromItems("Sesiones fisicas completadas", preparationItems),
