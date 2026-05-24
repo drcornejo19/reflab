@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -171,7 +171,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
 
-      <header className="fixed left-0 top-0 z-50 flex h-[76px] w-full items-center justify-between border-b border-white/10 bg-[#050b12]/95 px-4 backdrop-blur-xl lg:hidden">
+      <header className="fixed left-0 top-0 z-50 flex h-[76px] w-full max-w-full items-center justify-between overflow-hidden border-b border-white/10 bg-[#050b12]/95 px-3 backdrop-blur-xl sm:px-4 lg:hidden">
         <Logo compact />
 
         <button
@@ -187,7 +187,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-40 bg-black/45 backdrop-blur-sm lg:hidden">
-          <div className="mx-4 mt-[86px] rounded-[28px] border border-white/10 bg-[#0b131b] p-3 shadow-2xl">
+          <div className="mx-3 mt-[86px] max-h-[calc(100dvh-108px)] overflow-y-auto rounded-[28px] border border-white/10 bg-[#0b131b] p-3 shadow-2xl sm:mx-4">
             <p className="px-3 py-2 text-[10px] font-black uppercase tracking-[0.28em] text-[#6fc11f]">
               Mas accesos
             </p>
@@ -208,13 +208,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <main className="min-h-screen px-4 pb-[120px] pt-[92px] sm:px-5 lg:ml-[260px] lg:px-8 lg:pb-8 lg:pt-8">
-        <div className="mx-auto w-full max-w-[460px] lg:max-w-[1180px]">
+      <main className="min-h-screen w-full max-w-full overflow-x-hidden px-3 pb-[calc(150px+env(safe-area-inset-bottom))] pt-[88px] sm:px-5 lg:ml-[260px] lg:px-8 lg:pb-8 lg:pt-8">
+        <div className="mx-auto w-full max-w-full sm:max-w-[560px] lg:max-w-[1180px]">
           {children}
         </div>
       </main>
 
-      <nav className="fixed bottom-[calc(12px+env(safe-area-inset-bottom))] left-3 right-3 z-50 grid h-[76px] grid-cols-5 rounded-[28px] border border-white/10 bg-[#071019]/96 p-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl lg:hidden">
+      <nav className="fixed bottom-[calc(10px+env(safe-area-inset-bottom))] left-2 right-2 z-50 grid h-[74px] grid-cols-5 rounded-[26px] border border-white/10 bg-[#071019]/96 p-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:left-3 sm:right-3 lg:hidden">
         {mobileItems.map((item) => {
           const Icon = item.icon;
           const active = isItemActive(pathname, item);
@@ -223,7 +223,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-[22px] px-1 text-[10px] font-black leading-none transition active:scale-95 ${
+              className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-[20px] px-0.5 text-[9px] font-black leading-none transition active:scale-95 sm:px-1 sm:text-[10px] ${
                 active
                   ? "bg-[#6fc11f] text-black shadow-[0_0_24px_rgba(111,193,31,0.28)]"
                   : "text-zinc-500 hover:text-white"

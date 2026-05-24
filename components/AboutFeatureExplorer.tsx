@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -31,57 +31,57 @@ const features: Feature[] = [
     title: "VAR Lab",
     eyebrow: "Protocolo",
     description:
-      "Entrená protocolo VAR, OFR, APP, errores claros y obvios, factual vs interpretativo y decisión final.",
+      "Entrena protocolo VAR, OFR, APP, errores claros y obvios, factual vs interpretativo y decisiÃ³n final.",
     href: "/training/var",
     cta: "Abrir VAR Lab",
     icon: MonitorCheck,
   },
   {
     id: "train",
-    title: "Entrená",
-    eyebrow: "Práctica",
+    title: "Entrena",
+    eyebrow: "Practica",
     description:
-      "Practicá situaciones arbitrales reales mediante clips, preguntas, criterios técnicos y simulaciones de partido.",
+      "Practica situaciones arbitrales reales mediante clips, preguntas, criterios tecnicos y simulaciones de partido.",
     href: "/training",
     cta: "Ir a Entrenamiento",
     icon: ShieldCheck,
   },
   {
     id: "analyze",
-    title: "Analizá",
-    eyebrow: "Lectura técnica",
+    title: "Analiza",
+    eyebrow: "Lectura tecnica",
     description:
-      "Revisá jugadas, fundamentos, posicionamiento, comunicación y toma de decisiones con una mirada técnica.",
+      "Revisa jugadas, fundamentos, posicionamiento, comunicacion y toma de decisiones con una mirada tecnica.",
     href: "/training/video-analysis",
     cta: "Analizar clips",
     icon: PlaySquare,
   },
   {
     id: "decide",
-    title: "Decidí",
+    title: "Decidi",
     eyebrow: "Criterio",
     description:
-      "Tomá decisiones arbitrales bajo contexto: infracción, reanudación, disciplina, VAR y justificación.",
+      "Toma decisiones arbitrales bajo contexto: infraccion, reanudacion, disciplina, VAR y justificacion.",
     href: "/training/decision",
-    cta: "Entrenar decisión",
+    cta: "Entrenar decision",
     icon: Target,
   },
   {
     id: "improve",
-    title: "Mejorá",
+    title: "Mejora",
     eyebrow: "Datos",
     description:
-      "Detectá fortalezas, puntos críticos y patrones para construir un plan de mejora personalizado.",
+      "Detecta fortalezas, puntos criticos y patrones para construir un plan de mejora personalizado.",
     href: "/performance",
     cta: "Ver rendimiento",
     icon: BarChart3,
   },
   {
     id: "learn",
-    title: "Aprendé",
+    title: "Aprende",
     eyebrow: "Biblioteca",
     description:
-      "Accedé a reglas, biblioteca IFAB, protocolo VAR, inglés arbitral y material formativo.",
+      "Accede a reglas, biblioteca IFAB, protocolo VAR, ingles arbitral y material formativo.",
     href: "/learning",
     cta: "Abrir biblioteca",
     icon: BookOpen,
@@ -97,8 +97,8 @@ export function AboutFeatureExplorer() {
   const SelectedIcon = selectedFeature.icon;
 
   return (
-    <section className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+    <section className="w-full max-w-full space-y-4 overflow-hidden">
+      <div className="grid grid-cols-2 gap-3 min-[430px]:grid-cols-3 lg:grid-cols-6">
         {features.map((feature) => {
           const Icon = feature.icon;
           const active = feature.id === selectedFeature.id;
@@ -109,7 +109,7 @@ export function AboutFeatureExplorer() {
               type="button"
               aria-pressed={active}
               onClick={() => setSelectedId(feature.id)}
-              className={`group cursor-pointer rounded-[24px] border p-4 text-center shadow-xl outline-none transition duration-300 active:scale-[0.98] ${
+              className={`group min-w-0 cursor-pointer rounded-[22px] border p-3 text-center shadow-xl outline-none transition duration-300 active:scale-[0.98] sm:rounded-[24px] sm:p-4 ${
                 active
                   ? "border-[#6fc11f]/70 bg-[#6fc11f]/15 shadow-[0_0_34px_rgba(111,193,31,0.2)]"
                   : "border-white/10 bg-[#101b24] hover:-translate-y-1 hover:border-[#6fc11f]/55 hover:bg-[#13212b] hover:shadow-[0_0_28px_rgba(111,193,31,0.14)]"
@@ -125,7 +125,7 @@ export function AboutFeatureExplorer() {
                 <Icon className="h-6 w-6" />
               </div>
 
-              <p className="mt-3 text-xs font-black uppercase tracking-[0.22em] text-white">
+              <p className="mt-3 break-words text-[10px] font-black uppercase tracking-[0.14em] text-white sm:text-xs sm:tracking-[0.22em]">
                 {feature.id === "var" ? "VAR" : feature.title}
               </p>
             </button>
@@ -133,20 +133,20 @@ export function AboutFeatureExplorer() {
         })}
       </div>
 
-      <div className="overflow-hidden rounded-[30px] border border-[#6fc11f]/25 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.14),transparent_36%),#0d1720] p-5 shadow-2xl lg:p-6">
-        <div className="grid gap-5 lg:grid-cols-[auto_1fr_auto] lg:items-center">
+      <div className="max-w-full overflow-hidden rounded-[28px] border border-[#6fc11f]/25 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.14),transparent_36%),#0d1720] p-4 shadow-2xl sm:rounded-[30px] sm:p-5 lg:p-6">
+        <div className="grid min-w-0 gap-4 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
           <div className="grid h-16 w-16 place-items-center rounded-3xl border border-[#6fc11f]/35 bg-[#6fc11f]/10 text-[#6fc11f] shadow-[0_0_30px_rgba(111,193,31,0.14)]">
             <SelectedIcon className="h-8 w-8" />
           </div>
 
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">
+            <p className="break-words text-[10px] font-black uppercase tracking-[0.18em] text-[#6fc11f] sm:text-xs sm:tracking-[0.3em]">
               {selectedFeature.eyebrow}
             </p>
-            <h2 className="mt-2 text-2xl font-black text-white lg:text-3xl">
+            <h2 className="mt-2 break-words text-xl font-black leading-tight text-white sm:text-2xl lg:text-3xl">
               {selectedFeature.title}
             </h2>
-            <p className="mt-3 text-sm leading-7 text-zinc-300 lg:max-w-3xl">
+            <p className="mt-3 text-sm leading-6 text-zinc-300 sm:leading-7 lg:max-w-3xl">
               {selectedFeature.description}
             </p>
           </div>
@@ -163,3 +163,4 @@ export function AboutFeatureExplorer() {
     </section>
   );
 }
+

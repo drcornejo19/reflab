@@ -1,4 +1,4 @@
-import Image from "next/image";
+﻿import Image from "next/image";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { AboutFeatureExplorer } from "@/components/AboutFeatureExplorer";
@@ -44,9 +44,9 @@ const originParagraphs = [
 export default function AboutPage() {
   return (
     <AppShell>
-      <div className="space-y-5 pb-3 lg:space-y-7">
-        <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.12),transparent_34%),#05070d] p-4 shadow-2xl sm:p-7 lg:p-8">
-          <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-center">
+      <div className="w-full max-w-full space-y-5 overflow-hidden pb-3 lg:space-y-7">
+        <section className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.12),transparent_34%),#05070d] p-4 shadow-2xl sm:rounded-[34px] sm:p-7 lg:p-8">
+          <div className="grid min-w-0 gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-center">
             <div className="order-2 text-center lg:order-1 lg:text-left">
               <h1 className="sr-only text-4xl font-black leading-none tracking-normal text-white sm:text-5xl lg:not-sr-only lg:text-6xl">
                 Ref<span className="text-[#6fc11f]">Lab</span>
@@ -56,11 +56,11 @@ export default function AboutPage() {
                 Referee Decision Lab
               </p>
 
-              <p className="mx-auto max-w-md text-base leading-7 text-zinc-300 lg:mx-0 lg:mt-6 lg:text-lg lg:leading-8">
+              <p className="mx-auto max-w-md break-words text-sm leading-6 text-zinc-300 sm:text-base sm:leading-7 lg:mx-0 lg:mt-6 lg:text-lg lg:leading-8">
                 Plataforma integral de entrenamiento, evaluacion y desarrollo profesional para arbitros de futbol.
               </p>
 
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:flex">
+              <div className="mt-6 grid w-full gap-3 sm:grid-cols-2 lg:flex">
                 <Link
                   href="/dashboard"
                   className="inline-flex min-h-14 items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#82dc2a] active:scale-[0.98]"
@@ -79,14 +79,14 @@ export default function AboutPage() {
             </div>
 
             <div className="order-1 flex items-center justify-center lg:order-2 lg:justify-end">
-              <div className="relative w-full max-w-[860px] overflow-hidden rounded-[26px] border border-[#6fc11f]/25 bg-[#02060b] shadow-[0_0_55px_rgba(111,193,31,0.13)]">
-                <div className="relative aspect-[1536/448] w-full min-h-[126px] overflow-hidden rounded-[22px] sm:min-h-[170px] lg:min-h-0">
+              <div className="relative w-full max-w-full overflow-hidden rounded-[24px] border border-[#6fc11f]/25 bg-[#02060b] shadow-[0_0_55px_rgba(111,193,31,0.13)] sm:max-w-[860px] sm:rounded-[26px]">
+                <div className="relative aspect-[1536/448] w-full min-h-[96px] overflow-hidden rounded-[20px] min-[390px]:min-h-[116px] sm:min-h-[170px] sm:rounded-[22px] lg:min-h-0">
                   <Image
                     src="/reflab-wordmark-wide.png"
                     alt="Imagen institucional de RefLab"
                     fill
                     priority
-                    className="object-contain p-3 sm:p-4"
+                    className="object-contain p-2 sm:p-4"
                     sizes="(max-width: 768px) 100vw, 800px"
                   />
                 </div>
@@ -101,9 +101,9 @@ export default function AboutPage() {
           {storyBlocks.map((block) => (
             <article
               key={block.title}
-              className="rounded-[30px] border border-white/10 bg-[#0d1720] p-5 shadow-2xl transition hover:border-[#6fc11f]/30 lg:p-6"
+              className="min-w-0 rounded-[28px] border border-white/10 bg-[#0d1720] p-4 shadow-2xl transition hover:border-[#6fc11f]/30 sm:p-5 lg:p-6"
             >
-              <p className="text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">
+              <p className="break-words text-[10px] font-black uppercase tracking-[0.18em] text-[#6fc11f] sm:text-xs sm:tracking-[0.3em]">
                 {block.title}
               </p>
 
@@ -112,14 +112,14 @@ export default function AboutPage() {
           ))}
         </section>
 
-        <section className="rounded-[32px] border border-white/10 bg-[#071019] p-5 shadow-2xl lg:p-7">
+        <section className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[#071019] p-4 shadow-2xl sm:p-5 lg:p-7">
           <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
                 Areas de entrenamiento
               </p>
 
-              <h2 className="mt-4 text-3xl font-black leading-tight lg:text-4xl">
+              <h2 className="mt-4 break-words text-2xl font-black leading-tight sm:text-3xl lg:text-4xl">
                 Un laboratorio completo para entrenar criterio arbitral.
               </h2>
 
@@ -132,22 +132,22 @@ export default function AboutPage() {
               {trainingAreas.map((area) => (
                 <div
                   key={area}
-                  className="flex min-h-14 items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3"
+                  className="flex min-h-14 min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 sm:px-4"
                 >
                   <CheckCircle2 className="h-5 w-5 shrink-0 text-[#6fc11f]" />
-                  <span className="text-sm font-black text-zinc-200">{area}</span>
+                  <span className="min-w-0 break-words text-sm font-black text-zinc-200">{area}</span>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_right,rgba(111,193,31,0.1),transparent_34%),#05070d] p-5 shadow-2xl lg:p-10">
+        <section className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_right,rgba(111,193,31,0.1),transparent_34%),#05070d] p-4 shadow-2xl sm:p-5 lg:p-10">
           <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">Nuestra historia</p>
 
-              <h2 className="mt-4 text-3xl font-black leading-tight text-white sm:text-4xl lg:text-5xl">
+              <h2 className="mt-4 break-words text-2xl font-black leading-tight text-white sm:text-4xl lg:text-5xl">
                 Como nacio RefLab
               </h2>
 

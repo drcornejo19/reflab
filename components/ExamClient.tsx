@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
@@ -47,7 +47,7 @@ const noFoulRestartOptions = [
   "Saque de esquina",
   "Saque de banda",
   "Gol",
-  "Balón a tierra",
+  "Balon a tierra",
 ];
 
 const offsideReasonOptions = [
@@ -161,7 +161,7 @@ useEffect(() => {
     if (isNoOffside || isNoHandball) {
       setFoul(false);
       setRestart("Seguir el juego");
-      setDiscipline("Sin sanción");
+      setDiscipline("Sin sancion");
       setOffsideReason("");
       setHandballReason("");
     }
@@ -178,13 +178,13 @@ useEffect(() => {
       );
 
       if (currentClip.topic === "Offside") {
-        setDiscipline("Sin sanción");
+        setDiscipline("Sin sancion");
       }
     }
 
     if (foul === false && !noFoulRestartOptions.includes(restart)) {
       setRestart("Seguir el juego");
-      setDiscipline("Sin sanción");
+      setDiscipline("Sin sancion");
       setOffsideReason("");
       setHandballReason("");
     }
@@ -215,7 +215,7 @@ useEffect(() => {
     if (data.feedback) {
       setAiAnalysis(data.feedback);
     } else {
-      setAiAnalysis("No se pudo generar análisis IA.");
+      setAiAnalysis("No se pudo generar analisis IA.");
     }
 
     setLoadingAi(false);
@@ -298,7 +298,7 @@ function handleVideoEnded() {
 
   async function saveExam() {
     if (!user) {
-      alert("Tenés que iniciar sesión.");
+      alert("Tenes que iniciar sesion.");
       return;
     }
 
@@ -342,7 +342,7 @@ function handleVideoEnded() {
 
   if (loading) {
     return (
-      <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-zinc-400">
+      <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-4 text-zinc-400 sm:p-8">
         Cargando examen...
       </div>
     );
@@ -350,7 +350,7 @@ function handleVideoEnded() {
 
   if (clips.length === 0) {
     return (
-      <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-zinc-400">
+      <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-4 text-zinc-400 sm:p-8">
         No hay clips suficientes para iniciar examen.
       </div>
     );
@@ -358,21 +358,21 @@ function handleVideoEnded() {
 
   if (finished) {
     return (
-      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <section className="rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-8">
-          <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
+      <div className="grid max-w-full gap-5 overflow-hidden lg:grid-cols-[0.9fr_1.1fr] lg:gap-6">
+        <section className="min-w-0 rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-4 sm:p-6 lg:p-8">
+          <p className="break-words text-[10px] font-black uppercase tracking-[0.2em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
             Resultado final
           </p>
 
-          <h2 className="mt-4 text-7xl font-black">
+          <h2 className="mt-4 break-words text-5xl font-black sm:text-6xl lg:text-7xl">
             {examStats.avgScore}/100
           </h2>
 
-          <p className="mt-3 text-3xl font-black text-[#6fc11f]">
+          <p className="mt-3 break-words text-2xl font-black text-[#6fc11f] sm:text-3xl">
             {examStats.level}
           </p>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <div className="mt-6 grid gap-3 sm:grid-cols-3 sm:gap-4 lg:mt-8">
             <FinalStat title="Preguntas" value={answers.length.toString()} />
             <FinalStat
               title="Aprobadas"
@@ -381,33 +381,33 @@ function handleVideoEnded() {
             <FinalStat title="Score total" value={examStats.totalScore.toString()} />
           </div>
 
-          <div className="mt-8 flex gap-3">
+          <div className="mt-6 flex flex-col gap-3 lg:mt-8 lg:flex-row">
             <div className="flex-1 space-y-3">
               <button
                 onClick={saveExam}
                 disabled={saving}
-                className="w-full rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black disabled:opacity-50"
+                className="min-h-14 w-full rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black disabled:opacity-50"
               >
                 {saving ? "GUARDANDO..." : "GUARDAR EXAMEN"}
               </button>
 
               <button
                 onClick={generateAIAnalysis}
-                className="w-full rounded-2xl bg-blue-500 px-5 py-4 font-black text-white hover:bg-blue-600"
+                className="min-h-14 w-full rounded-2xl bg-blue-500 px-5 py-4 font-black text-white hover:bg-blue-600"
               >
                 ANALIZAR CON IA
               </button>
 
               {loadingAi && (
                 <p className="mt-4 text-sm text-zinc-400">
-                  Analizando desempeño...
+                  Analizando desempeno...
                 </p>
               )}
 
               {aiAnalysis && (
                 <div className="mt-4 rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-6">
                   <p className="text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">
-                    Análisis IA del examen
+                    Analisis IA del examen
                   </p>
 
                   <div className="mt-4 whitespace-pre-line text-sm leading-7 text-zinc-200">
@@ -423,14 +423,14 @@ function handleVideoEnded() {
 
             <button
               onClick={restartExam}
-              className="flex-1 rounded-2xl bg-white/10 px-5 py-4 font-black text-white hover:bg-white/15"
+              className="min-h-14 flex-1 rounded-2xl bg-white/10 px-5 py-4 font-black text-white hover:bg-white/15"
             >
               NUEVO EXAMEN
             </button>
           </div>
         </section>
 
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
+        <section className="min-w-0 rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:p-6">
           <h3 className="text-xl font-black">Detalle del examen</h3>
 
           <div className="mt-6 space-y-3">
@@ -439,14 +439,14 @@ function handleVideoEnded() {
                 key={`${a.clipId}-${i}`}
                 className="rounded-2xl border border-white/10 bg-black/30 p-4"
               >
-                <div className="flex justify-between gap-4">
+                <div className="flex min-w-0 justify-between gap-3 sm:gap-4">
                   <div>
                     <p className="font-black">
                       {i + 1}. {a.clipTitle}
                     </p>
 
                     <p className="mt-1 text-xs text-zinc-500">
-                      {a.topic} · {translateDifficulty(a.difficulty)}
+                      {a.topic} - {translateDifficulty(a.difficulty)}
                     </p>
 
                     {a.offsideReason && (
@@ -484,14 +484,14 @@ function handleVideoEnded() {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+      <div className="max-w-full overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:p-5">
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
+            <p className="break-words text-[10px] font-black uppercase tracking-[0.2em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
               Examen en curso
             </p>
 
-            <h2 className="mt-2 text-2xl font-black">
+            <h2 className="mt-2 break-words text-xl font-black sm:text-2xl">
               Pregunta {index + 1} de {clips.length}
             </h2>
           </div>
@@ -505,20 +505,20 @@ function handleVideoEnded() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.35fr_0.9fr]">
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-          <div className="mb-4 flex items-center justify-between">
+      <div className="grid max-w-full gap-5 overflow-hidden lg:grid-cols-[1.35fr_0.9fr] lg:gap-6">
+        <section className="max-w-full overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:p-5">
+          <div className="mb-4 flex min-w-0 flex-col gap-3 min-[390px]:flex-row min-[390px]:items-start min-[390px]:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#6fc11f]">
                 Clip de examen
               </p>
 
-              <h1 className="mt-2 text-2xl font-black">
+              <h1 className="mt-2 break-words text-xl font-black sm:text-2xl">
                 {labelFromValue(currentClip.topic)}
               </h1>
 
               <p className="mt-1 text-xs text-zinc-500">
-                Analizá la acción y seleccioná la decisión correcta.
+                Analiza la accion y selecciona la decision correcta.
               </p>
             </div>
 
@@ -529,7 +529,7 @@ function handleVideoEnded() {
 
           <div className="relative overflow-hidden rounded-2xl bg-black">
   <video
-    className="aspect-video w-full bg-black object-cover"
+    className="aspect-video w-full max-w-full bg-black object-contain"
     src={currentClip.video_url}
     controls={!videoLocked}
     onPlay={handleVideoPlay}
@@ -539,9 +539,9 @@ function handleVideoEnded() {
   {videoLocked && (
     <div className="absolute inset-0 grid place-items-center bg-black/75 p-6 text-center">
       <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-5 text-yellow-300">
-        <p className="text-lg font-black">Límite alcanzado</p>
+        <p className="text-lg font-black">Limite alcanzado</p>
         <p className="mt-2 text-sm">
-          Ya viste este video 2 veces. Ahora tenés que tomar la decisión.
+          Ya viste este video 2 veces. Ahora tenes que tomar la decision.
         </p>
       </div>
     </div>
@@ -555,20 +555,20 @@ function handleVideoEnded() {
   </span>
 </p>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <InfoBox title="Tema" value={labelFromValue(currentClip.topic)} />
             <InfoBox title="Modo" value="Examen" />
             <InfoBox title="Feedback" value="Al final" />
           </div>
         </section>
 
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+        <section className="max-w-full overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:p-5">
           <div className="space-y-6">
             <DecisionBlock
               title={
                 currentClip.topic === "Offside"
-                  ? "1. ¿Existe fuera de juego?"
-                  : "1. ¿Hubo infracción?"
+                  ? "1. Existe fuera de juego?"
+                  : "1. Hubo infraccion?"
               }
             >
               <div className="grid grid-cols-2 gap-3">
@@ -579,13 +579,13 @@ function handleVideoEnded() {
 
                     if (currentClip.topic === "Offside") {
                       setRestart("Tiro libre indirecto");
-                      setDiscipline("Sin sanción");
+                      setDiscipline("Sin sancion");
                     } else {
                       setRestart("Tiro libre directo");
                     }
                   }}
                 >
-                  SÍ
+                  SI
                 </DecisionButton>
 
                 <DecisionButton
@@ -593,7 +593,7 @@ function handleVideoEnded() {
                   onClick={() => {
                     setFoul(false);
                     setRestart("Seguir el juego");
-                    setDiscipline("Sin sanción");
+                    setDiscipline("Sin sancion");
                     setOffsideReason("");
                     setHandballReason("");
                   }}
@@ -603,7 +603,7 @@ function handleVideoEnded() {
               </div>
             </DecisionBlock>
 
-            <DecisionBlock title="2. Reanudación">
+            <DecisionBlock title="2. Reanudacion">
               <select
                 value={restart}
                 disabled={foul === null || currentClip.topic === "Offside"}
@@ -612,8 +612,8 @@ function handleVideoEnded() {
               >
                 <option value="">
                   {foul === null
-                    ? "Primero seleccioná si hubo infracción"
-                    : "Seleccioná una opción"}
+                    ? "Primero selecciona si hubo infraccion"
+                    : "Selecciona una opcion"}
                 </option>
 
                 {restartOptions.map((option) => (
@@ -667,12 +667,12 @@ function handleVideoEnded() {
             <DecisionBlock
               title={
                 mustAnswerOffsideReason || mustAnswerHandballReason
-                  ? "4. Sanción disciplinaria"
-                  : "3. Sanción disciplinaria"
+                  ? "4. Sancion disciplinaria"
+                  : "3. Sancion disciplinaria"
               }
             >
-              <div className="grid grid-cols-3 gap-3">
-                {["Sin sanción", "Amarilla", "Roja"].map((item) => (
+              <div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-3">
+                {["Sin sancion", "Amarilla", "Roja"].map((item) => (
                   <button
                     key={item}
                     disabled={currentClip.topic === "Offside"}
@@ -696,7 +696,7 @@ function handleVideoEnded() {
             <button
               disabled={!canSubmit}
               onClick={submitAnswer}
-              className="w-full rounded-xl bg-[#6fc11f] px-5 py-4 font-black text-black transition hover:bg-[#82dc2a] disabled:cursor-not-allowed disabled:opacity-40"
+              className="min-h-14 w-full rounded-xl bg-[#6fc11f] px-5 py-4 font-black text-black transition hover:bg-[#82dc2a] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {index === clips.length - 1
                 ? "FINALIZAR EXAMEN"
@@ -746,9 +746,9 @@ function getExamLevel(avg: number) {
 
 function translateDifficulty(value: string) {
   const map: Record<string, string> = {
-    easy: "Fácil",
+    easy: "Facil",
     medium: "Media",
-    hard: "Difícil",
+    hard: "Dificil",
   };
 
   return map[value] ?? value;
@@ -759,7 +759,7 @@ function labelFromValue(value?: string | null) {
 
   const dictionary: Record<string, string> = {
     Dispute: "Disputas",
-    "Tactical foul": "Faltas tácticas",
+    "Tactical foul": "Faltas tacticas",
     Offside: "Fuera de juego",
     Handball: "Manos",
     VAR: "VAR",
@@ -767,7 +767,7 @@ function labelFromValue(value?: string | null) {
     no_offside: "No fuera de juego",
     interferir_juego: "Interfiere en el juego",
     interferir_adversario: "Interfiere en el adversario",
-    sacar_ventaja: "Saca ventaja de su posición",
+    sacar_ventaja: "Saca ventaja de su posicion",
 
     inmediatez: "Mano de inmediatez",
     deliberada: "Mano deliberada",
@@ -780,7 +780,7 @@ function labelFromValue(value?: string | null) {
 
 function InfoBox({ title, value }: { title: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-black/30 p-4">
+    <div className="min-w-0 rounded-2xl bg-black/30 p-3 sm:p-4">
       <p className="text-xs text-zinc-500">{title}</p>
       <p className="mt-1 font-bold">{value}</p>
     </div>
@@ -827,9 +827,10 @@ function DecisionButton({
 
 function FinalStat({ title, value }: { title: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-black/30 p-4">
+    <div className="min-w-0 rounded-2xl bg-black/30 p-3 sm:p-4">
       <p className="text-xs text-zinc-500">{title}</p>
-      <p className="mt-2 text-2xl font-black">{value}</p>
+      <p className="mt-2 break-words text-xl font-black sm:text-2xl">{value}</p>
     </div>
   );
 }
+

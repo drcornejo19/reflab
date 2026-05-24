@@ -1,4 +1,4 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 
 :root {
   --background: #02070d;
@@ -72,4 +72,22 @@ textarea {
 
 .animate-splashFade {
   animation: splashFade 2.6s ease-in-out both;
+}
+
+html {
+  width: 100%;
+}
+
+body {
+  width: 100%;
+  min-width: 0;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

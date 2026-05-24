@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -139,13 +139,13 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
-      <div className="w-full space-y-5 rounded-[24px] border border-white/10 bg-[#101820] p-4 shadow-2xl sm:p-5 lg:mx-auto lg:max-w-[1080px]">
-        <header className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-[#0b131b] p-6 sm:flex-row sm:items-center sm:justify-between">
+      <div className="w-full max-w-full space-y-5 overflow-hidden rounded-[24px] border border-white/10 bg-[#101820] p-3 shadow-2xl sm:p-5 lg:mx-auto lg:max-w-[1080px]">
+        <header className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-[#0b131b] p-4 sm:p-6 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
               Dashboard tecnico
             </p>
-            <h1 className="mt-2 text-3xl font-black">Analisis arbitral</h1>
+            <h1 className="mt-2 break-words text-2xl font-black md:text-3xl">Analisis arbitral</h1>
             <p className="mt-2 text-sm text-zinc-400">
               Resumen tecnico de tu rendimiento arbitral, fortalezas, puntos
               criticos y plan recomendado.
@@ -154,7 +154,7 @@ export default function DashboardPage() {
 
           <Link
             href="/training/exam"
-            className="rounded-2xl bg-[#6fc11f] px-6 py-4 text-center font-black text-black transition hover:bg-[#82dc2a]"
+            className="flex min-h-12 w-full items-center justify-center rounded-2xl bg-[#6fc11f] px-5 py-3 text-center font-black text-black transition hover:bg-[#82dc2a] sm:w-auto sm:px-6 sm:py-4"
           >
             Rendir examen
           </Link>
@@ -252,10 +252,10 @@ export default function DashboardPage() {
           </Panel>
         </section>
 
-        <section className="rounded-3xl border border-white/10 bg-[#111b24] p-5">
+        <section className="rounded-3xl border border-white/10 bg-[#111b24] p-4 sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-xl font-black">Lectura tecnica del rendimiento</h2>
+              <h2 className="break-words text-lg font-black sm:text-xl">Lectura tecnica del rendimiento</h2>
               <p className="mt-1 text-sm text-zinc-500">
                 El analisis profundo vive en Rendimiento; este panel muestra solo el foco inmediato.
               </p>
@@ -297,22 +297,22 @@ function PlayerAnalysisCard({ topics, hasData }: { topics: PlayerTopic[]; hasDat
   const guideRings = [25, 50, 75, 100].map((value) => radarPoints([value, value, value, value, value], 92, 110));
 
   return (
-    <section className="overflow-hidden rounded-[34px] border border-[#6fc11f]/25 bg-[radial-gradient(circle_at_20%_10%,rgba(111,193,31,0.24),transparent_35%),linear-gradient(145deg,#09140d,#050b12_62%,#101820)] p-5 shadow-2xl lg:p-6">
-      <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-center">
+    <section className="max-w-full overflow-hidden rounded-[30px] border border-[#6fc11f]/25 bg-[radial-gradient(circle_at_20%_10%,rgba(111,193,31,0.24),transparent_35%),linear-gradient(145deg,#09140d,#050b12_62%,#101820)] p-4 shadow-2xl sm:rounded-[34px] lg:p-6">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.34em] text-[#6fc11f]">
             Player analysis
           </p>
-          <h2 className="mt-3 text-3xl font-black text-white lg:text-4xl">
+          <h2 className="mt-3 break-words text-2xl font-black leading-tight text-white md:text-3xl lg:text-4xl">
             Radar arbitral
           </h2>
           <p className="mt-3 text-sm leading-6 text-zinc-400">
             Lectura visual tipo jugador: VAR, fuera de juego, manos, disputas y faltas tacticas como ejes centrales del criterio.
           </p>
-          <div className="mt-5 grid grid-cols-2 gap-3">
+          <div className="mt-5 grid grid-cols-1 gap-3 min-[380px]:grid-cols-2">
             {topics.map((topic) => (
-              <div key={topic.label} className="rounded-2xl border border-white/10 bg-black/25 p-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">{topic.label}</p>
+              <div key={topic.label} className="min-w-0 rounded-2xl border border-white/10 bg-black/25 p-3">
+                <p className="break-words text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500 sm:tracking-[0.16em]">{topic.label}</p>
                 <p className="mt-2 text-2xl font-black text-white">{topic.value === null ? "-" : topic.value}</p>
                 <p className="mt-1 text-xs text-[#6fc11f]">{topic.attempts} intentos</p>
               </div>
@@ -320,7 +320,7 @@ function PlayerAnalysisCard({ topics, hasData }: { topics: PlayerTopic[]; hasDat
           </div>
         </div>
 
-        <div className="relative mx-auto aspect-square w-full max-w-[430px] rounded-[32px] border border-white/10 bg-black/25 p-4 shadow-[inset_0_0_50px_rgba(111,193,31,0.08)]">
+        <div className="relative mx-auto aspect-square w-full max-w-[320px] overflow-hidden rounded-[28px] border border-white/10 bg-black/25 p-2 shadow-[inset_0_0_50px_rgba(111,193,31,0.08)] sm:max-w-[390px] sm:p-4 lg:max-w-[430px]">
           <svg viewBox="0 0 220 220" className="h-full w-full">
             <defs>
               <filter id="radarGlow">
@@ -340,7 +340,7 @@ function PlayerAnalysisCard({ topics, hasData }: { topics: PlayerTopic[]; hasDat
               return (
                 <g key={topic.label}>
                   <line x1="110" y1="110" x2={end.x} y2={end.y} stroke="rgba(255,255,255,0.12)" />
-                  <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" className="fill-zinc-300 text-[8px] font-black uppercase">
+                  <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" className="fill-zinc-300 text-[7px] font-black uppercase sm:text-[8px]">
                     {shortTopicLabel(topic.label)}
                   </text>
                 </g>
@@ -390,9 +390,9 @@ function shortTopicLabel(label: string) {
 
 function TopMetric({ title, value, detail, featured = false }: { title: string; value: string | number; detail?: string; featured?: boolean }) {
   return (
-    <div className="border-r border-b border-white/10 p-4 last:border-r-0 md:border-b-0">
+    <div className="min-w-0 border-r border-b border-white/10 p-3 last:border-r-0 sm:p-4 md:border-b-0">
       <p className="text-[11px] text-zinc-400">{title}</p>
-      <p className="mt-3 text-2xl font-black sm:text-3xl">{value}</p>
+      <p className="mt-2 break-words text-xl font-black sm:mt-3 sm:text-3xl">{value}</p>
       {detail && (
         <p className={featured ? "mt-1 text-xs font-bold text-[#6fc11f]" : "mt-1 text-xs text-zinc-500"}>
           {detail}
@@ -410,7 +410,7 @@ function AnalysisCard({ title, items, tone }: { title: string; items: string[]; 
   }[tone];
 
   return (
-    <div className={`rounded-3xl border p-5 ${style}`}>
+    <div className={`min-w-0 rounded-3xl border p-4 sm:p-5 ${style}`}>
       <h2 className="text-lg font-black">{title}</h2>
       <ul className="mt-4 space-y-2 text-sm leading-6 text-zinc-300">
         {items.map((item, index) => (
@@ -426,9 +426,9 @@ function AnalysisCard({ title, items, tone }: { title: string; items: string[]; 
 
 function Panel({ title, href, children }: { title: string; href: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-[#0b131b] p-5">
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <h2 className="text-xl font-black">{title}</h2>
+    <section className="min-w-0 rounded-3xl border border-white/10 bg-[#0b131b] p-4 sm:p-5">
+      <div className="mb-5 flex min-w-0 items-center justify-between gap-3">
+        <h2 className="break-words text-lg font-black sm:text-xl">{title}</h2>
         <Link href={href} className="text-xs font-black text-[#6fc11f]">
           Abrir
         </Link>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -204,7 +204,7 @@ export default function PerformancePage() {
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-[1180px] space-y-6">
+      <div className="mx-auto w-full max-w-full space-y-5 overflow-hidden lg:max-w-[1180px] lg:space-y-6">
         <PerformanceHero summary={summary} />
 
         <PerformanceEntryGrid />
@@ -283,15 +283,15 @@ function PerformanceEntryGrid() {
           <a
             key={entry.title}
             href={entry.href}
-            className="group rounded-[26px] border border-white/10 bg-[#101b24] p-4 shadow-2xl transition hover:border-[#6fc11f]/45 hover:bg-[#13212b]"
+            className="group min-w-0 rounded-[24px] border border-white/10 bg-[#101b24] p-4 shadow-2xl transition hover:border-[#6fc11f]/45 hover:bg-[#13212b] sm:rounded-[26px]"
           >
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start justify-between gap-3 sm:gap-4">
               <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
                 <Icon size={22} />
               </div>
               <ArrowRight className="h-4 w-4 text-zinc-600 transition group-hover:translate-x-1 group-hover:text-[#6fc11f]" />
             </div>
-            <h2 className="mt-4 text-xl font-black text-white">{entry.title}</h2>
+            <h2 className="mt-4 break-words text-lg font-black leading-tight text-white sm:text-xl">{entry.title}</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-400">{entry.description}</p>
           </a>
         );
@@ -301,19 +301,19 @@ function PerformanceEntryGrid() {
 }
 function PerformanceHero({ summary }: { summary: ReturnType<typeof getPerformanceSummary> }) {
   return (
-    <header className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-6 shadow-2xl lg:p-7">
+    <header className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-4 shadow-2xl sm:rounded-[34px] lg:p-7">
       <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.45em] text-[#6fc11f]">REFLAB PERFORMANCE</p>
-          <h1 className="mt-4 text-4xl font-black md:text-5xl">Rendimiento</h1>
+          <p className="break-words text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.45em]">REFLAB PERFORMANCE</p>
+          <h1 className="mt-3 break-words text-3xl font-black leading-tight md:mt-4 md:text-5xl">Rendimiento</h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 md:text-base">
             Centro de analisis profundo: evolucion, topicos, criterios, modulos, historial, ranking y plan recomendado con datos reales.
           </p>
         </div>
 
-        <div className="rounded-3xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-5 lg:min-w-[280px]">
+        <div className="min-w-0 rounded-3xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4 sm:p-5 lg:min-w-[280px]">
           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#6fc11f]">Estado general</p>
-          <p className="mt-2 text-3xl font-black text-white">{summary.status}</p>
+          <p className="mt-2 break-words text-2xl font-black text-white sm:text-3xl">{summary.status}</p>
           <p className="mt-2 text-xs leading-5 text-zinc-300">{summary.sampleNote}</p>
         </div>
       </div>
@@ -331,9 +331,9 @@ function SummaryCard({ metric }: { metric: SummaryMetric }) {
   }[String(metric.tone) as "success" | "warning" | "danger" | "neutral" | "undefined"];
 
   return (
-    <article className={`min-h-[150px] rounded-[26px] border p-4 shadow-2xl ${tone}`}>
-      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">{metric.label}</p>
-      <p className="mt-3 text-2xl font-black text-white">{metric.value}</p>
+    <article className={`min-h-[132px] min-w-0 rounded-[24px] border p-4 shadow-2xl sm:min-h-[150px] sm:rounded-[26px] ${tone}`}>
+      <p className="break-words text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400 sm:text-[11px] sm:tracking-[0.18em]">{metric.label}</p>
+      <p className="mt-3 break-words text-xl font-black text-white sm:text-2xl">{metric.value}</p>
       <p className="mt-2 text-xs leading-5 text-zinc-400">{metric.detail}</p>
     </article>
   );
@@ -371,9 +371,9 @@ function EvolutionPanel({ evolution }: { evolution: ReturnType<typeof getEvoluti
 
 function EvolutionBars({ series }: { series: ReturnType<typeof getEvolutionData>["series"] }) {
   return (
-    <div className="flex h-44 items-end gap-2 overflow-x-auto pb-2">
+    <div className="flex h-40 max-w-full items-end gap-1 overflow-hidden pb-1 sm:h-44 sm:gap-2">
       {series.map((item) => (
-        <div key={item.id} className="flex min-w-12 flex-1 flex-col items-center gap-2">
+        <div key={item.id} className="flex min-w-0 flex-1 flex-col items-center gap-2">
           <div className="flex h-32 w-full items-end rounded-full bg-white/5 p-1">
             <div
               className="w-full rounded-full bg-[#6fc11f] shadow-[0_0_18px_rgba(111,193,31,0.35)]"
@@ -403,7 +403,7 @@ function RecommendedPlanPanel({ plan }: { plan: ReturnType<typeof getRecommended
         <PlanLine label="Motivo tecnico" value={plan.reason} />
       </div>
 
-      <Link href={plan.href} className="mt-5 flex min-h-14 items-center justify-between rounded-2xl bg-[#6fc11f] px-5 font-black text-black transition hover:bg-[#82dc2a]">
+      <Link href={plan.href} className="mt-5 flex min-h-14 w-full min-w-0 items-center justify-between gap-3 rounded-2xl bg-[#6fc11f] px-4 font-black text-black transition hover:bg-[#82dc2a] sm:px-5">
         <span>{plan.nextStep}</span>
         <ArrowRight size={20} />
       </Link>
@@ -503,11 +503,11 @@ function CriterionRow({ criterion }: { criterion: CriterionMetric }) {
 
 function ModulesPanel({ modules }: { modules: ModulePerformance[] }) {
   return (
-    <section className="rounded-[34px] border border-white/10 bg-[#071019] p-5 shadow-2xl lg:p-7">
+    <section className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[#071019] p-4 shadow-2xl sm:rounded-[34px] sm:p-5 lg:p-7">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">Por modulo</p>
-          <h2 className="mt-3 text-3xl font-black">Cada modulo mide algo distinto</h2>
+          <h2 className="mt-3 break-words text-2xl font-black leading-tight sm:text-3xl">Cada modulo mide algo distinto</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">
             Cada modulo mide una dimension distinta: decision arbitral, lectura de video, protocolo VAR, comunicacion en ingles y preparacion integral.
           </p>
@@ -528,8 +528,8 @@ function ModuleCard({ module }: { module: ModulePerformance }) {
   const construction = module.status === "Metricas en construccion";
 
   return (
-    <article className="rounded-[28px] border border-white/10 bg-[#101b24] p-5">
-      <div className="flex items-start justify-between gap-4">
+    <article className="min-w-0 rounded-[24px] border border-white/10 bg-[#101b24] p-4 sm:rounded-[28px] sm:p-5">
+      <div className="flex min-w-0 items-start justify-between gap-3 sm:gap-4">
         <div className="grid h-12 w-12 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
           <Icon size={25} />
         </div>
@@ -538,7 +538,7 @@ function ModuleCard({ module }: { module: ModulePerformance }) {
         </span>
       </div>
 
-      <h3 className="mt-4 text-xl font-black">{module.title}</h3>
+      <h3 className="mt-4 break-words text-lg font-black sm:text-xl">{module.title}</h3>
       <p className="mt-2 text-sm leading-6 text-zinc-400">{module.description}</p>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -643,7 +643,7 @@ function RankingPanel({ ranking, currentRanking }: { ranking: RankingRow[]; curr
 
           <div className="mt-4 space-y-2">
             {ranking.slice(0, 6).map((row) => (
-              <div key={row.userId} className="grid grid-cols-[48px_1fr_auto] items-center gap-3 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm">
+              <div key={row.userId} className="grid min-w-0 grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:gap-3">
                 <p className="font-black text-[#6fc11f]">#{row.position}</p>
                 <div>
                   <p className="font-black text-white">{row.name}</p>
@@ -668,12 +668,12 @@ function RankingPanel({ ranking, currentRanking }: { ranking: RankingRow[]; curr
 
 function Panel({ eyebrow, title, description, icon: Icon, children }: { eyebrow: string; title: string; description: string; icon: LucideIcon; children: ReactNode }) {
   return (
-    <section className="rounded-[32px] border border-white/10 bg-[#071019] p-5 shadow-2xl lg:p-6">
-      <div className="flex items-start gap-4">
-        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]"><Icon size={25} /></div>
+    <section className="max-w-full overflow-hidden rounded-[28px] border border-white/10 bg-[#071019] p-4 shadow-2xl sm:rounded-[32px] sm:p-5 lg:p-6">
+      <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f] sm:h-12 sm:w-12"><Icon size={25} /></div>
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">{eyebrow}</p>
-          <h2 className="mt-2 text-2xl font-black leading-tight">{title}</h2>
+          <p className="break-words text-[10px] font-black uppercase tracking-[0.18em] text-[#6fc11f] sm:text-xs sm:tracking-[0.3em]">{eyebrow}</p>
+          <h2 className="mt-2 break-words text-xl font-black leading-tight sm:text-2xl">{title}</h2>
           <p className="mt-2 text-sm leading-6 text-zinc-400">{description}</p>
         </div>
       </div>
@@ -699,7 +699,7 @@ function InlineEmpty({ text, compact = false }: { text: string; compact?: boolea
 }
 
 function EmptyState({ title, text, actionHref, actionLabel }: { title: string; text: string; actionHref: string; actionLabel: string }) {
-  return <div className="mx-auto max-w-[720px] rounded-[34px] border border-white/10 bg-[#071019] p-8 text-center shadow-2xl"><AlertTriangle className="mx-auto h-12 w-12 text-[#6fc11f]" /><h1 className="mt-4 text-3xl font-black">{title}</h1><p className="mt-3 text-sm leading-6 text-zinc-400">{text}</p><Link href={actionHref} className="mt-6 inline-flex min-h-12 items-center rounded-2xl bg-[#6fc11f] px-6 font-black text-black">{actionLabel}</Link></div>;
+  return <div className="mx-auto w-full max-w-[720px] rounded-[30px] border border-white/10 bg-[#071019] p-5 text-center shadow-2xl sm:rounded-[34px] sm:p-8"><AlertTriangle className="mx-auto h-12 w-12 text-[#6fc11f]" /><h1 className="mt-4 text-3xl font-black">{title}</h1><p className="mt-3 text-sm leading-6 text-zinc-400">{text}</p><Link href={actionHref} className="mt-6 inline-flex min-h-12 items-center rounded-2xl bg-[#6fc11f] px-6 font-black text-black">{actionLabel}</Link></div>;
 }
 
 function LoadingCard() {
@@ -709,4 +709,5 @@ function LoadingCard() {
 function InfoChip({ label, value }: { label: string; value: string }) {
   return <div className="rounded-xl bg-white/[0.04] px-3 py-2"><p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{label}</p><p className="mt-1 font-bold text-zinc-300">{value}</p></div>;
 }
+
 
