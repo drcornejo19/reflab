@@ -7,10 +7,12 @@ import { useUser } from "@clerk/nextjs";
 import {
   Activity,
   AlertTriangle,
+  ArrowLeft,
   ArrowRight,
   BarChart3,
   ClipboardCheck,
   Dumbbell,
+  Gauge,
   History,
   Languages,
   LineChart,
@@ -51,7 +53,7 @@ import {
 
 type HistoryMode = "ALL" | "training" | "exam" | "rules_exam";
 type HistoryResult = "ALL" | PerformanceItem["result"];
-type PerformanceView = "evolution" | "plan" | "topics" | "criteria";
+type PerformanceView = "evolution" | "plan" | "topics" | "criteria" | "modules" | "history" | "ranking" | "complementary";
 
 type LoadState = {
   attempts: AttemptRecord[];
@@ -90,6 +92,27 @@ const moduleIcons: Record<string, LucideIcon> = {
   communication: MessageCircle,
   preparation: Dumbbell,
 };
+
+const mainTopicOrder = ["VAR", "Fuera de juego", "Manos", "Disputas", "Faltas tacticas"];
+
+const performanceViewMeta: Record<
+  PerformanceView,
+  {
+    title: string;
+    description: string;
+    icon: LucideIcon;
+  }
+> = {
+  evolution: { title: "Mi evolucion", description: "Progreso, tendencia y actividad reciente a lo largo del tiempo.", icon: LineChart },
+  plan: { title: "Plan recomendado", description: "Diagnostico, prioridades y proximo entrenamiento sugerido.", icon: Target },
+  topics: { title: "Por topico", description: "Mapa tecnico y rendimiento por tipo de jugada arbitral.", icon: BarChart3 },
+  criteria: { title: "Por criterio", description: "Decision tecnica, reanudacion, disciplina, justificacion y VAR.", icon: ListChecks },
+  modules: { title: "Por modulo", description: "Que mide cada area de entrenamiento dentro de RefLab.", icon: Activity },
+  history: { title: "Historial", description: "Intentos reales, filtros, puntajes, decisiones y feedback.", icon: History },
+  ranking: { title: "Ranking", description: "Comparacion comunitaria y posicion segun actividad registrada.", icon: Trophy },
+  complementary: { title: "Analisis complementario", description: "Resumen general de metricas, indicadores y diagnostico global.", icon: Gauge },
+};
+
 export default function PerformancePage() {
   const { user, isLoaded } = useUser();
   const [data, setData] = useState<LoadState>(initialData);
@@ -97,7 +120,7 @@ export default function PerformancePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [historyMode, setHistoryMode] = useState<HistoryMode>("ALL");
   const [historyResult, setHistoryResult] = useState<HistoryResult>("ALL");
-  const [activeView, setActiveView] = useState<PerformanceView>("evolution");
+  const [activeView, setActiveView] = useState<PerformanceView | null>(null);
 
   useEffect(() => {
     async function loadPerformance() {
@@ -207,7 +230,7 @@ export default function PerformancePage() {
   return (
     <AppShell>
       <div className="mx-auto w-full max-w-full space-y-5 overflow-hidden lg:max-w-[1180px] lg:space-y-6">
-        <PerformanceHero summary={summary} />
+        <PerformanceHero />
 
         {loadError && (
           <div className="rounded-3xl border border-yellow-400/25 bg-yellow-400/10 p-4 text-sm font-bold leading-6 text-yellow-100">
@@ -215,52 +238,29 @@ export default function PerformancePage() {
           </div>
         )}
 
-        <PerformanceEntryGrid activeView={activeView} onSelect={setActiveView} />
-
-        <PrimaryAnalysisView
-          activeView={activeView}
-          evolution={evolution}
-          plan={plan}
-          topics={topics}
-          criteria={criteria}
-        />
-
-        <section className="rounded-[34px] border border-white/10 bg-[#050b12] p-4 shadow-2xl sm:p-5 lg:p-7">
-          <div className="mb-5 flex flex-col gap-2 lg:mb-6 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
-                Analisis complementario
-              </p>
-              <h2 className="mt-2 break-words text-2xl font-black leading-tight text-white sm:text-3xl">
-                Metricas, modulos, historial y ranking
-              </h2>
-            </div>
-            <p className="max-w-2xl text-sm leading-6 text-zinc-400">
-              Esta capa resume datos de apoyo sin mezclarlos con los cuatro modulos principales de rendimiento.
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {summary.metrics.slice(0, 12).map((metric) => (
-              <SummaryCard key={metric.label} metric={metric} />
-            ))}
-          </div>
-
-          <div className="mt-5 lg:mt-6">
-            <ModulesPanel modules={modules} />
-          </div>
-
-          <section className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr] lg:mt-6">
-            <HistoryPanel
+        {activeView ? (
+          <>
+            <PerformanceModuleHeader activeView={activeView} onBack={() => setActiveView(null)} />
+            <PrimaryAnalysisView
+              activeView={activeView}
+              summary={summary}
+              evolution={evolution}
+              plan={plan}
+              topics={topics}
+              criteria={criteria}
+              modules={modules}
               history={history}
               historyMode={historyMode}
               historyResult={historyResult}
               setHistoryMode={setHistoryMode}
               setHistoryResult={setHistoryResult}
+              ranking={ranking}
+              currentRanking={currentRanking}
             />
-            <RankingPanel ranking={ranking} currentRanking={currentRanking} />
-          </section>
-        </section>
+          </>
+        ) : (
+          <PerformanceEntryGrid activeView={activeView} onSelect={setActiveView} />
+        )}
       </div>
     </AppShell>
   );
@@ -269,40 +269,10 @@ function PerformanceEntryGrid({
   activeView,
   onSelect,
 }: {
-  activeView: PerformanceView;
+  activeView: PerformanceView | null;
   onSelect: (view: PerformanceView) => void;
 }) {
-  const entries: Array<{
-    view: PerformanceView;
-    title: string;
-    description: string;
-    icon: LucideIcon;
-  }> = [
-    {
-      view: "evolution",
-      title: "Mi evolucion",
-      description: "Progreso general del usuario a lo largo del tiempo.",
-      icon: LineChart,
-    },
-    {
-      view: "plan",
-      title: "Plan recomendado",
-      description: "Foco proximo segun errores, patrones y desempeno.",
-      icon: Target,
-    },
-    {
-      view: "topics",
-      title: "Por topico",
-      description: "Rendimiento segun tipo de jugada arbitral.",
-      icon: BarChart3,
-    },
-    {
-      view: "criteria",
-      title: "Por criterio",
-      description: "Calidad tecnica de como se resuelve la decision.",
-      icon: ListChecks,
-    },
-  ];
+  const entries = (Object.keys(performanceViewMeta) as PerformanceView[]).map((view) => ({ view, ...performanceViewMeta[view] }));
 
   return (
     <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -316,7 +286,7 @@ function PerformanceEntryGrid({
             type="button"
             onClick={() => onSelect(entry.view)}
             aria-pressed={active}
-            className={`group min-h-[176px] min-w-0 rounded-[30px] border p-5 text-left shadow-2xl transition active:scale-[0.98] sm:min-h-[190px] sm:p-6 ${
+            className={`group min-h-[190px] min-w-0 rounded-[30px] border p-5 text-left shadow-2xl transition active:scale-[0.98] sm:p-6 ${
               active
                 ? "border-[#6fc11f]/70 bg-[#6fc11f]/15 shadow-[0_0_34px_rgba(111,193,31,0.18)]"
                 : "border-white/10 bg-[#101b24] hover:-translate-y-1 hover:border-[#6fc11f]/45 hover:bg-[#13212b]"
@@ -332,20 +302,10 @@ function PerformanceEntryGrid({
               >
                 <Icon size={24} />
               </div>
-              <ArrowRight
-                className={`h-5 w-5 shrink-0 transition ${
-                  active
-                    ? "translate-x-1 text-[#6fc11f]"
-                    : "text-zinc-600 group-hover:translate-x-1 group-hover:text-[#6fc11f]"
-                }`}
-              />
+              <ArrowRight className={`h-5 w-5 shrink-0 transition ${active ? "translate-x-1 text-[#6fc11f]" : "text-zinc-600 group-hover:translate-x-1 group-hover:text-[#6fc11f]"}`} />
             </div>
-            <h2 className="mt-5 break-words text-2xl font-black leading-tight text-white">
-              {entry.title}
-            </h2>
-            <p className="mt-3 text-sm leading-6 text-zinc-400">
-              {entry.description}
-            </p>
+            <h2 className="mt-5 break-words text-2xl font-black leading-tight text-white">{entry.title}</h2>
+            <p className="mt-3 text-sm leading-6 text-zinc-400">{entry.description}</p>
             <p className="mt-5 text-[10px] font-black uppercase tracking-[0.2em] text-[#6fc11f]">
               {active ? "Modulo activo" : "Abrir modulo"}
             </p>
@@ -356,18 +316,64 @@ function PerformanceEntryGrid({
   );
 }
 
+function PerformanceModuleHeader({ activeView, onBack }: { activeView: PerformanceView; onBack: () => void }) {
+  const meta = performanceViewMeta[activeView];
+  const Icon = meta.icon;
+
+  return (
+    <section className="rounded-[30px] border border-[#6fc11f]/25 bg-[#071019] p-4 shadow-2xl sm:p-5 lg:p-6">
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-black text-zinc-200 transition hover:border-[#6fc11f]/40 hover:text-[#6fc11f]"
+      >
+        <ArrowLeft size={18} />
+        Volver a modulos
+      </button>
+      <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:tracking-[0.35em]">Modulo de analisis</p>
+          <h2 className="mt-2 break-words text-3xl font-black leading-tight text-white sm:text-4xl">{meta.title}</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">{meta.description}</p>
+        </div>
+        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/35 bg-[#6fc11f]/10 text-[#6fc11f]">
+          <Icon size={26} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function PrimaryAnalysisView({
   activeView,
+  summary,
   evolution,
   plan,
   topics,
   criteria,
+  modules,
+  history,
+  historyMode,
+  historyResult,
+  setHistoryMode,
+  setHistoryResult,
+  ranking,
+  currentRanking,
 }: {
   activeView: PerformanceView;
+  summary: ReturnType<typeof getPerformanceSummary>;
   evolution: ReturnType<typeof getEvolutionData>;
   plan: ReturnType<typeof getRecommendedPlan>;
   topics: TopicMetric[];
   criteria: CriterionMetric[];
+  modules: ModulePerformance[];
+  history: PerformanceItem[];
+  historyMode: HistoryMode;
+  historyResult: HistoryResult;
+  setHistoryMode: (value: HistoryMode) => void;
+  setHistoryResult: (value: HistoryResult) => void;
+  ranking: RankingRow[];
+  currentRanking?: RankingRow;
 }) {
   return (
     <section className="rounded-[34px] border border-[#6fc11f]/25 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.12),transparent_36%),#061018] p-3 shadow-2xl sm:p-4 lg:p-5">
@@ -375,26 +381,89 @@ function PrimaryAnalysisView({
       {activeView === "plan" && <RecommendedPlanPanel plan={plan} />}
       {activeView === "topics" && <TopicsPanel topics={topics} />}
       {activeView === "criteria" && <CriteriaPanel criteria={criteria} />}
+      {activeView === "modules" && <ModulesPanel modules={modules} />}
+      {activeView === "history" && (
+        <HistoryPanel
+          history={history}
+          historyMode={historyMode}
+          historyResult={historyResult}
+          setHistoryMode={setHistoryMode}
+          setHistoryResult={setHistoryResult}
+        />
+      )}
+      {activeView === "ranking" && <RankingPanel ranking={ranking} currentRanking={currentRanking} />}
+      {activeView === "complementary" && <ComplementaryAnalysisPanel summary={summary} />}
     </section>
   );
 }
-function PerformanceHero({ summary }: { summary: ReturnType<typeof getPerformanceSummary> }) {
+
+function ComplementaryAnalysisPanel({ summary }: { summary: ReturnType<typeof getPerformanceSummary> }) {
+  const criterionWeak = {
+    label: "Criterio debil",
+    value: summary.weakestCriterion?.label ?? "Sin datos",
+    detail: summary.weakestCriterion ? `${formatPercent(summary.weakestCriterion.accuracy)} de precision` : "No hay criterios suficientes.",
+    tone: "danger" as const,
+  };
+  const criterionToImprove = {
+    label: "Criterio a mejorar",
+    value: summary.weakestCriterion?.label ?? "Sin datos",
+    detail: summary.weakestCriterion?.status ?? "Completa mas ejercicios para detectar patrones.",
+    tone: "danger" as const,
+  };
+
+  const metric = (label: string) => summary.metrics.find((item) => item.label === label);
+  const groups = [
+    {
+      title: "Actividad",
+      metrics: [metric("Intentos analizados"), metric("Entrenamientos"), metric("Evaluaciones")].filter(Boolean),
+    },
+    {
+      title: "Rendimiento general",
+      metrics: [metric("Promedio general"), metric("Mejor score"), metric("Ultimo score")].filter(Boolean),
+    },
+    {
+      title: "Fortalezas",
+      metrics: [metric("Topico fuerte"), metric("Criterio fuerte")].filter(Boolean),
+    },
+    {
+      title: "Debilidades",
+      metrics: [metric("Topico debil"), criterionWeak, criterionToImprove],
+    },
+    {
+      title: "Recomendacion",
+      metrics: [metric("Modulo recomendado"), metric("Estado general")].filter(Boolean),
+    },
+  ];
+
+  return (
+    <Panel
+      eyebrow="Analisis complementario"
+      title="Resumen general del rendimiento arbitral"
+      description="Metricas generales agrupadas para que el hub principal quede limpio y modular."
+      icon={Gauge}
+    >
+      <div className="grid gap-4 xl:grid-cols-2">
+        {groups.map((group) => (
+          <section key={group.title} className="rounded-[26px] border border-white/10 bg-black/20 p-4">
+            <h3 className="text-lg font-black text-white">{group.title}</h3>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {group.metrics.map((item) => item && <SummaryCard key={`${group.title}-${item.label}`} metric={item} />)}
+            </div>
+          </section>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+function PerformanceHero() {
   return (
     <header className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-4 shadow-2xl sm:rounded-[34px] lg:p-7">
-      <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
-        <div>
-          <p className="break-words text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.45em]">REFLAB PERFORMANCE</p>
-          <h1 className="mt-3 break-words text-3xl font-black leading-tight md:mt-4 md:text-5xl">Rendimiento</h1>
-          <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 md:text-base">
-            Centro de analisis profundo: evolucion, topicos, criterios, modulos, historial, ranking y plan recomendado con datos reales.
-          </p>
-        </div>
-
-        <div className="min-w-0 rounded-3xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4 sm:p-5 lg:min-w-[280px]">
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#6fc11f]">Estado general</p>
-          <p className="mt-2 break-words text-2xl font-black text-white sm:text-3xl">{summary.status}</p>
-          <p className="mt-2 text-xs leading-5 text-zinc-300">{summary.sampleNote}</p>
-        </div>
+      <div>
+        <p className="break-words text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.45em]">REFLAB PERFORMANCE</p>
+        <h1 className="mt-3 break-words text-3xl font-black leading-tight md:mt-4 md:text-5xl">Rendimiento</h1>
+        <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 md:text-base">
+          Elegi un modulo de analisis para revisar evolucion, plan recomendado, topicos, criterios, modulos, historial, ranking o diagnostico complementario.
+        </p>
       </div>
     </header>
   );
@@ -491,6 +560,8 @@ function RecommendedPlanPanel({ plan }: { plan: ReturnType<typeof getRecommended
   );
 }
 function TopicsPanel({ topics }: { topics: TopicMetric[] }) {
+  const technicalTopics = buildTechnicalTopics(topics);
+
   return (
     <Panel
       eyebrow="Por topicos"
@@ -498,6 +569,8 @@ function TopicsPanel({ topics }: { topics: TopicMetric[] }) {
       description="Agrupa por tipo de situacion: manos, faltas tacticas, disputas, fuera de juego, VAR y otros topicos reales cargados."
       icon={BarChart3}
     >
+      <TopicTechnicalMap topics={technicalTopics} />
+
       {topics.length === 0 ? (
         <InlineEmpty text="Todavia no hay topicos suficientes. Completa ejercicios para activar este analisis." />
       ) : (
@@ -511,6 +584,68 @@ function TopicsPanel({ topics }: { topics: TopicMetric[] }) {
   );
 }
 
+
+type TechnicalTopic = {
+  label: string;
+  shortLabel: string;
+  value: number | null;
+  attempts: number;
+};
+
+function buildTechnicalTopics(topics: TopicMetric[]): TechnicalTopic[] {
+  return mainTopicOrder.map((label) => {
+    const metric = topics.find((topic) => topic.topic.toLowerCase() === label.toLowerCase());
+    return {
+      label,
+      shortLabel: shortTopicLabel(label),
+      value: metric?.accuracy ?? null,
+      attempts: metric?.attempts ?? 0,
+    };
+  });
+}
+
+function TopicTechnicalMap({ topics }: { topics: TechnicalTopic[] }) {
+  return (
+    <section className="mb-5 rounded-[30px] border border-[#6fc11f]/25 bg-[linear-gradient(145deg,#071019,#0b151d_58%,#101820)] p-4 sm:p-5">
+      <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#6fc11f] sm:text-xs sm:tracking-[0.32em]">
+            Dashboard tecnico
+          </p>
+          <h3 className="mt-2 break-words text-2xl font-black leading-tight text-white">
+            Mapa tecnico por topicos
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-zinc-400">
+            Vista mobile y desktop de los ejes principales: VAR, fuera de juego, manos, disputas y faltas tacticas.
+          </p>
+        </div>
+
+        <div className="grid gap-3 min-[390px]:grid-cols-2 xl:grid-cols-5">
+          {topics.map((topic) => (
+            <div key={topic.label} className="rounded-2xl border border-white/10 bg-black/25 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] font-black uppercase tracking-[0.12em] text-zinc-400">
+                  {topic.label}
+                </p>
+                <span className="text-xs font-black text-[#6fc11f]">{topic.attempts} int.</span>
+              </div>
+              <p className="mt-2 text-2xl font-black text-white">
+                {topic.value === null ? "Sin datos" : `${topic.value}%`}
+              </p>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-[#6fc11f] shadow-[0_0_18px_rgba(111,193,31,0.35)]"
+                  style={{ width: `${Math.max(0, Math.min(topic.value ?? 0, 100))}%` }}
+                />
+              </div>
+              <p className="mt-2 text-[10px] text-zinc-500">{topic.shortLabel}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 function TopicRow({ topic }: { topic: TopicMetric }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -787,4 +922,11 @@ function LoadingCard() {
 
 function InfoChip({ label, value }: { label: string; value: string }) {
   return <div className="rounded-xl bg-white/[0.04] px-3 py-2"><p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{label}</p><p className="mt-1 font-bold text-zinc-300">{value}</p></div>;
+}
+
+function shortTopicLabel(label: string) {
+  if (label === "Fuera de juego") return "FDJ";
+  if (label === "Faltas tacticas") return "FT";
+  if (label === "Disputas") return "DISP";
+  return label;
 }
