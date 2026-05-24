@@ -178,7 +178,7 @@ export default function DashboardPage() {
           <TopMetric title="Ultimo score" value={formatScore(summary.lastScore)} />
         </section>
 
-        <PlayerAnalysisCard topics={playerTopics} hasData={summary.hasData} />
+        <TechnicalProfileCard topics={playerTopics} hasData={summary.hasData} />
 
         {!summary.hasData && (
           <section className="rounded-3xl border border-dashed border-[#6fc11f]/25 bg-[#6fc11f]/5 p-6 text-center">
@@ -292,22 +292,22 @@ function buildPlayerTopics(topicMetrics: TopicMetric[]): PlayerTopic[] {
   });
 }
 
-function PlayerAnalysisCard({ topics, hasData }: { topics: PlayerTopic[]; hasData: boolean }) {
+function TechnicalProfileCard({ topics, hasData }: { topics: PlayerTopic[]; hasData: boolean }) {
   const points = radarPoints(topics.map((topic) => topic.value ?? 0), 92, 110);
   const guideRings = [25, 50, 75, 100].map((value) => radarPoints([value, value, value, value, value], 92, 110));
 
   return (
-    <section className="max-w-full overflow-hidden rounded-[30px] border border-[#6fc11f]/25 bg-[radial-gradient(circle_at_20%_10%,rgba(111,193,31,0.24),transparent_35%),linear-gradient(145deg,#09140d,#050b12_62%,#101820)] p-4 shadow-2xl sm:rounded-[34px] lg:p-6">
-      <div className="grid min-w-0 gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+    <section className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(145deg,#071019,#0b151d_58%,#101820)] p-4 shadow-2xl sm:rounded-[34px] lg:p-6">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.34em] text-[#6fc11f]">
-            Player analysis
+          <p className="text-[10px] font-black uppercase tracking-[0.26em] text-[#6fc11f] sm:text-xs sm:tracking-[0.34em]">
+            Mapa tecnico
           </p>
           <h2 className="mt-3 break-words text-2xl font-black leading-tight text-white md:text-3xl lg:text-4xl">
-            Radar arbitral
+            Perfil por topicos
           </h2>
           <p className="mt-3 text-sm leading-6 text-zinc-400">
-            Lectura visual tipo jugador: VAR, fuera de juego, manos, disputas y faltas tacticas como ejes centrales del criterio.
+            Lectura resumida de los cinco ejes principales del criterio arbitral: VAR, fuera de juego, manos, disputas y faltas tacticas.
           </p>
           <div className="mt-5 grid grid-cols-1 gap-3 min-[380px]:grid-cols-2">
             {topics.map((topic) => (
@@ -320,7 +320,7 @@ function PlayerAnalysisCard({ topics, hasData }: { topics: PlayerTopic[]; hasDat
           </div>
         </div>
 
-        <div className="relative mx-auto aspect-square w-full max-w-[320px] overflow-hidden rounded-[28px] border border-white/10 bg-black/25 p-2 shadow-[inset_0_0_50px_rgba(111,193,31,0.08)] sm:max-w-[390px] sm:p-4 lg:max-w-[430px]">
+        <div className="relative mx-auto aspect-square w-full max-w-[300px] overflow-hidden rounded-[28px] border border-[#6fc11f]/20 bg-[#050b12] p-3 shadow-[inset_0_0_50px_rgba(111,193,31,0.08)] sm:max-w-[380px] sm:p-5 lg:max-w-[410px]">
           <svg viewBox="0 0 220 220" className="h-full w-full">
             <defs>
               <filter id="radarGlow">
@@ -336,11 +336,11 @@ function PlayerAnalysisCard({ topics, hasData }: { topics: PlayerTopic[]; hasDat
             ))}
             {topics.map((topic, index) => {
               const end = radarAxisPoint(index, 92, 110);
-              const label = radarAxisPoint(index, 108, 110);
+              const label = radarAxisPoint(index, 99, 110);
               return (
                 <g key={topic.label}>
                   <line x1="110" y1="110" x2={end.x} y2={end.y} stroke="rgba(255,255,255,0.12)" />
-                  <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" className="fill-zinc-300 text-[7px] font-black uppercase sm:text-[8px]">
+                  <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" className="fill-white text-[7px] font-black uppercase sm:text-[8px]">
                     {shortTopicLabel(topic.label)}
                   </text>
                 </g>
@@ -356,7 +356,7 @@ function PlayerAnalysisCard({ topics, hasData }: { topics: PlayerTopic[]; hasDat
 
           {!hasData && (
             <div className="absolute inset-x-5 bottom-5 rounded-2xl border border-dashed border-[#6fc11f]/25 bg-[#050b12]/90 p-3 text-center text-xs font-bold text-zinc-300">
-              Completa ejercicios para llenar el radar con datos reales.
+              Completa ejercicios para activar este mapa con datos reales.
             </div>
           )}
         </div>
@@ -384,7 +384,8 @@ function radarAxisPoint(index: number, radius: number, center: number) {
 
 function shortTopicLabel(label: string) {
   if (label === "Fuera de juego") return "FDJ";
-  if (label === "Faltas tacticas") return "Faltas";
+  if (label === "Faltas tacticas") return "FT";
+  if (label === "Disputas") return "DISP";
   return label;
 }
 

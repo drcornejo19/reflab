@@ -51,6 +51,7 @@ import {
 
 type HistoryMode = "ALL" | "training" | "exam" | "rules_exam";
 type HistoryResult = "ALL" | PerformanceItem["result"];
+type PerformanceView = "evolution" | "plan" | "topics" | "criteria";
 
 type LoadState = {
   attempts: AttemptRecord[];
@@ -96,6 +97,7 @@ export default function PerformancePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [historyMode, setHistoryMode] = useState<HistoryMode>("ALL");
   const [historyResult, setHistoryResult] = useState<HistoryResult>("ALL");
+  const [activeView, setActiveView] = useState<PerformanceView>("evolution");
 
   useEffect(() => {
     async function loadPerformance() {
@@ -207,95 +209,172 @@ export default function PerformancePage() {
       <div className="mx-auto w-full max-w-full space-y-5 overflow-hidden lg:max-w-[1180px] lg:space-y-6">
         <PerformanceHero summary={summary} />
 
-        <PerformanceEntryGrid />
-
         {loadError && (
           <div className="rounded-3xl border border-yellow-400/25 bg-yellow-400/10 p-4 text-sm font-bold leading-6 text-yellow-100">
             {loadError}
           </div>
         )}
 
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {summary.metrics.slice(0, 12).map((metric) => (
-            <SummaryCard key={metric.label} metric={metric} />
-          ))}
-        </section>
+        <PerformanceEntryGrid activeView={activeView} onSelect={setActiveView} />
 
-        <section id="mi-evolucion" className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-          <EvolutionPanel evolution={evolution} />
-          <RecommendedPlanPanel plan={plan} />
-        </section>
+        <PrimaryAnalysisView
+          activeView={activeView}
+          evolution={evolution}
+          plan={plan}
+          topics={topics}
+          criteria={criteria}
+        />
 
-        <section id="por-topico" className="grid gap-5 xl:grid-cols-[1fr_1fr]">
-          <TopicsPanel topics={topics} />
-          <CriteriaPanel criteria={criteria} />
-        </section>
+        <section className="rounded-[34px] border border-white/10 bg-[#050b12] p-4 shadow-2xl sm:p-5 lg:p-7">
+          <div className="mb-5 flex flex-col gap-2 lg:mb-6 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
+                Analisis complementario
+              </p>
+              <h2 className="mt-2 break-words text-2xl font-black leading-tight text-white sm:text-3xl">
+                Metricas, modulos, historial y ranking
+              </h2>
+            </div>
+            <p className="max-w-2xl text-sm leading-6 text-zinc-400">
+              Esta capa resume datos de apoyo sin mezclarlos con los cuatro modulos principales de rendimiento.
+            </p>
+          </div>
 
-        <ModulesPanel modules={modules} />
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {summary.metrics.slice(0, 12).map((metric) => (
+              <SummaryCard key={metric.label} metric={metric} />
+            ))}
+          </div>
 
-        <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-          <HistoryPanel
-            history={history}
-            historyMode={historyMode}
-            historyResult={historyResult}
-            setHistoryMode={setHistoryMode}
-            setHistoryResult={setHistoryResult}
-          />
-          <RankingPanel ranking={ranking} currentRanking={currentRanking} />
+          <div className="mt-5 lg:mt-6">
+            <ModulesPanel modules={modules} />
+          </div>
+
+          <section className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr] lg:mt-6">
+            <HistoryPanel
+              history={history}
+              historyMode={historyMode}
+              historyResult={historyResult}
+              setHistoryMode={setHistoryMode}
+              setHistoryResult={setHistoryResult}
+            />
+            <RankingPanel ranking={ranking} currentRanking={currentRanking} />
+          </section>
         </section>
       </div>
     </AppShell>
   );
 }
-function PerformanceEntryGrid() {
-  const entries = [
+function PerformanceEntryGrid({
+  activeView,
+  onSelect,
+}: {
+  activeView: PerformanceView;
+  onSelect: (view: PerformanceView) => void;
+}) {
+  const entries: Array<{
+    view: PerformanceView;
+    title: string;
+    description: string;
+    icon: LucideIcon;
+  }> = [
     {
+      view: "evolution",
       title: "Mi evolucion",
       description: "Progreso general del usuario a lo largo del tiempo.",
       icon: LineChart,
-      href: "#mi-evolucion",
     },
     {
+      view: "plan",
       title: "Plan recomendado",
       description: "Foco proximo segun errores, patrones y desempeno.",
       icon: Target,
-      href: "#plan-recomendado",
     },
     {
+      view: "topics",
       title: "Por topico",
       description: "Rendimiento segun tipo de jugada arbitral.",
       icon: BarChart3,
-      href: "#por-topico",
     },
     {
+      view: "criteria",
       title: "Por criterio",
       description: "Calidad tecnica de como se resuelve la decision.",
       icon: ListChecks,
-      href: "#por-criterio",
     },
   ];
 
   return (
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       {entries.map((entry) => {
         const Icon = entry.icon;
+        const active = entry.view === activeView;
+
         return (
-          <a
-            key={entry.title}
-            href={entry.href}
-            className="group min-w-0 rounded-[24px] border border-white/10 bg-[#101b24] p-4 shadow-2xl transition hover:border-[#6fc11f]/45 hover:bg-[#13212b] sm:rounded-[26px]"
+          <button
+            key={entry.view}
+            type="button"
+            onClick={() => onSelect(entry.view)}
+            aria-pressed={active}
+            className={`group min-h-[176px] min-w-0 rounded-[30px] border p-5 text-left shadow-2xl transition active:scale-[0.98] sm:min-h-[190px] sm:p-6 ${
+              active
+                ? "border-[#6fc11f]/70 bg-[#6fc11f]/15 shadow-[0_0_34px_rgba(111,193,31,0.18)]"
+                : "border-white/10 bg-[#101b24] hover:-translate-y-1 hover:border-[#6fc11f]/45 hover:bg-[#13212b]"
+            }`}
           >
-            <div className="flex min-w-0 items-start justify-between gap-3 sm:gap-4">
-              <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
-                <Icon size={22} />
+            <div className="flex min-w-0 items-start justify-between gap-4">
+              <div
+                className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl border transition sm:h-14 sm:w-14 ${
+                  active
+                    ? "border-[#6fc11f] bg-[#6fc11f] text-black"
+                    : "border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f] group-hover:bg-[#6fc11f]/15"
+                }`}
+              >
+                <Icon size={24} />
               </div>
-              <ArrowRight className="h-4 w-4 text-zinc-600 transition group-hover:translate-x-1 group-hover:text-[#6fc11f]" />
+              <ArrowRight
+                className={`h-5 w-5 shrink-0 transition ${
+                  active
+                    ? "translate-x-1 text-[#6fc11f]"
+                    : "text-zinc-600 group-hover:translate-x-1 group-hover:text-[#6fc11f]"
+                }`}
+              />
             </div>
-            <h2 className="mt-4 break-words text-lg font-black leading-tight text-white sm:text-xl">{entry.title}</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-400">{entry.description}</p>
-          </a>
+            <h2 className="mt-5 break-words text-2xl font-black leading-tight text-white">
+              {entry.title}
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-zinc-400">
+              {entry.description}
+            </p>
+            <p className="mt-5 text-[10px] font-black uppercase tracking-[0.2em] text-[#6fc11f]">
+              {active ? "Modulo activo" : "Abrir modulo"}
+            </p>
+          </button>
         );
       })}
+    </section>
+  );
+}
+
+function PrimaryAnalysisView({
+  activeView,
+  evolution,
+  plan,
+  topics,
+  criteria,
+}: {
+  activeView: PerformanceView;
+  evolution: ReturnType<typeof getEvolutionData>;
+  plan: ReturnType<typeof getRecommendedPlan>;
+  topics: TopicMetric[];
+  criteria: CriterionMetric[];
+}) {
+  return (
+    <section className="rounded-[34px] border border-[#6fc11f]/25 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.12),transparent_36%),#061018] p-3 shadow-2xl sm:p-4 lg:p-5">
+      {activeView === "evolution" && <EvolutionPanel evolution={evolution} />}
+      {activeView === "plan" && <RecommendedPlanPanel plan={plan} />}
+      {activeView === "topics" && <TopicsPanel topics={topics} />}
+      {activeView === "criteria" && <CriteriaPanel criteria={criteria} />}
     </section>
   );
 }
@@ -709,5 +788,3 @@ function LoadingCard() {
 function InfoChip({ label, value }: { label: string; value: string }) {
   return <div className="rounded-xl bg-white/[0.04] px-3 py-2"><p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{label}</p><p className="mt-1 font-bold text-zinc-300">{value}</p></div>;
 }
-
-
