@@ -3,11 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { SignOutButton, useUser } from "@clerk/nextjs";
 import {
+  Activity,
   BadgeCheck,
+  BarChart3,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
   ClipboardList,
   Download,
   Gauge,
+  IdCard,
+  LineChart,
   LogOut,
+  MapPin,
   Save,
   ShieldCheck,
   Sparkles,
@@ -23,14 +31,32 @@ import {
   getCriterionPerformance,
   getPerformanceSummary,
   getRecentHistory,
+  getTopicPerformance,
   type AttemptRecord,
+  type CriterionMetric,
   type ExamResultRecord,
+  type PerformanceSummary,
   type RulesExamResultRecord,
+  type TopicMetric,
 } from "@/lib/performance";
 
 type Attempt = AttemptRecord;
 type Exam = ExamResultRecord;
 type RulesExam = RulesExamResultRecord;
+type RefCardTopic = {
+  label: string;
+  shortLabel: string;
+  value: number | null;
+  attempts: number;
+};
+
+const refCardTopicConfig = [
+  { label: "VAR", shortLabel: "VAR", aliases: ["VAR"] },
+  { label: "Fuera de juego", shortLabel: "FDJ", aliases: ["Fuera de juego", "Offside"] },
+  { label: "Manos", shortLabel: "Manos", aliases: ["Manos", "Mano", "Handball"] },
+  { label: "Disputas", shortLabel: "Disputas", aliases: ["Disputas", "Dispute", "Challenge"] },
+  { label: "Faltas tacticas", shortLabel: "Faltas", aliases: ["Faltas tacticas", "Tactical foul"] },
+];
 
 export default function ProfilePage() {
   const { user, isLoaded } = useUser();
@@ -224,7 +250,27 @@ export default function ProfilePage() {
   }, [dataset.sessions, summary]);
 
   const criteria = useMemo(() => getCriterionPerformance(dataset.items), [dataset.items]);
+  const topics = useMemo(() => getTopicPerformance(dataset.items), [dataset.items]);
+  const refCardTopics = useMemo(() => buildRefCardTopics(topics), [topics]);
   const trend = useMemo(() => getRecentHistory(dataset.items, 6), [dataset.items]);
+  const trendScores = useMemo(
+    () =>
+      dataset.sessions
+        .map((session) => session.score)
+        .filter(isFiniteNumber)
+        .slice(-8),
+    [dataset.sessions]
+  );
+  const disciplineMetric = criteria.find((item) => item.key === "discipline");
+  const lastTestDate = useMemo(() => {
+    const testSessions = dataset.sessions
+      .filter((session) => session.source !== "training" && session.date)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return testSessions[0]?.date ?? exams[0]?.created_at ?? rulesResults[0]?.created_at ?? null;
+  }, [dataset.sessions, exams, rulesResults]);
+  const refCardBadge = getRefCardBadge(summary, refereeType);
+  const disciplineLabel = getDisciplineLabel(disciplineMetric);
+  const trendLabel = getTrendLabel(trendScores);
 
   if (!isLoaded || loading) {
     return (
@@ -265,58 +311,69 @@ export default function ProfilePage() {
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-[1120px] space-y-5">
-        <section className="grid gap-5 lg:grid-cols-[390px_minmax(0,1fr)] lg:items-stretch">
-          <PlayerCard
-            name={displayName}
-            email={email}
-            photo={photo}
-            rating={stats.rating}
-            level={stats.level}
-            refereeType={refereeType}
-            mainRole={mainRole}
-            association={association || "Sin liga"}
-            category={category || "Sin categoria"}
-            uploadingAvatar={uploadingAvatar}
-            onUpload={uploadAvatar}
-            onDownload={downloadRefCard}
-          />
+      <div className="mx-auto w-full max-w-[1240px] space-y-5 overflow-hidden">
+        <PlayerCard
+          name={displayName}
+          email={email}
+          photo={photo}
+          score={summary.avgScore}
+          evaluations={stats.totalExams}
+          bestScore={summary.bestScore}
+          status={stats.hasData ? summary.status : "Pendiente"}
+          badge={refCardBadge}
+          level={stats.level}
+          refereeType={refereeType}
+          mainRole={mainRole}
+          association={association || "No registrado"}
+          category={category || "No registrado"}
+          location="No registrado"
+          discipline={disciplineLabel}
+          experience="No registrado"
+          lastTest={formatShortDate(lastTestDate)}
+          ranking="Pendiente"
+          trainings={stats.totalAttempts}
+          topics={refCardTopics}
+          trendScores={trendScores}
+          trendLabel={trendLabel}
+          uploadingAvatar={uploadingAvatar}
+          onUpload={uploadAvatar}
+          onDownload={downloadRefCard}
+        />
 
-          <div className="space-y-4 rounded-[34px] border border-white/10 bg-[#071019] p-5 shadow-2xl lg:p-6">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-                Ficha tecnica
-              </p>
-              <h1 className="mt-3 text-3xl font-black lg:text-5xl">
-                Perfil arbitral
-              </h1>
-              <p className="mt-3 text-sm leading-6 text-zinc-400">
-                Identidad, rol, categoria y lectura rapida de rendimiento. La ficha conserva tus datos reales y usa las mismas metricas que Rendimiento.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard icon={<Star />} title="Promedio training" value={stats.hasAttempts ? `${stats.avgAttempt}/100` : "-"} detail={stats.hasAttempts ? "Practicas individuales" : "Sin intentos"} />
-              <MetricCard icon={<Trophy />} title="Promedio examen" value={stats.hasExams ? `${stats.avgExam}/100` : "-"} detail={stats.hasExams ? "Evaluaciones formales" : "Sin examenes"} />
-              <MetricCard icon={<ClipboardList />} title="Actividad" value={stats.hasData ? stats.activity.toString() : "-"} detail={stats.hasData ? "Total registrado" : "Sin actividad"} />
-              <MetricCard icon={<BadgeCheck />} title="Estado" value={stats.hasData ? stats.state : "-"} detail={stats.hasData ? "Lectura general" : "Sin evaluacion"} />
-            </div>
-
-            {!stats.hasData && (
-              <div className="rounded-3xl border border-dashed border-[#6fc11f]/25 bg-[#6fc11f]/5 p-5 text-center">
-                <p className="font-black text-white">Todavia no hay actividad real.</p>
-                <p className="mt-2 text-sm text-zinc-400">
-                  Cuando completes ejercicios o examenes, tus estadisticas apareceran aca.
-                </p>
-              </div>
-            )}
-
-            <Panel title="Plan recomendado" subtitle="Sugerido con datos reales disponibles.">
-              <InfoRow label="Modulo recomendado" value={stats.hasData ? summary.recommendedModule : "Sin datos suficientes"} />
-              <InfoRow label="Topico fuerte" value={summary.strongestTopic?.topic ?? "Sin datos"} />
-              <InfoRow label="Topico a mejorar" value={summary.weakestTopic?.topic ?? "Sin datos"} />
-            </Panel>
+        <section className="space-y-4 rounded-[34px] border border-white/10 bg-[#071019] p-5 shadow-2xl lg:p-6">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
+              Ficha tecnica
+            </p>
+            <h1 className="mt-3 text-3xl font-black lg:text-5xl">
+              Perfil arbitral
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-zinc-400">
+              Identidad, rol, categoria y lectura rapida de rendimiento. La ficha conserva tus datos reales y usa las mismas metricas que Rendimiento.
+            </p>
           </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard icon={<Star />} title="Promedio training" value={stats.hasAttempts ? `${stats.avgAttempt}/100` : "-"} detail={stats.hasAttempts ? "Practicas individuales" : "Sin intentos"} />
+            <MetricCard icon={<Trophy />} title="Promedio examen" value={stats.hasExams ? `${stats.avgExam}/100` : "-"} detail={stats.hasExams ? "Evaluaciones formales" : "Sin examenes"} />
+            <MetricCard icon={<ClipboardList />} title="Actividad" value={stats.hasData ? stats.activity.toString() : "-"} detail={stats.hasData ? "Total registrado" : "Sin actividad"} />
+            <MetricCard icon={<BadgeCheck />} title="Estado" value={stats.hasData ? stats.state : "-"} detail={stats.hasData ? "Lectura general" : "Sin evaluacion"} />
+          </div>
+
+          {!stats.hasData && (
+            <div className="rounded-3xl border border-dashed border-[#6fc11f]/25 bg-[#6fc11f]/5 p-5 text-center">
+              <p className="font-black text-white">Todavia no hay actividad real.</p>
+              <p className="mt-2 text-sm text-zinc-400">
+                Cuando completes ejercicios o examenes, tus estadisticas apareceran aca.
+              </p>
+            </div>
+          )}
+
+          <Panel title="Plan recomendado" subtitle="Sugerido con datos reales disponibles.">
+            <InfoRow label="Modulo recomendado" value={stats.hasData ? summary.recommendedModule : "Sin datos suficientes"} />
+            <InfoRow label="Topico fuerte" value={summary.strongestTopic?.topic ?? "Sin datos"} />
+            <InfoRow label="Topico a mejorar" value={summary.weakestTopic?.topic ?? "Sin datos"} />
+          </Panel>
         </section>
 
         <section className="grid gap-4 md:grid-cols-2">
@@ -420,12 +477,25 @@ function PlayerCard({
   name,
   email,
   photo,
-  rating,
+  score,
+  evaluations,
+  bestScore,
+  status,
+  badge,
   level,
   refereeType,
   mainRole,
   association,
   category,
+  location,
+  discipline,
+  experience,
+  lastTest,
+  ranking,
+  trainings,
+  topics,
+  trendScores,
+  trendLabel,
   uploadingAvatar,
   onUpload,
   onDownload,
@@ -433,107 +503,339 @@ function PlayerCard({
   name: string;
   email: string;
   photo: string;
-  rating: number;
+  score: number | null;
+  evaluations: number;
+  bestScore: number | null;
+  status: string;
+  badge: string;
   level: string;
   refereeType: string;
   mainRole: string;
   association: string;
   category: string;
+  location: string;
+  discipline: string;
+  experience: string;
+  lastTest: string;
+  ranking: string;
+  trainings: number;
+  topics: RefCardTopic[];
+  trendScores: number[];
+  trendLabel: string;
   uploadingAvatar: boolean;
   onUpload: (file: File) => void;
   onDownload: () => void;
 }) {
+  const scoreLabel = score === null ? "--" : score.toString();
+  const bestLabel = bestScore === null ? "--" : bestScore.toString();
+  const refLabId = score === null ? "#00000" : `#${String(Math.round(score)).padStart(5, "0")}`;
+
   return (
-    <article className="relative mx-auto w-full max-w-[390px] overflow-hidden rounded-[38px] border border-[#6fc11f]/35 bg-[radial-gradient(circle_at_20%_0%,rgba(111,193,31,0.32),transparent_34%),linear-gradient(145deg,#152213,#071019_54%,#02060b)] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.5)]">
-      <div className="absolute inset-x-8 top-0 h-px bg-[#b7ff8a]/70" />
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[#b7ff8a]">REF CARD</p>
-          <p className="mt-2 text-5xl font-black leading-none text-white">{rating || "--"}</p>
-          <p className="mt-1 text-xs font-black uppercase tracking-[0.28em] text-zinc-400">REF</p>
-        </div>
-        <div className="rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-3 py-2 text-right">
-          <p className="text-xs font-black text-[#6fc11f]">{refereeType}</p>
-          <p className="mt-1 text-[10px] text-zinc-400">{category}</p>
-        </div>
-      </div>
-
-      <div className="mt-6 flex flex-col items-center text-center">
-        <label className="group relative cursor-pointer" title="Cambiar foto">
-          {photo ? (
-            <img
-              src={photo}
-              alt="Foto de perfil"
-              className="h-36 w-36 rounded-full border-4 border-[#6fc11f] object-cover shadow-[0_0_45px_rgba(111,193,31,0.35)] transition group-hover:scale-[1.02] sm:h-40 sm:w-40"
-            />
-          ) : (
-            <div className="grid h-36 w-36 place-items-center rounded-full border-4 border-[#6fc11f] bg-[#101b24] transition group-hover:scale-[1.02] sm:h-40 sm:w-40">
-              <UserRound className="text-[#6fc11f]" size={58} />
-            </div>
-          )}
-          <span className="absolute inset-0 grid place-items-center rounded-full bg-black/0 text-[10px] font-black uppercase tracking-[0.14em] text-white opacity-0 transition group-hover:bg-black/45 group-hover:opacity-100">
-            Cambiar foto
-          </span>
-          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-[#6fc11f] px-4 py-1 text-[10px] font-black text-black">
-            MATCH OFFICIAL
-          </div>
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            disabled={uploadingAvatar}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) onUpload(file);
-            }}
-          />
-        </label>
-
-        <h2 className="mt-6 max-w-full text-3xl font-black leading-tight text-white">{name}</h2>
-        <p className="mt-2 max-w-full truncate text-sm text-zinc-400">{email}</p>
-        <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-sm font-black text-[#b7ff8a]">
-          <Sparkles size={17} /> {level}
+    <article className="relative w-full max-w-full overflow-hidden rounded-[34px] border border-[#6fc11f]/35 bg-[radial-gradient(circle_at_14%_8%,rgba(111,193,31,0.34),transparent_30%),radial-gradient(circle_at_90%_0%,rgba(111,193,31,0.14),transparent_28%),linear-gradient(145deg,#05070d,#071019_48%,#0e1416)] p-3 shadow-[0_32px_110px_rgba(0,0,0,0.62)] sm:rounded-[42px] sm:p-5 lg:p-6">
+      <div className="pointer-events-none absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:34px_34px]" />
+      <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[#b7ff8a] to-transparent" />
+      <div className="pointer-events-none absolute bottom-5 left-5 top-5 hidden w-12 rounded-[28px] border border-white/10 bg-black/30 lg:block">
+        <p className="absolute left-1/2 top-8 -translate-x-1/2 rotate-90 whitespace-nowrap text-[10px] font-black uppercase tracking-[0.45em] text-zinc-400">
+          REFLAB ID
+        </p>
+        <p className="absolute bottom-10 left-1/2 -translate-x-1/2 -rotate-90 whitespace-nowrap text-sm font-black tracking-[0.22em] text-[#6fc11f]">
+          {refLabId}
         </p>
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-3">
-        <CardInfo label="Rol" value={mainRole} />
-        <CardInfo label="Liga" value={association} />
-        <CardInfo label="Tipo" value={refereeType} />
-        <CardInfo label="Categoria" value={category} />
+      <div className="relative grid gap-4 lg:grid-cols-[minmax(260px,0.72fr)_minmax(0,1fr)] lg:pl-16">
+        <div className="relative min-w-0 overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(145deg,rgba(111,193,31,0.16),rgba(0,0,0,0.42))] p-3 sm:p-4">
+          <div className="absolute -left-16 top-12 h-56 w-32 rotate-12 rounded-[32px] bg-[#6fc11f]/25 blur-sm" />
+          <label className="group relative block cursor-pointer overflow-hidden rounded-[26px] border border-[#6fc11f]/35 bg-[#04080d] shadow-[0_0_55px_rgba(111,193,31,0.16)]" title="Cambiar foto">
+            {photo ? (
+              <img
+                src={photo}
+                alt="Foto de perfil"
+                className="aspect-[4/5] w-full object-cover object-center opacity-95 transition duration-300 group-hover:scale-[1.02]"
+              />
+            ) : (
+              <div className="grid aspect-[4/5] w-full place-items-center bg-[radial-gradient(circle_at_center,rgba(111,193,31,0.18),transparent_58%),#101b24]">
+                <UserRound className="text-[#6fc11f]" size={86} />
+              </div>
+            )}
+            <span className="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-transparent" />
+            <span className="absolute inset-x-4 bottom-4 flex min-h-11 items-center justify-center rounded-2xl border border-[#6fc11f]/30 bg-black/55 text-xs font-black uppercase tracking-[0.18em] text-[#b7ff8a] opacity-100 backdrop-blur transition group-hover:bg-[#6fc11f] group-hover:text-black">
+              {uploadingAvatar ? "Subiendo..." : "Cambiar foto"}
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={uploadingAvatar}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onUpload(file);
+              }}
+            />
+          </label>
+
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <RefCardInfo icon={<IdCard size={17} />} label="Tipo" value={refereeType} />
+            <RefCardInfo icon={<Sparkles size={17} />} label="Badge" value={badge} tone="green" />
+          </div>
+        </div>
+
+        <div className="min-w-0 space-y-4">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
+            <section className="min-w-0 rounded-[30px] border border-white/10 bg-black/25 p-4 backdrop-blur sm:p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.34em] text-[#6fc11f]">REFLAB</p>
+                  <p className="mt-1 text-xs tracking-[0.34em] text-zinc-400">Referee Decision Lab</p>
+                </div>
+                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-[#b7ff8a]">
+                  <CheckCircle2 size={16} />
+                  Verificado RefLab
+                </div>
+              </div>
+
+              <div className="mt-6 min-w-0">
+                <h2 className="break-words text-4xl font-black leading-none text-white sm:text-5xl xl:text-6xl">
+                  {name}
+                </h2>
+                <p className="mt-3 break-words text-base font-black uppercase tracking-[0.18em] text-[#6fc11f] sm:text-lg">
+                  {mainRole}
+                </p>
+                <p className="mt-3 break-words text-sm leading-6 text-zinc-400">{email}</p>
+              </div>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <RefCardInfo icon={<ShieldCheck size={18} />} label="Asociacion" value={association} />
+                <RefCardInfo icon={<Gauge size={18} />} label="Nivel" value={level} />
+                <RefCardInfo icon={<Trophy size={18} />} label="Categoria" value={category} />
+                <RefCardInfo icon={<MapPin size={18} />} label="Ciudad / pais" value={location} />
+              </div>
+            </section>
+
+            <aside className="grid gap-3 rounded-[30px] border border-white/10 bg-black/25 p-4 backdrop-blur">
+              <SideMetric icon={<ShieldCheck size={22} />} label="Disciplina" value={discipline} />
+              <SideMetric icon={<Clock3 size={22} />} label="Experiencia" value={experience} />
+              <SideMetric icon={<CalendarDays size={22} />} label="Ultimo test" value={lastTest} />
+              <SideMetric icon={<Trophy size={22} />} label="Ranking" value={ranking} />
+              <SideMetric icon={<Activity size={22} />} label="Entrenamientos" value={trainings > 0 ? trainings.toString() : "Sin datos"} />
+            </aside>
+          </div>
+
+          <section className="grid gap-3 rounded-[30px] border border-white/10 bg-black/35 p-3 shadow-[inset_0_0_42px_rgba(255,255,255,0.02)] sm:grid-cols-2 sm:p-4 xl:grid-cols-4">
+            <RefStatCard icon={<Target size={25} />} label="Score" value={scoreLabel} detail={status} featured />
+            <RefStatCard icon={<ClipboardList size={25} />} label="Tests" value={evaluations > 0 ? evaluations.toString() : "--"} detail="Completados" />
+            <RefStatCard icon={<Star size={25} />} label="Best" value={bestLabel} detail="Puntaje maximo" />
+            <RefTrendCard scores={trendScores} label={trendLabel} />
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
+            <RefRadar topics={topics} />
+            <div className="grid gap-4">
+              <div className="rounded-[26px] border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4">
+                <div className="flex items-center gap-3">
+                  <BadgeCheck className="text-[#6fc11f]" size={30} />
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-zinc-400">Verificado</p>
+                    <p className="font-black text-[#b7ff8a]">REFLAB</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-[26px] border border-white/10 bg-black/25 p-4">
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-[#6fc11f]">REFLAB.APP</p>
+                    <p className="mt-2 text-xs leading-5 text-zinc-500">{refLabId} REFLAB ID</p>
+                  </div>
+                  <FakeQr />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex min-h-12 cursor-pointer items-center justify-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 text-xs font-black text-[#b7ff8a] transition hover:bg-[#6fc11f]/20">
+              {uploadingAvatar ? "SUBIENDO FOTO..." : "CAMBIAR FOTO"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={uploadingAvatar}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) onUpload(file);
+                }}
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={onDownload}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-4 text-xs font-black text-black transition hover:bg-[#82dc2a]"
+            >
+              <Download size={17} />
+              DESCARGAR REF CARD
+            </button>
+          </div>
+        </div>
       </div>
-
-      <label className="mt-5 flex min-h-12 cursor-pointer items-center justify-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 text-xs font-black text-[#b7ff8a] transition hover:bg-[#6fc11f]/20">
-        {uploadingAvatar ? "SUBIENDO FOTO..." : "CAMBIAR FOTO"}
-        <input
-          type="file"
-          accept="image/*"
-          className="hidden"
-          disabled={uploadingAvatar}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) onUpload(file);
-          }}
-        />
-      </label>
-
-      <button
-        type="button"
-        onClick={onDownload}
-        className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-4 text-xs font-black text-black transition hover:bg-[#82dc2a]"
-      >
-        <Download size={17} />
-        DESCARGAR REF CARD
-      </button>
     </article>
   );
 }
 
-function CardInfo({ label, value }: { label: string; value: string }) {
+function RefCardInfo({ icon, label, value, tone = "neutral" }: { icon: React.ReactNode; label: string; value: string; tone?: "neutral" | "green" }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+    <div className={`min-w-0 rounded-2xl border p-3 ${tone === "green" ? "border-[#6fc11f]/25 bg-[#6fc11f]/10" : "border-white/10 bg-black/25"}`}>
+      <div className="flex items-center gap-2 text-[#6fc11f]">{icon}</div>
       <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">{label}</p>
-      <p className="mt-1 truncate text-sm font-black text-white">{value}</p>
+      <p className="mt-1 break-words text-sm font-black text-white">{value || "No registrado"}</p>
+    </div>
+  );
+}
+
+function SideMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3 border-b border-white/10 pb-3 last:border-b-0 last:pb-0">
+      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">{label}</p>
+        <p className="mt-1 break-words text-sm font-black text-white">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function RefStatCard({ icon, label, value, detail, featured = false }: { icon: React.ReactNode; label: string; value: string; detail: string; featured?: boolean }) {
+  return (
+    <div className={`min-w-0 rounded-[24px] border p-4 ${featured ? "border-[#6fc11f]/35 bg-[#6fc11f]/10" : "border-white/10 bg-[#071019]"}`}>
+      <div className="text-[#6fc11f]">{icon}</div>
+      <p className="mt-3 text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">{label}</p>
+      <p className="mt-1 break-words text-5xl font-black leading-none text-white">{value}</p>
+      <p className={`mt-2 inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${featured ? "border-[#6fc11f]/45 text-[#b7ff8a]" : "border-white/10 text-zinc-400"}`}>
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+function RefTrendCard({ scores, label }: { scores: number[]; label: string }) {
+  return (
+    <div className="min-w-0 rounded-[24px] border border-white/10 bg-[#071019] p-4">
+      <div className="text-[#6fc11f]"><LineChart size={25} /></div>
+      <p className="mt-3 text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">Rating trend</p>
+      <TrendSparkline scores={scores} />
+      <p className="mt-2 inline-flex rounded-full border border-[#6fc11f]/35 bg-[#6fc11f]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[#b7ff8a]">
+        {label}
+      </p>
+    </div>
+  );
+}
+
+function TrendSparkline({ scores }: { scores: number[] }) {
+  const values = scores.length >= 2 ? scores : [18, 34, 27, 48, 56, 68, 74, 86];
+  const points = values
+    .map((value, index) => {
+      const x = values.length === 1 ? 0 : (index / (values.length - 1)) * 150;
+      const y = 58 - (Math.max(0, Math.min(value, 100)) / 100) * 48;
+      return `${Math.round(x)},${Math.round(y)}`;
+    })
+    .join(" ");
+
+  return (
+    <svg viewBox="0 0 150 64" className="mt-2 h-16 w-full overflow-visible">
+      <defs>
+        <linearGradient id="trendFill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stopColor="#6fc11f" stopOpacity="0.4" />
+          <stop offset="1" stopColor="#6fc11f" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polyline points={`0,62 ${points} 150,62`} fill="url(#trendFill)" stroke="none" />
+      <polyline points={points} fill="none" stroke="#6fc11f" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      {points.split(" ").map((point) => {
+        const [x, y] = point.split(",");
+        return <circle key={point} cx={x} cy={y} r="3" fill="#b7ff8a" />;
+      })}
+    </svg>
+  );
+}
+
+function RefRadar({ topics }: { topics: RefCardTopic[] }) {
+  const points = profileRadarPoints(topics.map((topic) => topic.value ?? 0), 84, 110);
+  const guideRings = [25, 50, 75, 100].map((value) => profileRadarPoints([value, value, value, value, value], 84, 110));
+  const hasAnyData = topics.some((topic) => topic.value !== null);
+
+  return (
+    <div className="min-w-0 overflow-hidden rounded-[30px] border border-white/10 bg-[#050b12] p-4 shadow-[inset_0_0_60px_rgba(111,193,31,0.08)] sm:p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <BarChart3 className="text-[#6fc11f]" size={22} />
+        <p className="text-sm font-black uppercase tracking-[0.22em] text-[#b7ff8a]">Radar arbitral</p>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[0.78fr_1fr] lg:items-center">
+        <div className="space-y-3">
+          {topics.map((topic) => (
+            <div key={topic.label} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+              <p className="break-words text-sm font-black uppercase tracking-[0.08em] text-zinc-200">{topic.shortLabel}</p>
+              <p className="text-lg font-black text-[#6fc11f]">{topic.value === null ? "--" : topic.value}</p>
+              <div className="col-span-2 h-px bg-gradient-to-r from-white/15 to-transparent" />
+            </div>
+          ))}
+        </div>
+
+        <div className="relative mx-auto aspect-square w-full max-w-[280px] overflow-hidden rounded-[26px] border border-[#6fc11f]/20 bg-black/30 p-3">
+          <svg viewBox="0 0 220 220" className="h-full w-full">
+            <defs>
+              <filter id="profileRadarGlow">
+                <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+                <feMerge>
+                  <feMergeNode in="coloredBlur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            {guideRings.map((ring, index) => (
+              <polygon key={index} points={ring} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
+            ))}
+            {topics.map((topic, index) => {
+              const end = profileRadarAxisPoint(index, 84, 110);
+              const label = profileRadarAxisPoint(index, 100, 110);
+              return (
+                <g key={topic.label}>
+                  <line x1="110" y1="110" x2={end.x} y2={end.y} stroke="rgba(255,255,255,0.12)" />
+                  <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" className="fill-white text-[7px] font-black uppercase">
+                    {topic.shortLabel}
+                  </text>
+                </g>
+              );
+            })}
+            <polygon points={points} fill="rgba(111,193,31,0.34)" stroke="#6fc11f" strokeWidth="4" filter="url(#profileRadarGlow)" />
+            {points.split(" ").map((point) => {
+              const [x, y] = point.split(",").map(Number);
+              return <circle key={point} cx={x} cy={y} r="4" fill="#b7ff8a" />;
+            })}
+            <circle cx="110" cy="110" r="4" fill="#6fc11f" />
+          </svg>
+
+          {!hasAnyData && (
+            <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-dashed border-[#6fc11f]/25 bg-[#050b12]/90 p-3 text-center text-xs font-bold text-zinc-300">
+              Sin datos todavia
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FakeQr() {
+  const active = new Set([0, 1, 2, 4, 5, 7, 8, 10, 13, 15, 16, 18, 20, 21, 23, 26, 28, 30, 31, 33, 35, 36, 37, 40, 42, 43, 45, 48]);
+  return (
+    <div className="grid h-20 w-20 shrink-0 grid-cols-7 gap-1 rounded-2xl border border-[#6fc11f]/45 bg-[#d9e5d2] p-2 shadow-[0_0_22px_rgba(111,193,31,0.2)]">
+      {Array.from({ length: 49 }).map((_, index) => (
+        <span key={index} className={active.has(index) ? "rounded-[2px] bg-black" : "rounded-[2px] bg-transparent"} />
+      ))}
     </div>
   );
 }
@@ -642,6 +944,68 @@ function averageNumbers(values: number[]) {
   if (values.length === 0) return null;
   return Math.round(values.reduce((acc, value) => acc + value, 0) / values.length);
 }
+
+function buildRefCardTopics(topicMetrics: TopicMetric[]): RefCardTopic[] {
+  return refCardTopicConfig.map((target) => {
+    const metric = topicMetrics.find((item) =>
+      target.aliases.some((alias) => item.topic.toLowerCase() === alias.toLowerCase())
+    );
+
+    return {
+      label: target.label,
+      shortLabel: target.shortLabel,
+      value: metric?.accuracy ?? null,
+      attempts: metric?.attempts ?? 0,
+    };
+  });
+}
+
+function getRefCardBadge(summary: PerformanceSummary, refereeType: string) {
+  if (!summary.hasData) return refereeType || "Amateur";
+  if (summary.status === "Elite") return "Elite";
+  if (summary.status === "Avanzado" || summary.status === "Solido") return "Avanzado";
+  if (summary.status === "En desarrollo" || summary.status === "Inicial") return "Proyeccion";
+  return refereeType || "Amateur";
+}
+
+function getDisciplineLabel(metric?: CriterionMetric) {
+  if (!metric || metric.accuracy === null || metric.attempts === 0) return "Pendiente";
+  if (metric.accuracy >= 85) return "Excelente";
+  if (metric.accuracy >= 70) return "Correcta";
+  return "A mejorar";
+}
+
+function getTrendLabel(scores: number[]) {
+  if (scores.length < 2) return "Pendiente";
+  const first = scores[0];
+  const last = scores[scores.length - 1];
+  if (last - first >= 5) return "Subiendo";
+  if (first - last >= 5) return "Bajando";
+  return "Estable";
+}
+
+function formatShortDate(date?: string | null) {
+  if (!date) return "Pendiente";
+  return new Date(date).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function profileRadarPoints(values: number[], radius: number, center: number) {
+  return values
+    .map((value, index) => {
+      const point = profileRadarAxisPoint(index, radius * (Math.max(0, Math.min(value, 100)) / 100), center);
+      return `${point.x},${point.y}`;
+    })
+    .join(" ");
+}
+
+function profileRadarAxisPoint(index: number, radius: number, center: number) {
+  const angle = (-90 + index * 72) * (Math.PI / 180);
+  return {
+    x: Math.round((center + Math.cos(angle) * radius) * 10) / 10,
+    y: Math.round((center + Math.sin(angle) * radius) * 10) / 10,
+  };
+}
+
 function createRefCardSvg({
   name,
   email,
