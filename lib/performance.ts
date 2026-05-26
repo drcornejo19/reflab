@@ -1,3 +1,5 @@
+import { getPublicRankingName, resolveRefCardId } from "@/lib/refCard";
+
 export type PerformanceSource = "training" | "exam" | "rules_exam";
 export type ModuleKey = "decision" | "video" | "var" | "english" | "communication" | "preparation";
 export type CriterionKey = "technical" | "restart" | "discipline" | "interpretation" | "justification" | "var";
@@ -5,6 +7,7 @@ export type CriterionKey = "technical" | "restart" | "discipline" | "interpretat
 export type AttemptRecord = {
   id?: string;
   user_id?: string | null;
+  ref_card_id?: string | null;
   clip_id?: string | null;
   clip_title?: string | null;
   module?: string | null;
@@ -76,6 +79,14 @@ export type RulesExamResultRecord = {
   percentage?: number | null; unanswered_count?: number | null; finish_reason?: string | null; level?: string | null;
   details?: RulesAnswerRecord[] | null; topic_performance?: unknown[] | null; created_at?: string | null;
 };
+export type RankingProfileRecord = {
+  user_id?: string | null;
+  ref_card_id?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  ranking_display_name?: string | null;
+  show_real_name_in_ranking?: boolean | null;
+};
 export type PerformanceItem = {
   id: string; source: PerformanceSource; module: ModuleKey; modeLabel: string; date: string;
   title: string; topic: string; rawTopic: string; difficulty?: string | null; score: number | null;
@@ -94,7 +105,7 @@ export type ModulePerformance = { key: ModuleKey; title: string; description: st
 export type EvolutionData = { historicalAverage: number | null; lastAverage: number | null; previousAverage: number | null; variation: number | null; trend: string; weeklyCount: number; monthlyCount: number; bestScore: number | null; worstScore: number | null; regularity: string; series: PerformanceSession[]; };
 export type PerformanceSummary = { hasData: boolean; avgScore: number | null; totalAttempts: number; totalTrainings: number; totalEvaluations: number; bestScore: number | null; lastScore: number | null; strongestTopic?: TopicMetric; weakestTopic?: TopicMetric; strongestCriterion?: CriterionMetric; weakestCriterion?: CriterionMetric; recommendedModule: string; status: string; sampleNote: string; metrics: SummaryMetric[]; };
 export type RecommendedPlan = { diagnosis: string; priority1: string; priority2: string; nextStep: string; reason: string; href: string; };
-export type RankingRow = { userId: string; position: number; name: string; attempts: number; avgScore: number; bestScore: number; lastAttempt: string; };
+export type RankingRow = { userId: string; position: number; name: string; refCardId: string; attempts: number; trainings: number; tests: number; avgScore: number; bestScore: number; lastAttempt: string; };
 
 const criterionLabels: Record<CriterionKey, string> = { technical: "Decision tecnica", restart: "Reanudacion", discipline: "Sancion disciplinaria", interpretation: "Interpretacion", justification: "Justificacion", var: "Criterio VAR" };
 const criterionDescriptions: Record<CriterionKey, string> = { technical: "Si la decision principal fue correcta.", restart: "Si la reanudacion reglamentaria fue correcta.", discipline: "Si la sancion disciplinaria fue correcta.", interpretation: "Si interpreto correctamente contexto, intensidad y consecuencia.", justification: "Calidad del fundamento tecnico.", var: "Aplicacion de protocolo o criterio VAR." };
@@ -429,12 +440,30 @@ export function getRecommendedPlan(summary: PerformanceSummary): RecommendedPlan
   return { diagnosis: weakTopic ? `El topico que mas conviene reforzar es ${weakTopic.topic}.` : "El sistema detecta una oportunidad general de mejora.", priority1: weakTopic ? `Entrenar ${weakTopic.topic}.` : "Entrenar Decision arbitral.", priority2: weakCriterion ? `Cuidar especialmente ${weakCriterion.label.toLowerCase()}.` : "Completar ejercicios de distintos topicos.", nextStep: "Completar una serie corta de 5 clips.", reason: "El plan se basa en la debilidad real mas marcada de tu actividad.", href: "/training/decision" };
 }
 
-export function getRankingRows(attempts: AttemptRecord[], currentUserId?: string | null): RankingRow[] {
+export function getRankingRows(attempts: AttemptRecord[], currentUserId?: string | null, profiles: RankingProfileRecord[] = []): RankingRow[] {
+  const profileMap = new Map(
+    profiles
+      .filter((profile) => profile.user_id)
+      .map((profile) => [profile.user_id as string, profile])
+  );
   const grouped = groupBy(attempts.filter((attempt) => attempt.user_id && isNumber(cleanScore(attempt.score))), (attempt) => attempt.user_id as string);
   const rows = Array.from(grouped.entries()).map(([userId, userAttempts]) => {
     const scores = userAttempts.map((attempt) => cleanScore(attempt.score)).filter(isNumber);
     const sorted = sortByDateDesc(userAttempts);
-    return { userId, position: 0, name: userId === currentUserId ? "Tu posicion" : `Arbitro ${userId.slice(0, 6)}`, attempts: scores.length, avgScore: average(scores) ?? 0, bestScore: scores.length ? Math.max(...scores) : 0, lastAttempt: sorted[0]?.created_at ?? "" };
+    const profile = profileMap.get(userId);
+    const tests = userAttempts.filter((attempt) => ["exam", "rules_exam"].includes(String(attempt.mode ?? ""))).length;
+    return {
+      userId,
+      position: 0,
+      name: getPublicRankingName(userId, profile, currentUserId),
+      refCardId: resolveRefCardId(userId, profile),
+      attempts: scores.length,
+      trainings: Math.max(0, scores.length - tests),
+      tests,
+      avgScore: average(scores) ?? 0,
+      bestScore: scores.length ? Math.max(...scores) : 0,
+      lastAttempt: sorted[0]?.created_at ?? "",
+    };
   });
   return rows.sort((a, b) => b.avgScore !== a.avgScore ? b.avgScore - a.avgScore : b.bestScore !== a.bestScore ? b.bestScore - a.bestScore : b.attempts - a.attempts).map((row, index) => ({ ...row, position: index + 1 }));
 }

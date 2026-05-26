@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { calculateScore } from "@/lib/scoring";
+import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
+import { resolveRefCardId } from "@/lib/refCard";
 import { supabase } from "@/lib/supabase";
 import type { Clip } from "@/lib/types";
 
@@ -177,7 +179,46 @@ export function ClipExercise({
     setSaveError(null);
     setAiFeedback(null);
 
-    const { error } = await supabase.from("attempts").insert([
+    const profileRes = await supabase
+      .from("user_profiles")
+      .select("ref_card_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const refCardId = resolveRefCardId(user.id, profileRes.data);
+
+    const savedAttempt = await insertAttemptSafely(
+      supabase,
+      {
+        user_id: user.id,
+        ref_card_id: refCardId,
+        clip_id: typedClip.id,
+        clip_title: typedClip.title,
+        module: isVarClip ? "var_lab" : "decision",
+        mode: isVarClip ? "var" : "training",
+        foul,
+        restart,
+        discipline,
+        var_review: typedClip.correct_var,
+        score,
+        topic: typedClip.topic,
+        difficulty: typedClip.difficulty,
+        is_correct: score >= 85,
+        selected_decision: decisionLabel(foul),
+        correct_decision: decisionLabel(typedClip.correct_foul),
+        selected_restart: restart,
+        correct_restart: typedClip.correct_restart,
+        selected_discipline: discipline,
+        correct_discipline: typedClip.correct_discipline,
+        technical_correct: foul === typedClip.correct_foul,
+        restart_correct: restart === typedClip.correct_restart,
+        discipline_correct: discipline === typedClip.correct_discipline,
+        var_correct: null,
+        criterion_result: {
+          technical: foul === typedClip.correct_foul,
+          restart: restart === typedClip.correct_restart,
+          discipline: discipline === typedClip.correct_discipline,
+        },
+      },
       {
         user_id: user.id,
         clip_title: typedClip.title,
@@ -193,14 +234,10 @@ export function ClipExercise({
         discipline_correct: discipline === typedClip.correct_discipline,
         var_correct: null,
       },
-    ]);
+    );
 
-    if (error) {
-      const message = `${error.code ?? "SIN_CODE"} - ${
-        error.message ?? "SIN_MESSAGE"
-      } - ${error.details ?? ""}`;
-
-      setSaveError(message);
+    if (!savedAttempt.saved) {
+      setSaveError(savedAttempt.error ?? "No se pudo guardar el intento.");
       setIsSaving(false);
       return;
     }
@@ -662,4 +699,10 @@ function labelFromValue(value?: string | null) {
   };
 
   return dictionary[value] ?? value;
+}
+
+function decisionLabel(value: boolean | null | undefined) {
+  if (value === true) return "Infraccion";
+  if (value === false) return "No infraccion";
+  return "Sin respuesta";
 }

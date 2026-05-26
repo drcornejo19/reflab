@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
+import { insertAttemptSafely } from "@/lib/attemptPersistence";
+import { resolveRefCardId } from "@/lib/refCard";
 import { supabase } from "@/lib/supabase";
 import type { Clip } from "@/lib/types";
 import { calculateScore } from "@/lib/scoring";
@@ -24,8 +26,11 @@ type Answer = {
   topic: string;
   difficulty: string;
   foul: boolean | null;
+  correctFoul: boolean | null;
   restart: string;
+  correctRestart: string | null;
   discipline: string;
+  correctDiscipline: string | null;
   offsideReason?: string;
   handballReason?: string;
   technicalCorrect: boolean;
@@ -66,6 +71,7 @@ export function ExamClient() {
   const [loading, setLoading] = useState(true);
   const [finished, setFinished] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [examSaved, setExamSaved] = useState(false);
   const [videoPlays, setVideoPlays] = useState(0);
 
   const [foul, setFoul] = useState<boolean | null>(null);
@@ -273,8 +279,11 @@ function handleVideoEnded() {
       topic: currentClip.topic,
       difficulty: currentClip.difficulty,
       foul,
+      correctFoul: currentClip.correct_foul ?? null,
       restart,
+      correctRestart: currentClip.correct_restart ?? null,
       discipline,
+      correctDiscipline: currentClip.correct_discipline ?? null,
       offsideReason: offsideReason || undefined,
       handballReason: handballReason || undefined,
       technicalCorrect,
@@ -302,11 +311,23 @@ function handleVideoEnded() {
       return;
     }
 
+    if (examSaved) {
+      alert("Este examen ya fue guardado.");
+      return;
+    }
+
     setSaving(true);
 
     const totalScore = answers.reduce((acc, a) => acc + a.score, 0);
     const avgScore = Math.round(totalScore / answers.length);
     const correctCount = answers.filter((a) => a.score >= 85).length;
+
+    const profileRes = await supabase
+      .from("user_profiles")
+      .select("ref_card_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const refCardId = resolveRefCardId(user.id, profileRes.data);
 
     const { error } = await supabase.from("exam_results").insert([
       {
@@ -322,7 +343,68 @@ function handleVideoEnded() {
     if (error) {
       alert(error.message);
     } else {
-      alert("Examen guardado correctamente.");
+      const attemptResults = await Promise.all(
+        answers.map((answer) =>
+          insertAttemptSafely(
+            supabase,
+            {
+              user_id: user.id,
+              ref_card_id: refCardId,
+              clip_id: answer.clipId,
+              clip_title: answer.clipTitle,
+              module: answer.topic === "VAR" ? "var_lab" : "decision",
+              mode: "exam",
+              topic: answer.topic,
+              difficulty: answer.difficulty,
+              score: answer.score,
+              is_correct: answer.score >= 85,
+              selected_decision: decisionLabel(answer.foul),
+              correct_decision: decisionLabel(answer.correctFoul),
+              selected_restart: answer.restart,
+              correct_restart: answer.correctRestart,
+              selected_discipline: answer.discipline,
+              correct_discipline: answer.correctDiscipline,
+              foul: answer.foul,
+              restart: answer.restart,
+              discipline: answer.discipline,
+              technical_correct: answer.technicalCorrect,
+              restart_correct: answer.restartCorrect,
+              discipline_correct: answer.disciplineCorrect,
+              subtype_correct: answer.subtypeCorrect,
+              criterion_result: {
+                technical: answer.technicalCorrect,
+                restart: answer.restartCorrect,
+                discipline: answer.disciplineCorrect,
+                subtype: answer.subtypeCorrect,
+              },
+              feedback: `Examen arbitral: ${answer.score}/100`,
+              created_at: new Date().toISOString(),
+            },
+            {
+              user_id: user.id,
+              clip_title: answer.clipTitle,
+              foul: answer.foul,
+              restart: answer.restart,
+              discipline: answer.discipline,
+              score: answer.score,
+              topic: answer.topic,
+              difficulty: answer.difficulty,
+              technical_correct: answer.technicalCorrect,
+              restart_correct: answer.restartCorrect,
+              discipline_correct: answer.disciplineCorrect,
+              subtype_correct: answer.subtypeCorrect,
+            }
+          )
+        )
+      );
+      const failedAttempt = attemptResults.find((result) => !result.saved);
+
+      if (failedAttempt) {
+        alert(`El examen se guardo, pero no se pudieron registrar todos los intentos: ${failedAttempt.error ?? "error desconocido"}`);
+      } else {
+        setExamSaved(true);
+        alert("Examen guardado correctamente. Las respuestas impactan en tus estadisticas por topico y criterio.");
+      }
     }
 
     setSaving(false);
@@ -385,10 +467,10 @@ function handleVideoEnded() {
             <div className="flex-1 space-y-3">
               <button
                 onClick={saveExam}
-                disabled={saving}
+                disabled={saving || examSaved}
                 className="min-h-14 w-full rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black disabled:opacity-50"
               >
-                {saving ? "GUARDANDO..." : "GUARDAR EXAMEN"}
+                {examSaved ? "EXAMEN GUARDADO" : saving ? "GUARDANDO..." : "GUARDAR EXAMEN"}
               </button>
 
               <button
@@ -776,6 +858,12 @@ function labelFromValue(value?: string | null) {
   };
 
   return dictionary[value] ?? value;
+}
+
+function decisionLabel(value: boolean | null) {
+  if (value === true) return "Infraccion";
+  if (value === false) return "No infraccion";
+  return "Sin respuesta";
 }
 
 function InfoBox({ title, value }: { title: string; value: string }) {

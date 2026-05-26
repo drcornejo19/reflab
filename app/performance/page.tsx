@@ -46,6 +46,7 @@ import {
   type ModulePerformance,
   type PerformanceItem,
   type RankingRow,
+  type RankingProfileRecord,
   type RulesExamResultRecord,
   type SummaryMetric,
   type TopicMetric,
@@ -60,6 +61,7 @@ type LoadState = {
   examResults: ExamResultRecord[];
   rulesResults: RulesExamResultRecord[];
   rankingAttempts: AttemptRecord[];
+  rankingProfiles: RankingProfileRecord[];
 };
 
 const initialData: LoadState = {
@@ -67,6 +69,7 @@ const initialData: LoadState = {
   examResults: [],
   rulesResults: [],
   rankingAttempts: [],
+  rankingProfiles: [],
 };
 
 const sourceLabels: Record<HistoryMode, string> = {
@@ -135,7 +138,7 @@ export default function PerformancePage() {
       setLoading(true);
       setLoadError(null);
 
-      const [attemptsRes, examsRes, rulesRes, rankingRes] = await Promise.all([
+      const [attemptsRes, examsRes, rulesRes, rankingRes, profilesRes] = await Promise.all([
         supabase
           .from("attempts")
           .select("*")
@@ -156,6 +159,9 @@ export default function PerformancePage() {
           .select("*")
           .order("created_at", { ascending: false })
           .limit(800),
+        supabase
+          .from("user_profiles")
+          .select("*"),
       ]);
 
       if (attemptsRes.error || examsRes.error) {
@@ -171,6 +177,7 @@ export default function PerformancePage() {
         examResults: (examsRes.data ?? []) as ExamResultRecord[],
         rulesResults: rulesRes.error ? [] : ((rulesRes.data ?? []) as RulesExamResultRecord[]),
         rankingAttempts: (rankingRes.data ?? []) as AttemptRecord[],
+        rankingProfiles: profilesRes.error ? [] : ((profilesRes.data ?? []) as RankingProfileRecord[]),
       });
 
       setLoading(false);
@@ -195,7 +202,7 @@ export default function PerformancePage() {
   const criteria = useMemo(() => getCriterionPerformance(dataset.items), [dataset.items]);
   const modules = useMemo(() => getModulePerformance(dataset.items), [dataset.items]);
   const plan = useMemo(() => getRecommendedPlan(summary), [summary]);
-  const ranking = useMemo(() => getRankingRows(data.rankingAttempts, user?.id), [data.rankingAttempts, user?.id]);
+  const ranking = useMemo(() => getRankingRows(data.rankingAttempts, user?.id, data.rankingProfiles), [data.rankingAttempts, data.rankingProfiles, user?.id]);
   const currentRanking = ranking.find((row) => row.userId === user?.id);
 
   const history = useMemo(() => {
@@ -851,7 +858,7 @@ function RankingPanel({ ranking, currentRanking }: { ranking: RankingRow[]; curr
             <p className="text-xs font-black uppercase tracking-[0.25em] text-[#6fc11f]">Tu posicion</p>
             <p className="mt-2 text-4xl font-black">{currentRanking ? `#${currentRanking.position}` : "Sin datos"}</p>
             <p className="mt-2 text-sm text-zinc-300">
-              {currentRanking ? `${currentRanking.avgScore}/100 promedio - ${currentRanking.attempts} intentos` : "Completa entrenamientos para aparecer en el ranking."}
+              {currentRanking ? `${currentRanking.avgScore}/100 promedio - RefCard ${currentRanking.refCardId}` : "Completa entrenamientos para aparecer en el ranking."}
             </p>
           </div>
 
@@ -861,11 +868,11 @@ function RankingPanel({ ranking, currentRanking }: { ranking: RankingRow[]; curr
                 <p className="font-black text-[#6fc11f]">#{row.position}</p>
                 <div>
                   <p className="font-black text-white">{row.name}</p>
-                  <p className="text-xs text-zinc-500">Ultima actividad: {formatDate(row.lastAttempt)}</p>
+                  <p className="text-xs text-zinc-500">RefCard {row.refCardId} - Ultima actividad: {formatDate(row.lastAttempt)}</p>
                 </div>
                 <div className="text-right">
                   <p className="font-black text-white">{row.avgScore}</p>
-                  <p className="text-xs text-zinc-500">prom.</p>
+                  <p className="text-xs text-zinc-500">{row.tests} eval. / {row.trainings} ent.</p>
                 </div>
               </div>
             ))}
