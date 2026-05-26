@@ -19,11 +19,20 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { languageOptions, getStoredLanguage, setStoredLanguage, subscribeToLanguageChange, type AppLanguage } from "@/lib/languagePreference";
+import {
+  languageOptions,
+  getStoredLanguage,
+  setStoredLanguage,
+  subscribeToLanguageChange,
+  translate,
+  type AppLanguage,
+  type TranslationKey,
+} from "@/lib/languagePreference";
 import { useUserRole } from "@/lib/useUserRole";
 
 type NavItem = {
   label: string;
+  labelKey: TranslationKey;
   href: string;
   icon: LucideIcon;
   activePaths?: string[];
@@ -45,9 +54,10 @@ const trainingActivePrefixes = [
 ];
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: Home },
+  { label: "Dashboard", labelKey: "nav.dashboard", href: "/dashboard", icon: Home },
   {
     label: "Entrenamiento",
+    labelKey: "nav.training",
     href: "/training",
     icon: CircleAlert,
     activePaths: trainingActivePaths,
@@ -55,6 +65,7 @@ const navItems: NavItem[] = [
   },
   {
     label: "Evaluaciones",
+    labelKey: "nav.evaluations",
     href: "/evaluations",
     icon: ShieldCheck,
     activePaths: ["/evaluations", "/training/exam", "/training/rules-exam"],
@@ -62,6 +73,7 @@ const navItems: NavItem[] = [
   },
   {
     label: "Rendimiento",
+    labelKey: "nav.performance",
     href: "/performance",
     icon: ChartNoAxesCombined,
     activePaths: ["/performance", "/stats", "/ranking", "/mobile-stats"],
@@ -69,13 +81,15 @@ const navItems: NavItem[] = [
   },
   {
     label: "Biblioteca",
+    labelKey: "nav.library",
     href: "/learning",
     icon: BookOpen,
     activePaths: ["/learning"],
   },
-  { label: "Perfil", href: "/profile", icon: User },
+  { label: "Perfil", labelKey: "nav.profile", href: "/profile", icon: User },
   {
     label: "Admin",
+    labelKey: "nav.admin",
     href: "/admin",
     icon: Clapperboard,
     activePaths: ["/admin", "/admin-clips"],
@@ -87,12 +101,14 @@ const navItems: NavItem[] = [
 const mobileItems: NavItem[] = [
   {
     label: "Dashboard",
+    labelKey: "nav.dashboard",
     href: "/mobile-dashboard",
     icon: Home,
     activePaths: ["/mobile-dashboard", "/dashboard"],
   },
   {
     label: "Entrenar",
+    labelKey: "nav.train",
     href: "/training",
     icon: CircleAlert,
     activePaths: trainingActivePaths,
@@ -100,6 +116,7 @@ const mobileItems: NavItem[] = [
   },
   {
     label: "Evaluar",
+    labelKey: "nav.evaluate",
     href: "/evaluations",
     icon: ShieldCheck,
     activePaths: ["/evaluations", "/training/exam", "/training/rules-exam"],
@@ -107,29 +124,33 @@ const mobileItems: NavItem[] = [
   },
   {
     label: "Rendim.",
+    labelKey: "nav.performance",
     href: "/performance",
     icon: ChartNoAxesCombined,
     activePaths: ["/performance", "/stats", "/ranking", "/mobile-stats"],
     activePrefixes: ["/performance"],
   },
-  { label: "Perfil", href: "/profile", icon: User },
+  { label: "Perfil", labelKey: "nav.profile", href: "/profile", icon: User },
 ];
 
 const secondaryMobileItems: NavItem[] = [
   {
     label: "RefLab",
+    labelKey: "nav.reflab",
     href: "/about",
     icon: Info,
     activePaths: ["/about"],
   },
   {
     label: "Biblioteca",
+    labelKey: "nav.library",
     href: "/learning",
     icon: BookOpen,
     activePaths: ["/learning"],
   },
   {
     label: "Admin",
+    labelKey: "nav.admin",
     href: "/admin",
     icon: Clapperboard,
     activePaths: ["/admin", "/admin-clips"],
@@ -165,6 +186,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <NavLink
               key={item.href}
               item={item}
+              language={language}
               active={isItemActive(pathname, item)}
             />
           ))}
@@ -178,7 +200,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           type="button"
           onClick={() => setMobileMenuOpen((open) => !open)}
           aria-expanded={mobileMenuOpen}
-          aria-label={mobileMenuOpen ? "Cerrar menu" : "Abrir menu"}
+          aria-label={mobileMenuOpen ? translate(language, "nav.closeMenu") : translate(language, "nav.openMenu")}
           className="grid h-12 w-12 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] text-white shadow-lg transition active:scale-95"
         >
           {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
@@ -189,7 +211,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 z-40 bg-black/45 backdrop-blur-sm lg:hidden">
           <div className="mx-3 mt-[86px] max-h-[calc(100dvh-108px)] overflow-y-auto rounded-[28px] border border-white/10 bg-[#0b131b] p-3 shadow-2xl sm:mx-4">
             <p className="px-3 py-2 text-[10px] font-black uppercase tracking-[0.28em] text-[#6fc11f]">
-              Mas accesos
+              {translate(language, "nav.moreAccess")}
             </p>
 
             <div className="grid gap-2">
@@ -197,6 +219,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <MobileMenuLink
                   key={item.href}
                   item={item}
+                  language={language}
                   active={isItemActive(pathname, item)}
                   onClick={() => setMobileMenuOpen(false)}
                 />
@@ -218,6 +241,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {mobileItems.map((item) => {
           const Icon = item.icon;
           const active = isItemActive(pathname, item);
+          const label = translate(language, item.labelKey);
 
           return (
             <Link
@@ -230,7 +254,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               }`}
             >
               <Icon size={20} />
-              <span className="w-full truncate text-center">{item.label}</span>
+              <span className="w-full truncate text-center">{label}</span>
             </Link>
           );
         })}
@@ -269,8 +293,17 @@ function Logo({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+function NavLink({
+  item,
+  active,
+  language,
+}: {
+  item: NavItem;
+  active: boolean;
+  language: AppLanguage;
+}) {
   const Icon = item.icon;
+  const label = translate(language, item.labelKey);
 
   return (
     <Link
@@ -282,7 +315,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       }`}
     >
       <Icon size={18} />
-      {item.label}
+      {label}
     </Link>
   );
 }
@@ -290,13 +323,16 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 function MobileMenuLink({
   item,
   active,
+  language,
   onClick,
 }: {
   item: NavItem;
   active: boolean;
+  language: AppLanguage;
   onClick: () => void;
 }) {
   const Icon = item.icon;
+  const label = translate(language, item.labelKey);
 
   return (
     <Link
@@ -309,7 +345,7 @@ function MobileMenuLink({
       }`}
     >
       <Icon size={20} />
-      {item.label}
+      {label}
     </Link>
   );
 }
@@ -353,12 +389,12 @@ function LanguageSettings({
           <Settings size={18} />
         </div>
         <div>
-          <p className="text-sm font-black text-white">Configuracion</p>
-          <p className="text-xs text-zinc-500">Idioma de la app y feedback</p>
+          <p className="text-sm font-black text-white">{translate(language, "settings.title")}</p>
+          <p className="text-xs text-zinc-500">{translate(language, "settings.languageSubtitle")}</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2" aria-label="Seleccionar idioma">
+      <div className="grid grid-cols-3 gap-2" aria-label={translate(language, "settings.selectLanguage")}>
         {languageOptions.map((option) => (
           <button
             key={option.value}

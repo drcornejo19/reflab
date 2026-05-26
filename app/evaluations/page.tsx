@@ -1,9 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { useI18n } from "@/lib/useI18n";
+import type { TranslationKey } from "@/lib/languagePreference";
 import {
   BookOpenCheck,
   ChevronRight,
-  Clock,
   Languages,
   MonitorCheck,
   ShieldCheck,
@@ -12,9 +15,9 @@ import {
 } from "lucide-react";
 
 type EvaluationCard = {
-  title: string;
-  category: string;
-  description: string;
+  titleKey: TranslationKey;
+  categoryKey: TranslationKey;
+  descriptionKey: TranslationKey;
   status: "Disponible" | "Proximamente" | "Beta";
   href?: string;
   icon: LucideIcon;
@@ -22,79 +25,69 @@ type EvaluationCard = {
 
 const evaluations: EvaluationCard[] = [
   {
-    title: "Examen arbitral",
-    category: "Formal",
-    description: "Clips consecutivos sin feedback inmediato, score final y cierre tecnico del examen.",
+    titleKey: "evaluations.refereeExam.title",
+    categoryKey: "evaluations.refereeExam.category",
+    descriptionKey: "evaluations.refereeExam.description",
     status: "Disponible",
     href: "/training/exam",
     icon: ShieldCheck,
   },
   {
-    title: "Examen de reglas",
-    category: "IFAB",
-    description: "20 preguntas exigentes para medir interpretacion reglamentaria bajo tiempo.",
+    titleKey: "evaluations.rulesExam.title",
+    categoryKey: "evaluations.rulesExam.category",
+    descriptionKey: "evaluations.rulesExam.description",
     status: "Disponible",
     href: "/training/rules-exam",
     icon: BookOpenCheck,
   },
   {
-    title: "Examen VAR",
-    category: "VAR",
-    description: "Evaluacion formal de protocolo VAR, OFR, APP, factual e interpretativo.",
+    titleKey: "evaluations.varExam.title",
+    categoryKey: "evaluations.varExam.category",
+    descriptionKey: "evaluations.varExam.description",
     status: "Proximamente",
     icon: MonitorCheck,
   },
   {
-    title: "Examen de ingles",
-    category: "Comunicacion",
-    description: "Situaciones para explicar decisiones en ingles tecnico arbitral.",
+    titleKey: "evaluations.englishExam.title",
+    categoryKey: "evaluations.englishExam.category",
+    descriptionKey: "evaluations.englishExam.description",
     status: "Proximamente",
     icon: Languages,
   },
   {
-    title: "Simulacion cronometrada",
-    category: "Tiempo real",
-    description: "Practica bajo presion con reloj, bloques de clips y cierre de rendimiento.",
+    titleKey: "evaluations.timedSimulation.title",
+    categoryKey: "evaluations.timedSimulation.category",
+    descriptionKey: "evaluations.timedSimulation.description",
     status: "Proximamente",
     icon: Timer,
   },
 ];
 
 export default function EvaluationsPage() {
+  const { t } = useI18n();
+
   return (
     <AppShell>
       <div className="space-y-6">
         <header className="rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-7 shadow-2xl">
           <p className="text-xs font-black uppercase tracking-[0.45em] text-[#6fc11f]">
-            EVALUACIONES
+            {t("evaluations.kicker")}
           </p>
 
           <div className="mt-5 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
             <div>
-              <h1 className="text-4xl font-black md:text-5xl">Evaluaciones</h1>
+              <h1 className="text-4xl font-black md:text-5xl">{t("evaluations.title")}</h1>
 
               <p className="mt-4 max-w-3xl text-lg leading-8 text-zinc-400">
-                Rendi simulaciones y examenes para medir tu criterio arbitral bajo condiciones formales.
+                {t("evaluations.description")}
               </p>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-              <div className="flex items-center gap-3">
-                <Clock className="h-5 w-5 text-[#6fc11f]" />
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500">
-                    Acceso principal
-                  </p>
-                  <p className="text-sm font-black text-white">/evaluations</p>
-                </div>
-              </div>
             </div>
           </div>
         </header>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {evaluations.map((evaluation) => (
-            <EvaluationModuleCard key={evaluation.title} item={evaluation} />
+            <EvaluationModuleCard key={evaluation.titleKey} item={evaluation} />
           ))}
         </section>
       </div>
@@ -104,6 +97,14 @@ export default function EvaluationsPage() {
 
 function EvaluationModuleCard({ item }: { item: EvaluationCard }) {
   const Icon = item.icon;
+  const { t } = useI18n();
+  const statusLabel =
+    item.status === "Disponible"
+      ? t("common.available")
+      : item.status === "Beta"
+        ? t("common.beta")
+        : t("common.comingSoon");
+
   const content = (
     <>
       <div>
@@ -113,22 +114,22 @@ function EvaluationModuleCard({ item }: { item: EvaluationCard }) {
           </div>
 
           <span className="rounded-full border border-[#6fc11f]/25 bg-[#6fc11f]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#6fc11f]">
-            {item.status}
+            {statusLabel}
           </span>
         </div>
 
         <p className="mt-6 text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">
-          {item.category}
+          {t(item.categoryKey)}
         </p>
 
-        <h2 className="mt-3 text-2xl font-black">{item.title}</h2>
+        <h2 className="mt-3 text-2xl font-black">{t(item.titleKey)}</h2>
 
-        <p className="mt-3 text-sm leading-6 text-zinc-400">{item.description}</p>
+        <p className="mt-3 text-sm leading-6 text-zinc-400">{t(item.descriptionKey)}</p>
       </div>
 
       <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4">
         <span className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">
-          {item.href ? "Abrir" : "Proximamente"}
+          {item.href ? t("common.open") : t("common.comingSoon")}
         </span>
         <ChevronRight
           className={`text-zinc-600 transition ${

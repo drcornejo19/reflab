@@ -3,6 +3,8 @@ create extension if not exists pgcrypto;
 alter table if exists public.user_profiles
   add column if not exists first_name text,
   add column if not exists last_name text,
+  add column if not exists country text,
+  add column if not exists city text,
   add column if not exists ref_card_id text,
   add column if not exists ranking_display_name text,
   add column if not exists show_real_name_in_ranking boolean not null default false;

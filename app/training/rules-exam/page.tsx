@@ -7,7 +7,7 @@ import { rulesQuestions } from "@/lib/rulesQuestions";
 import { supabase } from "@/lib/supabase";
 
 const EXAM_LIMIT = 20;
-const EXAM_TIME = 30 * 60;
+const EXAM_TIME = 15 * 60;
 
 type FinishReason = "completed" | "time" | "exit" | null;
 
@@ -307,7 +307,7 @@ export default function RulesExamPage() {
 
             <div className="mt-8 grid gap-4 md:grid-cols-3">
               <StatCard title="Preguntas" value="20" />
-              <StatCard title="Tiempo" value="30:00" />
+              <StatCard title="Tiempo" value="15:00" />
               <StatCard title="Feedback" value="Final" />
             </div>
           </section>
@@ -318,7 +318,7 @@ export default function RulesExamPage() {
             </h2>
 
             <div className="mt-4 space-y-2 text-sm leading-7 text-zinc-300">
-              <p>• El examen dura 30 minutos.</p>
+              <p>• El examen dura 15 minutos.</p>
               <p>• Si cambiás de pestaña o salís de la app, el examen finaliza.</p>
               <p>• Las preguntas no respondidas cuentan como incorrectas.</p>
               <p>• El resultado y el feedback aparecen al final.</p>
