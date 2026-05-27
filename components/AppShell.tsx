@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   BookOpen,
-  ChartNoAxesCombined,
+  Activity,
   CircleAlert,
   Clapperboard,
   Home,
@@ -72,10 +72,10 @@ const navItems: NavItem[] = [
     activePrefixes: ["/evaluations"],
   },
   {
-    label: "Rendimiento",
+    label: "Ref Performance",
     labelKey: "nav.performance",
     href: "/performance",
-    icon: ChartNoAxesCombined,
+    icon: Activity,
     activePaths: ["/performance", "/stats", "/ranking", "/mobile-stats"],
     activePrefixes: ["/performance"],
   },
@@ -123,10 +123,10 @@ const mobileItems: NavItem[] = [
     activePrefixes: ["/evaluations"],
   },
   {
-    label: "Rendim.",
+    label: "Ref Perf.",
     labelKey: "nav.performance",
     href: "/performance",
-    icon: ChartNoAxesCombined,
+    icon: Activity,
     activePaths: ["/performance", "/stats", "/ranking", "/mobile-stats"],
     activePrefixes: ["/performance"],
   },

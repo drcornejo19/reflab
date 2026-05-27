@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import type { Clip } from "@/lib/types";
 import { ClipExercise } from "@/components/ClipExercise";
 import { VarExercise } from "@/components/VarExercise";
+import { getTrainingClips, type ClipRecord } from "@/lib/clips";
 
 type TrainingMode = "field" | "var" | "english";
 
-type ClipWithMode = Clip & {
+type ClipWithMode = ClipRecord & {
   mode?: TrainingMode | string | null;
 };
 
@@ -69,7 +69,7 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
       setLoading(true);
       setCurrentIndex(0);
 
-      const { data, error } = await supabase.from("clips").select("*");
+      const { data, error } = await getTrainingClips(supabase, mode);
 
       if (error) {
         console.error("Error cargando clips:", error);
@@ -78,19 +78,7 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
         return;
       }
 
-      const clips = ((data ?? []) as ClipWithMode[]).filter((clip) => {
-        if (mode === "var") {
-          return clip.topic === "VAR" || clip.mode === "var";
-        }
-
-        if (mode === "english") {
-          return clip.mode === "english";
-        }
-
-        return clip.topic !== "VAR" && clip.mode !== "var";
-      });
-
-      setAllClips(shuffleClips(clips));
+      setAllClips(shuffleClips((data ?? []) as ClipWithMode[]));
       setLoading(false);
     }
 

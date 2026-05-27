@@ -5,20 +5,13 @@ import { useUser } from "@clerk/nextjs";
 import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { resolveRefCardId } from "@/lib/refCard";
 import { supabase } from "@/lib/supabase";
-import type { Clip } from "@/lib/types";
-import { calculateScore } from "@/lib/scoring";
+import { calculateScore, normalizeDiscipline } from "@/lib/scoring";
+import { getExamClips, type ClipRecord } from "@/lib/clips";
 
 const TOTAL_QUESTIONS = 10;
 const MAX_VIDEO_PLAYS = 2;
 
-type ClipWithDetails = Clip & {
-  sub_type?: string | null;
-  decision_detail?: string | null;
-  module?: string | null;
-  type?: string | null;
-  category?: string | null;
-  training_type?: string | null;
-};
+type ClipWithDetails = ClipRecord;
 
 type Answer = {
   clipId: string;
@@ -123,16 +116,15 @@ const videoLocked = remainingVideoPlays <= 0;
 
   useEffect(() => {
     async function loadClips() {
-      const { data, error } = await supabase.from("clips").select("*");
+      const { data, error } = await getExamClips(supabase);
 
       if (error) {
         console.error("Error cargando clips:", error);
         setClips([]);
       } else {
-        const examClips = ((data ?? []) as ClipWithDetails[]).filter(
-          (clip) => !isEnglishClip(clip)
+        const shuffled = [...((data ?? []) as ClipWithDetails[])].sort(
+          () => Math.random() - 0.5
         );
-        const shuffled = [...examClips].sort(() => Math.random() - 0.5);
 
         setClips(shuffled.slice(0, TOTAL_QUESTIONS));
       }
@@ -243,7 +235,9 @@ function handleVideoEnded() {
 
     const technicalCorrect = foul === currentClip.correct_foul;
     const restartCorrect = restart === currentClip.correct_restart;
-    const disciplineCorrect = discipline === currentClip.correct_discipline;
+    const disciplineCorrect =
+      normalizeDiscipline(discipline) ===
+      normalizeDiscipline(currentClip.correct_discipline);
 
     const subtypeCorrect =
       currentClip.topic === "Offside" && foul === true
@@ -789,34 +783,6 @@ function handleVideoEnded() {
       </div>
     </div>
   );
-}
-
-function isEnglishClip(clip: ClipWithDetails) {
-  const values = [
-    clip.mode,
-    clip.module,
-    clip.type,
-    clip.category,
-    clip.training_type,
-    clip.topic,
-    clip.title,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-
-  return [
-    "english",
-    "ingles",
-    "english_referee",
-    "modo ingles",
-    "modo_ingles",
-    "modulo ingles",
-    "modulo_ingles",
-    "ingles arbitral",
-  ].some((term) => values.includes(term));
 }
 function getExamLevel(avg: number) {
   if (avg >= 90) return "Nivel FIFA";

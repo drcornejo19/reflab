@@ -7,6 +7,15 @@ import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/lib/supabase";
 import { useUserRole } from "@/lib/useUserRole";
 import type { Clip, TrainingMode } from "@/lib/types";
+import {
+  deleteClipById,
+  getClips,
+  insertClipDecision,
+  normalizeClipDecision,
+  updateClipDecision,
+  validateClipDecision,
+  type ClipDecisionPayload,
+} from "@/lib/clips";
 
 type ClipWithDetails = Clip & {
   sub_type?: string | null;
@@ -225,65 +234,86 @@ export default function AdminClipsPage() {
     ];
   }, [correctFoul]);
 
-  useEffect(() => {
-    if (editingClipId) return;
-
-    if (topic === "Offside" && subType === "no_offside") {
-  setCorrectFoul(false);
-  setCorrectRestart("Seguir el juego");
-  setCorrectDiscipline("Sin tarjeta");
-}
-
-    if (topic === "Offside") {
+  function applyTopicDefaults(nextTopic: string) {
+    if (nextTopic === "Offside") {
       setSubType("interferir_juego");
       setDecisionDetail("");
       setCorrectFoul(true);
       setCorrectRestart("Tiro libre indirecto");
       setCorrectDiscipline("Sin tarjeta");
       setCorrectVar(false);
+      return;
     }
 
-    if (topic === "Handball") {
+    if (nextTopic === "Handball") {
       setSubType("inmediatez");
       setDecisionDetail("");
       setCorrectFoul(true);
       setCorrectRestart("Tiro libre directo");
       setCorrectDiscipline("Sin tarjeta");
       setCorrectVar(false);
+      return;
     }
 
-    if (topic === "Tactical foul") {
+    if (nextTopic === "Tactical foul") {
       setSubType("");
       setDecisionDetail("");
       setCorrectFoul(true);
       setCorrectRestart("Tiro libre directo");
       setCorrectDiscipline("Amarilla");
       setCorrectVar(false);
+      return;
     }
 
-    if (topic === "Dispute") {
+    if (nextTopic === "Dispute") {
       setSubType("");
       setDecisionDetail("");
       setCorrectFoul(true);
       setCorrectRestart("Tiro libre directo");
       setCorrectDiscipline("Sin tarjeta");
       setCorrectVar(false);
+      return;
     }
 
-   if (topic === "VAR") {
-  setSubType("check_complete");
+    if (nextTopic === "VAR") {
+      setSubType("check_complete");
 
-  setDecisionDetail("");
+      setDecisionDetail("");
 
-  setCorrectVar(true);
+      setCorrectVar(true);
 
-  setCorrectFoul(false);
+      setCorrectFoul(false);
 
-  setCorrectRestart("Seguir el juego");
+      setCorrectRestart("Seguir el juego");
 
-  setCorrectDiscipline("Sin tarjeta");
-}
-  }, [topic, editingClipId]);
+      setCorrectDiscipline("Sin tarjeta");
+    }
+  }
+
+  function applyNoInfractionDefaults(nextTopic: string, nextSubType: string) {
+    if (isEnglishMode) return;
+
+    const isNoOffside =
+      nextTopic === "Offside" && nextSubType === "no_offside";
+    const isNoHandball =
+      nextTopic === "Handball" && nextSubType === "no_sancionable";
+
+    if (!isNoOffside && !isNoHandball) return;
+
+    setCorrectFoul(false);
+    setCorrectRestart("Seguir el juego");
+    setCorrectDiscipline("Sin tarjeta");
+  }
+
+  function handleTopicChange(nextTopic: string) {
+    setTopic(nextTopic);
+    applyTopicDefaults(nextTopic);
+  }
+
+  function handleSubTypeChange(nextSubType: string) {
+    setSubType(nextSubType);
+    applyNoInfractionDefaults(topic, nextSubType);
+  }
 
   useEffect(() => {
     if (isLoaded && !user) {
@@ -328,12 +358,7 @@ export default function AdminClipsPage() {
   async function loadClips() {
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from("clips")
-      .select("*")
-      .order("created_at", {
-        ascending: false,
-      });
+    const { data, error } = await getClips(supabase);
 
     if (error) {
       console.error(error);
@@ -348,7 +373,7 @@ export default function AdminClipsPage() {
   async function createClip() {
     setSaving(true);
 
-    const payload = {
+    const rawPayload: ClipDecisionPayload = {
       title: generateClipTitle(
         topic,
         subType,
@@ -388,21 +413,44 @@ correct_var: isEnglishMode
       explanation,
     };
 
-    if (editingClipId) {
-      const { error } = await supabase
-        .from("clips")
-        .update(payload)
-        .eq("id", editingClipId);
+    const payload = normalizeClipDecision(rawPayload);
+    const validation = validateClipDecision(payload);
 
-      if (error) {
-        alert(error.message);
+    if (!validation.valid) {
+      const proceed = confirm(
+        `Hay una posible inconsistencia tecnica:\n\n${validation.messages
+          .map((message) => `- ${message}`)
+          .join("\n")}\n\n¿Guardar de todos modos?`
+      );
+
+      if (!proceed) {
+        setSaving(false);
+        return;
+      }
+    }
+
+    const wasEditing = Boolean(editingClipId);
+
+    if (editingClipId) {
+      const { data, error } = await updateClipDecision(
+        supabase,
+        editingClipId,
+        payload
+      );
+
+      if (error || !data) {
+        alert(
+          error?.message ??
+            "No se pudo confirmar el guardado en Supabase."
+        );
         setSaving(false);
         return;
       }
     } else {
-      const { error } = await supabase
-        .from("clips")
-        .insert([payload]);
+      const { error } = await insertClipDecision(
+        supabase,
+        payload
+      );
 
       if (error) {
         alert(error.message);
@@ -414,6 +462,12 @@ correct_var: isEnglishMode
     reset();
 
     await loadClips();
+
+    alert(
+      wasEditing
+        ? "Cambios guardados y verificados en Supabase."
+        : "Clip creado correctamente en Supabase."
+    );
 
     setSaving(false);
   }
@@ -451,10 +505,7 @@ correct_var: isEnglishMode
 
     if (!confirmDelete) return;
 
-    const { error } = await supabase
-      .from("clips")
-      .delete()
-      .eq("id", id);
+    const { error } = await deleteClipById(supabase, id);
 
     if (error) {
       alert(error.message);
@@ -560,7 +611,7 @@ correct_var: isEnglishMode
       : "Categoría técnica"
   }
   value={topic}
-  onChange={setTopic}
+  onChange={handleTopicChange}
   options={
   isEnglishMode
     ? englishTopicOptions
@@ -598,10 +649,16 @@ correct_var: isEnglishMode
             : "Tipo de mano"
         }
         value={subType}
-        onChange={setSubType}
+        onChange={handleSubTypeChange}
         options={subTypeOptions}
       />
     )}
+
+    <Input
+      label="Respuesta correcta final / criterio asociado"
+      value={decisionDetail}
+      onChange={setDecisionDetail}
+    />
 
     <BooleanSelect
       label="¿Hubo infracción?"

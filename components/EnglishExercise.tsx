@@ -5,16 +5,9 @@ import { useUser } from "@clerk/nextjs";
 import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
 import { supabase } from "@/lib/supabase";
+import { getEnglishClips, type ClipRecord } from "@/lib/clips";
 
-type EnglishClip = {
-  id: string;
-  title: string | null;
-  description: string | null;
-  video_url: string;
-  topic: string | null;
-  explanation: string | null;
-  created_at?: string;
-};
+type EnglishClip = ClipRecord;
 
 export function EnglishExercise() {
   const { user } = useUser();
@@ -42,11 +35,7 @@ export function EnglishExercise() {
     async function loadClips() {
       setLoadingClips(true);
 
-      const { data, error } = await supabase
-        .from("clips")
-        .select("id,title,description,video_url,topic,explanation,created_at")
-        .eq("mode", "english")
-        .order("created_at", { ascending: true });
+      const { data, error } = await getEnglishClips(supabase);
 
       if (!active) return;
 
@@ -418,7 +407,6 @@ export function EnglishExercise() {
     </div>
   );
 }
-
 
 
 

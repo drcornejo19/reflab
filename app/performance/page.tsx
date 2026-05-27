@@ -26,6 +26,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { RefPerformanceClient } from "@/components/RefPerformanceClient";
 import { supabase } from "@/lib/supabase";
 import {
   buildPerformanceDataset,
@@ -237,6 +238,8 @@ export default function PerformancePage() {
   return (
     <AppShell>
       <div className="mx-auto w-full max-w-full space-y-5 overflow-hidden lg:max-w-[1180px] lg:space-y-6">
+        <RefPerformanceClient />
+
         <PerformanceHero />
 
         {loadError && (

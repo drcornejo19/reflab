@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { calculateScore } from "@/lib/scoring";
+import { calculateScore, normalizeDiscipline } from "@/lib/scoring";
 import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
 import { resolveRefCardId } from "@/lib/refCard";
@@ -156,6 +156,11 @@ export function ClipExercise({
     };
 
     const score = calculateScore(userAnswer, correctAnswer);
+    const technicalCorrect = foul === typedClip.correct_foul;
+    const restartCorrect = restart === typedClip.correct_restart;
+    const disciplineCorrect =
+      normalizeDiscipline(discipline) ===
+      normalizeDiscipline(typedClip.correct_discipline);
 
     if (examMode && onComplete) {
       onComplete({
@@ -209,14 +214,14 @@ export function ClipExercise({
         correct_restart: typedClip.correct_restart,
         selected_discipline: discipline,
         correct_discipline: typedClip.correct_discipline,
-        technical_correct: foul === typedClip.correct_foul,
-        restart_correct: restart === typedClip.correct_restart,
-        discipline_correct: discipline === typedClip.correct_discipline,
+        technical_correct: technicalCorrect,
+        restart_correct: restartCorrect,
+        discipline_correct: disciplineCorrect,
         var_correct: null,
         criterion_result: {
-          technical: foul === typedClip.correct_foul,
-          restart: restart === typedClip.correct_restart,
-          discipline: discipline === typedClip.correct_discipline,
+          technical: technicalCorrect,
+          restart: restartCorrect,
+          discipline: disciplineCorrect,
         },
       },
       {
@@ -229,9 +234,9 @@ export function ClipExercise({
         score,
         topic: typedClip.topic,
         difficulty: typedClip.difficulty,
-        technical_correct: foul === typedClip.correct_foul,
-        restart_correct: restart === typedClip.correct_restart,
-        discipline_correct: discipline === typedClip.correct_discipline,
+        technical_correct: technicalCorrect,
+        restart_correct: restartCorrect,
+        discipline_correct: disciplineCorrect,
         var_correct: null,
       },
     );
