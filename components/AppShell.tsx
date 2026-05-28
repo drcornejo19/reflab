@@ -11,6 +11,7 @@ import {
   Clapperboard,
   Home,
   Info,
+  Landmark,
   Languages,
   Menu,
   ShieldCheck,
@@ -86,6 +87,13 @@ const navItems: NavItem[] = [
     icon: BookOpen,
     activePaths: ["/learning"],
   },
+  {
+    label: "Instituciones",
+    labelKey: "nav.institutions",
+    href: "/institutional",
+    icon: Landmark,
+    activePaths: ["/institutional"],
+  },
   { label: "Perfil", labelKey: "nav.profile", href: "/profile", icon: User },
   {
     label: "Admin",
@@ -147,6 +155,13 @@ const secondaryMobileItems: NavItem[] = [
     href: "/learning",
     icon: BookOpen,
     activePaths: ["/learning"],
+  },
+  {
+    label: "Instituciones",
+    labelKey: "nav.institutions",
+    href: "/institutional",
+    icon: Landmark,
+    activePaths: ["/institutional"],
   },
   {
     label: "Admin",

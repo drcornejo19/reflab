@@ -20,7 +20,8 @@ import {
   Trophy,
   type LucideIcon,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+
+type CheckInType = "pre" | "post" | "rest_day";
 
 type TrainingType =
   | "Fuerza"
@@ -38,10 +39,10 @@ type TrainingType =
 
 type SleepQuality = "Muy mala" | "Mala" | "Normal" | "Buena" | "Excelente";
 type PainLevel = "Ninguna" | "Leve" | "Moderada" | "Alta";
-type EmotionalState = "Muy bajo" | "Bajo" | "Normal" | "Bueno" | "Excelente";
 type ReadinessStatus = "Bajo" | "Moderado" | "Optimo" | "Elite";
 
 type CheckInForm = {
+  checkinType: CheckInType;
   hasMatchToday: boolean;
   trainsToday: boolean;
   trainingType: TrainingType;
@@ -52,24 +53,37 @@ type CheckInForm = {
   sleepQuality: SleepQuality;
   sleepHours: string;
   painLevel: PainLevel;
-  emotionalState: EmotionalState;
+  emotionalScore: number;
+  completed: boolean;
+  recoveryMobility: boolean;
+  notes: string;
 };
 
 type DailyCheckInRecord = {
   id?: string;
   user_id: string;
+  date?: string | null;
+  checkin_type?: CheckInType | null;
   has_match_today?: boolean | null;
+  has_training_today?: boolean | null;
   trains_today?: boolean | null;
+  activity_type?: string | null;
   training_type?: string | null;
   duration_minutes?: number | null;
   rpe?: number | null;
   fatigue?: number | null;
   sleep_quality?: string | null;
   sleep_hours?: number | null;
+  soreness?: string | null;
   pain_level?: string | null;
   emotional_state?: string | null;
+  emotional_score?: number | null;
   readiness_score?: number | null;
   readiness_status?: string | null;
+  completed?: boolean | null;
+  recovery_mobility?: boolean | null;
+  internal_load?: number | null;
+  notes?: string | null;
   created_at?: string | null;
 };
 
@@ -80,6 +94,8 @@ type TrainingSessionRecord = {
   duration_minutes?: number | null;
   rpe?: number | null;
   internal_load?: number | null;
+  fatigue_post?: number | null;
+  soreness_post?: string | null;
   completed?: boolean | null;
   created_at?: string | null;
 };
@@ -111,9 +127,12 @@ type LoadState = {
   sessions: TrainingSessionRecord[];
   tests: PhysicalTestRecord[];
   attempts: AttemptMiniRecord[];
+  readinessScores?: unknown[];
+  wellnessLogs?: unknown[];
 };
 
 const initialForm: CheckInForm = {
+  checkinType: "pre",
   hasMatchToday: false,
   trainsToday: true,
   trainingType: "Intermitencia",
@@ -124,7 +143,10 @@ const initialForm: CheckInForm = {
   sleepQuality: "Buena",
   sleepHours: "7.5",
   painLevel: "Ninguna",
-  emotionalState: "Bueno",
+  emotionalScore: 7,
+  completed: true,
+  recoveryMobility: false,
+  notes: "",
 };
 
 const trainingTypes: TrainingType[] = [
@@ -144,8 +166,75 @@ const trainingTypes: TrainingType[] = [
 const durationOptions = [30, 45, 60, 90];
 const sleepOptions: SleepQuality[] = ["Muy mala", "Mala", "Normal", "Buena", "Excelente"];
 const painOptions: PainLevel[] = ["Ninguna", "Leve", "Moderada", "Alta"];
-const emotionalOptions: EmotionalState[] = ["Muy bajo", "Bajo", "Normal", "Bueno", "Excelente"];
 const physicalTestTypes = ["Yo-Yo", "40x75", "Sprint", "CODA", "RSA", "Agilidad", "Intermitencia"];
+
+type RefPerformanceResult =
+  | { ok: true; data: LoadState; message?: string }
+  | { ok: false; error: string };
+
+async function fetchRefPerformance(): Promise<RefPerformanceResult> {
+  try {
+    const response = await fetch("/api/ref-performance", { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return { ok: false, error: formatApiError(payload) };
+    return { ok: true, data: normalizeLoadState(payload) };
+  } catch (error) {
+    return { ok: false, error: `No se pudo conectar con Ref Performance. ${error instanceof Error ? error.message : ""}` };
+  }
+}
+
+async function postRefPerformance(action: string, payload: Record<string, unknown>): Promise<RefPerformanceResult> {
+  try {
+    const response = await fetch("/api/ref-performance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, payload }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return { ok: false, error: formatApiError(result) };
+    return { ok: true, data: normalizeLoadState(result), message: result.message };
+  } catch (error) {
+    return { ok: false, error: `No se pudo guardar en Supabase. ${error instanceof Error ? error.message : ""}` };
+  }
+}
+
+function normalizeLoadState(payload: Record<string, unknown>): LoadState {
+  return {
+    checkins: Array.isArray(payload.checkins) ? (payload.checkins as DailyCheckInRecord[]) : [],
+    sessions: Array.isArray(payload.sessions) ? (payload.sessions as TrainingSessionRecord[]) : [],
+    tests: Array.isArray(payload.tests) ? (payload.tests as PhysicalTestRecord[]) : [],
+    attempts: Array.isArray(payload.attempts) ? (payload.attempts as AttemptMiniRecord[]) : [],
+    readinessScores: Array.isArray(payload.readinessScores) ? payload.readinessScores : [],
+    wellnessLogs: Array.isArray(payload.wellnessLogs) ? payload.wellnessLogs : [],
+  };
+}
+
+function formatApiError(payload: Record<string, unknown>) {
+  const error = typeof payload.error === "string" ? payload.error : "No se pudo guardar en Supabase.";
+  const technical = typeof payload.technical === "string" ? payload.technical : null;
+  return technical ? `${error} Detalle tecnico: ${technical}` : error;
+}
+
+function validateCheckIn(form: CheckInForm) {
+  const duration = resolveDuration(form);
+
+  if (form.checkinType === "pre" && (form.hasMatchToday || form.trainsToday) && !form.trainingType) {
+    return "Indica que tipo de actividad vas a hacer.";
+  }
+
+  if (form.checkinType === "post") {
+    if (!form.trainingType) return "Indica que actividad hiciste.";
+    if (!duration || duration <= 0) return "Carga la duracion de la actividad.";
+    if (!form.rpe || form.rpe < 1) return "Carga la intensidad percibida RPE.";
+  }
+
+  const sleepHours = Number.parseFloat(form.sleepHours);
+  if (form.checkinType !== "post" && (!Number.isFinite(sleepHours) || sleepHours < 0 || sleepHours > 24)) {
+    return "Carga horas de sueno validas.";
+  }
+
+  return null;
+}
 
 export function RefPerformanceClient() {
   const { user, isLoaded } = useUser();
@@ -183,25 +272,18 @@ export function RefPerformanceClient() {
       setLoading(true);
       setSchemaMessage(null);
 
-      const [checkinsRes, sessionsRes, testsRes, attemptsRes] = await Promise.all([
-        supabase.from("daily_checkins").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(30),
-        supabase.from("training_sessions").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(60),
-        supabase.from("physical_tests").select("*").eq("user_id", user.id).order("test_date", { ascending: false }).limit(30),
-        supabase.from("attempts").select("id,score,topic,mode,module,created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(80),
-      ]);
+      const result = await fetchRefPerformance();
 
       if (!active) return;
 
-      if (checkinsRes.error || sessionsRes.error || testsRes.error) {
-        setSchemaMessage("Ref Performance esta listo. Aplica la migracion de Supabase para activar historiales fisicos, wellness y tests.");
+      if (!result.ok) {
+        setSchemaMessage(result.error);
+        setData({ checkins: [], sessions: [], tests: [], attempts: [] });
+        setLoading(false);
+        return;
       }
 
-      setData({
-        checkins: checkinsRes.error ? [] : ((checkinsRes.data ?? []) as DailyCheckInRecord[]),
-        sessions: sessionsRes.error ? [] : ((sessionsRes.data ?? []) as TrainingSessionRecord[]),
-        tests: testsRes.error ? [] : ((testsRes.data ?? []) as PhysicalTestRecord[]),
-        attempts: attemptsRes.error ? [] : ((attemptsRes.data ?? []) as AttemptMiniRecord[]),
-      });
+      setData(result.data);
       setLoading(false);
     }
 
@@ -218,62 +300,42 @@ export function RefPerformanceClient() {
       return;
     }
 
+    const validationError = validateCheckIn(form);
+    if (validationError) {
+      setMessage(validationError);
+      return;
+    }
+
     setSaving(true);
     setMessage(null);
+    setSchemaMessage(null);
 
-    const now = new Date().toISOString();
     const duration = resolveDuration(form);
-    const sleepHours = Number.parseFloat(form.sleepHours) || null;
-    const checkInPayload: DailyCheckInRecord = {
-      user_id: user.id,
-      has_match_today: form.hasMatchToday,
-      trains_today: form.trainsToday,
-      training_type: form.trainsToday || form.hasMatchToday ? form.trainingType : null,
-      duration_minutes: form.trainsToday || form.hasMatchToday ? duration : null,
-      rpe: form.trainsToday || form.hasMatchToday ? form.rpe : null,
+    const result = await postRefPerformance("save_checkin", {
+      checkinType: form.checkinType,
+      hasMatchToday: form.checkinType === "rest_day" ? false : form.hasMatchToday,
+      hasTrainingToday: form.checkinType === "rest_day" ? false : form.trainsToday,
+      activityType: form.checkinType === "rest_day" ? "Descanso" : form.trainingType,
+      durationMinutes: form.checkinType === "post" ? duration : null,
+      rpe: form.checkinType === "post" ? form.rpe : null,
       fatigue: form.fatigue,
-      sleep_quality: form.sleepQuality,
-      sleep_hours: sleepHours,
-      pain_level: form.painLevel,
-      emotional_state: form.emotionalState,
-      readiness_score: readiness.score,
-      readiness_status: readiness.status,
-      created_at: now,
-    };
+      sleepQuality: form.checkinType === "post" ? null : form.sleepQuality,
+      sleepHours: form.checkinType === "post" ? null : Number.parseFloat(form.sleepHours) || null,
+      soreness: form.painLevel,
+      emotionalScore: form.checkinType === "post" ? null : form.emotionalScore,
+      completed: form.checkinType === "post" ? form.completed : null,
+      recoveryMobility: form.checkinType === "rest_day" ? form.recoveryMobility : null,
+      notes: form.notes || null,
+    });
 
-    const { data: savedCheckIn, error } = await supabase
-      .from("daily_checkins")
-      .insert([checkInPayload])
-      .select("*")
-      .maybeSingle();
-
-    if (error) {
-      setMessage("No se pudo guardar en Supabase. Revisa que la migracion de Ref Performance este aplicada.");
+    if (!result.ok) {
+      setSchemaMessage(result.error);
       setSaving(false);
       return;
     }
 
-    const internalLoad = form.trainsToday || form.hasMatchToday ? duration * form.rpe : 0;
-
-    await Promise.all([
-      supabase.from("readiness_scores").insert([{ user_id: user.id, daily_checkin_id: savedCheckIn?.id ?? null, score: readiness.score, status: readiness.status, factors: readiness.factors, created_at: now }]),
-      supabase.from("fatigue_logs").insert([{ user_id: user.id, fatigue: form.fatigue, pain_level: form.painLevel, emotional_state: form.emotionalState, created_at: now }]),
-      supabase.from("sleep_logs").insert([{ user_id: user.id, sleep_quality: form.sleepQuality, sleep_hours: sleepHours, created_at: now }]),
-      form.trainsToday || form.hasMatchToday
-        ? supabase.from("training_sessions").insert([{ user_id: user.id, daily_checkin_id: savedCheckIn?.id ?? null, session_type: form.hasMatchToday ? "Partido" : form.trainingType, duration_minutes: duration, rpe: form.rpe, internal_load: internalLoad, completed: true, created_at: now }])
-        : Promise.resolve({ error: null }),
-    ]);
-
-    setData((current) => ({
-      ...current,
-      checkins: [((savedCheckIn ?? checkInPayload) as DailyCheckInRecord), ...current.checkins].slice(0, 30),
-      sessions:
-        form.trainsToday || form.hasMatchToday
-          ? [{ user_id: user.id, session_type: form.hasMatchToday ? "Partido" : form.trainingType, duration_minutes: duration, rpe: form.rpe, internal_load: internalLoad, completed: true, created_at: now }, ...current.sessions].slice(0, 60)
-          : current.sessions,
-    }));
-
-    setMessage("Daily Ref Check-In guardado. Readiness actualizado para hoy.");
+    setData(result.data);
+    setMessage(result.message ?? "Daily Ref Check-In guardado. Datos recargados desde Supabase.");
     setSaving(false);
   }
 
@@ -291,31 +353,27 @@ export function RefPerformanceClient() {
 
     setSavingTest(true);
     setMessage(null);
+    setSchemaMessage(null);
 
-    const payload: PhysicalTestRecord = {
-      user_id: user.id,
-      test_type: testType,
+    const result = await postRefPerformance("save_test", {
+      testType,
       score,
       unit: testUnit || null,
-      gender_category: testGender,
-      target_value: Number.parseFloat(testTarget) || null,
+      genderCategory: testGender,
+      targetValue: Number.parseFloat(testTarget) || null,
       notes: testNotes || null,
-      test_date: new Date().toISOString().slice(0, 10),
-      created_at: new Date().toISOString(),
-    };
+    });
 
-    const { data: savedTest, error } = await supabase.from("physical_tests").insert([payload]).select("*").maybeSingle();
-
-    if (error) {
-      setMessage("No se pudo guardar el test. Revisa la migracion de Supabase.");
+    if (!result.ok) {
+      setSchemaMessage(result.error);
       setSavingTest(false);
       return;
     }
 
-    setData((current) => ({ ...current, tests: [((savedTest ?? payload) as PhysicalTestRecord), ...current.tests].slice(0, 30) }));
+    setData(result.data);
     setTestScore("");
     setTestNotes("");
-    setMessage("Test fisico guardado para Ref Performance.");
+    setMessage(result.message ?? "Test fisico guardado para Ref Performance.");
     setSavingTest(false);
   }
 
@@ -429,54 +487,113 @@ function DailyCheckInPanel({
   onSave: () => void;
 }) {
   const duration = resolveDuration(form);
+  const isPre = form.checkinType === "pre";
+  const isPost = form.checkinType === "post";
+  const isRest = form.checkinType === "rest_day";
 
   return (
-    <Panel eyebrow="Daily Ref Check-In" title="Como llega tu cuerpo al dia arbitral" icon={HeartPulse}>
+    <Panel eyebrow="Daily Ref Check-In" title="Registro fisico, wellness y readiness" icon={HeartPulse}>
       <div className="grid gap-4">
-        <ToggleRow label="Tenes partido hoy?" value={form.hasMatchToday} onChange={(value) => setForm((current) => ({ ...current, hasMatchToday: value, trainingType: value ? "Partido" : current.trainingType }))} />
-        <ToggleRow label="Entrenas hoy?" value={form.trainsToday} onChange={(value) => setForm((current) => ({ ...current, trainsToday: value }))} />
-        <SelectField label="Tipo de entrenamiento" value={form.trainingType} options={trainingTypes} onChange={(value) => setForm((current) => ({ ...current, trainingType: value as TrainingType }))} />
-
-        <div>
-          <Label>Duracion</Label>
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
-            {durationOptions.map((minutes) => (
-              <button
-                key={minutes}
-                type="button"
-                onClick={() => setForm((current) => ({ ...current, durationMinutes: minutes, customDuration: "" }))}
-                className={`min-h-11 rounded-2xl border text-sm font-black transition ${duration === minutes && form.customDuration === "" ? "border-[#6fc11f] bg-[#6fc11f] text-black" : "border-white/10 bg-white/[0.04] text-zinc-300"}`}
-              >
-                {minutes} min
-              </button>
-            ))}
-            <input value={form.customDuration} onChange={(event) => setForm((current) => ({ ...current, customDuration: event.target.value }))} inputMode="numeric" placeholder="Otro" className="min-h-11 rounded-2xl border border-white/10 bg-[#101b24] px-3 text-sm font-bold text-white outline-none placeholder:text-zinc-600" />
-          </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {[
+            { value: "pre", label: "Antes de entrenar / partido" },
+            { value: "post", label: "Despues de entrenar / partido" },
+            { value: "rest_day", label: "Dia sin actividad" },
+          ].map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() =>
+                setForm((current) => ({
+                  ...current,
+                  checkinType: item.value as CheckInType,
+                  hasMatchToday: item.value === "rest_day" ? false : current.hasMatchToday,
+                  trainsToday: item.value === "rest_day" ? false : current.trainsToday,
+                  trainingType: item.value === "rest_day" ? "Recuperacion" : current.trainingType,
+                }))
+              }
+              className={`min-h-12 rounded-2xl border px-3 text-sm font-black transition ${
+                form.checkinType === item.value
+                  ? "border-[#6fc11f] bg-[#6fc11f] text-black"
+                  : "border-white/10 bg-white/[0.04] text-zinc-300 hover:border-[#6fc11f]/40"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
 
-        <RangeField label="Intensidad percibida (RPE)" value={form.rpe} onChange={(value) => setForm((current) => ({ ...current, rpe: value }))} />
-        <RangeField label="Fatiga actual" value={form.fatigue} onChange={(value) => setForm((current) => ({ ...current, fatigue: value }))} />
+        {!isRest && (
+          <>
+            <ToggleRow label="Tenes partido hoy?" value={form.hasMatchToday} onChange={(value) => setForm((current) => ({ ...current, hasMatchToday: value, trainingType: value ? "Partido" : current.trainingType }))} />
+            {isPre && <ToggleRow label="Entrenas hoy?" value={form.trainsToday} onChange={(value) => setForm((current) => ({ ...current, trainsToday: value }))} />}
+            <SelectField label={isPost ? "Que actividad hiciste?" : "Que tipo de actividad vas a hacer?"} value={form.trainingType} options={trainingTypes} onChange={(value) => setForm((current) => ({ ...current, trainingType: value as TrainingType }))} />
+          </>
+        )}
+
+        {isPost && (
+          <div>
+            <Label>Duracion</Label>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {durationOptions.map((minutes) => (
+                <button
+                  key={minutes}
+                  type="button"
+                  onClick={() => setForm((current) => ({ ...current, durationMinutes: minutes, customDuration: "" }))}
+                  className={`min-h-11 rounded-2xl border text-sm font-black transition ${duration === minutes && form.customDuration === "" ? "border-[#6fc11f] bg-[#6fc11f] text-black" : "border-white/10 bg-white/[0.04] text-zinc-300"}`}
+                >
+                  {minutes} min
+                </button>
+              ))}
+              <input value={form.customDuration} onChange={(event) => setForm((current) => ({ ...current, customDuration: event.target.value }))} inputMode="numeric" placeholder="Otro" className="min-h-11 rounded-2xl border border-white/10 bg-[#101b24] px-3 text-sm font-bold text-white outline-none placeholder:text-zinc-600" />
+            </div>
+          </div>
+        )}
+
+        {isPost && <RangeField label="Intensidad percibida (RPE)" value={form.rpe} onChange={(value) => setForm((current) => ({ ...current, rpe: value }))} />}
+        <RangeField label={isPost ? "Fatiga post actividad" : "Fatiga actual"} value={form.fatigue} onChange={(value) => setForm((current) => ({ ...current, fatigue: value }))} />
+
+        {!isPost && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SelectField label="Calidad de sueno" value={form.sleepQuality} options={sleepOptions} onChange={(value) => setForm((current) => ({ ...current, sleepQuality: value as SleepQuality }))} />
+            <InputField label="Horas de sueno" value={form.sleepHours} onChange={(value) => setForm((current) => ({ ...current, sleepHours: value }))} />
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <SelectField label="Calidad de sueno" value={form.sleepQuality} options={sleepOptions} onChange={(value) => setForm((current) => ({ ...current, sleepQuality: value as SleepQuality }))} />
-          <InputField label="Horas de sueno" value={form.sleepHours} onChange={(value) => setForm((current) => ({ ...current, sleepHours: value }))} />
           <SelectField label="Dolor o molestias" value={form.painLevel} options={painOptions} onChange={(value) => setForm((current) => ({ ...current, painLevel: value as PainLevel }))} />
-          <SelectField label="Estado emocional" value={form.emotionalState} options={emotionalOptions} onChange={(value) => setForm((current) => ({ ...current, emotionalState: value as EmotionalState }))} />
+          {!isPost && <RangeField label="Estado mental / emocional" value={form.emotionalScore} onChange={(value) => setForm((current) => ({ ...current, emotionalScore: value }))} />}
         </div>
 
-        <div className="rounded-[24px] border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4">
+        {isPost && <ToggleRow label="Pudiste completar la sesion?" value={form.completed} onChange={(value) => setForm((current) => ({ ...current, completed: value }))} />}
+        {isRest && <ToggleRow label="Hiciste recuperacion o movilidad?" value={form.recoveryMobility} onChange={(value) => setForm((current) => ({ ...current, recoveryMobility: value }))} />}
+
+        <label className="block">
+          <Label>{isPost ? "Notas post actividad" : isRest ? "Notas del dia" : "Notas previas"}</Label>
+          <textarea
+            value={form.notes}
+            onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+            rows={3}
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-[#101b24] px-4 py-3 text-sm font-bold text-white outline-none placeholder:text-zinc-600"
+            placeholder="Sensaciones, molestias, contexto del partido o detalles utiles."
+          />
+        </label>
+
+        {isPost && (
+          <div className="rounded-[24px] border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6fc11f]">Carga interna estimada</p>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6fc11f]">Carga interna</p>
               <p className="mt-1 text-2xl font-black">{duration * form.rpe} AU</p>
             </div>
             <Activity className="h-9 w-9 text-[#6fc11f]" />
           </div>
-          <p className="mt-2 text-xs leading-5 text-zinc-400">Duracion x RPE. No reemplaza planificacion profesional, ayuda a leer carga arbitral.</p>
-        </div>
+            <p className="mt-2 text-xs leading-5 text-zinc-400">Duracion x RPE. Se guarda como carga interna de la actividad.</p>
+          </div>
+        )}
 
         <button type="button" onClick={onSave} disabled={saving} className="min-h-14 rounded-2xl bg-[#6fc11f] px-5 font-black text-black transition hover:bg-[#82dc2a] disabled:opacity-50">
-          {saving ? "Guardando..." : `Guardar check-in (${readiness.score}%)`}
+          {saving ? "Guardando..." : isPost ? "Guardar post actividad" : isRest ? `Guardar descanso (${readiness.score}%)` : `Guardar pre actividad (${readiness.score}%)`}
         </button>
       </div>
     </Panel>
@@ -776,21 +893,27 @@ function EmptyBlock({ text }: { text: string }) {
 }
 
 function calculateReadiness(form: CheckInForm) {
-  const sleepHours = Number.parseFloat(form.sleepHours) || 0;
-  let score = 82;
-  score += sleepQualityScore(form.sleepQuality);
-  score += Math.min(10, Math.max(-14, (sleepHours - 7) * 4));
+  const sleepHours = form.checkinType === "post" ? 0 : Number.parseFloat(form.sleepHours) || 0;
+  let score = form.checkinType === "post" ? 76 : 82;
+
+  if (form.checkinType !== "post") {
+    score += sleepQualityScore(form.sleepQuality);
+    score += Math.min(10, Math.max(-14, (sleepHours - 7) * 4));
+    score += (form.emotionalScore - 5) * 3;
+  }
+
   score -= form.fatigue * 3.8;
   score -= painPenalty(form.painLevel);
-  score += emotionalScore(form.emotionalState);
 
-  if (form.trainsToday || form.hasMatchToday) {
+  if (form.checkinType === "post") {
     score -= Math.max(0, form.rpe - 6) * 2.5;
     score -= resolveDuration(form) > 90 ? 5 : 0;
   }
 
+  if (form.checkinType === "rest_day" && form.recoveryMobility) score += 5;
+
   if (form.hasMatchToday && form.fatigue >= 7) score -= 8;
-  if (form.sleepQuality === "Excelente" && form.fatigue <= 3) score += 6;
+  if (form.checkinType !== "post" && form.sleepQuality === "Excelente" && form.fatigue <= 3) score += 6;
 
   const normalized = Math.max(0, Math.min(100, Math.round(score)));
   const status = readinessStatus(normalized);
@@ -800,15 +923,16 @@ function calculateReadiness(form: CheckInForm) {
     status,
     message: readinessMessage(status),
     factors: {
+      checkin_type: form.checkinType,
       sleep_quality: form.sleepQuality,
       sleep_hours: sleepHours,
       fatigue: form.fatigue,
-      pain_level: form.painLevel,
-      emotional_state: form.emotionalState,
+      soreness: form.painLevel,
+      emotional_score: form.emotionalScore,
       rpe: form.rpe,
       duration_minutes: resolveDuration(form),
       has_match_today: form.hasMatchToday,
-      trains_today: form.trainsToday,
+      has_training_today: form.trainsToday,
     },
   };
 }
@@ -866,11 +990,6 @@ function sleepQualityScore(value: SleepQuality) {
 
 function painPenalty(value: PainLevel) {
   const map: Record<PainLevel, number> = { Ninguna: 0, Leve: 5, Moderada: 13, Alta: 24 };
-  return map[value];
-}
-
-function emotionalScore(value: EmotionalState) {
-  const map: Record<EmotionalState, number> = { "Muy bajo": -14, Bajo: -8, Normal: 0, Bueno: 5, Excelente: 9 };
   return map[value];
 }
 
