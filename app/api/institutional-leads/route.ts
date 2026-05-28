@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
+import { createClient } from "@supabase/supabase-js";
+import {
+  sendInstitutionalLeadEmails,
+  type InstitutionalLeadEmailData,
+} from "@/lib/institutionalEmails";
 
 export const dynamic = "force-dynamic";
 
@@ -31,49 +35,95 @@ function cleanInteger(value: unknown) {
   return Math.trunc(parsed);
 }
 
+function cleanEmail(value: unknown) {
+  const email = cleanText(value);
+  if (!email || !email.includes("@")) return null;
+  return email;
+}
+
+function createLeadWriteClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      "Faltan NEXT_PUBLIC_SUPABASE_URL y una clave Supabase valida para guardar leads."
+    );
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as LeadPayload;
     const fullName = cleanText(body.fullName);
     const institutionName = cleanText(body.institutionName);
-    const email = cleanText(body.email);
+    const email = cleanEmail(body.email);
 
     if (!fullName || !institutionName || !email) {
       return NextResponse.json(
         {
+          success: false,
           error:
-            "Completá nombre, institución y email para enviar la solicitud institucional.",
+            "Completa nombre, institucion y email valido para enviar la solicitud institucional.",
         },
         { status: 400 }
       );
     }
 
+    const createdAt = new Date().toISOString();
     const interestAreas = Array.isArray(body.interestAreas)
       ? body.interestAreas
           .map((area) => cleanText(area))
           .filter((area): area is string => Boolean(area))
       : [];
 
-    const supabase = createSupabaseAdminClient();
-    const { error } = await supabase.from("institutional_leads").insert({
-      full_name: fullName,
+    const lead: InstitutionalLeadEmailData = {
+      fullName,
       role: cleanText(body.role),
-      institution_name: institutionName,
-      institution_type: cleanText(body.institutionType),
+      institutionName,
+      institutionType: cleanText(body.institutionType),
       country: cleanText(body.country),
       city: cleanText(body.city),
-      referee_count: cleanInteger(body.refereeCount),
-      instructor_count: cleanInteger(body.instructorCount),
+      refereeCount: cleanInteger(body.refereeCount),
+      instructorCount: cleanInteger(body.instructorCount),
       email,
       whatsapp: cleanText(body.whatsapp),
-      interest_areas: interestAreas,
+      interestAreas,
       message: cleanText(body.message),
+      createdAt,
+    };
+
+    const supabase = createLeadWriteClient();
+    const { error } = await supabase.from("institutional_leads").insert({
+      full_name: lead.fullName,
+      role: lead.role,
+      institution_name: lead.institutionName,
+      institution_type: lead.institutionType,
+      country: lead.country,
+      city: lead.city,
+      referee_count: lead.refereeCount,
+      instructor_count: lead.instructorCount,
+      email: lead.email,
+      whatsapp: lead.whatsapp,
+      interest_areas: lead.interestAreas,
+      message: lead.message,
       status: "new",
+      created_at: createdAt,
+      updated_at: createdAt,
     });
 
     if (error) {
       return NextResponse.json(
         {
+          success: false,
           error: "No se pudo guardar la solicitud institucional en Supabase.",
           technical: error.message,
         },
@@ -81,13 +131,41 @@ export async function POST(request: Request) {
       );
     }
 
+    const emailResults = await sendInstitutionalLeadEmails(lead);
+    const failedEmailResults = [
+      { type: "internal", result: emailResults.internal },
+      { type: "confirmation", result: emailResults.confirmation },
+    ].filter(({ result }) => !result.ok);
+    const emailErrors = failedEmailResults
+      .map(({ type, result }) => `${type}: ${result.error}`)
+      .filter(Boolean);
+
+    if (failedEmailResults.length > 0) {
+      console.error("Institutional lead emailError", {
+        lead: {
+          email: lead.email,
+          fullName: lead.fullName,
+          institutionName: lead.institutionName,
+        },
+        failures: failedEmailResults,
+      });
+    }
+
     return NextResponse.json({
+      success: true,
       message:
-        "Solicitud recibida. Nos pondremos en contacto para coordinar una demo institucional.",
+        "Solicitud recibida. Te enviamos una confirmacion por email y nos pondremos en contacto para coordinar una demo institucional.",
+      warning:
+        emailErrors.length > 0
+          ? `La solicitud se guardo, pero hubo un problema enviando emails: ${emailErrors.join(
+              " | "
+            )}`
+          : null,
     });
   } catch (error) {
     return NextResponse.json(
       {
+        success: false,
         error: "No se pudo procesar la solicitud institucional.",
         technical: error instanceof Error ? error.message : "Error desconocido",
       },

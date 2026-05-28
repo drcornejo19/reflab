@@ -1,20 +1,25 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import Link from "next/link";
 import { ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
+import {
+  institutionTypeLabels,
+  type InstitutionType,
+} from "@/lib/institutionalExperience";
 
-const institutionTypes = [
-  "Escuela arbitral",
-  "Asociacion",
-  "Liga",
-  "Federacion",
-  "Otro",
+const institutionTypes: InstitutionType[] = [
+  "school",
+  "league",
+  "association",
+  "federation",
 ];
 
 const interestAreas = [
   "Entrenamiento",
   "Evaluaciones",
   "Video analisis",
+  "Clips propios",
   "VAR Lab",
   "Ref Performance",
   "Panel institucional",
@@ -26,7 +31,7 @@ type FormState = {
   fullName: string;
   role: string;
   institutionName: string;
-  institutionType: string;
+  institutionType: InstitutionType;
   country: string;
   city: string;
   refereeCount: string;
@@ -41,7 +46,7 @@ const initialState: FormState = {
   fullName: "",
   role: "",
   institutionName: "",
-  institutionType: institutionTypes[0],
+  institutionType: "school",
   country: "",
   city: "",
   refereeCount: "",
@@ -56,6 +61,7 @@ export function InstitutionalLeadForm() {
   const [form, setForm] = useState<FormState>(initialState);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const canSubmit = useMemo(
@@ -86,6 +92,7 @@ export function InstitutionalLeadForm() {
     event.preventDefault();
     setLoading(true);
     setSuccess(null);
+    setWarning(null);
     setError(null);
 
     try {
@@ -96,6 +103,7 @@ export function InstitutionalLeadForm() {
       });
       const data = (await response.json()) as {
         message?: string;
+        warning?: string | null;
         error?: string;
         technical?: string;
       };
@@ -106,8 +114,9 @@ export function InstitutionalLeadForm() {
 
       setSuccess(
         data.message ||
-          "Solicitud recibida. Nos pondremos en contacto para coordinar una demo institucional."
+          "Solicitud recibida. Te enviamos una confirmacion por email y nos pondremos en contacto para coordinar una demo institucional."
       );
+      setWarning(data.warning ?? null);
       setForm(initialState);
     } catch (submitError) {
       setError(
@@ -161,12 +170,14 @@ export function InstitutionalLeadForm() {
           </span>
           <select
             value={form.institutionType}
-            onChange={(event) => updateField("institutionType", event.target.value)}
+            onChange={(event) =>
+              updateField("institutionType", event.target.value as InstitutionType)
+            }
             className="min-h-12 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-bold text-white outline-none transition focus:border-[#6fc11f]/60"
           >
             {institutionTypes.map((type) => (
               <option key={type} value={type} className="bg-[#0b131b]">
-                {type}
+                {institutionTypeLabels[type]}
               </option>
             ))}
           </select>
@@ -238,9 +249,30 @@ export function InstitutionalLeadForm() {
       </label>
 
       {success && (
-        <div className="mt-5 flex gap-3 rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4 text-sm font-bold text-[#b7ff67]">
-          <CheckCircle2 className="mt-0.5 shrink-0" size={18} />
-          <span>{success}</span>
+        <div className="mt-5 rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4 text-sm font-bold text-[#b7ff67]">
+          <div className="flex gap-3">
+            <CheckCircle2 className="mt-0.5 shrink-0" size={18} />
+            <span>{success}</span>
+          </div>
+          {warning && (
+            <div className="mt-4 rounded-2xl border border-yellow-400/30 bg-yellow-400/10 p-3 text-xs font-bold leading-5 text-yellow-100">
+              {warning}
+            </div>
+          )}
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <Link
+              href="/demo/institution"
+              className="flex min-h-11 items-center justify-center rounded-2xl bg-[#6fc11f] px-4 text-xs font-black text-black transition hover:bg-[#82dc2a]"
+            >
+              Ver demo institucional
+            </Link>
+            <Link
+              href="/demo/student"
+              className="flex min-h-11 items-center justify-center rounded-2xl border border-[#6fc11f]/30 bg-black/20 px-4 text-xs font-black text-[#b7ff67] transition hover:border-[#6fc11f]"
+            >
+              Ver demo como alumno
+            </Link>
+          </div>
         </div>
       )}
 

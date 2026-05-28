@@ -9,11 +9,19 @@ import {
   GraduationCap,
   Landmark,
   Layers3,
+  LockKeyhole,
   ShieldCheck,
+  Share2,
+  UploadCloud,
   UsersRound,
   Video,
 } from "lucide-react";
 import { InstitutionalLeadForm } from "@/components/InstitutionalLeadForm";
+import {
+  institutionalExperiences,
+  institutionTypeLabels,
+  type InstitutionType,
+} from "@/lib/institutionalExperience";
 
 const problemCards = [
   {
@@ -69,6 +77,31 @@ const modules = [
   { title: "Metricas", icon: BarChart3 },
   { title: "Cohortes", icon: UsersRound },
   { title: "Licencias", icon: BadgeCheck },
+];
+
+const institutionTypes: InstitutionType[] = [
+  "school",
+  "league",
+  "association",
+  "federation",
+];
+
+const audiovisualFlow = [
+  {
+    title: "La institucion sube material real",
+    text: "Video, contexto, minuto de la jugada, categoria, topico y decision esperada.",
+    icon: UploadCloud,
+  },
+  {
+    title: "RefLab revisa y procesa",
+    text: "El equipo tecnico adapta el clip, corrige metadata y lo convierte en experiencia interactiva.",
+    icon: ShieldCheck,
+  },
+  {
+    title: "Privado o compartido",
+    text: "Cada institucion decide si el clip queda privado o puede entrar a la biblioteca global RefLab.",
+    icon: Share2,
+  },
 ];
 
 export default function InstitutionalPage() {
@@ -130,6 +163,21 @@ export default function InstitutionalPage() {
               className="flex min-h-13 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-sm font-black text-white transition hover:border-[#6fc11f]/40 hover:text-[#6fc11f] active:scale-[0.98]"
             >
               Ver acceso individual
+            </Link>
+          </div>
+
+          <div className="mt-4 grid w-full gap-3 sm:max-w-[520px] sm:grid-cols-2">
+            <Link
+              href="/demo/institution"
+              className="flex min-h-12 items-center justify-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-5 text-xs font-black text-[#b7ff67] transition hover:border-[#6fc11f]"
+            >
+              Ver demo institucional
+            </Link>
+            <Link
+              href="/demo/student"
+              className="flex min-h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-xs font-black text-white transition hover:border-[#6fc11f]/40"
+            >
+              Ver demo como alumno
             </Link>
           </div>
         </div>
@@ -206,6 +254,102 @@ export default function InstitutionalPage() {
         </div>
       </section>
 
+      <section className="relative z-10 mx-auto w-full max-w-[1180px] px-4 py-8 sm:px-6 lg:px-8">
+        <div className="rounded-[32px] border border-[#6fc11f]/20 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.15),transparent_42%),#0b131b] p-5 sm:p-7 lg:p-9">
+          <p className="text-[10px] font-black uppercase tracking-[0.32em] text-[#6fc11f]">
+            Experiencia adaptable
+          </p>
+          <h2 className="mt-4 max-w-[820px] text-3xl font-black leading-tight sm:text-4xl">
+            RefLab cambia segun la realidad de cada institucion arbitral.
+          </h2>
+          <p className="mt-4 max-w-[820px] text-sm leading-7 text-zinc-400">
+            Una escuela necesita formacion inicial. Una federacion necesita criterios,
+            clips, VAR, rendimiento y seguimiento competitivo. La plataforma prepara
+            modulos, metricas y flujo operativo para cada perfil.
+          </p>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {institutionTypes.map((type) => {
+              const profile = institutionalExperiences[type];
+              return (
+                <article
+                  key={type}
+                  className="rounded-[26px] border border-white/10 bg-white/[0.035] p-5"
+                >
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#6fc11f]">
+                    {institutionTypeLabels[type]}
+                  </p>
+                  <h3 className="mt-4 text-xl font-black leading-tight">
+                    {profile.headline}
+                  </h3>
+                  <p className="mt-3 text-sm leading-6 text-zinc-400">
+                    {profile.description}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-300">
+                      {profile.trainingLevel}
+                    </span>
+                    {profile.customVideoEnabled ? (
+                      <span className="rounded-full border border-[#6fc11f]/25 bg-[#6fc11f]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#b7ff67]">
+                        Videos propios
+                      </span>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="relative z-10 mx-auto w-full max-w-[1180px] px-4 py-8 sm:px-6 lg:px-8">
+        <div className="grid gap-6 rounded-[32px] border border-white/10 bg-[#0b131b] p-5 sm:p-7 lg:grid-cols-[0.8fr_1.2fr] lg:p-9">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.32em] text-[#6fc11f]">
+              Videos institucionales
+            </p>
+            <h2 className="mt-4 text-3xl font-black leading-tight sm:text-4xl">
+              Las asociaciones y federaciones pueden trabajar con sus propios clips.
+            </h2>
+            <p className="mt-4 text-sm leading-7 text-zinc-400">
+              RefLab no reemplaza la realidad competitiva de cada institucion:
+              la convierte en material formativo, medible y reutilizable.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link
+                href="/institution/videos"
+                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#82dc2a]"
+              >
+                Panel audiovisual
+                <ArrowRight size={18} />
+              </Link>
+              <span className="inline-flex min-h-12 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-xs font-black text-zinc-300">
+                <LockKeyhole size={16} className="text-[#6fc11f]" />
+                Privado o publico
+              </span>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {audiovisualFlow.map((item) => {
+              const Icon = item.icon;
+              return (
+                <article
+                  key={item.title}
+                  className="rounded-[26px] border border-white/10 bg-white/[0.035] p-5"
+                >
+                  <div className="grid h-12 w-12 place-items-center rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]">
+                    <Icon size={24} />
+                  </div>
+                  <h3 className="mt-5 text-lg font-black">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-zinc-400">{item.text}</p>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       <section className="relative z-10 mx-auto grid w-full max-w-[1180px] gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[0.85fr_1.15fr] lg:px-8">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.32em] text-[#6fc11f]">
@@ -228,6 +372,36 @@ export default function InstitutionalPage() {
               <span className="text-sm font-black text-zinc-100">{feature}</span>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="relative z-10 mx-auto w-full max-w-[1180px] px-4 py-8 sm:px-6 lg:px-8">
+        <div className="grid gap-4 rounded-[32px] border border-[#6fc11f]/20 bg-[#6fc11f]/10 p-5 sm:p-7 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.32em] text-[#b7ff67]">
+              Demo B2B funcional
+            </p>
+            <h2 className="mt-3 text-2xl font-black sm:text-3xl">
+              Mostra como compra la institucion y como entrena cada alumno.
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-300">
+              Usa estas pantallas para presentar el modelo de licencias, cupos, instructores, cohortes y seguimiento.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[380px]">
+            <Link
+              href="/demo/institution"
+              className="flex min-h-12 items-center justify-center rounded-2xl bg-[#6fc11f] px-4 text-sm font-black text-black transition hover:bg-[#82dc2a]"
+            >
+              Demo institucion
+            </Link>
+            <Link
+              href="/demo/student"
+              className="flex min-h-12 items-center justify-center rounded-2xl border border-[#6fc11f]/30 bg-black/20 px-4 text-sm font-black text-[#b7ff67] transition hover:border-[#6fc11f]"
+            >
+              Demo alumno
+            </Link>
+          </div>
         </div>
       </section>
 

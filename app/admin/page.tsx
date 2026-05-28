@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import {
   BookOpen,
+  Building2,
   ChevronRight,
   Clapperboard,
   Settings,
   ShieldCheck,
   Users,
+  Video,
   type LucideIcon,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -42,6 +44,24 @@ const adminAreas: AdminArea[] = [
       "Administración futura de usuarios, permisos y perfiles arbitrales.",
     status: "Próximamente",
     icon: Users,
+  },
+  {
+    title: "Leads institucionales",
+    category: "B2B",
+    description:
+      "Seguimiento comercial de solicitudes institucionales, demos y pilotos.",
+    status: "Disponible",
+    href: "/admin/institutional-leads",
+    icon: Building2,
+  },
+  {
+    title: "Clips institucionales",
+    category: "B2B",
+    description:
+      "Revision tecnica de videos cargados por asociaciones, ligas y federaciones.",
+    status: "Disponible",
+    href: "/admin/institutional-clips",
+    icon: Video,
   },
   {
     title: "Biblioteca",
