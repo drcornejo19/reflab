@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { supabase } from "@/lib/supabase";
 import { AppShell } from "@/components/AppShell";
+import { ProUpgradeCard } from "@/components/ProUpgradeCard";
+import { useUserRole } from "@/lib/useUserRole";
 
 type ExamAnswer = {
   clipId: string;
@@ -38,6 +40,7 @@ const topics = [
 
 export default function StatsPage() {
   const { user, isLoaded } = useUser();
+  const { isPro, loadingRole } = useUserRole();
 
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,11 +110,44 @@ export default function StatsPage() {
     });
   }, [examAnswers]);
 
-  if (loading) {
+  if (loading || loadingRole) {
     return (
       <AppShell>
         <div className="rounded-3xl border border-white/10 bg-[#0b131b] p-4 text-zinc-400">
           Cargando estadisticas...
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!isPro) {
+    return (
+      <AppShell>
+        <div className="mx-auto w-full max-w-full space-y-5 overflow-hidden lg:max-w-[1200px] lg:space-y-6">
+          <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-4 sm:p-6">
+            <p className="break-words text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
+              REFLAB STATS
+            </p>
+            <h1 className="mt-2 break-words text-2xl font-black leading-tight md:text-3xl">
+              Estadisticas basicas
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-zinc-400">
+              El plan FREE muestra un resumen simple para probar la plataforma.
+            </p>
+          </header>
+
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+            <StatCard title="Examenes" value={totalExams} />
+            <StatCard title="Respuestas" value={totalAnswers} />
+            <StatCard title="Promedio" value={`${avg}/100`} />
+            <StatCard title="Mejor score" value={best} />
+          </div>
+
+          <ProUpgradeCard
+            title="Desbloquea estadisticas completas"
+            description="RefLab Pro habilita rendimiento por topico, historial completo, precision por criterio, ranking y evolucion avanzada."
+            compact
+          />
         </div>
       </AppShell>
     );

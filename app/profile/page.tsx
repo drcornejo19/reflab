@@ -26,6 +26,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { useI18n } from "@/lib/useI18n";
 import { supabase } from "@/lib/supabase";
 import {
@@ -42,6 +43,8 @@ import {
   type TopicMetric,
 } from "@/lib/performance";
 import { generateRefCardId, getRefCardPublicUrl, resolveRefCardId } from "@/lib/refCard";
+import { planLabels } from "@/lib/subscription";
+import { useUserRole } from "@/lib/useUserRole";
 
 type Attempt = AttemptRecord;
 type Exam = ExamResultRecord;
@@ -64,6 +67,7 @@ const refCardTopicConfig = [
 export default function ProfilePage() {
   const { user, isLoaded } = useUser();
   const { t } = useI18n();
+  const { isPro, subscriptionPlan, loadingRole } = useUserRole();
 
   const [avatarUrl, setAvatarUrl] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -162,6 +166,7 @@ export default function ProfilePage() {
     const { error } = await upsertProfileSafely(
       {
         user_id: user.id,
+        email: user.primaryEmailAddress?.emailAddress ?? null,
         referee_type: refereeType,
         main_role: mainRole,
         association,
@@ -228,6 +233,7 @@ export default function ProfilePage() {
       const { error: profileError } = await upsertProfileSafely(
         {
           user_id: user.id,
+          email: user.primaryEmailAddress?.emailAddress ?? null,
           referee_type: refereeType,
           main_role: mainRole,
           association,
@@ -349,7 +355,7 @@ export default function ProfilePage() {
     }).then(setQrDataUrl).catch(() => setQrDataUrl(""));
   }, [refCardUrl]);
 
-  if (!isLoaded || loading) {
+  if (!isLoaded || loading || loadingRole) {
     return (
       <AppShell>
         <div className="rounded-3xl border border-white/10 bg-[#101b24] p-6 text-zinc-400">
@@ -409,36 +415,58 @@ export default function ProfilePage() {
   return (
     <AppShell>
       <div className="mx-auto w-full max-w-[1240px] space-y-5 overflow-hidden">
-        <PlayerCard
-          name={displayName}
-          email={email}
-          photo={photo}
-          score={summary.avgScore}
-          evaluations={stats.totalExams}
-          bestScore={summary.bestScore}
-          status={stats.hasData ? summary.status : "Pendiente"}
-          badge={refCardBadge}
-          level={stats.level}
-          refereeType={refereeType}
-          mainRole={mainRole}
-          association={association || "No registrado"}
-          category={category || "No registrado"}
-          location={location}
-          discipline={disciplineLabel}
-          experience="No registrado"
-          lastTest={formatShortDate(lastTestDate)}
-          ranking="Pendiente"
-          trainings={stats.totalAttempts}
-          topics={refCardTopics}
-          trendScores={trendScores}
-          trendLabel={trendLabel}
-          refCardId={effectiveRefCardId}
-          refCardUrl={refCardUrl}
-          qrDataUrl={qrDataUrl}
-          uploadingAvatar={uploadingAvatar}
-          onUpload={uploadAvatar}
-          onDownload={downloadRefCard}
-        />
+        {isPro ? (
+          <PlayerCard
+            name={displayName}
+            email={email}
+            photo={photo}
+            score={summary.avgScore}
+            evaluations={stats.totalExams}
+            bestScore={summary.bestScore}
+            status={stats.hasData ? summary.status : "Pendiente"}
+            badge={refCardBadge}
+            level={stats.level}
+            refereeType={refereeType}
+            mainRole={mainRole}
+            association={association || "No registrado"}
+            category={category || "No registrado"}
+            location={location}
+            discipline={disciplineLabel}
+            experience="No registrado"
+            lastTest={formatShortDate(lastTestDate)}
+            ranking="Pendiente"
+            trainings={stats.totalAttempts}
+            topics={refCardTopics}
+            trendScores={trendScores}
+            trendLabel={trendLabel}
+            refCardId={effectiveRefCardId}
+            refCardUrl={refCardUrl}
+            qrDataUrl={qrDataUrl}
+            uploadingAvatar={uploadingAvatar}
+            onUpload={uploadAvatar}
+            onDownload={downloadRefCard}
+          />
+        ) : (
+          <>
+            <BasicProfileCard
+              name={displayName}
+              email={email}
+              photo={photo}
+              plan={planLabels[subscriptionPlan]}
+              mainRole={mainRole}
+              association={association || "No registrado"}
+              category={category || "No registrado"}
+              location={location}
+              uploadingAvatar={uploadingAvatar}
+              onUpload={uploadAvatar}
+            />
+            <ProUpgradeCard
+              title="RefCard premium disponible en RefLab Pro"
+              description="Tu perfil basico queda activo en FREE. RefLab Pro desbloquea RefCard descargable, radar arbitral, ranking, historial y evolucion completa."
+              compact
+            />
+          </>
+        )}
 
         <section className="space-y-4 rounded-[34px] border border-white/10 bg-[#071019] p-5 shadow-2xl lg:p-6">
           <div>
@@ -530,63 +558,73 @@ export default function ProfilePage() {
           {savingProfile ? t("profile.savingProfile").toUpperCase() : t("profile.saveProfile").toUpperCase()}
         </button>
 
-        <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-          <Panel title="Identidad arbitral" subtitle="Datos reales del perfil.">
-            <InfoRow label="Tipo" value={refereeType} />
-            <InfoRow label="Funcion" value={mainRole} />
-            <InfoRow label="Asociacion / Liga" value={association || "Sin cargar"} />
-            <InfoRow label="Categoria" value={category || "Sin cargar"} />
-            <InfoRow label={t("profile.country")} value={country || t("common.notRegistered")} />
-            <InfoRow label={t("profile.city")} value={city || t("common.notRegistered")} />
-            <InfoRow label="Nivel RefLab" value={stats.level} />
-          </Panel>
+        {isPro ? (
+          <>
+            <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+              <Panel title="Identidad arbitral" subtitle="Datos reales del perfil.">
+                <InfoRow label="Tipo" value={refereeType} />
+                <InfoRow label="Funcion" value={mainRole} />
+                <InfoRow label="Asociacion / Liga" value={association || "Sin cargar"} />
+                <InfoRow label="Categoria" value={category || "Sin cargar"} />
+                <InfoRow label={t("profile.country")} value={country || t("common.notRegistered")} />
+                <InfoRow label={t("profile.city")} value={city || t("common.notRegistered")} />
+                <InfoRow label="Nivel RefLab" value={stats.level} />
+              </Panel>
 
-          <Panel title="Precision por criterio" subtitle="Perfil tecnico actual.">
-            {criteria.some((item) => item.accuracy !== null) ? (
-              criteria.map((item) => <Bar key={item.label} label={item.label} value={item.accuracy ?? 0} />)
-            ) : (
-              <Empty text="Completa ejercicios para calcular precision por criterio." />
-            )}
-          </Panel>
-        </section>
+              <Panel title="Precision por criterio" subtitle="Perfil tecnico actual.">
+                {criteria.some((item) => item.accuracy !== null) ? (
+                  criteria.map((item) => <Bar key={item.label} label={item.label} value={item.accuracy ?? 0} />)
+                ) : (
+                  <Empty text="Completa ejercicios para calcular precision por criterio." />
+                )}
+              </Panel>
+            </section>
 
-        <section className="grid gap-5 lg:grid-cols-[1fr_1fr]">
-          <Panel title="Evolucion reciente" subtitle="Ultimos intentos registrados.">
-            <div className="space-y-3">
-              {trend.length === 0 ? (
-                <Empty text="Todavia no hay intentos." />
-              ) : (
-                trend.map((item, index) => (
-                  <HistoryRow
-                    key={item.id}
-                    title={`Intento #${index + 1}`}
-                    date={item.date}
-                    meta={`${item.topic ?? "Sin tema"} - ${item.modeLabel}`}
-                    score={item.score}
-                  />
-                ))
-              )}
-            </div>
-          </Panel>
+            <section className="grid gap-5 lg:grid-cols-[1fr_1fr]">
+              <Panel title="Evolucion reciente" subtitle="Ultimos intentos registrados.">
+                <div className="space-y-3">
+                  {trend.length === 0 ? (
+                    <Empty text="Todavia no hay intentos." />
+                  ) : (
+                    trend.map((item, index) => (
+                      <HistoryRow
+                        key={item.id}
+                        title={`Intento #${index + 1}`}
+                        date={item.date}
+                        meta={`${item.topic ?? "Sin tema"} - ${item.modeLabel}`}
+                        score={item.score}
+                      />
+                    ))
+                  )}
+                </div>
+              </Panel>
 
-          <Panel title="Historial de examenes" subtitle="Resultados guardados del modo examen.">
-            <div className="space-y-3">
-              {exams.length === 0 ? (
-                <Empty text="Todavia no hay examenes guardados." />
-              ) : (
-                exams.slice(0, 6).map((exam) => (
-                  <HistoryRow
-                    key={exam.id}
-                    title={`Examen - ${exam.correct_count ?? 0}/${exam.total_questions ?? 0}`}
-                    date={exam.created_at}
-                    meta="Evaluacion formal"
-                    score={exam.avg_score ?? null}
-                  />
-                ))
-              )}
-            </div>
-          </Panel>
-        </section>
+              <Panel title="Historial de examenes" subtitle="Resultados guardados del modo examen.">
+                <div className="space-y-3">
+                  {exams.length === 0 ? (
+                    <Empty text="Todavia no hay examenes guardados." />
+                  ) : (
+                    exams.slice(0, 6).map((exam) => (
+                      <HistoryRow
+                        key={exam.id}
+                        title={`Examen - ${exam.correct_count ?? 0}/${exam.total_questions ?? 0}`}
+                        date={exam.created_at}
+                        meta="Evaluacion formal"
+                        score={exam.avg_score ?? null}
+                      />
+                    ))
+                  )}
+                </div>
+              </Panel>
+            </section>
+          </>
+        ) : (
+          <ProUpgradeCard
+            title="Desbloquea tu perfil tecnico"
+            description="El plan FREE mantiene tus datos basicos. RefLab Pro habilita precision por criterio, evolucion reciente, historial de examenes y RefCard completa."
+            compact
+          />
+        )}
 
         <SignOutButton>
           <button className="flex w-full items-center justify-center gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 font-black text-red-300 transition hover:bg-red-500/20">
@@ -596,6 +634,79 @@ export default function ProfilePage() {
         </SignOutButton>
       </div>
     </AppShell>
+  );
+}
+
+function BasicProfileCard({
+  name,
+  email,
+  photo,
+  plan,
+  mainRole,
+  association,
+  category,
+  location,
+  uploadingAvatar,
+  onUpload,
+}: {
+  name: string;
+  email: string;
+  photo: string;
+  plan: string;
+  mainRole: string;
+  association: string;
+  category: string;
+  location: string;
+  uploadingAvatar: boolean;
+  onUpload: (file: File) => void;
+}) {
+  return (
+    <section className="relative overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.16),transparent_34%),#071019] p-5 shadow-2xl sm:p-6">
+      <div className="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)] md:items-center">
+        <div className="min-w-0">
+          <div className="relative mx-auto h-56 w-full max-w-[220px] overflow-hidden rounded-[28px] border border-[#6fc11f]/30 bg-black/35 shadow-[0_0_38px_rgba(111,193,31,0.12)]">
+            {photo ? (
+              <img src={photo} alt={name} className="h-full w-full object-cover object-center" />
+            ) : (
+              <div className="grid h-full place-items-center text-[#6fc11f]">
+                <UserRound size={58} />
+              </div>
+            )}
+          </div>
+          <label className="mt-3 flex min-h-11 cursor-pointer items-center justify-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 text-sm font-black text-[#b7ff8a] transition hover:bg-[#6fc11f]/20">
+            {uploadingAvatar ? "Subiendo foto..." : "Cambiar foto"}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={uploadingAvatar}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onUpload(file);
+              }}
+            />
+          </label>
+        </div>
+
+        <div className="min-w-0">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#b7ff8a]">
+            <IdCard size={14} />
+            Plan {plan}
+          </div>
+          <h1 className="mt-4 break-words text-3xl font-black leading-tight text-white sm:text-5xl">
+            {name}
+          </h1>
+          <p className="mt-2 break-words text-sm font-bold text-zinc-400">{email}</p>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <RefCardInfo icon={<ShieldCheck size={19} />} label="Rol" value={mainRole} tone="green" />
+            <RefCardInfo icon={<BadgeCheck size={19} />} label="Asociacion" value={association} />
+            <RefCardInfo icon={<Trophy size={19} />} label="Categoria" value={category} />
+            <RefCardInfo icon={<MapPin size={19} />} label="Ubicacion" value={location} />
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -7,6 +7,9 @@ import { resolveRefCardId } from "@/lib/refCard";
 import { supabase } from "@/lib/supabase";
 import { calculateScore, normalizeDiscipline } from "@/lib/scoring";
 import { getExamClips, type ClipRecord } from "@/lib/clips";
+import { ProUpgradeCard } from "@/components/ProUpgradeCard";
+import { FREE_WEEKLY_EXAM_LIMIT, getCurrentWeekStart } from "@/lib/subscription";
+import { useUserRole } from "@/lib/useUserRole";
 
 const TOTAL_QUESTIONS = 10;
 const MAX_VIDEO_PLAYS = 2;
@@ -58,6 +61,7 @@ const handballReasonOptions = ["inmediatez", "bloqueo", "deliberada"];
 
 export function ExamClient() {
   const { user } = useUser();
+  const { isPro, loadingRole } = useUserRole();
 
   const [clips, setClips] = useState<ClipWithDetails[]>([]);
   const [index, setIndex] = useState(0);
@@ -76,10 +80,12 @@ export function ExamClient() {
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
+  const [weeklyExamCount, setWeeklyExamCount] = useState(0);
 
   const currentClip = clips[index];
   const remainingVideoPlays = Math.max(MAX_VIDEO_PLAYS - videoPlays, 0);
 const videoLocked = remainingVideoPlays <= 0;
+  const freeExamLimitReached = !loadingRole && !isPro && weeklyExamCount >= FREE_WEEKLY_EXAM_LIMIT;
 
   const isOffsideClip = currentClip?.topic === "Offside";
   const isHandballClip = currentClip?.topic === "Handball";
@@ -134,6 +140,39 @@ const videoLocked = remainingVideoPlays <= 0;
 
     loadClips();
   }, []);
+
+  useEffect(() => {
+    async function loadWeeklyUsage() {
+      if (!user || isPro) {
+        setWeeklyExamCount(0);
+        return;
+      }
+
+      const weekStart = getCurrentWeekStart().toISOString();
+      const [examRes, rulesRes] = await Promise.all([
+        supabase
+          .from("exam_results")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .gte("created_at", weekStart),
+        supabase
+          .from("rules_exam_results")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .gte("created_at", weekStart),
+      ]);
+
+      if (examRes.error || rulesRes.error) {
+        console.warn("No se pudo calcular el limite semanal de examenes FREE.");
+        setWeeklyExamCount(0);
+        return;
+      }
+
+      setWeeklyExamCount((examRes.count ?? 0) + (rulesRes.count ?? 0));
+    }
+
+    loadWeeklyUsage();
+  }, [user, isPro]);
 
   useEffect(() => {
   window.scrollTo({
@@ -310,6 +349,11 @@ function handleVideoEnded() {
       return;
     }
 
+    if (freeExamLimitReached) {
+      alert("Ya usaste tu examen gratuito de esta semana. Desbloquea RefLab Pro para rendir examenes ilimitados.");
+      return;
+    }
+
     setSaving(true);
 
     const totalScore = answers.reduce((acc, a) => acc + a.score, 0);
@@ -397,6 +441,7 @@ function handleVideoEnded() {
         alert(`El examen se guardo, pero no se pudieron registrar todos los intentos: ${failedAttempt.error ?? "error desconocido"}`);
       } else {
         setExamSaved(true);
+        if (!isPro) setWeeklyExamCount((prev) => prev + 1);
         alert("Examen guardado correctamente. Las respuestas impactan en tus estadisticas por topico y criterio.");
       }
     }
@@ -429,6 +474,16 @@ function handleVideoEnded() {
       <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-4 text-zinc-400 sm:p-8">
         No hay clips suficientes para iniciar examen.
       </div>
+    );
+  }
+
+  if (freeExamLimitReached && !finished) {
+    return (
+      <ProUpgradeCard
+        title="Ya usaste tu examen gratuito de esta semana"
+        description="El plan FREE permite 1 examen semanal para que puedas probar la experiencia. RefLab Pro desbloquea examenes ilimitados, estadisticas completas y evolucion avanzada."
+        reason={`Limite FREE: ${FREE_WEEKLY_EXAM_LIMIT} examen por semana.`}
+      />
     );
   }
 

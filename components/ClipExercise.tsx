@@ -8,6 +8,9 @@ import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
 import { resolveRefCardId } from "@/lib/refCard";
 import { supabase } from "@/lib/supabase";
 import type { Clip } from "@/lib/types";
+import { ProUpgradeCard } from "@/components/ProUpgradeCard";
+import { FREE_WEEKLY_CLIP_LIMIT, getCurrentWeekStart } from "@/lib/subscription";
+import { useUserRole } from "@/lib/useUserRole";
 
 type ExamAnswer = {
   clipId: string;
@@ -55,6 +58,7 @@ export function ClipExercise({
   const typedClip = clip as ClipWithDetails;
 
   const { user } = useUser();
+  const { isPro, loadingRole } = useUserRole();
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const [foul, setFoul] = useState<boolean | null>(null);
@@ -67,6 +71,7 @@ export function ClipExercise({
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
   const [playCount, setPlayCount] = useState(0);
+  const [weeklyClipCount, setWeeklyClipCount] = useState(0);
 
   const isOffside = typedClip.topic === "Offside";
   const isVarClip = typedClip.topic === "VAR";
@@ -83,6 +88,33 @@ export function ClipExercise({
   const videoLocked = remainingPlays <= 0;
 
   const canSubmit = foul !== null && restart !== "" && discipline !== "";
+  const freeClipLimitReached =
+    !examMode && !loadingRole && !isPro && weeklyClipCount >= FREE_WEEKLY_CLIP_LIMIT;
+
+  useEffect(() => {
+    async function loadWeeklyUsage() {
+      if (!user || isPro) {
+        setWeeklyClipCount(0);
+        return;
+      }
+
+      const { count, error } = await supabase
+        .from("attempts")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .gte("created_at", getCurrentWeekStart().toISOString());
+
+      if (error) {
+        console.warn("No se pudo calcular el limite semanal FREE:", error.message);
+        setWeeklyClipCount(0);
+        return;
+      }
+
+      setWeeklyClipCount(count ?? 0);
+    }
+
+    loadWeeklyUsage();
+  }, [user, isPro]);
 
   useEffect(() => {
     const savedCount = Number(
@@ -140,6 +172,11 @@ export function ClipExercise({
 
   async function submit() {
     if (!canSubmit || isSaving) return;
+
+    if (freeClipLimitReached) {
+      setSaveError("Has completado tus clips gratuitos de esta semana. Desbloquea RefLab Pro para seguir entrenando sin limites.");
+      return;
+    }
 
     const userAnswer = {
       foul,
@@ -248,6 +285,7 @@ export function ClipExercise({
     }
 
     setResult(score);
+    if (!isPro) setWeeklyClipCount((prev) => prev + 1);
     setIsSaving(false);
 
     try {
@@ -385,6 +423,16 @@ export function ClipExercise({
           </div>
         </section>
       </div>
+    );
+  }
+
+  if (freeClipLimitReached) {
+    return (
+      <ProUpgradeCard
+        title="Has completado tus clips gratuitos de esta semana"
+        description="Ya experimentaste el entrenamiento base. Con RefLab Pro podes seguir entrenando clips, acceder al analisis completo y ver tu evolucion real."
+        reason={`Limite FREE: ${FREE_WEEKLY_CLIP_LIMIT} clips por semana.`}
+      />
     );
   }
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
+import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import {
   getRankingRows,
   type AttemptRecord,
@@ -10,9 +11,11 @@ import {
   type RankingRow,
 } from "@/lib/performance";
 import { supabase } from "@/lib/supabase";
+import { useUserRole } from "@/lib/useUserRole";
 
 export default function RankingPage() {
   const { user } = useUser();
+  const { isPro, loadingRole } = useUserRole();
   const [attempts, setAttempts] = useState<AttemptRecord[]>([]);
   const [profiles, setProfiles] = useState<RankingProfileRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,11 +48,37 @@ export default function RankingPage() {
   const podium = ranking.slice(0, 3);
   const rest = ranking.slice(3);
 
-  if (loading) {
+  if (loading || loadingRole) {
     return (
       <AppShell>
         <div className="rounded-3xl border border-white/10 bg-[#0b131b] p-8 text-zinc-400">
           Cargando ranking...
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!isPro) {
+    return (
+      <AppShell>
+        <div className="mx-auto w-full max-w-[980px] space-y-5 overflow-hidden">
+          <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-5 shadow-2xl sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#6fc11f]">
+              RefLab Ranking
+            </p>
+            <h1 className="mt-3 break-words text-3xl font-black tracking-tight md:text-4xl">
+              Ranking Pro
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+              La comparacion comunitaria se desbloquea cuando el usuario ya
+              tiene datos suficientes para competir con sentido.
+            </p>
+          </header>
+          <ProUpgradeCard
+            title="Ranking exclusivo de RefLab Pro"
+            description="Desbloquea posicion, promedio, mejor score, cantidad de examenes, entrenamientos y actividad comparada con otros arbitros."
+            compact
+          />
         </div>
       </AppShell>
     );

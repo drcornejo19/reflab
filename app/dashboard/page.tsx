@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
+import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { supabase } from "@/lib/supabase";
 import {
   buildPerformanceDataset,
@@ -19,6 +20,8 @@ import {
   type RulesExamResultRecord,
   type TopicMetric,
 } from "@/lib/performance";
+import { getFreemiumUsage } from "@/lib/subscription";
+import { useUserRole } from "@/lib/useUserRole";
 
 type DashboardData = {
   attempts: AttemptRecord[];
@@ -48,6 +51,7 @@ const playerTopicKeys = [
 
 export default function DashboardPage() {
   const { user, isLoaded } = useUser();
+  const { isPro, loadingRole } = useUserRole();
   const [data, setData] = useState<DashboardData>(emptyData);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -126,12 +130,59 @@ export default function DashboardPage() {
   const playerTopics = useMemo(() => buildPlayerTopics(topicMetrics), [topicMetrics]);
   const criteria = useMemo(() => getCriterionPerformance(dataset.items), [dataset.items]);
   const plan = useMemo(() => getRecommendedPlan(summary), [summary]);
+  const freemiumUsage = useMemo(
+    () =>
+      getFreemiumUsage({
+        attempts: data.attempts,
+        examResults: data.examResults,
+        rulesResults: data.rulesResults,
+      }),
+    [data.attempts, data.examResults, data.rulesResults]
+  );
 
-  if (!isLoaded || loading) {
+  if (!isLoaded || loading || loadingRole) {
     return (
       <AppShell>
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-zinc-400">
           Cargando dashboard...
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!isPro) {
+    return (
+      <AppShell>
+        <div className="mx-auto w-full max-w-[1080px] space-y-5 overflow-hidden">
+          <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-5 shadow-2xl sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#6fc11f]">
+              Dashboard basico
+            </p>
+            <h1 className="mt-3 break-words text-3xl font-black leading-tight md:text-4xl">
+              Primer diagnostico RefLab
+            </h1>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">
+              Usa tus clips y examenes gratuitos para descubrir fortalezas,
+              puntos a mejorar y motivos reales para evolucionar.
+            </p>
+          </header>
+
+          {loadError && (
+            <div className="rounded-2xl border border-yellow-400/25 bg-yellow-400/10 p-4 text-sm font-bold text-yellow-100">
+              {loadError}
+            </div>
+          )}
+
+          <FreeDashboardSummary
+            summary={summary}
+            usage={freemiumUsage}
+          />
+
+          <ProUpgradeCard
+            title="Ver analisis completo"
+            description="RefLab Pro desbloquea radar arbitral, evolucion historica, precision por criterio, historial completo, ranking, VAR Lab y entrenamiento sin limites."
+            reason="El plan FREE mantiene el foco en un resumen basico para que pruebes la plataforma sin paywall inicial."
+          />
         </div>
       </AppShell>
     );
@@ -290,6 +341,69 @@ function buildPlayerTopics(topicMetrics: TopicMetric[]): PlayerTopic[] {
       attempts: metric?.attempts ?? 0,
     };
   });
+}
+
+function FreeDashboardSummary({
+  summary,
+  usage,
+}: {
+  summary: ReturnType<typeof getPerformanceSummary>;
+  usage: ReturnType<typeof getFreemiumUsage>;
+}) {
+  return (
+    <section className="rounded-[30px] border border-white/10 bg-[#101b24] p-4 shadow-2xl sm:p-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <TopMetric
+          title="Tu precision"
+          value={formatScore(summary.avgScore)}
+          detail={summary.hasData ? summary.status : "Sin datos suficientes"}
+          featured
+        />
+        <TopMetric
+          title="Mejor topico"
+          value={summary.strongestTopic?.topic ?? "Sin datos"}
+          detail={
+            summary.strongestTopic
+              ? `${formatPercent(summary.strongestTopic.accuracy)} de acierto`
+              : "Completa clips para activarlo"
+          }
+        />
+        <TopMetric
+          title="Topico a mejorar"
+          value={summary.weakestTopic?.topic ?? "Sin datos"}
+          detail={
+            summary.weakestTopic
+              ? `${formatPercent(summary.weakestTopic.accuracy)} de acierto`
+              : "Completa clips para activarlo"
+          }
+        />
+        <TopMetric
+          title="Uso semanal FREE"
+          value={`${usage.weeklyClips}/${usage.clipLimit}`}
+          detail={`${usage.examsRemaining} examen gratis disponible`}
+        />
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <InsightBlock
+          title="Clips gratuitos"
+          text={
+            usage.clipLimitReached
+              ? "Ya usaste tus clips gratuitos de esta semana."
+              : `Te quedan ${usage.clipsRemaining} clips gratuitos esta semana.`
+          }
+        />
+        <InsightBlock
+          title="Examen gratuito"
+          text={
+            usage.examLimitReached
+              ? "Ya usaste tu examen gratuito semanal."
+              : `Te quedan ${usage.examsRemaining} examenes gratuitos esta semana.`
+          }
+        />
+      </div>
+    </section>
+  );
 }
 
 function TechnicalProfileCard({ topics, hasData }: { topics: PlayerTopic[]; hasData: boolean }) {

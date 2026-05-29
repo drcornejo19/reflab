@@ -26,6 +26,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { RefPerformanceClient } from "@/components/RefPerformanceClient";
 import { supabase } from "@/lib/supabase";
 import {
@@ -52,6 +53,7 @@ import {
   type SummaryMetric,
   type TopicMetric,
 } from "@/lib/performance";
+import { useUserRole } from "@/lib/useUserRole";
 
 type HistoryMode = "ALL" | "training" | "exam" | "rules_exam";
 type HistoryResult = "ALL" | PerformanceItem["result"];
@@ -119,6 +121,7 @@ const performanceViewMeta: Record<
 
 export default function PerformancePage() {
   const { user, isLoaded } = useUser();
+  const { isPro, loadingRole } = useUserRole();
   const [data, setData] = useState<LoadState>(initialData);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -214,7 +217,7 @@ export default function PerformancePage() {
     });
   }, [dataset.items, historyMode, historyResult]);
 
-  if (!isLoaded || loading) {
+  if (!isLoaded || loading || loadingRole) {
     return (
       <AppShell>
         <LoadingCard />
@@ -231,6 +234,27 @@ export default function PerformancePage() {
           actionHref="/sign-in"
           actionLabel="Iniciar sesion"
         />
+      </AppShell>
+    );
+  }
+
+  if (!isPro) {
+    return (
+      <AppShell>
+        <div className="mx-auto w-full max-w-[1180px] space-y-5 overflow-hidden">
+          <PerformanceHero />
+          {loadError && (
+            <div className="rounded-3xl border border-yellow-400/25 bg-yellow-400/10 p-4 text-sm font-bold leading-6 text-yellow-100">
+              {loadError}
+            </div>
+          )}
+          <FreePerformanceOverview summary={summary} />
+          <ProUpgradeCard
+            title="Desbloquea tu evolucion completa con RefLab Pro"
+            description="El plan FREE muestra un resumen basico. RefLab Pro abre los modulos de evolucion, plan recomendado, topicos, criterios, historial, ranking y Ref Performance completo."
+            reason="Primero probas la plataforma. Cuando ya encontraste valor, podes pasar a una lectura profesional de tu rendimiento arbitral."
+          />
+        </div>
       </AppShell>
     );
   }
@@ -275,6 +299,71 @@ export default function PerformancePage() {
     </AppShell>
   );
 }
+
+function FreePerformanceOverview({
+  summary,
+}: {
+  summary: ReturnType<typeof getPerformanceSummary>;
+}) {
+  return (
+    <section className="rounded-[34px] border border-white/10 bg-[#101b24] p-4 shadow-2xl sm:p-5 lg:p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#6fc11f]">
+            Resumen FREE
+          </p>
+          <h2 className="mt-2 break-words text-2xl font-black leading-tight text-white sm:text-3xl">
+            Tu primera lectura de rendimiento
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+            Este resumen usa datos reales y evita mostrar estadisticas avanzadas
+            sin contexto suficiente.
+          </p>
+        </div>
+        <Link
+          href="/training"
+          className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#82dc2a]"
+        >
+          Seguir entrenando
+        </Link>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <BasicSummaryCard
+          label="Promedio general"
+          value={formatScore(summary.avgScore)}
+          detail={summary.hasData ? summary.status : "Sin datos suficientes"}
+          tone="green"
+        />
+        <BasicSummaryCard
+          label="Intentos analizados"
+          value={summary.totalAttempts}
+          detail="Actividad registrada"
+        />
+        <BasicSummaryCard
+          label="Topico fuerte"
+          value={summary.strongestTopic?.topic ?? "Sin datos"}
+          detail={
+            summary.strongestTopic
+              ? `${formatPercent(summary.strongestTopic.accuracy)} de acierto`
+              : "Completa mas ejercicios"
+          }
+        />
+        <BasicSummaryCard
+          label="Topico a mejorar"
+          value={summary.weakestTopic?.topic ?? "Sin datos"}
+          detail={
+            summary.weakestTopic
+              ? `${formatPercent(summary.weakestTopic.accuracy)} de acierto`
+              : "Completa mas ejercicios"
+          }
+          tone="danger"
+        />
+      </div>
+    </section>
+  );
+}
+
 function PerformanceEntryGrid({
   activeView,
   onSelect,
@@ -476,6 +565,35 @@ function PerformanceHero() {
         </p>
       </div>
     </header>
+  );
+}
+
+function BasicSummaryCard({
+  label,
+  value,
+  detail,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+  tone?: "neutral" | "green" | "danger";
+}) {
+  const style =
+    tone === "green"
+      ? "border-[#6fc11f]/30 bg-[#6fc11f]/10"
+      : tone === "danger"
+        ? "border-red-500/25 bg-red-500/10"
+        : "border-white/10 bg-black/25";
+
+  return (
+    <article className={`min-w-0 rounded-[24px] border p-4 ${style}`}>
+      <p className="break-words text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400">
+        {label}
+      </p>
+      <p className="mt-3 break-words text-2xl font-black text-white">{value}</p>
+      <p className="mt-2 text-xs leading-5 text-zinc-400">{detail}</p>
+    </article>
   );
 }
 

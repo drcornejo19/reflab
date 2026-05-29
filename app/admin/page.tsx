@@ -22,7 +22,7 @@ type AdminArea = {
   title: string;
   category: string;
   description: string;
-  status: "Disponible" | "Próximamente";
+  status: "Disponible" | "Proximamente";
   href?: string;
   icon: LucideIcon;
 };
@@ -32,17 +32,18 @@ const adminAreas: AdminArea[] = [
     title: "Clips",
     category: "Contenido",
     description:
-      "Gestioná clips, URLs de video, criterios correctos, edición y eliminación.",
+      "Gestiona clips, URLs de video, criterios correctos, edicion y eliminacion.",
     status: "Disponible",
     href: "/admin-clips",
     icon: Clapperboard,
   },
   {
     title: "Usuarios",
-    category: "Roles",
+    category: "Roles y planes",
     description:
-      "Administración futura de usuarios, permisos y perfiles arbitrales.",
-    status: "Próximamente",
+      "Gestiona usuarios, roles y planes FREE/PRO para probar la experiencia completa.",
+    status: "Disponible",
+    href: "/admin/users",
     icon: Users,
   },
   {
@@ -67,24 +68,24 @@ const adminAreas: AdminArea[] = [
     title: "Biblioteca",
     category: "Recursos",
     description:
-      "Gestión futura de documentos, glosario, material RefLab y temporadas IFAB.",
-    status: "Próximamente",
+      "Gestion futura de documentos, glosario, material RefLab y temporadas IFAB.",
+    status: "Proximamente",
     icon: BookOpen,
   },
   {
     title: "Evaluaciones",
-    category: "Exámenes",
+    category: "Examenes",
     description:
-      "Configuración futura de simulaciones, rúbricas, tiempos y feedback final.",
-    status: "Próximamente",
+      "Configuracion futura de simulaciones, rubricas, tiempos y feedback final.",
+    status: "Proximamente",
     icon: ShieldCheck,
   },
   {
     title: "Configuracion",
     category: "Plataforma",
     description:
-      "Ajustes futuros de módulos, estados, etiquetas y comportamiento general.",
-    status: "Próximamente",
+      "Ajustes futuros de modulos, estados, etiquetas y comportamiento general.",
+    status: "Proximamente",
     icon: Settings,
   },
 ];
@@ -122,7 +123,7 @@ export default function AdminPage() {
     return (
       <AppShell>
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-red-300">
-          No tenés permisos para acceder a Admin.
+          No tenes permisos para acceder a Admin.
         </div>
       </AppShell>
     );
@@ -139,8 +140,8 @@ export default function AdminPage() {
           <h1 className="mt-5 text-4xl font-black md:text-5xl">Admin</h1>
 
           <p className="mt-4 max-w-3xl text-lg leading-8 text-zinc-400">
-            Gestioná clips, contenidos, evaluaciones y recursos de la
-            plataforma.
+            Gestiona clips, usuarios, contenidos institucionales y recursos de
+            la plataforma.
           </p>
         </header>
 
@@ -182,7 +183,7 @@ function AdminCard({ area }: { area: AdminArea }) {
 
       <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4">
         <span className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">
-          {area.href ? "Abrir" : "Próximamente"}
+          {area.href ? "Abrir" : "Proximamente"}
         </span>
         <ChevronRight
           className={`text-zinc-600 transition ${

@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
+import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { rulesQuestions } from "@/lib/rulesQuestions";
 import { supabase } from "@/lib/supabase";
+import { FREE_WEEKLY_EXAM_LIMIT, getCurrentWeekStart } from "@/lib/subscription";
+import { useUserRole } from "@/lib/useUserRole";
 
 const EXAM_LIMIT = 20;
 const EXAM_TIME = 15 * 60;
@@ -22,6 +25,7 @@ function shuffle<T>(arr: T[]) {
 
 export default function RulesExamPage() {
   const { user } = useUser();
+  const { isPro, loadingRole } = useUserRole();
 
   const questions = useMemo(() => {
     const heavyTopics = [
@@ -69,8 +73,43 @@ export default function RulesExamPage() {
   const [timeLeft, setTimeLeft] = useState(EXAM_TIME);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [weeklyExamCount, setWeeklyExamCount] = useState(0);
 
   const currentQuestion = questions[currentIndex];
+  const freeExamLimitReached = !loadingRole && !isPro && weeklyExamCount >= FREE_WEEKLY_EXAM_LIMIT;
+
+  useEffect(() => {
+    async function loadWeeklyUsage() {
+      if (!user || isPro) {
+        setWeeklyExamCount(0);
+        return;
+      }
+
+      const weekStart = getCurrentWeekStart().toISOString();
+      const [examRes, rulesRes] = await Promise.all([
+        supabase
+          .from("exam_results")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .gte("created_at", weekStart),
+        supabase
+          .from("rules_exam_results")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .gte("created_at", weekStart),
+      ]);
+
+      if (examRes.error || rulesRes.error) {
+        console.warn("No se pudo calcular el limite semanal de examenes FREE.");
+        setWeeklyExamCount(0);
+        return;
+      }
+
+      setWeeklyExamCount((examRes.count ?? 0) + (rulesRes.count ?? 0));
+    }
+
+    loadWeeklyUsage();
+  }, [user, isPro]);
 
   const finishExam = useCallback((reason: Exclude<FinishReason, null>) => {
     setFinishReason(reason);
@@ -125,6 +164,8 @@ export default function RulesExamPage() {
   }, [started, finished]);
 
   function startExam() {
+    if (freeExamLimitReached) return;
+
     setStarted(true);
     setFinished(false);
     setFinishReason(null);
@@ -220,6 +261,11 @@ export default function RulesExamPage() {
       return;
     }
 
+    if (freeExamLimitReached) {
+      alert("Ya usaste tu examen gratuito de esta semana. Desbloquea RefLab Pro para rendir examenes ilimitados.");
+      return;
+    }
+
     const result = calculateResults();
 
     const details = questions.map((question, questionIndex) => {
@@ -262,6 +308,7 @@ export default function RulesExamPage() {
       alert(error.message);
     } else {
       setSaved(true);
+      if (!isPro) setWeeklyExamCount((prev) => prev + 1);
       alert("Resultado guardado correctamente.");
     }
 
@@ -291,6 +338,14 @@ export default function RulesExamPage() {
     return (
       <AppShell>
         <div className="mx-auto max-w-[950px] space-y-5">
+          {freeExamLimitReached && (
+            <ProUpgradeCard
+              title="Ya usaste tu examen gratuito de esta semana"
+              description="El plan FREE permite 1 examen semanal. RefLab Pro desbloquea examenes ilimitados y estadisticas completas."
+              reason={`Limite FREE: ${FREE_WEEKLY_EXAM_LIMIT} examen por semana.`}
+            />
+          )}
+
           <section className="rounded-3xl border border-[#6fc11f]/30 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_42%),#101820] p-8 shadow-2xl">
             <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
               REFLAB RULES EXAM
@@ -327,6 +382,7 @@ export default function RulesExamPage() {
 
           <button
             onClick={startExam}
+            disabled={freeExamLimitReached}
             className="w-full rounded-2xl bg-[#6fc11f] px-5 py-5 text-lg font-black text-black transition hover:bg-[#82dc2a]"
           >
             COMENZAR EXAMEN

@@ -1,4 +1,5 @@
-﻿import { AppShell } from "@/components/AppShell";
+import { AppShell } from "@/components/AppShell";
+import { ProFeatureGate } from "@/components/ProFeatureGate";
 import { TrainingClient } from "@/components/TrainingClient";
 
 export default function VarPage() {
@@ -20,9 +21,14 @@ export default function VarPage() {
           </p>
         </header>
 
-        <TrainingClient mode="var" />
+        <ProFeatureGate
+          title="VAR Lab es exclusivo de RefLab Pro"
+          description="Entrena APP, OFR, factual vs interpretativo y protocolo VAR con todos los casos disponibles."
+          reason="El plan FREE te permite probar entrenamiento base; VAR Lab se desbloquea al actualizar."
+        >
+          <TrainingClient mode="var" />
+        </ProFeatureGate>
       </div>
     </AppShell>
   );
 }
-
