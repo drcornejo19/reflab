@@ -5,10 +5,8 @@ import {
   BarChart3,
   Building2,
   ClipboardCheck,
-  Gauge,
   GraduationCap,
   Landmark,
-  Layers3,
   LockKeyhole,
   ShieldCheck,
   Share2,
@@ -23,24 +21,6 @@ import {
   institutionTypeLabels,
   type InstitutionType,
 } from "@/lib/institutionalExperience";
-
-const problemCards = [
-  {
-    title: "Formacion dispersa",
-    text: "Muchas estructuras dependen de clases aisladas, archivos sueltos y seguimiento manual.",
-    icon: Layers3,
-  },
-  {
-    title: "Evaluacion poco medible",
-    text: "Cuesta comparar evolucion, detectar patrones y sostener criterios comunes entre grupos.",
-    icon: BarChart3,
-  },
-  {
-    title: "Falta de continuidad",
-    text: "El arbitro entrena, rinde y aprende en espacios separados, sin una lectura integral.",
-    icon: Gauge,
-  },
-];
 
 const institutionUseCases = [
   {
@@ -133,9 +113,9 @@ export default function InstitutionalPage() {
 
       <section className="relative z-10 mx-auto grid w-full max-w-[1180px] gap-8 px-4 pb-12 pt-6 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:px-8 lg:pb-20 lg:pt-16">
         <div className="flex min-w-0 flex-col justify-center">
-          <p className="text-[10px] font-black uppercase tracking-[0.34em] text-[#6fc11f]">
-            Solucion B2B
-          </p>
+          <div className="grid h-16 w-16 place-items-center rounded-full border border-[#6fc11f]/35 bg-[#6fc11f]/10 text-lg font-black text-[#6fc11f] shadow-[0_0_34px_rgba(111,193,31,0.18)]">
+            RF
+          </div>
           <h1 className="mt-4 max-w-[760px] break-words text-4xl font-black leading-[0.96] tracking-tight text-white sm:text-5xl lg:text-6xl">
             RefLab para instituciones arbitrales
           </h1>
@@ -143,7 +123,7 @@ export default function InstitutionalPage() {
             Digitaliza, medi y profesionaliza la formacion arbitral de tu escuela, liga o asociacion.
           </p>
           <p className="mt-4 max-w-[680px] text-sm leading-6 text-zinc-500">
-            Converti la formacion arbitral en un sistema medible, digital y escalable: reglas, evaluaciones, videos, rendimiento tecnico y seguimiento en una misma infraestructura.
+            Converti la formacion arbitral en un sistema medible, digital y escalable: reglas, evaluaciones, videos, programas academicos y seguimiento en una misma infraestructura.
           </p>
 
           <div className="mt-8 grid w-full gap-3 sm:max-w-[520px] sm:grid-cols-2">
@@ -206,22 +186,6 @@ export default function InstitutionalPage() {
         </div>
       </section>
 
-      <section className="relative z-10 mx-auto grid w-full max-w-[1180px] gap-4 px-4 py-6 sm:px-6 md:grid-cols-3 lg:px-8">
-        {problemCards.map((card) => {
-          const Icon = card.icon;
-          return (
-            <article
-              key={card.title}
-              className="rounded-[28px] border border-white/10 bg-[#0b131b] p-5"
-            >
-              <Icon className="text-[#6fc11f]" size={26} />
-              <h2 className="mt-5 text-xl font-black">{card.title}</h2>
-              <p className="mt-3 text-sm leading-6 text-zinc-400">{card.text}</p>
-            </article>
-          );
-        })}
-      </section>
-
       <section className="relative z-10 mx-auto w-full max-w-[1180px] px-4 py-10 sm:px-6 lg:px-8">
         <div className="rounded-[32px] border border-white/10 bg-[#0b131b] p-5 sm:p-7 lg:p-9">
           <p className="text-[10px] font-black uppercase tracking-[0.32em] text-[#6fc11f]">
@@ -264,7 +228,7 @@ export default function InstitutionalPage() {
             modulos, metricas y flujo operativo para cada perfil.
           </p>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
             {institutionTypes.map((type) => {
               const profile = institutionalExperiences[type];
               return (
@@ -294,10 +258,6 @@ export default function InstitutionalPage() {
                 </article>
               );
             })}
-          </div>
-          <div className="mt-5 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm leading-6 text-yellow-100">
-            Federaciones queda como modulo futuro. Primero se ordenan escuelas,
-            ligas y asociaciones para no mezclar necesidades diferentes.
           </div>
         </div>
       </section>
@@ -356,7 +316,7 @@ export default function InstitutionalPage() {
             Licencias institucionales
           </p>
           <h2 className="mt-4 text-3xl font-black leading-tight sm:text-4xl">
-            B2B no es solo acceso: es infraestructura metodologica.
+            Programas, cupos y seguimiento academico en una misma estructura.
           </h2>
           <p className="mt-4 text-sm leading-7 text-zinc-400">
             RefLab permite vender pilotos, cohortes, licencias semestrales o anuales y planes de formacion digital para escuelas, ligas y asociaciones.
@@ -379,7 +339,7 @@ export default function InstitutionalPage() {
         <div className="grid gap-4 rounded-[32px] border border-[#6fc11f]/20 bg-[#6fc11f]/10 p-5 sm:p-7 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.32em] text-[#b7ff67]">
-              Demo B2B funcional
+              Demo institucional funcional
             </p>
             <h2 className="mt-3 text-2xl font-black sm:text-3xl">
               Mostra como compra la institucion y como entrena cada alumno.

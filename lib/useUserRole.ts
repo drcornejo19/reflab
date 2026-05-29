@@ -3,13 +3,18 @@
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { supabase } from "@/lib/supabase";
+import {
+  normalizeRole,
+  roleAccess,
+  type SystemRole,
+} from "@/lib/institutionalRoles";
 
-export type UserRole = "user" | "video_admin" | "super_admin";
+export type UserRole = SystemRole;
 
 export function useUserRole() {
   const { user, isLoaded } = useUser();
 
-  const [role, setRole] = useState<UserRole>("user");
+  const [role, setRole] = useState<UserRole>("individual_referee");
   const [loadingRole, setLoadingRole] = useState(true);
 
   useEffect(() => {
@@ -17,7 +22,7 @@ export function useUserRole() {
       if (!isLoaded) return;
 
       if (!user) {
-        setRole("user");
+        setRole("individual_referee");
         setLoadingRole(false);
         return;
       }
@@ -28,11 +33,7 @@ export function useUserRole() {
   .eq("user_id", user.id)
   .maybeSingle();
 
-      if (error || !data?.role) {
-        setRole("user");
-      } else {
-        setRole(data.role as UserRole);
-      }
+      setRole(error || !data?.role ? "individual_referee" : normalizeRole(data.role));
 
       setLoadingRole(false);
     }
@@ -43,7 +44,15 @@ export function useUserRole() {
   return {
     role,
     loadingRole,
-    isVideoAdmin: role === "video_admin" || role === "super_admin",
+    isVideoAdmin: roleAccess[role].canAccessAdmin,
     isSuperAdmin: role === "super_admin",
+    isInstitutionAdmin: role === "institution_admin",
+    isInstitutionInstructor: role === "institutional_instructor",
+    isInstitutionStudent: role === "institutional_student",
+    isIndividualReferee: role === "individual_referee",
+    canAccessIndividual: roleAccess[role].canAccessIndividual,
+    canAccessInstitutionAdmin: roleAccess[role].canAccessInstitutionAdmin,
+    canAccessInstitutionStudent: roleAccess[role].canAccessInstitutionStudent,
+    canUseIndividualPremium: roleAccess[role].canUseIndividualPremium,
   };
 }

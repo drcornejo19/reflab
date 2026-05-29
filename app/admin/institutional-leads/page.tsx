@@ -169,7 +169,7 @@ export default function InstitutionalLeadsAdminPage() {
       <div className="space-y-6">
         <header className="rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-6 shadow-2xl sm:p-7">
           <p className="text-xs font-black uppercase tracking-[0.45em] text-[#6fc11f]">
-            REFLAB B2B
+            REFLAB INSTITUCIONAL
           </p>
           <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -323,8 +323,7 @@ function formatInstitutionType(value: string | null) {
   if (
     value === "school" ||
     value === "league" ||
-    value === "association" ||
-    value === "federation"
+    value === "association"
   ) {
     return institutionTypeLabels[value as InstitutionType];
   }

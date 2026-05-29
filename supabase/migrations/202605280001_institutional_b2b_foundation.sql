@@ -22,13 +22,10 @@ create table if not exists public.institutional_leads (
 create table if not exists public.institutions (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  type text,
+  institution_type text check (institution_type in ('school', 'league', 'association')),
   country text,
   city text,
-  plan text,
-  license_status text not null default 'inactive',
-  license_start date,
-  license_end date,
+  status text not null default 'pending',
   seats_total integer not null default 0 check (seats_total >= 0),
   seats_used integer not null default 0 check (seats_used >= 0),
   created_at timestamptz not null default now(),
@@ -43,7 +40,7 @@ create table if not exists public.institution_members (
     role in (
       'individual_referee',
       'institution_admin',
-      'instructor',
+      'institutional_instructor',
       'institutional_student'
     )
   ),

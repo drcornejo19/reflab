@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { normalizeRole } from "@/lib/institutionalRoles";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import {
   institutionalClipStatuses,
@@ -119,8 +120,8 @@ async function requireAdmin() {
     .eq("user_id", userId)
     .maybeSingle();
 
-  const role = data?.role;
-  if (error || (role !== "video_admin" && role !== "super_admin")) {
+  const role = normalizeRole(data?.role);
+  if (error || role !== "super_admin") {
     return {
       response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
       supabase,

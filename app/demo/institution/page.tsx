@@ -7,7 +7,10 @@ import {
   ArrowRight,
   BadgeCheck,
   BarChart3,
+  CalendarDays,
+  CheckCircle2,
   ClipboardCheck,
+  GraduationCap,
   UserPlus,
   type LucideIcon,
 } from "lucide-react";
@@ -18,7 +21,13 @@ import {
   institutionalExperiences,
   institutionalComparatives,
   institutionTypeLabels,
+  schoolAcademicProgram,
+  schoolContentAccess,
+  schoolCourseProgress,
   schoolExamFormats,
+  schoolOwnContentFlow,
+  schoolPanelCapabilities,
+  schoolScheduleBlocks,
   schoolVideoTopics,
   type InstitutionType,
 } from "@/lib/institutionalExperience";
@@ -81,7 +90,7 @@ export default function InstitutionDemoPage() {
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#6fc11f]">
             Tipo de institucion
           </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {institutionTypes.map((type) => {
               const active = type === institutionType;
               return (
@@ -108,10 +117,6 @@ export default function InstitutionDemoPage() {
                 </button>
               );
             })}
-          </div>
-          <div className="mt-4 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm leading-6 text-yellow-100">
-            Federaciones queda como etapa futura. Por ahora la demo institucional
-            se concentra en escuelas, ligas y asociaciones.
           </div>
         </section>
 
@@ -164,46 +169,143 @@ export default function InstitutionDemoPage() {
         </section>
 
         {institutionType === "school" ? (
-          <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-            <Panel title="Reglas de Juego IFAB" kicker="Biblioteca escuela">
-              <p className="text-sm leading-6 text-zinc-400">
-                La escuela trabaja una biblioteca resumida, pedagogica y dividida
-                de Regla 1 a Regla 17, con explicacion simple, puntos clave y
-                errores frecuentes.
-              </p>
-              <Link
-                href="/institution/rules"
-                className="mt-5 flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#82dc2a]"
-              >
-                Abrir biblioteca IFAB
-                <ArrowRight size={18} />
-              </Link>
-            </Panel>
-
-            <Panel title="Examenes y videos escuela" kicker="Formacion inicial">
-              <div className="grid gap-4">
+          <section className="mt-6 grid gap-6">
+            <div className="rounded-[30px] border border-[#6fc11f]/20 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.13),transparent_42%),#0b131b] p-5 sm:p-6">
+              <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">
-                    Formatos de examen
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#6fc11f]">
+                    Academia arbitral digital
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {schoolExamFormats.map((format) => (
-                      <Chip key={format} label={format} />
-                    ))}
+                  <h2 className="mt-3 break-words text-2xl font-black sm:text-3xl">
+                    Panel escuela: cursos, programas, cronogramas y progreso.
+                  </h2>
+                  <p className="mt-3 text-sm leading-6 text-zinc-400">
+                    La escuela organiza alumnos, cursos, contenidos, fechas de
+                    apertura, evaluaciones y avance academico dentro de una
+                    estructura simple.
+                  </p>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <SchoolMetric label="Curso demo" value={`${schoolCourseProgress.percent}%`} />
+                    <SchoolMetric label="Pendientes" value={`${schoolCourseProgress.pendingActivities}`} />
                   </div>
                 </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">
-                    Topicos oficiales de video
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {schoolVideoTopics.map((topic) => (
-                      <Chip key={topic} label={topic} />
-                    ))}
-                  </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {schoolPanelCapabilities.map((capability) => (
+                    <div
+                      key={capability}
+                      className="rounded-2xl border border-white/10 bg-white/[0.035] p-4"
+                    >
+                      <GraduationCap className="text-[#6fc11f]" size={20} />
+                      <p className="mt-3 text-sm font-black text-zinc-200">{capability}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </Panel>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+              <Panel title="Reglas de Juego IFAB" kicker="Biblioteca escuela">
+                <p className="text-sm leading-6 text-zinc-400">
+                  Biblioteca resumida, pedagogica y dividida de Regla 1 a Regla
+                  17, con explicacion simple, puntos clave, errores frecuentes y
+                  resumen rapido para alumnos.
+                </p>
+                <Link
+                  href="/institution/rules"
+                  className="mt-5 flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#82dc2a]"
+                >
+                  Abrir biblioteca IFAB
+                  <ArrowRight size={18} />
+                </Link>
+              </Panel>
+
+              <Panel title="Examenes, videos y accesos" kicker="Formacion inicial">
+                <div className="grid gap-4">
+                  <ChipGroup title="Formatos de examen" items={schoolExamFormats} />
+                  <ChipGroup title="Topicos oficiales de video" items={schoolVideoTopics} />
+                  <ChipGroup title="Accesos del alumno" items={schoolContentAccess} />
+                </div>
+              </Panel>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+              <Panel title="Programacion por fechas" kicker="Diario / semanal / mensual">
+                <div className="grid gap-3">
+                  {schoolScheduleBlocks.map((block) => (
+                    <div
+                      key={block.title}
+                      className="rounded-2xl border border-white/10 bg-white/[0.035] p-4"
+                    >
+                      <div className="flex items-start gap-3">
+                        <CalendarDays className="mt-0.5 shrink-0 text-[#6fc11f]" size={20} />
+                        <div>
+                          <p className="text-sm font-black text-white">{block.title}</p>
+                          <p className="mt-1 text-xs leading-5 text-zinc-500">
+                            {block.description}
+                          </p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {block.items.map((item) => (
+                              <Chip key={item} label={item} />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+
+              <Panel title="Programa academico demo" kicker="Activacion por fechas">
+                <div className="grid gap-3">
+                  {schoolAcademicProgram.map((week) => (
+                    <div
+                      key={week.week}
+                      className="rounded-2xl border border-white/10 bg-white/[0.035] p-4"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm font-black text-white">{week.week}</p>
+                          <p className="mt-1 text-xs font-bold text-zinc-500">{week.range}</p>
+                        </div>
+                        <Chip label={week.status} />
+                      </div>
+                      <div className="mt-3 grid gap-2">
+                        {week.items.slice(0, 2).map((item) => (
+                          <div key={item.title} className="flex items-start gap-2 text-xs text-zinc-400">
+                            <CheckCircle2 className="mt-0.5 shrink-0 text-[#6fc11f]" size={14} />
+                            <span>
+                              {item.title} - abre {item.openDate}, cierra {item.dueDate}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+              <Panel title="Biblioteca oficial RefLab" kicker="Videos escuela">
+                <p className="text-sm leading-6 text-zinc-400">
+                  La escuela funciona perfectamente sin subir contenido propio.
+                  Usa la biblioteca oficial RefLab con fuera de juego, manos,
+                  disputas y faltas tacticas.
+                </p>
+              </Panel>
+
+              <Panel title="Contenido propio" kicker="Flujo con revision RefLab">
+                <div className="grid gap-3">
+                  {schoolOwnContentFlow.map((step) => (
+                    <div key={step} className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+                      <BadgeCheck className="mt-0.5 shrink-0 text-[#6fc11f]" size={18} />
+                      <p className="text-sm font-semibold leading-6 text-zinc-300">{step}</p>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            </div>
           </section>
         ) : null}
 
@@ -282,11 +384,16 @@ export default function InstitutionDemoPage() {
                     <p className="break-words text-base font-black">{student.name}</p>
                     <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-zinc-400">
                       <span>{student.level}</span>
-                      <span>Score {student.score}</span>
+                      <span>
+                        {institutionType === "school"
+                          ? `Avance ${student.score}%`
+                          : `Score ${student.score}`}
+                      </span>
                       <span>Ultima actividad: {student.last}</span>
                     </div>
                     <p className="mt-2 text-sm text-zinc-400">
-                      Topico a mejorar: <span className="font-bold text-white">{student.weak}</span>
+                      {institutionType === "school" ? "Pendiente" : "Topico a mejorar"}:{" "}
+                      <span className="font-bold text-white">{student.weak}</span>
                     </p>
                   </div>
                   <Link
@@ -351,14 +458,14 @@ export default function InstitutionDemoPage() {
 
         <section className="mt-6 rounded-[30px] border border-[#6fc11f]/20 bg-[#6fc11f]/10 p-5 sm:p-6">
           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#b7ff67]">
-            Modelo B2B
+            Modelo institucional
           </p>
           <h2 className="mt-3 text-2xl font-black sm:text-3xl">
             La institucion compra cupos, los instructores gestionan y los alumnos entrenan.
           </h2>
           <p className="mt-3 max-w-[860px] text-sm leading-6 text-zinc-300">
             Esta demo muestra el flujo comercial: licencia institucional, cupos activos, seguimiento por cohorte,
-            evaluaciones, analytics y experiencia individual para cada alumno dentro de RefLab.
+            evaluaciones, progreso academico y experiencia de alumno dentro de RefLab.
           </p>
         </section>
       </div>
@@ -400,6 +507,30 @@ function LicenseRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
       <span className="text-sm font-semibold text-zinc-400">{label}</span>
       <span className="text-sm font-black text-white">{value}</span>
+    </div>
+  );
+}
+
+function SchoolMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-500">{label}</p>
+      <p className="mt-2 text-2xl font-black text-[#6fc11f]">{value}</p>
+    </div>
+  );
+}
+
+function ChipGroup({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div>
+      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">
+        {title}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {items.map((item) => (
+          <Chip key={item} label={item} />
+        ))}
+      </div>
     </div>
   );
 }

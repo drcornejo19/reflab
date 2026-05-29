@@ -24,10 +24,10 @@ const individualBenefits = [
 ];
 
 const institutionalBenefits = [
-  "Panel institucional",
+  "Programas academicos",
   "Cohortes y grupos",
-  "Metricas por arbitro",
-  "Licencias B2B",
+  "Progreso del alumno",
+  "Licencias institucionales",
 ];
 
 const ecosystemItems = [
@@ -78,7 +78,7 @@ export default function HomePage() {
             Elegi como queres usar RefLab.
           </p>
           <p className="mx-auto mt-2 max-w-[760px] text-sm leading-6 text-zinc-500">
-            Una plataforma integral para entrenar arbitros individualmente y para profesionalizar estructuras institucionales.
+            Una plataforma integral para arbitros individuales y para instituciones que organizan formacion arbitral.
           </p>
         </div>
 
@@ -96,8 +96,8 @@ export default function HomePage() {
           <ExperienceCard
             icon={Building2}
             kicker="Acceso institucional"
-            title="Instituciones / B2B"
-            text="Para escuelas, asociaciones, ligas y federaciones que quieren digitalizar, medir y profesionalizar la formacion arbitral."
+            title="Instituciones"
+            text="Para escuelas arbitrales, ligas y asociaciones que quieren organizar programas, contenidos, evaluaciones y progreso academico."
             button="Solicitar demo institucional"
             href="/institutional"
             benefits={institutionalBenefits}

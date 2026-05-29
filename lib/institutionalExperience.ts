@@ -1,4 +1,4 @@
-export type InstitutionType = "school" | "league" | "association" | "federation";
+export type InstitutionType = "school" | "league" | "association";
 
 export type InstitutionalClipStatus =
   | "uploaded"
@@ -59,14 +59,12 @@ export const institutionTypeLabels: Record<InstitutionType, string> = {
   school: "Escuela arbitral",
   league: "Liga",
   association: "Asociacion",
-  federation: "Federacion",
 };
 
 export const institutionTypeShortLabels: Record<InstitutionType, string> = {
   school: "Escuela",
   league: "Liga",
   association: "Asociacion",
-  federation: "Federacion",
 };
 
 export const institutionalClipStatusLabels: Record<InstitutionalClipStatus, string> = {
@@ -95,6 +93,193 @@ export const schoolExamFormats = [
   "Situaciones arbitrales con video",
 ];
 
+export type SchoolProgramItemStatus = "done" | "available" | "locked";
+
+export type SchoolProgramItem = {
+  title: string;
+  type: string;
+  status: SchoolProgramItemStatus;
+  startDate: string;
+  openDate: string;
+  dueDate: string;
+};
+
+export type SchoolProgramWeek = {
+  week: string;
+  range: string;
+  status: "completada" | "activa" | "programada";
+  items: SchoolProgramItem[];
+};
+
+export const schoolCourseProgress = {
+  percent: 75,
+  completedModules: 12,
+  pendingModules: 4,
+  pendingEvaluations: 1,
+  pendingActivities: 3,
+};
+
+export const schoolAcademicProgram: SchoolProgramWeek[] = [
+  {
+    week: "Semana 1",
+    range: "01/06 - 07/06",
+    status: "completada",
+    items: [
+      {
+        title: "Regla 1 - El terreno de juego",
+        type: "Material IFAB",
+        status: "done",
+        startDate: "01/06",
+        openDate: "01/06",
+        dueDate: "05/06",
+      },
+      {
+        title: "Regla 2 - El balon",
+        type: "Material IFAB",
+        status: "done",
+        startDate: "01/06",
+        openDate: "01/06",
+        dueDate: "05/06",
+      },
+      {
+        title: "Video 1 - Introduccion a manos",
+        type: "Video habilitado",
+        status: "done",
+        startDate: "02/06",
+        openDate: "02/06",
+        dueDate: "06/06",
+      },
+      {
+        title: "Evaluacion 1 - Fundamentos",
+        type: "Examen",
+        status: "done",
+        startDate: "03/06",
+        openDate: "03/06",
+        dueDate: "07/06",
+      },
+    ],
+  },
+  {
+    week: "Semana 2",
+    range: "08/06 - 14/06",
+    status: "activa",
+    items: [
+      {
+        title: "Regla 3 - Los jugadores",
+        type: "Material IFAB",
+        status: "available",
+        startDate: "08/06",
+        openDate: "08/06",
+        dueDate: "12/06",
+      },
+      {
+        title: "Regla 4 - Equipamiento",
+        type: "Material IFAB",
+        status: "available",
+        startDate: "08/06",
+        openDate: "08/06",
+        dueDate: "12/06",
+      },
+      {
+        title: "Video 2 - Fuera de juego inicial",
+        type: "Video habilitado",
+        status: "available",
+        startDate: "09/06",
+        openDate: "09/06",
+        dueDate: "13/06",
+      },
+      {
+        title: "Evaluacion 2 - Reglas 3 y 4",
+        type: "Evaluacion",
+        status: "available",
+        startDate: "10/06",
+        openDate: "10/06",
+        dueDate: "14/06",
+      },
+    ],
+  },
+  {
+    week: "Semana 3",
+    range: "15/06 - 21/06",
+    status: "programada",
+    items: [
+      {
+        title: "Regla 5 - El arbitro",
+        type: "Material IFAB",
+        status: "locked",
+        startDate: "15/06",
+        openDate: "15/06",
+        dueDate: "19/06",
+      },
+      {
+        title: "Regla 6 - Otros miembros del equipo arbitral",
+        type: "Material IFAB",
+        status: "locked",
+        startDate: "15/06",
+        openDate: "15/06",
+        dueDate: "19/06",
+      },
+      {
+        title: "Video 3 - Disputas simples",
+        type: "Video habilitado",
+        status: "locked",
+        startDate: "16/06",
+        openDate: "16/06",
+        dueDate: "20/06",
+      },
+      {
+        title: "Evaluacion 3 - Senales y autoridad",
+        type: "Examen",
+        status: "locked",
+        startDate: "17/06",
+        openDate: "17/06",
+        dueDate: "21/06",
+      },
+    ],
+  },
+];
+
+export const schoolScheduleBlocks = [
+  {
+    title: "Lo que debo hacer hoy",
+    description: "Actividades habilitadas para la fecha actual.",
+    items: ["Leer Regla 3", "Completar Video 2", "Responder mini cuestionario"],
+  },
+  {
+    title: "Lo que debo hacer esta semana",
+    description: "Bloque semanal asignado por la escuela.",
+    items: ["Reglas 3 y 4", "Video de fuera de juego", "Evaluacion 2"],
+  },
+  {
+    title: "Lo que debo hacer este mes",
+    description: "Cronograma mensual de formacion inicial.",
+    items: ["Reglas 1 a 6", "Tres videos oficiales", "Tres evaluaciones"],
+  },
+];
+
+export const schoolContentAccess = [
+  "Material IFAB",
+  "Videos habilitados por la escuela",
+  "Entrenamientos asignados",
+  "Examenes",
+  "Evaluaciones",
+];
+
+export const schoolPanelCapabilities = [
+  "Alumnos",
+  "Cursos",
+  "Programas",
+  "Cronogramas",
+  "Evaluaciones",
+  "Progreso",
+];
+
+export const schoolOwnContentFlow = [
+  "La escuela envia video, descripcion, decision tecnica, decision disciplinaria y categoria.",
+  "RefLab revisa, procesa, valida y adapta el material.",
+  "El contenido aprobado se asigna a esa escuela o se incorpora a la biblioteca general.",
+];
+
 export const schoolStudentMetricGroups: InstitutionalMetricGroup[] = [
   {
     title: "Progreso academico",
@@ -111,8 +296,8 @@ export const schoolStudentMetricGroups: InstitutionalMetricGroup[] = [
     description: "Seguimiento de clips formativos por topico oficial de escuela.",
     metrics: [
       "Videos completados",
-      "Mejor topico",
-      "Topico a mejorar",
+      "Modulo con mejor avance",
+      "Contenido a reforzar",
       "Actividad reciente",
     ],
   },
@@ -202,8 +387,8 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
       "Promedio general",
       "Cantidad de examenes",
       "Porcentaje de aprobacion",
-      "Mejor topico",
-      "Topico a mejorar",
+      "Modulo con mejor avance",
+      "Contenido a reforzar",
       "Evolucion",
       "Videos completados",
       "Actividad reciente",
@@ -214,7 +399,7 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
       { label: "Promedio general", value: "76/100", detail: "programa inicial" },
       { label: "Examenes", value: "92", detail: "multiple choice y V/F" },
       { label: "Aprobacion", value: "74%", detail: "cohorte inicial" },
-      { label: "Mejor topico", value: "Manos", detail: "conceptos basicos" },
+      { label: "Mejor avance", value: "Manos", detail: "conceptos basicos" },
       { label: "A reforzar", value: "Fuera de juego", detail: "regla y senales" },
       { label: "Videos completados", value: "318", detail: "formativos" },
       { label: "Cupos usados", value: "37/50", detail: "13 disponibles" },
@@ -477,35 +662,6 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
       "Comparar precision por categoria y promocion.",
       "Asignar VAR Lab a plantel regional.",
     ],
-  },
-  federation: {
-    type: "federation",
-    title: "Federacion",
-    headline: "Proximamente",
-    description:
-      "La experiencia federativa se definira mas adelante: observadores, instructores, estructura nacional y evaluaciones federativas.",
-    tone: "Pendiente de definicion",
-    trainingLevel: "Proximamente",
-    plan: "Proximamente",
-    seatsTotal: 0,
-    seatsUsed: 0,
-    instructors: 0,
-    customVideoEnabled: false,
-    publicClipSharingEnabled: false,
-    modules: [
-      {
-        title: "Federaciones",
-        description: "Modulo reservado para una etapa posterior.",
-        status: "coming_soon",
-      },
-    ],
-    metrics: ["Proximamente"],
-    kpis: [
-      { label: "Estado", value: "Proximamente", detail: "no desarrollado por ahora" },
-    ],
-    cohorts: [],
-    students: [],
-    instructorFocus: ["Definir diferencias con asociaciones antes de desarrollar."],
   },
 };
 

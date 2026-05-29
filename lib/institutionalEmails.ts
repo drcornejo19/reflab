@@ -193,8 +193,7 @@ function formatInstitutionType(value?: string | null) {
   if (
     value === "school" ||
     value === "league" ||
-    value === "association" ||
-    value === "federation"
+    value === "association"
   ) {
     return institutionTypeLabels[value as InstitutionType];
   }

@@ -4,7 +4,7 @@ create table if not exists public.institution_profiles (
   id uuid primary key default gen_random_uuid(),
   institution_id uuid not null references public.institutions(id) on delete cascade,
   institution_type text not null check (
-    institution_type in ('school', 'league', 'association', 'federation')
+    institution_type in ('school', 'league', 'association')
   ),
   training_level text not null default 'introductory',
   custom_video_enabled boolean not null default false,

@@ -47,7 +47,7 @@ const adminAreas: AdminArea[] = [
   },
   {
     title: "Leads institucionales",
-    category: "B2B",
+    category: "Institucional",
     description:
       "Seguimiento comercial de solicitudes institucionales, demos y pilotos.",
     status: "Disponible",
@@ -56,9 +56,9 @@ const adminAreas: AdminArea[] = [
   },
   {
     title: "Clips institucionales",
-    category: "B2B",
+    category: "Institucional",
     description:
-      "Revision tecnica de videos cargados por asociaciones, ligas y federaciones.",
+      "Revision tecnica de videos cargados por escuelas, ligas y asociaciones.",
     status: "Disponible",
     href: "/admin/institutional-clips",
     icon: Video,

@@ -9,6 +9,7 @@ import {
   Activity,
   CircleAlert,
   Clapperboard,
+  GraduationCap,
   Home,
   Info,
   Landmark,
@@ -33,12 +34,14 @@ import { useUserRole } from "@/lib/useUserRole";
 
 type NavItem = {
   label: string;
-  labelKey: TranslationKey;
+  labelKey?: TranslationKey;
   href: string;
   icon: LucideIcon;
   activePaths?: string[];
   activePrefixes?: string[];
   adminOnly?: boolean;
+  individualOnly?: boolean;
+  institutionalStudentOnly?: boolean;
 };
 
 const trainingActivePaths = ["/training", "/mobile-var"];
@@ -55,7 +58,28 @@ const trainingActivePrefixes = [
 ];
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", labelKey: "nav.dashboard", href: "/dashboard", icon: Home },
+  {
+    label: "Mi Programa",
+    href: "/demo/student",
+    icon: GraduationCap,
+    activePaths: ["/demo/student"],
+    institutionalStudentOnly: true,
+  },
+  {
+    label: "Material IFAB",
+    href: "/institution/rules",
+    icon: BookOpen,
+    activePaths: ["/institution/rules"],
+    activePrefixes: ["/institution/rules"],
+    institutionalStudentOnly: true,
+  },
+  {
+    label: "Dashboard",
+    labelKey: "nav.dashboard",
+    href: "/dashboard",
+    icon: Home,
+    individualOnly: true,
+  },
   {
     label: "Entrenamiento",
     labelKey: "nav.training",
@@ -63,6 +87,7 @@ const navItems: NavItem[] = [
     icon: CircleAlert,
     activePaths: trainingActivePaths,
     activePrefixes: trainingActivePrefixes,
+    individualOnly: true,
   },
   {
     label: "Evaluaciones",
@@ -79,6 +104,7 @@ const navItems: NavItem[] = [
     icon: Activity,
     activePaths: ["/performance", "/stats", "/ranking", "/mobile-stats"],
     activePrefixes: ["/performance"],
+    individualOnly: true,
   },
   {
     label: "Biblioteca",
@@ -94,7 +120,13 @@ const navItems: NavItem[] = [
     icon: Landmark,
     activePaths: ["/institutional"],
   },
-  { label: "Perfil", labelKey: "nav.profile", href: "/profile", icon: User },
+  {
+    label: "Perfil",
+    labelKey: "nav.profile",
+    href: "/profile",
+    icon: User,
+    individualOnly: true,
+  },
   {
     label: "Admin",
     labelKey: "nav.admin",
@@ -108,11 +140,27 @@ const navItems: NavItem[] = [
 
 const mobileItems: NavItem[] = [
   {
+    label: "Programa",
+    href: "/demo/student",
+    icon: GraduationCap,
+    activePaths: ["/demo/student"],
+    institutionalStudentOnly: true,
+  },
+  {
+    label: "IFAB",
+    href: "/institution/rules",
+    icon: BookOpen,
+    activePaths: ["/institution/rules"],
+    activePrefixes: ["/institution/rules"],
+    institutionalStudentOnly: true,
+  },
+  {
     label: "Dashboard",
     labelKey: "nav.dashboard",
     href: "/mobile-dashboard",
     icon: Home,
     activePaths: ["/mobile-dashboard", "/dashboard"],
+    individualOnly: true,
   },
   {
     label: "Entrenar",
@@ -121,6 +169,7 @@ const mobileItems: NavItem[] = [
     icon: CircleAlert,
     activePaths: trainingActivePaths,
     activePrefixes: trainingActivePrefixes,
+    individualOnly: true,
   },
   {
     label: "Evaluar",
@@ -137,8 +186,15 @@ const mobileItems: NavItem[] = [
     icon: Activity,
     activePaths: ["/performance", "/stats", "/ranking", "/mobile-stats"],
     activePrefixes: ["/performance"],
+    individualOnly: true,
   },
-  { label: "Perfil", labelKey: "nav.profile", href: "/profile", icon: User },
+  {
+    label: "Perfil",
+    labelKey: "nav.profile",
+    href: "/profile",
+    icon: User,
+    individualOnly: true,
+  },
 ];
 
 const secondaryMobileItems: NavItem[] = [
@@ -178,12 +234,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [language, setLanguage] = useState<AppLanguage>("es");
-  const { isVideoAdmin, loadingRole } = useUserRole();
-  const visibleNavItems = filterAdminItems(navItems, isVideoAdmin, loadingRole);
-  const visibleSecondaryItems = filterAdminItems(
+  const roleState = useUserRole();
+  const { isVideoAdmin, loadingRole } = roleState;
+  const visibleNavItems = filterNavItems(navItems, roleState);
+  const visibleMobileItems = filterNavItems(mobileItems, roleState);
+  const mobileNavGrid =
+    visibleMobileItems.length <= 3
+      ? "grid-cols-3"
+      : visibleMobileItems.length === 4
+        ? "grid-cols-4"
+        : "grid-cols-5";
+  const visibleSecondaryItems = filterNavItems(
     secondaryMobileItems,
-    isVideoAdmin,
-    loadingRole
+    roleState
   );
 
   useEffect(() => {
@@ -252,11 +315,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </main>
 
-      <nav className="fixed bottom-[calc(10px+env(safe-area-inset-bottom))] left-2 right-2 z-50 grid h-[74px] grid-cols-5 rounded-[26px] border border-white/10 bg-[#071019]/96 p-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:left-3 sm:right-3 lg:hidden">
-        {mobileItems.map((item) => {
+      <nav
+        className={`fixed bottom-[calc(10px+env(safe-area-inset-bottom))] left-2 right-2 z-50 grid h-[74px] ${mobileNavGrid} rounded-[26px] border border-white/10 bg-[#071019]/96 p-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:left-3 sm:right-3 lg:hidden`}
+      >
+        {visibleMobileItems.map((item) => {
           const Icon = item.icon;
           const active = isItemActive(pathname, item);
-          const label = translate(language, item.labelKey);
+          const label = item.labelKey ? translate(language, item.labelKey) : item.label;
 
           return (
             <Link
@@ -318,7 +383,7 @@ function NavLink({
   language: AppLanguage;
 }) {
   const Icon = item.icon;
-  const label = translate(language, item.labelKey);
+  const label = item.labelKey ? translate(language, item.labelKey) : item.label;
 
   return (
     <Link
@@ -347,7 +412,7 @@ function MobileMenuLink({
   onClick: () => void;
 }) {
   const Icon = item.icon;
-  const label = translate(language, item.labelKey);
+  const label = item.labelKey ? translate(language, item.labelKey) : item.label;
 
   return (
     <Link
@@ -365,12 +430,24 @@ function MobileMenuLink({
   );
 }
 
-function filterAdminItems(
+function filterNavItems(
   items: NavItem[],
-  isVideoAdmin: boolean,
-  loadingRole: boolean
+  roleState: ReturnType<typeof useUserRole>
 ) {
-  return items.filter((item) => !item.adminOnly || (!loadingRole && isVideoAdmin));
+  if (roleState.loadingRole) {
+    return items.filter(
+      (item) => !item.adminOnly && !item.institutionalStudentOnly
+    );
+  }
+
+  return items.filter((item) => {
+    if (item.adminOnly && !roleState.isVideoAdmin) return false;
+    if (item.individualOnly && !roleState.canUseIndividualPremium) return false;
+    if (item.institutionalStudentOnly && !roleState.isInstitutionStudent) {
+      return false;
+    }
+    return true;
+  });
 }
 
 function isItemActive(pathname: string, item: NavItem) {
