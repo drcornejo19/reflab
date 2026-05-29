@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useUser } from "@clerk/nextjs";
 import {
   CheckCircle2,
@@ -149,7 +149,7 @@ export default function InstitutionVideosPage() {
     }
   }
 
-  async function submitClip(event: React.FormEvent<HTMLFormElement>) {
+  async function submitClip(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError(null);
@@ -204,7 +204,7 @@ export default function InstitutionVideosPage() {
       <div className="space-y-6">
         <header className="rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-6 shadow-2xl sm:p-7">
           <p className="text-xs font-black uppercase tracking-[0.45em] text-[#6fc11f]">
-            INSTITUTION VIDEO LAB
+            ASSOCIATION VIDEO LAB
           </p>
           <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
             <div>
@@ -212,8 +212,8 @@ export default function InstitutionVideosPage() {
                 Gestion audiovisual institucional
               </h1>
               <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-400">
-                Subi jugadas reales de tu competencia, completa la decision
-                tecnica y dejalas listas para revision RefLab.
+                Para asociaciones: subi jugadas reales de tu competencia,
+                completa la decision tecnica y dejalas listas para revision RefLab.
               </p>
             </div>
             <button
@@ -257,7 +257,7 @@ export default function InstitutionVideosPage() {
                   value={form.title}
                   onChange={(event) => updateForm("title", event.target.value)}
                   className={inputClass}
-                  placeholder="Ej: Posible DOGSO en ataque prometedor"
+                  placeholder="Ej: Falta tactica que corta un ataque prometedor"
                   required
                 />
               </Field>
@@ -286,7 +286,7 @@ export default function InstitutionVideosPage() {
                     value={form.topic}
                     onChange={(event) => updateForm("topic", event.target.value)}
                     className={inputClass}
-                    placeholder="Manos, disputas, VAR, DOGSO..."
+                    placeholder="Fuera de juego, manos, disputas, faltas tacticas, VAR..."
                   />
                 </Field>
                 <Field label="Minuto de la jugada">
@@ -392,6 +392,12 @@ export default function InstitutionVideosPage() {
                 </span>
               </label>
 
+              <div className="rounded-2xl border border-[#6fc11f]/20 bg-[#6fc11f]/10 p-4 text-xs font-bold leading-5 text-[#d8ff9b]">
+                En escuelas, los videos se limitan a fuera de juego, manos,
+                disputas y faltas tacticas. En asociaciones tambien puede
+                trabajarse VAR Lab y clips propios de mayor complejidad.
+              </div>
+
               {message && (
                 <div className="rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-4 text-sm font-bold text-[#b7ff67]">
                   {message}
@@ -470,7 +476,7 @@ function Field({
 }: {
   label: string;
   required?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <label className="grid gap-2">

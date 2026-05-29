@@ -4,25 +4,22 @@ import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 import {
+  activeInstitutionTypes,
   institutionTypeLabels,
   type InstitutionType,
 } from "@/lib/institutionalExperience";
 
-const institutionTypes: InstitutionType[] = [
-  "school",
-  "league",
-  "association",
-  "federation",
-];
+const institutionTypes: InstitutionType[] = activeInstitutionTypes;
 
 const interestAreas = [
-  "Entrenamiento",
+  "Reglas IFAB",
   "Evaluaciones",
+  "Videos de entrenamiento",
   "Video analisis",
   "Clips propios",
   "VAR Lab",
-  "Ref Performance",
   "Panel institucional",
+  "Gestion academica",
   "Licencias para alumnos",
   "Otro",
 ];

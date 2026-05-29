@@ -97,13 +97,13 @@ function buildConfirmationHtml(
       Gracias por contactarte con RefLab.
     </p>
     <p style="margin:0 0 16px;color:#d4d4d8;font-size:15px;line-height:1.7;">
-      Recibimos tu solicitud para conocer la propuesta institucional de RefLab para escuelas, asociaciones, ligas y federaciones arbitrales.
+      Recibimos tu solicitud para conocer la propuesta institucional de RefLab para escuelas, ligas y asociaciones arbitrales.
     </p>
     <p style="margin:0 0 16px;color:#d4d4d8;font-size:15px;line-height:1.7;">
       Nuestro equipo revisara la informacion enviada y se pondra en contacto para coordinar una demo institucional.
     </p>
     <p style="margin:0 0 22px;color:#d4d4d8;font-size:15px;line-height:1.7;">
-      RefLab busca digitalizar, medir y profesionalizar la formacion arbitral mediante entrenamiento, evaluacion, video analisis, VAR Lab, Ref Performance y seguimiento de evolucion.
+      RefLab busca digitalizar, medir y profesionalizar la formacion arbitral con experiencias diferenciadas: formacion inicial para escuelas, actualizacion para ligas y entrenamiento tecnico avanzado para asociaciones.
     </p>
     <a href="${escapeHtml(appUrl)}/institutional" style="display:inline-block;background:#6fc11f;color:#020b14;text-decoration:none;font-weight:900;padding:13px 18px;border-radius:14px;">
       Ver RefLab institucional
@@ -148,11 +148,11 @@ function buildConfirmationText(
     "",
     "Gracias por contactarte con RefLab.",
     "",
-    "Recibimos tu solicitud para conocer la propuesta institucional de RefLab para escuelas, asociaciones, ligas y federaciones arbitrales.",
+    "Recibimos tu solicitud para conocer la propuesta institucional de RefLab para escuelas, ligas y asociaciones arbitrales.",
     "",
     "Nuestro equipo revisara la informacion enviada y se pondra en contacto para coordinar una demo institucional.",
     "",
-    "RefLab busca digitalizar, medir y profesionalizar la formacion arbitral mediante entrenamiento, evaluacion, video analisis, VAR Lab, Ref Performance y seguimiento de evolucion.",
+    "RefLab busca digitalizar, medir y profesionalizar la formacion arbitral con experiencias diferenciadas: formacion inicial para escuelas, actualizacion para ligas y entrenamiento tecnico avanzado para asociaciones.",
     "",
     `Ver RefLab institucional: ${appUrl}/institutional`,
     "",

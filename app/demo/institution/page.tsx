@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { useState } from "react";
 import {
   ArrowRight,
@@ -11,17 +12,18 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import {
+  activeInstitutionTypes,
+  associationAssistantMetrics,
+  associationRefereeMetrics,
   institutionalExperiences,
+  institutionalComparatives,
   institutionTypeLabels,
+  schoolExamFormats,
+  schoolVideoTopics,
   type InstitutionType,
 } from "@/lib/institutionalExperience";
 
-const institutionTypes: InstitutionType[] = [
-  "school",
-  "league",
-  "association",
-  "federation",
-];
+const institutionTypes: InstitutionType[] = activeInstitutionTypes;
 
 export default function InstitutionDemoPage() {
   const [institutionType, setInstitutionType] =
@@ -107,6 +109,10 @@ export default function InstitutionDemoPage() {
               );
             })}
           </div>
+          <div className="mt-4 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm leading-6 text-yellow-100">
+            Federaciones queda como etapa futura. Por ahora la demo institucional
+            se concentra en escuelas, ligas y asociaciones.
+          </div>
         </section>
 
         <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -129,11 +135,14 @@ export default function InstitutionDemoPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               {profile.modules.map((module) => (
                 <div
-                  key={module}
+                  key={module.title}
                   className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-4"
                 >
                   <BadgeCheck className="shrink-0 text-[#6fc11f]" size={18} />
-                  <p className="text-sm font-black text-zinc-200">{module}</p>
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-black text-zinc-200">{module.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-zinc-500">{module.description}</p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -153,6 +162,86 @@ export default function InstitutionDemoPage() {
             </div>
           </Panel>
         </section>
+
+        {institutionType === "school" ? (
+          <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+            <Panel title="Reglas de Juego IFAB" kicker="Biblioteca escuela">
+              <p className="text-sm leading-6 text-zinc-400">
+                La escuela trabaja una biblioteca resumida, pedagogica y dividida
+                de Regla 1 a Regla 17, con explicacion simple, puntos clave y
+                errores frecuentes.
+              </p>
+              <Link
+                href="/institution/rules"
+                className="mt-5 flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#82dc2a]"
+              >
+                Abrir biblioteca IFAB
+                <ArrowRight size={18} />
+              </Link>
+            </Panel>
+
+            <Panel title="Examenes y videos escuela" kicker="Formacion inicial">
+              <div className="grid gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">
+                    Formatos de examen
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {schoolExamFormats.map((format) => (
+                      <Chip key={format} label={format} />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">
+                    Topicos oficiales de video
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {schoolVideoTopics.map((topic) => (
+                      <Chip key={topic} label={topic} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Panel>
+          </section>
+        ) : null}
+
+        {institutionType === "association" ? (
+          <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
+            <Panel title="Metricas por rol" kicker="Asociacion avanzada">
+              <div className="grid gap-4">
+                {[...associationRefereeMetrics, ...associationAssistantMetrics].map((group) => (
+                  <div key={group.title} className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+                    <p className="text-sm font-black text-white">{group.title}</p>
+                    <p className="mt-2 text-xs leading-5 text-zinc-500">{group.description}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {group.metrics.map((metric) => (
+                        <Chip key={metric} label={metric} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+
+            <Panel title="Comparativas" kicker="Categoria / grupo / cohorte">
+              <div className="grid gap-3">
+                {institutionalComparatives.map((item) => (
+                  <div
+                    key={item.label}
+                    className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-4 sm:grid-cols-4 sm:items-center"
+                  >
+                    <p className="text-sm font-black">{item.label}</p>
+                    <p className="text-xs font-bold text-zinc-400">Promedio {item.average}</p>
+                    <p className="text-xs font-bold text-zinc-400">Ranking #{item.ranking}</p>
+                    <p className="text-xs font-black text-[#6fc11f]">{item.trend}</p>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          </section>
+        ) : null}
 
         <section className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <Panel title="Cohortes / grupos" kicker="Organizacion">
@@ -293,7 +382,7 @@ function Panel({
 }: {
   title: string;
   kicker: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="rounded-[30px] border border-white/10 bg-[#0b131b] p-5 sm:p-6">
@@ -312,6 +401,14 @@ function LicenseRow({ label, value }: { label: string; value: string }) {
       <span className="text-sm font-semibold text-zinc-400">{label}</span>
       <span className="text-sm font-black text-white">{value}</span>
     </div>
+  );
+}
+
+function Chip({ label }: { label: string }) {
+  return (
+    <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-300">
+      {label}
+    </span>
   );
 }
 

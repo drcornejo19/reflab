@@ -7,17 +7,13 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
-  Brain,
-  CalendarDays,
   Dumbbell,
   Gauge,
   HeartPulse,
   LineChart,
   Moon,
-  Plus,
   RefreshCw,
   ShieldCheck,
-  Trophy,
   type LucideIcon,
 } from "lucide-react";
 
@@ -166,8 +162,6 @@ const trainingTypes: TrainingType[] = [
 const durationOptions = [30, 45, 60, 90];
 const sleepOptions: SleepQuality[] = ["Muy mala", "Mala", "Normal", "Buena", "Excelente"];
 const painOptions: PainLevel[] = ["Ninguna", "Leve", "Moderada", "Alta"];
-const physicalTestTypes = ["Yo-Yo", "40x75", "Sprint", "CODA", "RSA", "Agilidad", "Intermitencia"];
-
 type RefPerformanceResult =
   | { ok: true; data: LoadState; message?: string }
   | { ok: false; error: string };
@@ -244,13 +238,6 @@ export function RefPerformanceClient() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [schemaMessage, setSchemaMessage] = useState<string | null>(null);
-  const [testType, setTestType] = useState("Yo-Yo");
-  const [testScore, setTestScore] = useState("");
-  const [testUnit, setTestUnit] = useState("nivel");
-  const [testGender, setTestGender] = useState("masculino");
-  const [testTarget, setTestTarget] = useState("");
-  const [testNotes, setTestNotes] = useState("");
-  const [savingTest, setSavingTest] = useState(false);
 
   const readiness = useMemo(() => calculateReadiness(form), [form]);
   const analytics = useMemo(() => buildAnalytics(data, readiness.score), [data, readiness.score]);
@@ -339,44 +326,6 @@ export function RefPerformanceClient() {
     setSaving(false);
   }
 
-  async function savePhysicalTest() {
-    if (!user) {
-      setMessage("Inicia sesion para guardar tests fisicos.");
-      return;
-    }
-
-    const score = Number.parseFloat(testScore);
-    if (!Number.isFinite(score)) {
-      setMessage("Carga un score valido para el test fisico.");
-      return;
-    }
-
-    setSavingTest(true);
-    setMessage(null);
-    setSchemaMessage(null);
-
-    const result = await postRefPerformance("save_test", {
-      testType,
-      score,
-      unit: testUnit || null,
-      genderCategory: testGender,
-      targetValue: Number.parseFloat(testTarget) || null,
-      notes: testNotes || null,
-    });
-
-    if (!result.ok) {
-      setSchemaMessage(result.error);
-      setSavingTest(false);
-      return;
-    }
-
-    setData(result.data);
-    setTestScore("");
-    setTestNotes("");
-    setMessage(result.message ?? "Test fisico guardado para Ref Performance.");
-    setSavingTest(false);
-  }
-
   if (!isLoaded || loading) {
     return (
       <div className="rounded-[32px] border border-white/10 bg-[#071019] p-6 text-zinc-400">
@@ -394,7 +343,7 @@ export function RefPerformanceClient() {
         <ShieldCheck className="mx-auto h-12 w-12 text-[#6fc11f]" />
         <h1 className="mt-4 text-3xl font-black">Ref Performance</h1>
         <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-400">
-          Inicia sesion para registrar wellness, carga fisica, tests y readiness arbitral.
+          Inicia sesion para registrar wellness, carga, fatiga, sueno y readiness arbitral.
         </p>
         <Link href="/sign-in" className="mt-6 inline-flex min-h-12 items-center rounded-2xl bg-[#6fc11f] px-6 font-black text-black">
           Iniciar sesion
@@ -416,29 +365,6 @@ export function RefPerformanceClient() {
       </section>
 
       <AnalyticsPanel analytics={analytics} checkins={data.checkins} sessions={data.sessions} />
-
-      <section className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
-        <PhysicalTestsPanel
-          tests={data.tests}
-          testType={testType}
-          setTestType={setTestType}
-          testScore={testScore}
-          setTestScore={setTestScore}
-          testUnit={testUnit}
-          setTestUnit={setTestUnit}
-          testGender={testGender}
-          setTestGender={setTestGender}
-          testTarget={testTarget}
-          setTestTarget={setTestTarget}
-          testNotes={testNotes}
-          setTestNotes={setTestNotes}
-          savingTest={savingTest}
-          onSave={savePhysicalTest}
-        />
-        <PlannerPanel />
-      </section>
-
-      <EducationPanel />
     </div>
   );
 }
@@ -451,7 +377,7 @@ function Hero({ readiness }: { readiness: ReturnType<typeof calculateReadiness> 
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#6fc11f] sm:text-xs sm:tracking-[0.45em]">High performance center</p>
           <h1 className="mt-3 break-words text-4xl font-black leading-tight text-white sm:text-5xl">Ref Performance</h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 sm:text-base">
-            Seguimiento integral para arbitros: carga fisica, wellness, readiness, tests, planificacion y relacion con el rendimiento tecnico.
+            Seguimiento diario para arbitros: wellness, readiness, fatiga, sueno, carga interna y relacion con el rendimiento tecnico.
           </p>
         </div>
 
@@ -648,124 +574,6 @@ function AnalyticsPanel({ analytics, checkins, sessions }: { analytics: ReturnTy
         <MetricCard label="Recuperacion" value={analytics.recoveryStatus} detail="Sueno, fatiga, molestias y estado emocional." />
         <MetricCard label="Frecuencia" value={analytics.frequency} detail="Entrenamientos / partidos registrados." />
         <MetricCard label="Tendencia" value={analytics.trend} detail="Lectura combinada de carga y readiness." />
-      </div>
-    </Panel>
-  );
-}
-
-function PhysicalTestsPanel(props: {
-  tests: PhysicalTestRecord[];
-  testType: string;
-  setTestType: (value: string) => void;
-  testScore: string;
-  setTestScore: (value: string) => void;
-  testUnit: string;
-  setTestUnit: (value: string) => void;
-  testGender: string;
-  setTestGender: (value: string) => void;
-  testTarget: string;
-  setTestTarget: (value: string) => void;
-  testNotes: string;
-  setTestNotes: (value: string) => void;
-  savingTest: boolean;
-  onSave: () => void;
-}) {
-  return (
-    <Panel eyebrow="Physical Tests" title="Tests fisicos del arbitro" icon={Trophy}>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <SelectField label="Test" value={props.testType} options={physicalTestTypes} onChange={props.setTestType} />
-        <InputField label="Score / marca" value={props.testScore} onChange={props.setTestScore} />
-        <InputField label="Unidad" value={props.testUnit} onChange={props.setTestUnit} />
-        <SelectField label="Categoria" value={props.testGender} options={["masculino", "femenino", "mixto"]} onChange={props.setTestGender} />
-        <InputField label="Objetivo recomendado" value={props.testTarget} onChange={props.setTestTarget} />
-        <InputField label="Notas" value={props.testNotes} onChange={props.setTestNotes} />
-      </div>
-
-      <button type="button" onClick={props.onSave} disabled={props.savingTest} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 font-black text-[#6fc11f] transition hover:bg-[#6fc11f]/15 disabled:opacity-50">
-        <Plus size={18} />
-        {props.savingTest ? "Guardando test..." : "Guardar test fisico"}
-      </button>
-
-      <div className="mt-5 space-y-3">
-        {props.tests.length === 0 ? (
-          <EmptyBlock text="Sin tests registrados. Carga Yo-Yo, 40x75, Sprint, CODA, RSA, agilidad o intermitencia." />
-        ) : (
-          props.tests.slice(0, 5).map((test) => (
-            <div key={`${test.id ?? test.test_type}-${test.created_at}`} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-black text-white">{test.test_type}</p>
-                  <p className="mt-1 text-xs text-zinc-500">{formatShortDate(test.test_date ?? test.created_at)} - {test.gender_category}</p>
-                </div>
-                <p className="text-2xl font-black text-[#6fc11f]">{test.score ?? "-"} <span className="text-xs text-zinc-500">{test.unit}</span></p>
-              </div>
-              <p className="mt-2 text-xs leading-5 text-zinc-400">Objetivo: {test.target_value ?? "Pendiente"} {test.unit ?? ""}. {test.notes ?? "Sin notas."}</p>
-            </div>
-          ))
-        )}
-      </div>
-    </Panel>
-  );
-}
-
-function PlannerPanel() {
-  const planner = [
-    { day: "Lunes", title: "Recuperacion + movilidad", load: "Baja", detail: "Descarga post partido o post alta carga." },
-    { day: "Martes", title: "Fuerza + core", load: "Media", detail: "Base funcional, prevencion y estabilidad." },
-    { day: "Miercoles", title: "Intermitencia 15/15", load: "Alta", detail: "Estimulo arbitral para cambios de ritmo." },
-    { day: "Jueves", title: "Tecnica arbitral + cognitivo", load: "Media", detail: "Clips, toma de decisiones y foco." },
-    { day: "Viernes", title: "Activacion pre partido", load: "Baja", detail: "Velocidad corta, movilidad y confianza." },
-    { day: "Sabado/Domingo", title: "Partido / evaluacion", load: "Variable", detail: "Registrar RPE y sensaciones post partido." },
-  ];
-
-  return (
-    <Panel eyebrow="Training Planner" title="Planificacion semanal arbitral" icon={CalendarDays}>
-      <div className="space-y-3">
-        {planner.map((item) => (
-          <div key={item.day} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#6fc11f]">{item.day}</p>
-                <p className="mt-1 font-black text-white">{item.title}</p>
-              </div>
-              <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-black text-zinc-300">{item.load}</span>
-            </div>
-            <p className="mt-2 text-xs leading-5 text-zinc-400">{item.detail}</p>
-          </div>
-        ))}
-      </div>
-    </Panel>
-  );
-}
-
-function EducationPanel() {
-  const categories = [
-    { title: "Fuerza", icon: Dumbbell, text: "Protocolos, rutinas base y progresiones para el arbitro." },
-    { title: "Potencia", icon: Activity, text: "Aceleracion, cambios de ritmo y sprints cortos." },
-    { title: "Movilidad", icon: HeartPulse, text: "Preparacion articular, descarga y prevencion." },
-    { title: "Core", icon: ShieldCheck, text: "Estabilidad, tronco y prevencion de lesiones." },
-    { title: "Cognitivo", icon: Brain, text: "Decision bajo fatiga, atencion y lectura de juego." },
-    { title: "Recuperacion", icon: Moon, text: "Sueno, carga, fatiga y readiness pre partido." },
-  ];
-
-  return (
-    <Panel eyebrow="Contenido educativo" title="Biblioteca de alto rendimiento arbitral" icon={Brain}>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {categories.map((item) => {
-          const Icon = item.icon;
-          return (
-            <article key={item.title} className="rounded-[24px] border border-white/10 bg-[#101b24] p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
-                  <Icon size={21} />
-                </div>
-                <span className="rounded-full border border-yellow-400/25 bg-yellow-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-yellow-200">En construccion</span>
-              </div>
-              <h3 className="mt-4 text-lg font-black">{item.title}</h3>
-              <p className="mt-2 text-sm leading-6 text-zinc-400">{item.text}</p>
-            </article>
-          );
-        })}
       </div>
     </Panel>
   );
@@ -1038,7 +846,3 @@ function buildTrendLabel(checkins: DailyCheckInRecord[]) {
   return "Estable";
 }
 
-function formatShortDate(value?: string | null) {
-  if (!value) return "Sin fecha";
-  return new Date(value).toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
-}

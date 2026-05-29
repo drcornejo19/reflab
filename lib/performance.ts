@@ -108,8 +108,11 @@ export type RecommendedPlan = { diagnosis: string; priority1: string; priority2:
 export type RankingRow = { userId: string; position: number; name: string; refCardId: string; attempts: number; trainings: number; tests: number; avgScore: number; bestScore: number; lastAttempt: string; };
 
 const criterionLabels: Record<CriterionKey, string> = { technical: "Decision tecnica", restart: "Reanudacion", discipline: "Sancion disciplinaria", interpretation: "Interpretacion", justification: "Justificacion", var: "Criterio VAR" };
-const criterionDescriptions: Record<CriterionKey, string> = { technical: "Si la decision principal fue correcta.", restart: "Si la reanudacion reglamentaria fue correcta.", discipline: "Si la sancion disciplinaria fue correcta.", interpretation: "Si interpreto correctamente contexto, intensidad y consecuencia.", justification: "Calidad del fundamento tecnico.", var: "Aplicacion de protocolo o criterio VAR." };
+const criterionDescriptions: Record<CriterionKey, string> = { technical: "Si la decision principal fue correcta.", restart: "Si la reanudacion reglamentaria fue correcta.", discipline: "Si la sancion disciplinaria fue correcta.", interpretation: "Metrica futura: requiere mas contexto para no mostrar resultados engañosos.", justification: "Metrica futura: requiere una rubrica de fundamentos tecnicos.", var: "Metrica futura: requiere campos especificos de protocolo VAR." };
 const topicDictionary: Record<string, string> = { Dispute: "Disputas", Challenge: "Disputas", "Tactical foul": "Faltas tacticas", Handball: "Manos", Mano: "Manos", Offside: "Fuera de juego", VAR: "VAR", "SPA / DOGSO": "SPA / DOGSO", SPA: "SPA / DOGSO", DOGSO: "SPA / DOGSO", Disciplina: "Disciplina" };
+const coreTechnicalTopics = ["VAR", "Disputas", "Faltas tacticas", "Manos", "Fuera de juego"];
+const activeCriterionKeys: CriterionKey[] = ["technical", "restart", "discipline"];
+const futureCriterionKeys: CriterionKey[] = ["interpretation", "justification", "var"];
 export function buildPerformanceDataset({ attempts, examResults, rulesExamResults }: { attempts: AttemptRecord[]; examResults: ExamResultRecord[]; rulesExamResults: RulesExamResultRecord[]; }) {
   const items: PerformanceItem[] = [];
   const sessions: PerformanceSession[] = [];
@@ -295,7 +298,8 @@ export function getEvolutionData(sessions: PerformanceSession[]): EvolutionData 
 }
 
 export function getTopicPerformance(items: PerformanceItem[]): TopicMetric[] {
-  const groups = groupBy(items.filter((item) => item.topic), (item) => item.topic);
+  const coreTopicSet = new Set(coreTechnicalTopics);
+  const groups = groupBy(items.filter((item) => item.topic && coreTopicSet.has(item.topic)), (item) => item.topic);
   return Array.from(groups.entries()).map(([topic, topicItems]) => {
     const scores = topicItems.map((item) => item.score).filter(isNumber);
     const correct = topicItems.filter((item) => item.result === "Correcto").length;
@@ -311,8 +315,11 @@ export function getTopicPerformance(items: PerformanceItem[]): TopicMetric[] {
 }
 
 export function getCriterionPerformance(items: PerformanceItem[]): CriterionMetric[] {
-  const keys: CriterionKey[] = ["technical", "restart", "discipline", "interpretation", "justification", "var"];
-  return keys.map((key) => {
+  return [...activeCriterionKeys, ...futureCriterionKeys].map((key) => {
+    if (futureCriterionKeys.includes(key)) {
+      return { key, label: criterionLabels[key], attempts: 0, correct: 0, accuracy: null, status: "En construccion", description: criterionDescriptions[key] };
+    }
+
     const values = items.map((item) => item.criteria[key]).filter((value): value is boolean => typeof value === "boolean");
     const correct = values.filter(Boolean).length;
     const accuracy = values.length ? Math.round((correct / values.length) * 100) : null;
@@ -332,7 +339,7 @@ export function getModulePerformance(items: PerformanceItem[]): ModulePerformanc
     {
       key: "decision",
       title: "Decision arbitral",
-      description: "Evalua si cobraste bien, la reanudacion, la sancion disciplinaria y la interpretacion de la jugada.",
+      description: "Evalua si cobraste bien, la reanudacion y la sancion disciplinaria.",
       status: moduleStatus(items, "decision"),
       metrics: [
         metricFromItems("Intentos realizados", items.filter((item) => item.module === "decision")),
@@ -349,7 +356,7 @@ export function getModulePerformance(items: PerformanceItem[]): ModulePerformanc
     {
       key: "video",
       title: "Video analisis",
-      description: "Evalua lectura tecnica, comprension de la jugada, contexto, observacion y justificacion.",
+      description: "Evalua lectura tecnica, comprension de la jugada y observacion aplicada.",
       status: moduleStatus(items, "video"),
       metrics: [
         metricFromItems("Clips analizados", items.filter((item) => item.module === "video")),
@@ -357,7 +364,7 @@ export function getModulePerformance(items: PerformanceItem[]): ModulePerformanc
         metricFromCriterion("Deteccion correcta de infraccion", criteria.find((item) => item.key === "technical")),
         metricUnavailable("Lectura de intensidad", "Requiere registrar intensidad o punto de contacto."),
         metricUnavailable("Punto de contacto", "Metrica preparada para carga futura."),
-        metricFromCriterion("Calidad de justificacion", criteria.find((item) => item.key === "justification")),
+        metricUnavailable("Calidad de justificacion", "Proximamente: requiere rubrica especifica para fundamentos tecnicos."),
       ],
     },
     {
@@ -368,7 +375,7 @@ export function getModulePerformance(items: PerformanceItem[]): ModulePerformanc
       metrics: [
         metricFromItems("Casos VAR analizados", items.filter((item) => item.module === "var" || item.topic === "VAR")),
         metricFromAverage("Precision VAR", moduleAverage(items, "var")),
-        metricFromCriterion("Criterio VAR", criteria.find((item) => item.key === "var")),
+        metricUnavailable("Criterio VAR", "Proximamente: se activara con campos especificos de protocolo VAR."),
         metricUnavailable("Aciertos en OFR", "Disponible cuando el ejercicio VAR guarde OFR."),
         metricUnavailable("Aciertos en APP", "Disponible cuando el ejercicio VAR guarde APP."),
         metricUnavailable("Factual vs interpretativo", "Metrica preparada para VAR Lab."),
@@ -383,7 +390,7 @@ export function getModulePerformance(items: PerformanceItem[]): ModulePerformanc
         metricFromItems("Respuestas en ingles", items.filter((item) => item.module === "english")),
         metricFromAverage("Promedio del modulo", moduleAverage(items, "english")),
         metricFromCriterion("Precision tecnica del texto", criteria.find((item) => item.key === "technical")),
-        metricFromCriterion("Claridad comunicacional", criteria.find((item) => item.key === "justification")),
+        metricUnavailable("Claridad comunicacional", "Proximamente: requiere rubrica especifica de comunicacion."),
         metricUnavailable("Vocabulario FIFA", "Requiere rubrica especifica del feedback de ingles."),
         metricUnavailable("Terminologia VAR", "Metrica preparada para respuestas VAR en ingles."),
       ],

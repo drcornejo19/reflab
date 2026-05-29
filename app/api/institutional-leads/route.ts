@@ -4,6 +4,7 @@ import {
   sendInstitutionalLeadEmails,
   type InstitutionalLeadEmailData,
 } from "@/lib/institutionalEmails";
+import { activeInstitutionTypes, type InstitutionType } from "@/lib/institutionalExperience";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,14 @@ function cleanEmail(value: unknown) {
   const email = cleanText(value);
   if (!email || !email.includes("@")) return null;
   return email;
+}
+
+function cleanInstitutionType(value: unknown): InstitutionType | null {
+  const type = cleanText(value);
+  if (!type) return null;
+  return activeInstitutionTypes.includes(type as InstitutionType)
+    ? (type as InstitutionType)
+    : null;
 }
 
 function createLeadWriteClient() {
@@ -89,7 +98,7 @@ export async function POST(request: Request) {
       fullName,
       role: cleanText(body.role),
       institutionName,
-      institutionType: cleanText(body.institutionType),
+      institutionType: cleanInstitutionType(body.institutionType),
       country: cleanText(body.country),
       city: cleanText(body.city),
       refereeCount: cleanInteger(body.refereeCount),

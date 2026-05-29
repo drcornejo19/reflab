@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { InstitutionalLeadForm } from "@/components/InstitutionalLeadForm";
 import {
+  activeInstitutionTypes,
   institutionalExperiences,
   institutionTypeLabels,
   type InstitutionType,
@@ -48,13 +49,13 @@ const institutionUseCases = [
     icon: GraduationCap,
   },
   {
-    title: "Asociaciones y ligas",
-    text: "Organiza cohortes, mide rendimiento y estandariza criterios tecnicos para tus arbitros.",
+    title: "Ligas",
+    text: "Sostiene capacitacion continua, evaluaciones periodicas, videos y estadisticas para arbitros activos.",
     icon: Building2,
   },
   {
-    title: "Federaciones",
-    text: "Escala evaluaciones, contenidos y analitica de rendimiento con una plataforma institucional.",
+    title: "Asociaciones",
+    text: "Prioriza video analisis, clips propios, VAR Lab, toma de decisiones y evaluaciones tecnicas avanzadas.",
     icon: Landmark,
   },
 ];
@@ -65,13 +66,13 @@ const platformFeatures = [
   "Cohortes y grupos",
   "Evaluaciones formales",
   "Video analisis",
-  "VAR Lab",
-  "Ref Performance",
+  "Biblioteca IFAB para escuelas",
+  "Clips propios para asociaciones",
   "Licencias semestrales/anuales",
 ];
 
 const modules = [
-  { title: "Entrenamiento", icon: ClipboardCheck },
+  { title: "Formacion", icon: ClipboardCheck },
   { title: "Evaluaciones", icon: ShieldCheck },
   { title: "Video analisis", icon: Video },
   { title: "Metricas", icon: BarChart3 },
@@ -79,12 +80,7 @@ const modules = [
   { title: "Licencias", icon: BadgeCheck },
 ];
 
-const institutionTypes: InstitutionType[] = [
-  "school",
-  "league",
-  "association",
-  "federation",
-];
+const institutionTypes: InstitutionType[] = activeInstitutionTypes;
 
 const audiovisualFlow = [
   {
@@ -144,10 +140,10 @@ export default function InstitutionalPage() {
             RefLab para instituciones arbitrales
           </h1>
           <p className="mt-5 max-w-[680px] text-base leading-7 text-zinc-300 sm:text-lg">
-            Digitaliza, medi y profesionaliza la formacion arbitral de tu escuela, asociacion, liga o federacion.
+            Digitaliza, medi y profesionaliza la formacion arbitral de tu escuela, liga o asociacion.
           </p>
           <p className="mt-4 max-w-[680px] text-sm leading-6 text-zinc-500">
-            Converti la formacion arbitral en un sistema medible, digital y escalable: contenido, evaluaciones, video analisis, rendimiento y seguimiento en una misma infraestructura.
+            Converti la formacion arbitral en un sistema medible, digital y escalable: reglas, evaluaciones, videos, rendimiento tecnico y seguimiento en una misma infraestructura.
           </p>
 
           <div className="mt-8 grid w-full gap-3 sm:max-w-[520px] sm:grid-cols-2">
@@ -263,8 +259,8 @@ export default function InstitutionalPage() {
             RefLab cambia segun la realidad de cada institucion arbitral.
           </h2>
           <p className="mt-4 max-w-[820px] text-sm leading-7 text-zinc-400">
-            Una escuela necesita formacion inicial. Una federacion necesita criterios,
-            clips, VAR, rendimiento y seguimiento competitivo. La plataforma prepara
+            Una escuela necesita formacion inicial. Una liga necesita continuidad.
+            Una asociacion necesita entrenamiento tecnico avanzado. La plataforma prepara
             modulos, metricas y flujo operativo para cada perfil.
           </p>
 
@@ -299,6 +295,10 @@ export default function InstitutionalPage() {
               );
             })}
           </div>
+          <div className="mt-5 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm leading-6 text-yellow-100">
+            Federaciones queda como modulo futuro. Primero se ordenan escuelas,
+            ligas y asociaciones para no mezclar necesidades diferentes.
+          </div>
         </div>
       </section>
 
@@ -309,7 +309,7 @@ export default function InstitutionalPage() {
               Videos institucionales
             </p>
             <h2 className="mt-4 text-3xl font-black leading-tight sm:text-4xl">
-              Las asociaciones y federaciones pueden trabajar con sus propios clips.
+              Las asociaciones pueden trabajar con sus propios clips.
             </h2>
             <p className="mt-4 text-sm leading-7 text-zinc-400">
               RefLab no reemplaza la realidad competitiva de cada institucion:
@@ -359,7 +359,7 @@ export default function InstitutionalPage() {
             B2B no es solo acceso: es infraestructura metodologica.
           </h2>
           <p className="mt-4 text-sm leading-7 text-zinc-400">
-            RefLab permite vender pilotos, cohortes, licencias semestrales o anuales y planes de formacion digital para escuelas, asociaciones y federaciones.
+            RefLab permite vender pilotos, cohortes, licencias semestrales o anuales y planes de formacion digital para escuelas, ligas y asociaciones.
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">

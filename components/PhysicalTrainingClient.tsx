@@ -1,23 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { useUser } from "@clerk/nextjs";
 import {
-  Activity,
   Brain,
   Briefcase,
   CalendarCheck,
   Dumbbell,
   HeartPulse,
-  MessageCircle,
+  Lock,
   Pause,
   Play,
   RotateCcw,
-  Route,
   ShieldAlert,
   Target,
   Timer,
-  Users,
+  Unlock,
   Volume2,
   VolumeX,
   Zap,
@@ -36,34 +34,33 @@ type PrepModule = {
   icon: IconType;
 };
 
-type ConstructionRoutine = {
+type TabataPresetKey = "yoyo" | "intermittent_40x75" | "sprint" | "resistance" | "recovery" | "custom";
+type TabataPreset = {
+  key: TabataPresetKey;
   title: string;
   description: string;
-  tag: string;
-  icon: IconType;
+  preparation: number;
+  work: number;
+  rest: number;
+  sets: number;
 };
 
 const prepModules: PrepModule[] = [
-  { title: "Entrenamiento fisico", description: "Tabata libre funcional y rutinas arbitrales preparadas para crecer.", status: "Disponible", icon: Dumbbell },
-  { title: "Preparacion pre-partido", description: "Checklist previo, visualizacion, llegada, entrada en calor y foco operativo.", status: "En construccion", icon: CalendarCheck },
+  { title: "Preparacion integral", description: "Bienestar, rutina previa, habitos y control diario del arbitro.", status: "Disponible", icon: Target },
+  { title: "Preparacion fisica", description: "Tabata arbitral configurable con presets de trabajo especifico.", status: "Disponible", icon: Dumbbell },
   { title: "Nutricion y recuperacion", description: "Hidratacion, descanso, retorno a la calma y habitos de recuperacion.", status: "Proximamente", icon: HeartPulse },
   { title: "Psicologia arbitral", description: "Manejo de presion, confianza, tolerancia al error y control emocional.", status: "En construccion", icon: Brain },
-  { title: "Comunicacion y liderazgo", description: "Autoridad, lenguaje corporal, protestas y control de cuerpos tecnicos.", status: "En construccion", icon: Users },
-  { title: "Manejo de conflictos", description: "Escaladas, protesta colectiva, limites y comunicacion preventiva.", status: "Proximamente", icon: MessageCircle },
-  { title: "Lectura y posicionamiento", description: "Angulos, proximidad, diagonal, transiciones y lectura tactica.", status: "Proximamente", icon: Route },
-  { title: "Preparacion mental / foco", description: "Rutinas de concentracion, respiracion, activacion y reset durante el partido.", status: "En construccion", icon: Target },
-  { title: "Carrera arbitral", description: "Objetivos, desarrollo profesional, etica, informes y plan de crecimiento.", status: "Proximamente", icon: Briefcase },
+  { title: "Planificacion arbitral", description: "Partidos, descanso, carga semanal y objetivos de preparacion.", status: "Proximamente", icon: CalendarCheck },
+  { title: "Etica y deontologia", description: "Habitos profesionales, responsabilidad, informes y conducta arbitral.", status: "Proximamente", icon: Briefcase },
 ];
 
-const constructionRoutines: ConstructionRoutine[] = [
-  { title: "Intermitentes 75 m - 15/15", description: "Formato arbitral de carrera y recuperacion corta. Queda preparado como rutina futura.", tag: "75 m", icon: Activity },
-  { title: "Intermitentes 75 m - 15/18", description: "Base intermitente con recuperacion moderada segun categoria y plan fisico.", tag: "75 m", icon: Activity },
-  { title: "Intermitentes 75 m - 15/20", description: "Trabajo preparatorio con recuperacion mas amplia para cargas progresivas.", tag: "75 m", icon: Activity },
-  { title: "Preparacion Yo-Yo Test", description: "Resistencia intermitente y cambios de direccion sin reemplazar el audio oficial.", tag: "Yo-Yo", icon: Timer },
-  { title: "La estrella progresiva", description: "Drill de aceleracion, frenado, giro y aumento de velocidad por bloques.", tag: "Agilidad", icon: Route },
-  { title: "RSA - sprints repetidos", description: "Capacidad de repetir sprints con recuperacion incompleta.", tag: "Velocidad", icon: Zap },
-  { title: "CODA - cambios de direccion", description: "Aceleracion, frenado, giro y desplazamientos laterales.", tag: "CODA", icon: Route },
-  { title: "Movilidad y recuperacion", description: "Retorno a la calma, movilidad y prevencion de molestias.", tag: "Recovery", icon: HeartPulse },
+const tabataPresets: TabataPreset[] = [
+  { key: "yoyo", title: "Yo-Yo", description: "Estimulo intermitente orientativo para preparar tolerancia al cambio de ritmo.", preparation: 60, work: 40, rest: 20, sets: 10 },
+  { key: "intermittent_40x75", title: "Intermitencia 40x75", description: "Bloques 15/15 como base ajustable para trabajos arbitrales de 75 m.", preparation: 60, work: 15, rest: 15, sets: 16 },
+  { key: "sprint", title: "Sprint", description: "Sprints cortos con recuperacion suficiente para repetir calidad.", preparation: 45, work: 8, rest: 40, sets: 8 },
+  { key: "resistance", title: "Resistencia", description: "Trabajo intermitente mas largo para sostener ritmo y recuperacion.", preparation: 45, work: 45, rest: 20, sets: 8 },
+  { key: "recovery", title: "Recuperacion", description: "Movilidad suave, retorno a la calma y descarga activa.", preparation: 30, work: 30, rest: 20, sets: 6 },
+  { key: "custom", title: "Personalizado", description: "Ajusta manualmente tiempos y sets segun tu plan del dia.", preparation: 30, work: 20, rest: 10, sets: 8 },
 ];
 
 const phaseLabels: Record<Phase, string> = {
@@ -92,6 +89,8 @@ export function PhysicalTrainingClient() {
   const [secondsLeft, setSecondsLeft] = useState(defaultConfig.preparation);
   const [currentSet, setCurrentSet] = useState(1);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [selectedPreset, setSelectedPreset] = useState<TabataPresetKey>("custom");
+  const [screenLocked, setScreenLocked] = useState(false);
   const [sessionMessage, setSessionMessage] = useState<string | null>(null);
   const savedSessionRef = useRef(false);
 
@@ -102,29 +101,26 @@ export function PhysicalTrainingClient() {
   const activeDuration = getActiveDuration(phase, safePreparation, safeWork, safeRest);
   const progress = getProgress(phase, currentSet, safeSets, secondsLeft, activeDuration);
 
-  useEffect(() => {
-    if (status === "idle") setSecondsLeft(safePreparation);
-  }, [safePreparation, status]);
-
-  useEffect(() => {
-    if (status !== "running") return;
-
-    const interval = window.setInterval(() => {
-      setSecondsLeft((current) => {
-        if (current > 1) return current - 1;
-        advancePhase();
-        return 0;
-      });
-    }, 1000);
-
-    return () => window.clearInterval(interval);
-  }, [status, phase, currentSet, safePreparation, safeWork, safeRest, safeSets, soundEnabled]);
-
-  function updateNumber(value: string, setter: (value: number) => void, min: number, max: number) {
+  function updateNumber(value: string, setter: (value: number) => void, min: number, max: number, onNext?: (next: number) => void) {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return;
     const next = clampSeconds(parsed, min, max);
+    setSelectedPreset("custom");
     setter(next);
+    onNext?.(next);
+  }
+
+  function applyPreset(preset: TabataPreset) {
+    if (status === "running" || status === "paused") return;
+    setSelectedPreset(preset.key);
+    setPreparation(preset.preparation);
+    setWork(preset.work);
+    setRest(preset.rest);
+    setSets(preset.sets);
+    setPhase("idle");
+    setCurrentSet(1);
+    setSecondsLeft(preset.preparation);
+    setSessionMessage(null);
   }
 
   function startTimer() {
@@ -153,10 +149,70 @@ export function PhysicalTrainingClient() {
     setCurrentSet(1);
     setSecondsLeft(safePreparation);
     setSessionMessage(null);
+    setScreenLocked(false);
     savedSessionRef.current = false;
   }
 
-  function advancePhase() {
+  const finishSession = useCallback(async () => {
+    setPhase("finished");
+    setStatus("finished");
+    setScreenLocked(false);
+    setSecondsLeft(0);
+    playWhistle(soundEnabled);
+
+    if (savedSessionRef.current) return;
+    savedSessionRef.current = true;
+
+    if (!user) {
+      setSessionMessage("Rutina completada. Inicia sesion para guardar metricas fisicas.");
+      return;
+    }
+
+    const totalDuration = safePreparation + safeSets * safeWork + Math.max(0, safeSets - 1) * safeRest;
+    const preset = tabataPresets.find((item) => item.key === selectedPreset);
+    const workoutName = `Tabata arbitral - ${preset?.title ?? "Personalizado"}`;
+    const primaryPayload = {
+      user_id: user.id,
+      module: "referee_preparation",
+      mode: "physical_training",
+      clip_title: workoutName,
+      workout_name: workoutName,
+      topic: "Preparacion fisica",
+      score: null,
+      total_duration: totalDuration,
+      time_spent_seconds: totalDuration,
+      completed_rounds: safeSets,
+      total_rounds: safeSets,
+      completed: true,
+      feedback: `Rutina completada: ${workoutName} (${safeSets} sets)`,
+      created_at: new Date().toISOString(),
+    };
+
+    const fallbackPayload = {
+      user_id: user.id,
+      clip_title: workoutName,
+      foul: null,
+      restart: null,
+      discipline: null,
+      var_review: null,
+      score: null,
+      topic: "Preparacion fisica",
+      difficulty: "physical_training",
+      technical_correct: null,
+      restart_correct: null,
+      discipline_correct: null,
+      var_correct: null,
+    };
+
+    const result = await insertAttemptSafely(supabase, primaryPayload, fallbackPayload);
+    setSessionMessage(
+      result.saved
+        ? "Tabata registrado para futuras metricas de Preparacion del arbitro."
+        : "Rutina completada. Registro de sesiones en construccion hasta habilitar campos fisicos en Supabase."
+    );
+  }, [safePreparation, safeRest, safeSets, safeWork, selectedPreset, soundEnabled, user]);
+
+  const advancePhase = useCallback(() => {
     if (phase === "preparation") {
       setPhase("work");
       setSecondsLeft(safeWork);
@@ -191,73 +247,58 @@ export function PhysicalTrainingClient() {
       setSecondsLeft(safeWork);
       playWhistle(soundEnabled);
     }
-  }
+  }, [currentSet, finishSession, phase, safeRest, safeSets, safeWork, soundEnabled]);
 
-  async function finishSession() {
-    setPhase("finished");
-    setStatus("finished");
-    setSecondsLeft(0);
-    playWhistle(soundEnabled);
+  useEffect(() => {
+    if (status !== "running") return;
 
-    if (savedSessionRef.current) return;
-    savedSessionRef.current = true;
+    const interval = window.setInterval(() => {
+      setSecondsLeft((current) => {
+        if (current > 1) {
+          const next = current - 1;
+          if (["preparation", "work", "rest"].includes(phase)) {
+            if (next === 10) playBeep(soundEnabled, 1);
+            if (next === 5) playBeep(soundEnabled, 2);
+          }
+          return next;
+        }
+        advancePhase();
+        return 0;
+      });
+    }, 1000);
 
-    if (!user) {
-      setSessionMessage("Rutina completada. Inicia sesion para guardar metricas fisicas.");
-      return;
-    }
-
-    const totalDuration = safePreparation + safeSets * safeWork + Math.max(0, safeSets - 1) * safeRest;
-    const primaryPayload = {
-      user_id: user.id,
-      module: "referee_preparation",
-      mode: "physical_training",
-      clip_title: "Tabata arbitral libre",
-      workout_name: "Tabata arbitral libre",
-      topic: "Preparacion fisica",
-      score: null,
-      total_duration: totalDuration,
-      time_spent_seconds: totalDuration,
-      completed_rounds: safeSets,
-      total_rounds: safeSets,
-      completed: true,
-      feedback: `Rutina completada: Tabata arbitral libre (${safeSets} sets)`,
-      created_at: new Date().toISOString(),
-    };
-
-    const fallbackPayload = {
-      user_id: user.id,
-      clip_title: "Tabata arbitral libre",
-      foul: null,
-      restart: null,
-      discipline: null,
-      var_review: null,
-      score: null,
-      topic: "Preparacion fisica",
-      difficulty: "physical_training",
-      technical_correct: null,
-      restart_correct: null,
-      discipline_correct: null,
-      var_correct: null,
-    };
-
-    const result = await insertAttemptSafely(supabase, primaryPayload, fallbackPayload);
-    setSessionMessage(
-      result.saved
-        ? "Tabata registrado para futuras metricas de Preparacion del arbitro."
-        : "Rutina completada. Registro de sesiones en construccion hasta habilitar campos fisicos en Supabase."
-    );
-  }
+    return () => window.clearInterval(interval);
+  }, [status, phase, currentSet, safePreparation, safeWork, safeRest, safeSets, soundEnabled, advancePhase]);
 
   return (
     <div className="space-y-6">
+      {screenLocked && (
+        <div className="fixed inset-0 z-[80] grid place-items-center bg-[#02060a]/95 p-5 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-[34px] border border-[#6fc11f]/35 bg-[#071019] p-6 text-center shadow-[0_0_48px_rgba(111,193,31,0.2)]">
+            <Lock className="mx-auto h-12 w-12 text-[#6fc11f]" />
+            <p className="mt-4 text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">Pantalla bloqueada</p>
+            <p className="mt-3 text-6xl font-black leading-none text-white">{formatClock(secondsLeft)}</p>
+            <p className="mt-3 text-sm font-bold text-zinc-300">
+              {phaseLabels[phase]} - Set {Math.min(currentSet, safeSets)}/{safeSets}
+            </p>
+            <button
+              type="button"
+              onClick={() => setScreenLocked(false)}
+              className="mt-6 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-5 font-black text-black transition hover:bg-[#82dc2a]"
+            >
+              <Unlock size={20} />
+              Desbloquear
+            </button>
+          </div>
+        </div>
+      )}
       <section className="rounded-[34px] border border-[#6fc11f]/25 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_36%),#071019] p-5 shadow-2xl lg:p-7">
         <div className="grid gap-5 lg:grid-cols-[1fr_360px] lg:items-end">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">Preparacion del arbitro</p>
             <h1 className="mt-3 text-3xl font-black md:text-5xl">Preparacion integral</h1>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-300">
-              Un espacio para preparar al arbitro de forma fisica, mental, comunicacional y profesional. Hoy queda funcional el Tabata libre; el resto se muestra como estructura futura.
+              Un espacio individual para preparar al arbitro desde bienestar, fisico, nutricion, psicologia, planificacion y etica profesional. Hoy el foco operativo es el Tabata arbitral.
             </p>
           </div>
 
@@ -278,9 +319,9 @@ export function PhysicalTrainingClient() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">Modulo disponible</p>
-            <h2 className="mt-3 text-3xl font-black">Tabata arbitral libre</h2>
+            <h2 className="mt-3 text-3xl font-black">Tabata arbitral</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
-              Configura preparacion, ejercicio, pausa y sets. Los silbatos marcan inicio, cambio de fase y final para entrenar sin mirar la pantalla todo el tiempo.
+              Elegi una prueba, ajusta tiempos si hace falta y entrena con silbatos fuertes y alertas de transicion.
             </p>
           </div>
 
@@ -300,17 +341,44 @@ export function PhysicalTrainingClient() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.25em] text-[#6fc11f]">Funcional</p>
-                  <h3 className="mt-2 text-2xl font-black text-white">Tabata arbitral libre</h3>
-                  <p className="mt-2 text-sm leading-6 text-zinc-300">Rutina editable para bloques cortos de intensidad, reaccion, desplazamientos y tolerancia al esfuerzo intermitente.</p>
+                  <h3 className="mt-2 text-2xl font-black text-white">Prueba activa</h3>
+                  <p className="mt-2 text-sm leading-6 text-zinc-300">
+                    {tabataPresets.find((preset) => preset.key === selectedPreset)?.description ?? "Ajuste personalizado para tu sesion."}
+                  </p>
                 </div>
                 <Zap className="shrink-0 text-[#6fc11f]" />
               </div>
             </article>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-              {constructionRoutines.map((routine) => (
-                <ConstructionRoutineCard key={routine.title} routine={routine} />
-              ))}
+              {tabataPresets.map((preset) => {
+                const active = selectedPreset === preset.key;
+                const locked = status === "running" || status === "paused";
+                return (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    onClick={() => applyPreset(preset)}
+                    disabled={locked}
+                    className={`rounded-[24px] border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      active
+                        ? "border-[#6fc11f]/70 bg-[#6fc11f]/15 shadow-[0_0_22px_rgba(111,193,31,0.15)]"
+                        : "border-white/10 bg-[#101b24] hover:border-[#6fc11f]/35 hover:bg-[#13212b]"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]">
+                        <Timer size={20} />
+                      </div>
+                      <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-zinc-300">
+                        {preset.work}s / {preset.rest}s
+                      </span>
+                    </div>
+                    <h3 className="mt-3 font-black text-white">{preset.title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-zinc-400">{preset.description}</p>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -318,14 +386,24 @@ export function PhysicalTrainingClient() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">Rutina activa</p>
-                <h3 className="mt-3 text-3xl font-black">Tabata arbitral libre</h3>
+                <h3 className="mt-3 text-3xl font-black">Tabata {tabataPresets.find((preset) => preset.key === selectedPreset)?.title ?? "Personalizado"}</h3>
                 <p className="mt-2 text-sm leading-6 text-zinc-400">Ajusta los tiempos antes de iniciar. Los valores se mantienen claros y tactiles para mobile.</p>
               </div>
               <span className="rounded-full border border-[#6fc11f]/25 bg-[#6fc11f]/10 px-4 py-2 text-xs font-black text-[#6fc11f]">{phaseLabels[phase]}</span>
             </div>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <NumberControl label="Preparacion" value={preparation} min={1} max={600} suffix="s" onChange={(value) => updateNumber(value, setPreparation, 1, 600)} disabled={status === "running" || status === "paused"} />
+              <NumberControl
+                label="Preparacion"
+                value={preparation}
+                min={1}
+                max={600}
+                suffix="s"
+                onChange={(value) => updateNumber(value, setPreparation, 1, 600, (next) => {
+                  if (status === "idle") setSecondsLeft(next);
+                })}
+                disabled={status === "running" || status === "paused"}
+              />
               <NumberControl label="Ejercicio" value={work} min={1} max={600} suffix="s" onChange={(value) => updateNumber(value, setWork, 1, 600)} disabled={status === "running" || status === "paused"} />
               <NumberControl label="Pausa" value={rest} min={0} max={600} suffix="s" onChange={(value) => updateNumber(value, setRest, 0, 600)} disabled={status === "running" || status === "paused"} />
               <NumberControl label="Sets" value={sets} min={1} max={99} suffix="" onChange={(value) => updateNumber(value, setSets, 1, 99)} disabled={status === "running" || status === "paused"} />
@@ -354,10 +432,19 @@ export function PhysicalTrainingClient() {
                 <RotateCcw size={20} /> Reiniciar
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => setScreenLocked(true)}
+              disabled={status !== "running"}
+              className="mt-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-5 font-black text-[#6fc11f] transition hover:bg-[#6fc11f]/15 disabled:opacity-45"
+            >
+              <Lock size={20} />
+              Bloquear pantalla
+            </button>
 
             <div className="mt-5 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm leading-6 text-zinc-300">
               <p className="font-black text-white">Silbatos de transicion</p>
-              <p className="mt-1">Silbato fuerte al iniciar, al terminar cada ejercicio, al volver de la pausa y al finalizar toda la rutina.</p>
+              <p className="mt-1">Silbato fuerte al iniciar, al terminar cada ejercicio, al volver de la pausa y al finalizar toda la rutina. A los 10 segundos suena un beep y a los 5 segundos dos beeps.</p>
             </div>
 
             {sessionMessage && <div className="mt-5 rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4 text-sm font-bold text-[#b7ff8a]">{sessionMessage}</div>}
@@ -379,21 +466,6 @@ function PreparationModuleCard({ module }: { module: PrepModule }) {
       </div>
       <h3 className="mt-4 text-lg font-black text-white">{module.title}</h3>
       <p className="mt-2 text-sm leading-6 text-zinc-400">{module.description}</p>
-    </article>
-  );
-}
-
-function ConstructionRoutineCard({ routine }: { routine: ConstructionRoutine }) {
-  const Icon = routine.icon;
-  return (
-    <article className="rounded-[24px] border border-white/10 bg-[#101b24] p-4 opacity-90">
-      <div className="flex items-start justify-between gap-3">
-        <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]"><Icon size={20} /></div>
-        <span className="rounded-full border border-yellow-400/25 bg-yellow-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-yellow-200">En construccion</span>
-      </div>
-      <p className="mt-3 text-[11px] font-black uppercase tracking-[0.2em] text-[#6fc11f]">{routine.tag}</p>
-      <h3 className="mt-2 font-black text-white">{routine.title}</h3>
-      <p className="mt-2 text-sm leading-6 text-zinc-400">{routine.description}</p>
     </article>
   );
 }
@@ -456,29 +528,69 @@ function playWhistle(enabled: boolean) {
     const gain = context.createGain();
     const oscillatorA = context.createOscillator();
     const oscillatorB = context.createOscillator();
+    const oscillatorC = context.createOscillator();
     const now = context.currentTime;
 
     oscillatorA.type = "square";
     oscillatorB.type = "sawtooth";
+    oscillatorC.type = "square";
     oscillatorA.frequency.setValueAtTime(1480, now);
     oscillatorB.frequency.setValueAtTime(1860, now);
+    oscillatorC.frequency.setValueAtTime(920, now);
     oscillatorA.frequency.exponentialRampToValueAtTime(1720, now + 0.18);
     oscillatorB.frequency.exponentialRampToValueAtTime(2100, now + 0.18);
+    oscillatorC.frequency.exponentialRampToValueAtTime(1080, now + 0.18);
 
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.22, now + 0.03);
-    gain.gain.setValueAtTime(0.22, now + 0.5);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.78);
+    gain.gain.exponentialRampToValueAtTime(0.38, now + 0.025);
+    gain.gain.setValueAtTime(0.38, now + 0.72);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.02);
 
     oscillatorA.connect(gain);
     oscillatorB.connect(gain);
+    oscillatorC.connect(gain);
     gain.connect(context.destination);
     oscillatorA.start(now);
     oscillatorB.start(now);
-    oscillatorA.stop(now + 0.8);
-    oscillatorB.stop(now + 0.8);
-    window.setTimeout(() => void context.close(), 900);
+    oscillatorC.start(now);
+    oscillatorA.stop(now + 1.05);
+    oscillatorB.stop(now + 1.05);
+    oscillatorC.stop(now + 1.05);
+    window.setTimeout(() => void context.close(), 1150);
   } catch {
     // El sonido es opcional. Si el navegador lo bloquea, el timer sigue funcionando.
+  }
+}
+
+function playBeep(enabled: boolean, count: 1 | 2) {
+  if (!enabled || typeof window === "undefined") return;
+
+  try {
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    const context = new AudioContextClass();
+    const now = context.currentTime;
+
+    Array.from({ length: count }).forEach((_, index) => {
+      const start = now + index * 0.22;
+      const gain = context.createGain();
+      const oscillator = context.createOscillator();
+
+      oscillator.type = "square";
+      oscillator.frequency.setValueAtTime(1320, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.18, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(start);
+      oscillator.stop(start + 0.13);
+    });
+
+    window.setTimeout(() => void context.close(), count === 2 ? 620 : 420);
+  } catch {
+    // El aviso sonoro no debe cortar el entrenamiento.
   }
 }

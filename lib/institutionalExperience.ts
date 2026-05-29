@@ -8,6 +8,53 @@ export type InstitutionalClipStatus =
   | "rejected"
   | "published";
 
+export type InstitutionalModule = {
+  title: string;
+  description: string;
+  status: "available" | "configured" | "coming_soon";
+};
+
+export type InstitutionalMetricGroup = {
+  title: string;
+  description: string;
+  metrics: string[];
+};
+
+export type InstitutionalExperience = {
+  type: InstitutionType;
+  title: string;
+  headline: string;
+  description: string;
+  tone: string;
+  trainingLevel: string;
+  plan: string;
+  seatsTotal: number;
+  seatsUsed: number;
+  instructors: number;
+  customVideoEnabled: boolean;
+  publicClipSharingEnabled: boolean;
+  modules: InstitutionalModule[];
+  metrics: string[];
+  metricGroups?: InstitutionalMetricGroup[];
+  kpis: { label: string; value: string; detail: string }[];
+  cohorts: { name: string; students: number; progress: number }[];
+  students: {
+    name: string;
+    level: string;
+    score: string;
+    last: string;
+    weak: string;
+    status: string;
+  }[];
+  instructorFocus: string[];
+};
+
+export const activeInstitutionTypes: InstitutionType[] = [
+  "school",
+  "league",
+  "association",
+];
+
 export const institutionTypeLabels: Record<InstitutionType, string> = {
   school: "Escuela arbitral",
   league: "Liga",
@@ -35,43 +82,89 @@ export const institutionalClipStatuses = Object.keys(
   institutionalClipStatusLabels
 ) as InstitutionalClipStatus[];
 
-export type InstitutionalExperience = {
-  type: InstitutionType;
-  title: string;
-  headline: string;
-  description: string;
-  tone: string;
-  trainingLevel: string;
-  plan: string;
-  seatsTotal: number;
-  seatsUsed: number;
-  instructors: number;
-  customVideoEnabled: boolean;
-  publicClipSharingEnabled: boolean;
-  modules: string[];
-  metrics: string[];
-  kpis: { label: string; value: string; detail: string }[];
-  cohorts: { name: string; students: number; progress: number }[];
-  students: {
-    name: string;
-    level: string;
-    score: string;
-    last: string;
-    weak: string;
-    status: string;
-  }[];
-  instructorFocus: string[];
-};
+export const schoolVideoTopics = [
+  "Fuera de juego",
+  "Manos",
+  "Disputas",
+  "Faltas tacticas",
+];
+
+export const schoolExamFormats = [
+  "Multiple choice",
+  "Verdadero / falso",
+  "Situaciones arbitrales con video",
+];
+
+export const schoolStudentMetricGroups: InstitutionalMetricGroup[] = [
+  {
+    title: "Progreso academico",
+    description: "Lectura simple para alumnos que estan aprendiendo el reglamento.",
+    metrics: [
+      "Promedio general",
+      "Cantidad de examenes",
+      "Porcentaje de aprobacion",
+      "Evolucion por bloque",
+    ],
+  },
+  {
+    title: "Practica con videos",
+    description: "Seguimiento de clips formativos por topico oficial de escuela.",
+    metrics: [
+      "Videos completados",
+      "Mejor topico",
+      "Topico a mejorar",
+      "Actividad reciente",
+    ],
+  },
+];
+
+export const associationRefereeMetrics: InstitutionalMetricGroup[] = [
+  {
+    title: "Arbitro",
+    description: "Analisis tecnico para arbitros principales recibidos.",
+    metrics: [
+      "Fuera de juego",
+      "Manos",
+      "Disputas",
+      "Faltas tacticas",
+      "Decision tecnica",
+      "Reanudacion",
+      "Sancion disciplinaria",
+      "VAR",
+    ],
+  },
+];
+
+export const associationAssistantMetrics: InstitutionalMetricGroup[] = [
+  {
+    title: "Arbitro asistente",
+    description: "Lectura especifica para asistentes y colaboracion arbitral.",
+    metrics: [
+      "Fuera de juego",
+      "Posicionamiento",
+      "Colaboracion arbitral",
+      "Reanudaciones",
+      "Senalizacion",
+      "Comunicacion",
+    ],
+  },
+];
+
+export const institutionalComparatives = [
+  { label: "Regional", average: "82/100", ranking: "1", trend: "+6%" },
+  { label: "Provincial", average: "78/100", ranking: "2", trend: "+3%" },
+  { label: "Nacional", average: "86/100", ranking: "1", trend: "+5%" },
+];
 
 export const institutionalExperiences: Record<InstitutionType, InstitutionalExperience> = {
   school: {
     type: "school",
     title: "Escuela Arbitral Demo",
-    headline: "Formacion inicial guiada desde cero",
+    headline: "Formacion inicial para alumnos que empiezan desde cero",
     description:
-      "Pensada para alumnos que empiezan: reglamento, fundamentos, senales, posicionamiento y criterios basicos.",
+      "Pensada para estudiantes que todavia no son arbitros recibidos: reglamento, fundamentos, examenes, videos formativos y seguimiento academico.",
     tone: "Educativa, pedagogica y formativa",
-    trainingLevel: "introductory",
+    trainingLevel: "Inicial",
     plan: "Licencia Escuela Semestral",
     seatsTotal: 50,
     seatsUsed: 37,
@@ -79,32 +172,51 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
     customVideoEnabled: false,
     publicClipSharingEnabled: false,
     modules: [
-      "Reglamento IFAB basico",
-      "Resumenes simples",
-      "Fundamentos arbitrales",
-      "Posicionamiento basico",
-      "Senales arbitrales",
-      "Introduccion al fuera de juego",
-      "Mano y faltas simples",
-      "Comunicacion y etica",
-      "Examenes basicos",
-      "Aprendizaje guiado",
+      {
+        title: "Reglas de Juego IFAB",
+        description: "Biblioteca resumida por reglas, con conceptos, puntos clave y errores frecuentes.",
+        status: "available",
+      },
+      {
+        title: "Examenes",
+        description: "Multiple choice y verdadero/falso para medir aprendizaje reglamentario.",
+        status: "available",
+      },
+      {
+        title: "Videos de entrenamiento",
+        description: "Clips pedagogicos de fuera de juego, manos, disputas y faltas tacticas.",
+        status: "available",
+      },
+      {
+        title: "Estadisticas del alumno",
+        description: "Promedio, examenes, aprobacion, evolucion, videos completados y actividad.",
+        status: "configured",
+      },
+      {
+        title: "Gestion academica",
+        description: "Cohortes, alumnos, instructores, avances y seguimiento simple.",
+        status: "configured",
+      },
     ],
     metrics: [
-      "Progreso por tema",
-      "Examenes basicos",
-      "Asistencia por cohorte",
-      "Temas pendientes",
-      "Seguimiento de alumnos nuevos",
+      "Promedio general",
+      "Cantidad de examenes",
+      "Porcentaje de aprobacion",
+      "Mejor topico",
+      "Topico a mejorar",
+      "Evolucion",
+      "Videos completados",
+      "Actividad reciente",
     ],
+    metricGroups: schoolStudentMetricGroups,
     kpis: [
       { label: "Alumnos activos", value: "37", detail: "sobre 50 cupos" },
-      { label: "Progreso promedio", value: "64%", detail: "programa inicial" },
-      { label: "Evaluaciones basicas", value: "92", detail: "realizadas este ciclo" },
-      { label: "Tema a reforzar", value: "Fuera de juego", detail: "introduccion y senales" },
-      { label: "Tema fuerte", value: "Manos", detail: "conceptos basicos" },
-      { label: "Actividad semanal", value: "76%", detail: "alumnos activos" },
-      { label: "Etica arbitral", value: "82%", detail: "bloque formativo" },
+      { label: "Promedio general", value: "76/100", detail: "programa inicial" },
+      { label: "Examenes", value: "92", detail: "multiple choice y V/F" },
+      { label: "Aprobacion", value: "74%", detail: "cohorte inicial" },
+      { label: "Mejor topico", value: "Manos", detail: "conceptos basicos" },
+      { label: "A reforzar", value: "Fuera de juego", detail: "regla y senales" },
+      { label: "Videos completados", value: "318", detail: "formativos" },
       { label: "Cupos usados", value: "37/50", detail: "13 disponibles" },
     ],
     cohorts: [
@@ -112,7 +224,6 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
       { name: "Reglamento I", students: 12, progress: 58 },
       { name: "Senales y campo", students: 9, progress: 72 },
       { name: "Fuera de juego inicial", students: 8, progress: 43 },
-      { name: "Preparacion arbitral inicial", students: 21, progress: 69 },
     ],
     students: [
       {
@@ -128,7 +239,7 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
         level: "Inicial",
         score: "79",
         last: "Ayer",
-        weak: "Reanudaciones",
+        weak: "Manos",
         status: "En aprendizaje",
       },
       {
@@ -136,7 +247,7 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
         level: "Inicial",
         score: "76",
         last: "2 dias",
-        weak: "Senales",
+        weak: "Disputas",
         status: "Requiere seguimiento",
       },
       {
@@ -144,25 +255,25 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
         level: "Inicial",
         score: "88",
         last: "Esta semana",
-        weak: "Faltas simples",
+        weak: "Faltas tacticas",
         status: "Activo",
       },
     ],
     instructorFocus: [
       "Asignar bloque introductorio de fuera de juego.",
-      "Revisar alumnos con menos de 50% de avance semanal.",
-      "Programar examen basico de Regla 12.",
-      "Enviar material de senales y mecanica arbitral.",
+      "Tomar examen basico de Reglas 11 y 12.",
+      "Revisar alumnos con menos de 60% de aprobacion.",
+      "Usar videos formativos de manos, disputas y faltas tacticas.",
     ],
   },
   league: {
     type: "league",
     title: "Liga Regional Demo",
-    headline: "Capacitacion continua para arbitros activos",
+    headline: "Capacitacion continua para arbitros en actividad",
     description:
-      "Combina formacion basica, evaluaciones periodicas, seguimiento de arbitros y entrenamiento tecnico intermedio.",
+      "Combina formacion permanente, evaluaciones, videos, rendimiento y estadisticas para arbitros que ya dirigen en competencia local.",
     tone: "Operativa, regional y de seguimiento",
-    trainingLevel: "intermediate",
+    trainingLevel: "Intermedio",
     plan: "Licencia Liga Anual",
     seatsTotal: 120,
     seatsUsed: 84,
@@ -170,16 +281,26 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
     customVideoEnabled: true,
     publicClipSharingEnabled: false,
     modules: [
-      "Reglas aplicadas",
-      "Evaluaciones periodicas",
-      "Video analisis regional",
-      "Faltas tacticas",
-      "Manos",
-      "Fuera de juego",
-      "Disciplina",
-      "Seguimiento semanal",
-      "Ref Performance basico",
-      "Panel administrativo",
+      {
+        title: "Examenes",
+        description: "Evaluaciones periodicas para sostener actualizacion reglamentaria.",
+        status: "available",
+      },
+      {
+        title: "Videos",
+        description: "Entrenamiento tecnico con jugadas de liga y biblioteca RefLab.",
+        status: "available",
+      },
+      {
+        title: "Rendimiento",
+        description: "Lectura de progreso, topicos criticos y actividad por categoria.",
+        status: "configured",
+      },
+      {
+        title: "Estadisticas",
+        description: "Promedios, ranking interno, actividad semanal y evolucion.",
+        status: "configured",
+      },
     ],
     metrics: [
       "Arbitros activos",
@@ -195,7 +316,7 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
       { label: "Topico debil", value: "Disputas", detail: "64% de precision" },
       { label: "Topico fuerte", value: "Manos", detail: "88% de precision" },
       { label: "Actividad semanal", value: "71%", detail: "arbitros activos" },
-      { label: "Ref Performance", value: "74%", detail: "readiness promedio" },
+      { label: "Videos propios", value: "12", detail: "revision interna" },
       { label: "Licencias usadas", value: "84/120", detail: "36 disponibles" },
     ],
     cohorts: [
@@ -203,7 +324,6 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
       { name: "Reserva", students: 18, progress: 69 },
       { name: "Juveniles", students: 25, progress: 62 },
       { name: "Asistentes", students: 11, progress: 73 },
-      { name: "Preparacion fisica", students: 42, progress: 67 },
     ],
     students: [
       {
@@ -249,11 +369,11 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
   association: {
     type: "association",
     title: "Asociacion Arbitral Demo",
-    headline: "Entrenamiento tecnico avanzado y seguimiento competitivo",
+    headline: "Entrenamiento tecnico avanzado para arbitros recibidos",
     description:
-      "Para arbitros recibidos: video analisis, toma de decisiones, DOGSO/SPA, VAR Lab, rendimiento y metricas comparativas.",
-    tone: "Tecnica, competitiva y de alto rendimiento",
-    trainingLevel: "advanced",
+      "Para arbitros y asistentes ya formados: video analisis, clips propios, VAR Lab, toma de decisiones, actualizacion y evaluaciones tecnicas.",
+    tone: "Tecnica, competitiva y avanzada",
+    trainingLevel: "Avanzado",
     plan: "Licencia Asociacion Anual",
     seatsTotal: 200,
     seatsUsed: 148,
@@ -261,40 +381,61 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
     customVideoEnabled: true,
     publicClipSharingEnabled: true,
     modules: [
-      "Video analisis avanzado",
-      "VAR Lab",
-      "DOGSO / SPA",
-      "Disputas complejas",
-      "Manos complejas",
-      "Fuera de juego avanzado",
-      "Gestion disciplinaria",
-      "Simulaciones",
-      "Evaluaciones profesionales",
-      "Ref Performance",
+      {
+        title: "Video analisis",
+        description: "Lectura tecnica, criterios y discusion metodologica sobre jugadas.",
+        status: "available",
+      },
+      {
+        title: "Clips propios",
+        description: "Carga de material real de la competencia, privado o compartible.",
+        status: "available",
+      },
+      {
+        title: "VAR Lab",
+        description: "APP, OFR, factual vs interpretativo y protocolo VAR.",
+        status: "available",
+      },
+      {
+        title: "Toma de decisiones",
+        description: "Decision tecnica, reanudacion y sancion disciplinaria.",
+        status: "available",
+      },
+      {
+        title: "Actualizacion arbitral",
+        description: "Criterios, circulares, enfoque tecnico y cambios reglamentarios.",
+        status: "configured",
+      },
+      {
+        title: "Evaluaciones tecnicas",
+        description: "Examenes y ejercicios por rol, categoria, grupo o promocion.",
+        status: "configured",
+      },
     ],
     metrics: [
-      "Comparativa por grupo",
-      "Precision por criterio",
-      "Ranking tecnico",
-      "Readiness promedio",
-      "Carga y actividad competitiva",
+      "Promedio general",
+      "Evolucion",
+      "Precision por topico",
+      "Actividad reciente",
+      "Comparativa por categoria",
+      "Ranking por grupo",
     ],
+    metricGroups: [...associationRefereeMetrics, ...associationAssistantMetrics],
     kpis: [
       { label: "Arbitros activos", value: "148", detail: "sobre 200 cupos" },
       { label: "Evaluaciones", value: "396", detail: "ultimo trimestre" },
       { label: "Promedio general", value: "84/100", detail: "plantel completo" },
-      { label: "Topico debil", value: "APP", detail: "VAR y ataque prometedor" },
+      { label: "Topico debil", value: "VAR", detail: "protocolo y APP" },
       { label: "Topico fuerte", value: "Faltas tacticas", detail: "89% de precision" },
       { label: "Actividad semanal", value: "82%", detail: "arbitros activos" },
-      { label: "Ref Performance", value: "81%", detail: "readiness promedio" },
       { label: "Clips propios", value: "27", detail: "en revision y publicados" },
+      { label: "Comparativas", value: "3", detail: "regional, provincial, nacional" },
     ],
     cohorts: [
       { name: "Plantel superior", students: 38, progress: 84 },
       { name: "Regional", students: 41, progress: 78 },
       { name: "VAR Lab", students: 24, progress: 71 },
       { name: "Asistentes avanzados", students: 18, progress: 82 },
-      { name: "Ref Performance", students: 63, progress: 76 },
     ],
     students: [
       {
@@ -302,7 +443,7 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
         level: "Regional",
         score: "91",
         last: "Hoy",
-        weak: "APP",
+        weak: "VAR",
         status: "Alto rendimiento",
       },
       {
@@ -310,7 +451,7 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
         level: "Superior",
         score: "88",
         last: "Ayer",
-        weak: "OFR",
+        weak: "Reanudacion",
         status: "Competitivo",
       },
       {
@@ -332,101 +473,39 @@ export const institutionalExperiences: Record<InstitutionType, InstitutionalExpe
     ],
     instructorFocus: [
       "Revisar clips propios pendientes de aprobacion.",
+      "Separar analisis entre arbitros y asistentes.",
+      "Comparar precision por categoria y promocion.",
       "Asignar VAR Lab a plantel regional.",
-      "Comparar precision disciplinaria entre grupos.",
-      "Cruzar readiness con rendimiento en evaluaciones.",
     ],
   },
   federation: {
     type: "federation",
-    title: "Federacion Demo",
-    headline: "Estandarizacion nacional y analytics profesional",
+    title: "Federacion",
+    headline: "Proximamente",
     description:
-      "Infraestructura para federaciones: criterios tecnicos, contenido actualizado, video analisis, VAR, rendimiento y seguimiento escalable.",
-    tone: "Institucional, profesional y escalable",
-    trainingLevel: "elite",
-    plan: "Licencia Federacion Enterprise",
-    seatsTotal: 800,
-    seatsUsed: 512,
-    instructors: 24,
-    customVideoEnabled: true,
-    publicClipSharingEnabled: true,
+      "La experiencia federativa se definira mas adelante: observadores, instructores, estructura nacional y evaluaciones federativas.",
+    tone: "Pendiente de definicion",
+    trainingLevel: "Proximamente",
+    plan: "Proximamente",
+    seatsTotal: 0,
+    seatsUsed: 0,
+    instructors: 0,
+    customVideoEnabled: false,
+    publicClipSharingEnabled: false,
     modules: [
-      "Panel tecnico nacional",
-      "VAR Lab avanzado",
-      "Biblioteca de clips federativos",
-      "Evaluaciones profesionales",
-      "Metricas comparativas",
-      "Ranking por categoria",
-      "Seguimiento fisico",
-      "Readiness",
-      "Capacitacion permanente",
-      "Publicacion de criterios",
+      {
+        title: "Federaciones",
+        description: "Modulo reservado para una etapa posterior.",
+        status: "coming_soon",
+      },
     ],
-    metrics: [
-      "Estandarizacion por region",
-      "Ranking tecnico",
-      "Evolucion por categoria",
-      "Clips federativos",
-      "Readiness y carga",
-    ],
+    metrics: ["Proximamente"],
     kpis: [
-      { label: "Arbitros activos", value: "512", detail: "sobre 800 cupos" },
-      { label: "Evaluaciones", value: "1.284", detail: "ultimo trimestre" },
-      { label: "Promedio general", value: "86/100", detail: "ecosistema completo" },
-      { label: "Criterio critico", value: "OFR", detail: "revision recomendada" },
-      { label: "Criterio fuerte", value: "DOGSO", detail: "91% de precision" },
-      { label: "Actividad semanal", value: "88%", detail: "arbitros activos" },
-      { label: "Ref Performance", value: "83%", detail: "readiness promedio" },
-      { label: "Clips propios", value: "134", detail: "federativos y privados" },
+      { label: "Estado", value: "Proximamente", detail: "no desarrollado por ahora" },
     ],
-    cohorts: [
-      { name: "Elite nacional", students: 48, progress: 88 },
-      { name: "Proyeccion", students: 96, progress: 79 },
-      { name: "VAR", students: 64, progress: 74 },
-      { name: "Asistentes FIFA", students: 32, progress: 86 },
-      { name: "Performance nacional", students: 280, progress: 81 },
-    ],
-    students: [
-      {
-        name: "Daniel Castro",
-        level: "Elite",
-        score: "94",
-        last: "Hoy",
-        weak: "OFR",
-        status: "Elite",
-      },
-      {
-        name: "Mariana Torres",
-        level: "Proyeccion",
-        score: "90",
-        last: "Ayer",
-        weak: "APP",
-        status: "Seguimiento elite",
-      },
-      {
-        name: "Pablo Suarez",
-        level: "Nacional",
-        score: "87",
-        last: "2 dias",
-        weak: "Factual vs interpretativo",
-        status: "Competitivo",
-      },
-      {
-        name: "Carla Ruiz",
-        level: "Asistente",
-        score: "95",
-        last: "Esta semana",
-        weak: "FDJ complejo",
-        status: "Elite",
-      },
-    ],
-    instructorFocus: [
-      "Publicar criterio federativo de APP y OFR.",
-      "Analizar variaciones de decision por region.",
-      "Priorizar clips federativos de alta complejidad.",
-      "Cruzar carga fisica con performance tecnica.",
-    ],
+    cohorts: [],
+    students: [],
+    instructorFocus: ["Definir diferencias con asociaciones antes de desarrollar."],
   },
 };
 

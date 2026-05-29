@@ -110,7 +110,7 @@ const performanceViewMeta: Record<
   evolution: { title: "Mi evolucion", description: "Progreso, tendencia y actividad reciente a lo largo del tiempo.", icon: LineChart },
   plan: { title: "Plan recomendado", description: "Diagnostico, prioridades y proximo entrenamiento sugerido.", icon: Target },
   topics: { title: "Por topico", description: "Mapa tecnico y rendimiento por tipo de jugada arbitral.", icon: BarChart3 },
-  criteria: { title: "Por criterio", description: "Decision tecnica, reanudacion, disciplina, justificacion y VAR.", icon: ListChecks },
+  criteria: { title: "Por criterio", description: "Decision tecnica, reanudacion y sancion disciplinaria.", icon: ListChecks },
   modules: { title: "Por modulo", description: "Que mide cada area de entrenamiento dentro de RefLab.", icon: Activity },
   history: { title: "Historial", description: "Intentos reales, filtros, puntajes, decisiones y feedback.", icon: History },
   ranking: { title: "Ranking", description: "Comparacion comunitaria y posicion segun actividad registrada.", icon: Trophy },
@@ -571,21 +571,22 @@ function RecommendedPlanPanel({ plan }: { plan: ReturnType<typeof getRecommended
 }
 function TopicsPanel({ topics }: { topics: TopicMetric[] }) {
   const technicalTopics = buildTechnicalTopics(topics);
+  const visibleTopics = topics.filter((topic) => mainTopicOrder.some((label) => label.toLowerCase() === topic.topic.toLowerCase()));
 
   return (
     <Panel
       eyebrow="Por topicos"
       title="En que jugadas rendis mejor o peor"
-      description="Agrupa por tipo de situacion: manos, faltas tacticas, disputas, fuera de juego, VAR y otros topicos reales cargados."
+      description="Concentra el analisis en los cinco pilares tecnicos: VAR, disputas, faltas tacticas, manos y fuera de juego."
       icon={BarChart3}
     >
       <TopicTechnicalMap topics={technicalTopics} />
 
-      {topics.length === 0 ? (
+      {visibleTopics.length === 0 ? (
         <InlineEmpty text="Todavia no hay topicos suficientes. Completa ejercicios para activar este analisis." />
       ) : (
         <div className="space-y-3">
-          {topics.map((topic) => (
+          {visibleTopics.map((topic) => (
             <TopicRow key={topic.topic} topic={topic} />
           ))}
         </div>
@@ -681,21 +682,52 @@ function TopicRow({ topic }: { topic: TopicMetric }) {
 }
 
 function CriteriaPanel({ criteria }: { criteria: CriterionMetric[] }) {
+  const activeCriteria = criteria.filter((criterion) => ["technical", "restart", "discipline"].includes(criterion.key));
+  const futureCriteria = criteria.filter((criterion) => ["interpretation", "justification", "var"].includes(criterion.key));
+
   return (
     <div id="por-criterio">
       <Panel
       eyebrow="Por criterio"
       title="Que parte de la decision estas resolviendo mal"
-      description="Separa decision tecnica, reanudacion, sancion disciplinaria, interpretacion, justificacion y criterio VAR cuando esos campos existen."
+      description="Por ahora RefLab muestra solo criterios con logica suficiente: decision tecnica, reanudacion y sancion disciplinaria."
       icon={ListChecks}
     >
       <div className="space-y-3">
-        {criteria.map((criterion) => (
+        {activeCriteria.map((criterion) => (
           <CriterionRow key={criterion.key} criterion={criterion} />
         ))}
       </div>
+
+      <div className="mt-5 rounded-[26px] border border-yellow-400/20 bg-yellow-400/10 p-4">
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-yellow-200">Proximamente</p>
+        <p className="mt-2 text-sm leading-6 text-yellow-50/80">
+          Estas metricas quedan preparadas, pero no muestran resultados hasta tener una logica tecnica suficientemente confiable.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          {futureCriteria.map((criterion) => (
+            <FutureCriterionCard key={criterion.key} criterion={criterion} />
+          ))}
+        </div>
+      </div>
       </Panel>
     </div>
+  );
+}
+
+function FutureCriterionCard({ criterion }: { criterion: CriterionMetric }) {
+  return (
+    <article className="rounded-2xl border border-yellow-400/20 bg-black/25 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-black text-white">{criterion.label}</p>
+          <p className="mt-1 text-xs leading-5 text-zinc-400">{criterion.description}</p>
+        </div>
+        <span className="rounded-full border border-yellow-400/25 bg-yellow-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-yellow-200">
+          En construccion
+        </span>
+      </div>
+    </article>
   );
 }
 

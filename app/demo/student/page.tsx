@@ -1,26 +1,24 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import {
-  Activity,
   ArrowRight,
   BadgeCheck,
   BookOpen,
-  Brain,
   ClipboardCheck,
-  Globe2,
   ShieldCheck,
   Target,
   Video,
 } from "lucide-react";
 
 const assignedModules = [
-  { title: "Reglas de juego", status: "Asignado", progress: 62, icon: BookOpen },
-  { title: "Fuera de juego", status: "Prioridad", progress: 38, icon: Target },
-  { title: "Mano", status: "Activo", progress: 74, icon: ShieldCheck },
-  { title: "DOGSO / SPA", status: "Asignado", progress: 44, icon: ClipboardCheck },
-  { title: "VAR Lab", status: "Activo", progress: 51, icon: Video },
-  { title: "Ingles arbitral", status: "Asignado", progress: 28, icon: Globe2 },
-  { title: "Ref Performance", status: "Activo", progress: 69, icon: Activity },
-  { title: "Psicologia arbitral", status: "Proximamente", progress: 0, icon: Brain },
+  { title: "Reglas de Juego IFAB", status: "Asignado", progress: 62, icon: BookOpen },
+  { title: "Examenes", status: "Prioridad", progress: 48, icon: ClipboardCheck },
+  { title: "Videos: Fuera de juego", status: "Prioridad", progress: 38, icon: Target },
+  { title: "Videos: Manos", status: "Activo", progress: 74, icon: ShieldCheck },
+  { title: "Videos: Disputas", status: "Asignado", progress: 44, icon: Video },
+  { title: "Videos: Faltas tacticas", status: "Asignado", progress: 52, icon: Video },
+  { title: "Estadisticas del alumno", status: "Activo", progress: 58, icon: BadgeCheck },
+  { title: "Gestion academica", status: "Asignado", progress: 64, icon: BookOpen },
 ];
 
 const progressCards = [
@@ -33,9 +31,9 @@ const progressCards = [
 ];
 
 const instructorFeedback = [
-  "Completar 5 ejercicios de fuera de juego antes del viernes.",
-  "Revisar criterio de reanudacion cuando no hay infraccion.",
-  "Proxima evaluacion asignada: Reglas de juego - Bloque 2.",
+  "Completar 5 videos de fuera de juego antes del viernes.",
+  "Repasar Regla 11 y senalizacion del asistente.",
+  "Proxima evaluacion asignada: Reglas de Juego - Bloque 2.",
 ];
 
 export default function StudentDemoPage() {
@@ -152,7 +150,7 @@ export default function StudentDemoPage() {
             <div className="grid gap-3">
               <ActionButton label="Continuar entrenamiento" href="/training" primary />
               <ActionButton label="Rendir evaluacion" href="/evaluations" />
-              <ActionButton label="Registrar Ref Performance" href="/performance" />
+              <ActionButton label="Abrir biblioteca IFAB" href="/institution/rules" />
             </div>
           </Panel>
         </section>
@@ -193,7 +191,7 @@ function RefCardDemo() {
             <div className="mt-4 flex items-center gap-4">
               <RadarShape />
               <div className="grid gap-1 text-xs font-bold text-zinc-300">
-                <span>VAR 80</span>
+                <span>Reglas 84</span>
                 <span>FDJ 68</span>
                 <span>Manos 92</span>
                 <span>Disputas 74</span>
@@ -243,7 +241,7 @@ function Panel({
 }: {
   title: string;
   kicker: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="rounded-[30px] border border-white/10 bg-[#0b131b] p-5 sm:p-6">
