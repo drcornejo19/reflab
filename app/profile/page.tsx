@@ -372,6 +372,7 @@ export default function ProfilePage() {
   const location = [city, country].filter(Boolean).join(", ") || t("common.notRegistered");
 
   async function downloadRefCard() {
+    const exportPhoto = photo ? await imageUrlToDataUrl(photo) : "";
     const exportQr = qrDataUrl || (refCardUrl
       ? await QRCode.toDataURL(refCardUrl, {
           margin: 1,
@@ -389,7 +390,7 @@ export default function ProfilePage() {
       association: association || "Sin liga",
       category: category || "Sin categoria",
       location,
-      photo,
+      photo: exportPhoto,
       refCardId: effectiveRefCardId,
       refCardUrl,
       qrDataUrl: exportQr,
@@ -401,11 +402,10 @@ export default function ProfilePage() {
       discipline: disciplineLabel,
       lastTest: formatShortDate(lastTestDate),
     });
-    const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
+    const url = await svgToPngObjectUrl(svg, 2);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${slugify(displayName)}-ref-card.svg`;
+    link.download = `${slugify(displayName)}-ref-card.png`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -558,73 +558,28 @@ export default function ProfilePage() {
           {savingProfile ? t("profile.savingProfile").toUpperCase() : t("profile.saveProfile").toUpperCase()}
         </button>
 
-        {isPro ? (
-          <>
-            <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-              <Panel title="Identidad arbitral" subtitle="Datos reales del perfil.">
-                <InfoRow label="Tipo" value={refereeType} />
-                <InfoRow label="Funcion" value={mainRole} />
-                <InfoRow label="Asociacion / Liga" value={association || "Sin cargar"} />
-                <InfoRow label="Categoria" value={category || "Sin cargar"} />
-                <InfoRow label={t("profile.country")} value={country || t("common.notRegistered")} />
-                <InfoRow label={t("profile.city")} value={city || t("common.notRegistered")} />
-                <InfoRow label="Nivel RefLab" value={stats.level} />
-              </Panel>
+        <section className="grid gap-5 lg:grid-cols-[1fr_1fr]">
+          <Panel title="Informacion principal" subtitle="Datos visibles en tu perfil y credencial.">
+            <InfoRow label="Tipo" value={refereeType} />
+            <InfoRow label="Funcion" value={mainRole} />
+            <InfoRow label="Asociacion / Liga" value={association || "Sin cargar"} />
+            <InfoRow label="Categoria" value={category || "Sin cargar"} />
+            <InfoRow label={t("profile.country")} value={country || t("common.notRegistered")} />
+            <InfoRow label={t("profile.city")} value={city || t("common.notRegistered")} />
+            <InfoRow label="Nivel RefLab" value={stats.level} />
+          </Panel>
 
-              <Panel title="Precision por criterio" subtitle="Perfil tecnico actual.">
-                {criteria.some((item) => item.accuracy !== null) ? (
-                  criteria.map((item) => <Bar key={item.label} label={item.label} value={item.accuracy ?? 0} />)
-                ) : (
-                  <Empty text="Completa ejercicios para calcular precision por criterio." />
-                )}
-              </Panel>
-            </section>
-
-            <section className="grid gap-5 lg:grid-cols-[1fr_1fr]">
-              <Panel title="Evolucion reciente" subtitle="Ultimos intentos registrados.">
-                <div className="space-y-3">
-                  {trend.length === 0 ? (
-                    <Empty text="Todavia no hay intentos." />
-                  ) : (
-                    trend.map((item, index) => (
-                      <HistoryRow
-                        key={item.id}
-                        title={`Intento #${index + 1}`}
-                        date={item.date}
-                        meta={`${item.topic ?? "Sin tema"} - ${item.modeLabel}`}
-                        score={item.score}
-                      />
-                    ))
-                  )}
-                </div>
-              </Panel>
-
-              <Panel title="Historial de examenes" subtitle="Resultados guardados del modo examen.">
-                <div className="space-y-3">
-                  {exams.length === 0 ? (
-                    <Empty text="Todavia no hay examenes guardados." />
-                  ) : (
-                    exams.slice(0, 6).map((exam) => (
-                      <HistoryRow
-                        key={exam.id}
-                        title={`Examen - ${exam.correct_count ?? 0}/${exam.total_questions ?? 0}`}
-                        date={exam.created_at}
-                        meta="Evaluacion formal"
-                        score={exam.avg_score ?? null}
-                      />
-                    ))
-                  )}
-                </div>
-              </Panel>
-            </section>
-          </>
-        ) : (
-          <ProUpgradeCard
-            title="Desbloquea tu perfil tecnico"
-            description="El plan FREE mantiene tus datos basicos. RefLab Pro habilita precision por criterio, evolucion reciente, historial de examenes y RefCard completa."
-            compact
-          />
-        )}
+          <Panel title="Configuracion" subtitle="Preferencias y accesos de cuenta.">
+            <InfoRow label="Plan actual" value={planLabels[subscriptionPlan]} />
+            <InfoRow label="Privacidad ranking" value={showRealNameInRanking ? "Nombre visible" : `Solo RefCard ${effectiveRefCardId || t("common.pending")}`} />
+            <a
+              href="/notifications"
+              className="mt-4 flex min-h-12 items-center justify-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 text-sm font-black text-[#b7ff8a] transition hover:bg-[#6fc11f]/20"
+            >
+              Configurar notificaciones
+            </a>
+          </Panel>
+        </section>
 
         <SignOutButton>
           <button className="flex w-full items-center justify-center gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 font-black text-red-300 transition hover:bg-red-500/20">
@@ -1348,13 +1303,13 @@ function createRefCardSvg({
   const bestLabel = bestScore === null ? "--" : String(bestScore ?? "--");
   const testsLabel = evaluations > 0 ? String(evaluations) : "--";
   const safePhoto = photo
-    ? `<image href="${escapeXml(photo)}" x="62" y="132" width="326" height="500" clip-path="url(#photoClip)" preserveAspectRatio="xMidYMid slice" />`
-    : `<rect x="62" y="132" width="326" height="500" rx="34" fill="#0d1821"/><text x="225" y="392" text-anchor="middle" font-size="94" font-weight="900" fill="#6fc11f">${escapeXml(initials)}</text>`;
+    ? `<image href="${escapeXml(photo)}" x="60" y="132" width="322" height="492" clip-path="url(#photoClip)" preserveAspectRatio="xMidYMid slice" />`
+    : `<rect x="60" y="132" width="322" height="492" rx="34" fill="#0d1821"/><text x="221" y="386" text-anchor="middle" font-size="94" font-weight="900" fill="#6fc11f">${escapeXml(initials)}</text>`;
   const qr = qrDataUrl
-    ? `<image href="${escapeXml(qrDataUrl)}" x="752" y="1104" width="104" height="104" preserveAspectRatio="xMidYMid meet" />`
-    : svgQrFallback(refCardUrl || refCardId, 752, 1104, 104);
+    ? `<image href="${escapeXml(qrDataUrl)}" x="730" y="1174" width="116" height="116" preserveAspectRatio="xMidYMid meet" />`
+    : svgQrFallback(refCardUrl || refCardId, 730, 1174, 116);
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1260" viewBox="0 0 900 1260">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1340" viewBox="0 0 900 1340">
   <defs>
     <linearGradient id="cardBg" x1="0" x2="1" y1="0" y2="1">
       <stop offset="0" stop-color="#18240f"/>
@@ -1369,23 +1324,23 @@ function createRefCardSvg({
       <stop offset="0" stop-color="#6fc11f" stop-opacity="0.35"/>
       <stop offset="1" stop-color="#6fc11f" stop-opacity="0"/>
     </radialGradient>
-    <clipPath id="photoClip"><rect x="62" y="132" width="326" height="500" rx="34"/></clipPath>
+    <clipPath id="photoClip"><rect x="60" y="132" width="322" height="492" rx="34"/></clipPath>
     <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
       <feGaussianBlur stdDeviation="6" result="blur"/>
       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   </defs>
-  <rect width="900" height="1260" rx="54" fill="url(#cardBg)"/>
-  <rect width="900" height="1260" rx="54" fill="url(#glow)"/>
-  <path d="M58 60 H842 Q862 60 862 80 V1180 Q862 1200 842 1200 H58 Q38 1200 38 1180 V80 Q38 60 58 60Z" fill="none" stroke="#6fc11f" stroke-width="2.6" stroke-opacity="0.88"/>
-  <path d="M76 78 H824 Q844 78 844 98 V1162 Q844 1182 824 1182 H76 Q56 1182 56 1162 V98 Q56 78 76 78Z" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.18"/>
+  <rect width="900" height="1340" rx="54" fill="url(#cardBg)"/>
+  <rect width="900" height="1340" rx="54" fill="url(#glow)"/>
+  <path d="M58 60 H842 Q862 60 862 80 V1260 Q862 1280 842 1280 H58 Q38 1280 38 1260 V80 Q38 60 58 60Z" fill="none" stroke="#6fc11f" stroke-width="2.6" stroke-opacity="0.88"/>
+  <path d="M76 78 H824 Q844 78 844 98 V1242 Q844 1262 824 1262 H76 Q56 1262 56 1242 V98 Q56 78 76 78Z" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.18"/>
   <path d="M78 80 L170 80 L54 238 L54 164 Q54 112 78 80Z" fill="#6fc11f" fill-opacity="0.16"/>
   <path d="M74 322 L170 178 L252 80 H174 L54 238 V426 Z" fill="#6fc11f" fill-opacity="0.34"/>
-  <rect x="62" y="132" width="326" height="500" rx="34" fill="#081018" stroke="#6fc11f" stroke-opacity="0.34"/>
+  <rect x="60" y="132" width="322" height="492" rx="34" fill="#081018" stroke="#6fc11f" stroke-opacity="0.34"/>
   ${safePhoto}
-  <rect x="78" y="150" width="50" height="390" rx="24" fill="#050b12" fill-opacity="0.76" stroke="#ffffff" stroke-opacity="0.15"/>
-  <text transform="translate(104 336) rotate(-90)" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="900" letter-spacing="6" fill="#a7b2bd">REFCARD</text>
-  <text transform="translate(104 500) rotate(-90)" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="900" letter-spacing="3" fill="#b7ff8a">${escapeXml(refCardId)}</text>
+  <rect x="76" y="150" width="48" height="384" rx="24" fill="#050b12" fill-opacity="0.78" stroke="#ffffff" stroke-opacity="0.15"/>
+  <text transform="translate(100 332) rotate(-90)" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="900" letter-spacing="6" fill="#a7b2bd">REFCARD</text>
+  <text transform="translate(100 496) rotate(-90)" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="900" letter-spacing="3" fill="#b7ff8a">${escapeXml(refCardId)}</text>
 
   <text x="430" y="150" font-family="Arial, sans-serif" font-size="54" font-weight="900" fill="#ffffff">REF<tspan fill="#6fc11f">LAB</tspan></text>
   <text x="432" y="183" font-family="Arial, sans-serif" font-size="21" letter-spacing="7" fill="#d6dde5">Referee Decision Lab</text>
@@ -1420,13 +1375,15 @@ function createRefCardSvg({
   ${svgSideInfo(714, 996, "UBICACION", location)}
   ${svgSideInfo(714, 1074, "ULTIMO TEST", lastTest)}
 
-  <rect x="54" y="1138" width="792" height="82" rx="24" fill="#071019" fill-opacity="0.78" stroke="#ffffff" stroke-opacity="0.12"/>
-  <circle cx="104" cy="1180" r="28" fill="#6fc11f" fill-opacity="0.14" stroke="#6fc11f" stroke-width="3"/>
-  <path d="M92 1181 L101 1190 L117 1167" fill="none" stroke="#b7ff8a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="154" y="1172" font-family="Arial, sans-serif" font-size="17" letter-spacing="4" fill="#a7b2bd">VERIFICADO</text>
-  <text x="154" y="1202" font-family="Arial, sans-serif" font-size="20" font-weight="900" letter-spacing="4" fill="#b7ff8a">REFLAB</text>
-  <text x="520" y="1190" font-family="Arial, sans-serif" font-size="18" font-weight="900" letter-spacing="4" fill="#b7ff8a">REFLAB.APP</text>
-  <rect x="744" y="1096" width="124" height="124" rx="18" fill="#d9e5d2" stroke="#6fc11f" stroke-width="4"/>
+  <rect x="54" y="1150" width="792" height="150" rx="26" fill="#071019" fill-opacity="0.78" stroke="#ffffff" stroke-opacity="0.12"/>
+  <circle cx="104" cy="1204" r="28" fill="#6fc11f" fill-opacity="0.14" stroke="#6fc11f" stroke-width="3"/>
+  <path d="M92 1205 L101 1214 L117 1191" fill="none" stroke="#b7ff8a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="154" y="1196" font-family="Arial, sans-serif" font-size="17" letter-spacing="4" fill="#a7b2bd">VERIFICADO</text>
+  <text x="154" y="1228" font-family="Arial, sans-serif" font-size="20" font-weight="900" letter-spacing="4" fill="#b7ff8a">REFLAB</text>
+  <text x="154" y="1268" font-family="Arial, sans-serif" font-size="15" font-weight="900" letter-spacing="2" fill="#8d98a5">${escapeXml(refCardId)}</text>
+  <text x="505" y="1220" font-family="Arial, sans-serif" font-size="18" font-weight="900" letter-spacing="4" fill="#b7ff8a">REFLAB.APP</text>
+  <text x="505" y="1252" font-family="Arial, sans-serif" font-size="13" letter-spacing="2" fill="#8d98a5">CREDENCIAL DIGITAL</text>
+  <rect x="718" y="1162" width="140" height="140" rx="20" fill="#d9e5d2" stroke="#6fc11f" stroke-width="4"/>
   ${qr}
 </svg>`;
 }
@@ -1586,6 +1543,62 @@ function escapeXml(value: string) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
+}
+
+async function imageUrlToDataUrl(url: string) {
+  try {
+    const response = await fetch(url, { mode: "cors" });
+    if (!response.ok) return "";
+
+    const blob = await response.blob();
+    return await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : "");
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return "";
+  }
+}
+
+async function svgToPngObjectUrl(svg: string, scale = 2) {
+  const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const svgUrl = URL.createObjectURL(svgBlob);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("No se pudo renderizar la RefCard."));
+      img.src = svgUrl;
+    });
+    const imageWidth = image.naturalWidth || image.width || 900;
+    const imageHeight = image.naturalHeight || image.height || 1340;
+    const canvas = document.createElement("canvas");
+    canvas.width = imageWidth * scale;
+    canvas.height = imageHeight * scale;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("No se pudo preparar la exportacion PNG.");
+    }
+
+    context.fillStyle = "#02060b";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    const pngBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("No se pudo generar el PNG."));
+      }, "image/png", 1);
+    });
+
+    return URL.createObjectURL(pngBlob);
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
 }
 
 function slugify(value: string) {

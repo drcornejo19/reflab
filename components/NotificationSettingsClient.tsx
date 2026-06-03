@@ -3,16 +3,12 @@
 import { useEffect, useState } from "react";
 import {
   AlertCircle,
-  Bell,
   BellRing,
   CheckCircle2,
   Loader2,
   Send,
-  ShieldCheck,
 } from "lucide-react";
 import {
-  getNotificationExamples,
-  notificationPreferenceItems,
   type NotificationPreferences,
   type SmartNotificationType,
 } from "@/lib/notifications";
@@ -22,8 +18,6 @@ import {
   subscribeToForegroundMessages,
   type ForegroundNotificationPayload,
 } from "@/lib/firebaseClient";
-
-const examples = getNotificationExamples();
 
 export function NotificationSettingsClient() {
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
@@ -161,14 +155,12 @@ export function NotificationSettingsClient() {
       }
 
       const nextPreferences = {
-        ...(preferences ?? {
-          training: true,
-          exams: true,
-          evolution: true,
-          matches: true,
-          newContent: true,
-          pushEnabled: false,
-        }),
+        ...(preferences ?? {}),
+        training: true,
+        exams: true,
+        evolution: true,
+        matches: true,
+        newContent: true,
         pushEnabled: true,
       };
       setPreferences(nextPreferences);
@@ -322,78 +314,89 @@ export function NotificationSettingsClient() {
         </button>
       )}
 
-      <section className="grid gap-3 md:grid-cols-2">
-        {notificationPreferenceItems.map((item) => {
-          const active = Boolean(preferences?.[item.key]);
-
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => {
-                if (!preferences) return;
-                savePreferences({ ...preferences, [item.key]: !active });
-              }}
-              className={`flex min-h-28 w-full items-start gap-4 rounded-[26px] border p-4 text-left transition ${
-                active
-                  ? "border-[#6fc11f]/35 bg-[#6fc11f]/10"
-                  : "border-white/10 bg-white/[0.04]"
-              }`}
-            >
-              <div
-                className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${
-                  active ? "bg-[#6fc11f] text-black" : "bg-white/10 text-zinc-400"
-                }`}
-              >
-                <Bell size={19} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-base font-black text-white">{item.label}</p>
-                <p className="mt-1 text-sm leading-6 text-zinc-400">{item.description}</p>
-                <p className="mt-2 text-xs font-black uppercase tracking-[0.2em] text-[#6fc11f]">
-                  {active ? "Activo" : "Desactivado"}
-                </p>
-              </div>
-            </button>
-          );
-        })}
-      </section>
-
       <section className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 md:p-6">
-        <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
-            <ShieldCheck size={20} />
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
+              <BellRing size={21} />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-white">
+                Recibir notificaciones de RefLab
+              </h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-400">
+                RefLab decide automaticamente que avisos enviarte segun tu actividad:
+                continuidad, examenes, nuevos clips, partidos y evolucion.
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-black text-white">Tipos de avisos</h2>
-            <p className="text-sm text-zinc-500">Plantillas con proposito arbitral.</p>
-          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (!preferences) return;
+
+              if (preferences.pushEnabled) {
+                savePreferences({ ...preferences, pushEnabled: false });
+              } else {
+                activatePush();
+              }
+            }}
+            disabled={activating || saving || (!firebaseConfigured && !preferences?.pushEnabled)}
+            className={`relative flex h-12 w-24 shrink-0 items-center rounded-full border p-1 transition ${
+              preferences?.pushEnabled
+                ? "justify-end border-[#6fc11f]/40 bg-[#6fc11f]"
+                : "justify-start border-white/10 bg-white/10"
+            } disabled:cursor-not-allowed disabled:opacity-50`}
+            aria-pressed={Boolean(preferences?.pushEnabled)}
+          >
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-black text-xs font-black text-white shadow-lg">
+              {preferences?.pushEnabled ? "ON" : "OFF"}
+            </span>
+          </button>
         </div>
 
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">
-          {examples.map((example) => (
+        <div className="mt-5 rounded-[24px] border border-[#6fc11f]/20 bg-[#6fc11f]/8 p-4">
+          <p className="text-sm font-black text-white">
+            {preferences?.pushEnabled
+              ? "Notificaciones activas"
+              : "Notificaciones desactivadas"}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-zinc-400">
+            {preferences?.pushEnabled
+              ? "Vas a recibir avisos utiles relacionados con progreso, entrenamiento, evaluaciones y preparacion arbitral."
+              : "No se enviaran notificaciones push a este dispositivo hasta que vuelvas a activar esta opcion."}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => sendTest("training_pending")}
+            disabled={testingType !== null || saving || !preferences?.pushEnabled}
+            className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-2xl border border-white/10 px-4 text-xs font-black text-white transition hover:border-[#6fc11f]/50 hover:text-[#6fc11f] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {testingType ? (
+              <Loader2 className="animate-spin" size={15} />
+            ) : (
+              <Send size={15} />
+            )}
+            Enviar prueba
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {[
+            "Entrenamiento pendiente por inactividad.",
+            "Nuevo clip o examen habilitado.",
+            "Debilidad detectada por topico.",
+            "Recordatorios pre y post partido.",
+            "Rachas y resumen semanal.",
+            "Avisos institucionales importantes.",
+          ].map((item) => (
             <div
-              key={example.type}
-              className="rounded-[22px] border border-white/10 bg-black/25 p-4"
+              key={item}
+              className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-zinc-300"
             >
-              <p className="text-[10px] font-black uppercase tracking-[0.26em] text-[#6fc11f]">
-                {example.category}
-              </p>
-              <h3 className="mt-2 text-lg font-black text-white">{example.title}</h3>
-              <p className="mt-2 text-sm leading-6 text-zinc-400">{example.message}</p>
-              <button
-                type="button"
-                onClick={() => sendTest(example.type)}
-                disabled={testingType === example.type || saving}
-                className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-2xl border border-white/10 px-4 text-xs font-black text-white transition hover:border-[#6fc11f]/50 hover:text-[#6fc11f] disabled:opacity-50"
-              >
-                {testingType === example.type ? (
-                  <Loader2 className="animate-spin" size={15} />
-                ) : (
-                  <Send size={15} />
-                )}
-                Enviar prueba
-              </button>
+              {item}
             </div>
           ))}
         </div>

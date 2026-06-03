@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useState } from "react";
@@ -50,6 +51,25 @@ export default function InstitutionDemoPage() {
       <div className="relative z-10 mx-auto w-full max-w-[1220px] px-4 py-6 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-4 rounded-[32px] border border-white/10 bg-[#0b131b]/95 p-5 shadow-[0_30px_100px_rgba(0,0,0,0.35)] sm:p-7 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
+            <div className="mb-5 flex items-center gap-3">
+              <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-[#6fc11f]/35 bg-black/45 p-2 shadow-[0_0_28px_rgba(111,193,31,0.18)]">
+                <Image
+                  src="/rf-logo.png"
+                  alt="Logo RefLab"
+                  width={44}
+                  height={44}
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <div>
+                <p className="text-lg font-black leading-none">
+                  REF<span className="text-[#6fc11f]">LAB</span>
+                </p>
+                <p className="mt-1 text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500">
+                  Referee Decision Lab
+                </p>
+              </div>
+            </div>
             <p className="text-[10px] font-black uppercase tracking-[0.32em] text-[#6fc11f]">
               Demo comprador institucional
             </p>

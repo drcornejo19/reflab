@@ -9,6 +9,7 @@ import {
   Building2,
   ChevronRight,
   Clapperboard,
+  BellRing,
   Settings,
   ShieldCheck,
   Users,
@@ -63,6 +64,15 @@ const adminAreas: AdminArea[] = [
     status: "Disponible",
     href: "/admin/institutional-clips",
     icon: Video,
+  },
+  {
+    title: "Notificaciones",
+    category: "Comunicacion",
+    description:
+      "Envia avisos globales utiles sobre contenido, reglas, examenes o novedades.",
+    status: "Disponible",
+    href: "/admin/notifications",
+    icon: BellRing,
   },
   {
     title: "Biblioteca",

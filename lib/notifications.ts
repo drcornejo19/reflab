@@ -13,7 +13,8 @@ export type SmartNotificationType =
   | "weakness_detected"
   | "training_streak"
   | "match_reminder"
-  | "post_match_reminder";
+  | "post_match_reminder"
+  | "admin_broadcast";
 
 export type NotificationPreferences = Record<NotificationCategory, boolean> & {
   pushEnabled: boolean;
@@ -137,6 +138,14 @@ const notificationTemplates: Record<SmartNotificationType, SmartNotification> = 
       "Registra como te sentiste despues del partido y mantene actualizado tu historial.",
     actionLabel: "Completar registro",
     actionUrl: "/performance",
+  },
+  admin_broadcast: {
+    type: "admin_broadcast",
+    category: "newContent",
+    title: "Aviso RefLab",
+    message: "Hay una novedad importante disponible en RefLab.",
+    actionLabel: "Abrir RefLab",
+    actionUrl: "/dashboard",
   },
 };
 

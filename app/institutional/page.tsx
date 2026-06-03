@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   BadgeCheck,
@@ -90,8 +91,14 @@ export default function InstitutionalPage() {
 
       <header className="relative z-10 mx-auto flex w-full max-w-[1180px] items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
         <Link href="/home" className="flex min-w-0 items-center gap-3">
-          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[#6fc11f]/35 bg-[#6fc11f]/10 text-sm font-black text-[#6fc11f] shadow-[0_0_24px_rgba(111,193,31,0.16)]">
-            RF
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[#6fc11f]/35 bg-black/45 p-1.5 shadow-[0_0_24px_rgba(111,193,31,0.18)]">
+            <Image
+              src="/rf-logo.png"
+              alt="Logo RefLab"
+              width={40}
+              height={40}
+              className="h-full w-full object-contain"
+            />
           </div>
           <div className="min-w-0">
             <p className="text-lg font-black leading-none">
@@ -113,8 +120,15 @@ export default function InstitutionalPage() {
 
       <section className="relative z-10 mx-auto grid w-full max-w-[1180px] gap-8 px-4 pb-12 pt-6 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:px-8 lg:pb-20 lg:pt-16">
         <div className="flex min-w-0 flex-col justify-center">
-          <div className="grid h-16 w-16 place-items-center rounded-full border border-[#6fc11f]/35 bg-[#6fc11f]/10 text-lg font-black text-[#6fc11f] shadow-[0_0_34px_rgba(111,193,31,0.18)]">
-            RF
+          <div className="grid h-20 w-20 place-items-center rounded-full border border-[#6fc11f]/35 bg-black/45 p-2 shadow-[0_0_34px_rgba(111,193,31,0.22)]">
+            <Image
+              src="/rf-logo.png"
+              alt="Logo RefLab"
+              width={64}
+              height={64}
+              className="h-full w-full object-contain"
+              priority
+            />
           </div>
           <h1 className="mt-4 max-w-[760px] break-words text-4xl font-black leading-[0.96] tracking-tight text-white sm:text-5xl lg:text-6xl">
             RefLab para instituciones arbitrales

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
@@ -65,8 +66,15 @@ export default function HomePage() {
 
       <section className="relative z-10 mx-auto flex min-h-[100svh] w-full max-w-[1180px] flex-col justify-center px-4 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto w-full max-w-[860px] text-center">
-          <div className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-[#6fc11f]/35 bg-[#6fc11f]/10 text-lg font-black text-[#6fc11f] shadow-[0_0_34px_rgba(111,193,31,0.18)]">
-            RF
+          <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-[#6fc11f]/35 bg-black/45 p-2 shadow-[0_0_34px_rgba(111,193,31,0.22)]">
+            <Image
+              src="/rf-logo.png"
+              alt="Logo RefLab"
+              width={64}
+              height={64}
+              className="h-full w-full object-contain"
+              priority
+            />
           </div>
           <h1 className="mt-6 break-words text-4xl font-black tracking-tight sm:text-6xl">
             REF<span className="text-[#6fc11f]">LAB</span>

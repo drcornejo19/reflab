@@ -155,7 +155,7 @@ export async function sendSmartNotificationToUser(
   const notification = getSmartNotification(type, overrides);
   const preferences = await getUserNotificationPreferences(supabase, userId);
 
-  if (!preferences.pushEnabled || !preferences[notification.category]) {
+  if (!preferences.pushEnabled) {
     await recordNotificationEvent(
       supabase,
       userId,
