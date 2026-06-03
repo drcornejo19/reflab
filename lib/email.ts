@@ -25,8 +25,11 @@ export function getEmailConfig() {
     smtpUser: process.env.SMTP_USER,
     smtpPassword: process.env.SMTP_PASSWORD,
     smtpFromEmail: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
-    institutionalEmail: process.env.INSTITUTIONAL_EMAIL || "institucional@reflab.app",
-    supportEmail: process.env.SUPPORT_EMAIL || "soporte@reflab.app",
+    institutionalEmail: process.env.INSTITUTIONAL_EMAIL || "reflab.institucional@gmail.com",
+    supportEmail:
+      process.env.SUPPORT_EMAIL ||
+      process.env.INSTITUTIONAL_EMAIL ||
+      "reflab.institucional@gmail.com",
     appUrl: process.env.APP_URL || "https://reflab.app",
   };
 }

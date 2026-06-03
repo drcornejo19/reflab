@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import {
   BookOpen,
   Activity,
+  Bell,
   CircleAlert,
   Clapperboard,
   GraduationCap,
@@ -16,6 +17,7 @@ import {
   Languages,
   Menu,
   ShieldCheck,
+  LifeBuoy,
   Settings,
   User,
   X,
@@ -128,6 +130,20 @@ const navItems: NavItem[] = [
     individualOnly: true,
   },
   {
+    label: "Notificaciones",
+    labelKey: "nav.notifications",
+    href: "/notifications",
+    icon: Bell,
+    activePaths: ["/notifications"],
+  },
+  {
+    label: "Soporte",
+    labelKey: "nav.support",
+    href: "/support",
+    icon: LifeBuoy,
+    activePaths: ["/support"],
+  },
+  {
     label: "Admin",
     labelKey: "nav.admin",
     href: "/admin",
@@ -218,6 +234,20 @@ const secondaryMobileItems: NavItem[] = [
     href: "/institutional",
     icon: Landmark,
     activePaths: ["/institutional"],
+  },
+  {
+    label: "Notificaciones",
+    labelKey: "nav.notifications",
+    href: "/notifications",
+    icon: Bell,
+    activePaths: ["/notifications"],
+  },
+  {
+    label: "Soporte",
+    labelKey: "nav.support",
+    href: "/support",
+    icon: LifeBuoy,
+    activePaths: ["/support"],
   },
   {
     label: "Admin",

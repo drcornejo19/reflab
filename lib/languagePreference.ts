@@ -15,7 +15,9 @@ export type TranslationKey =
   | "nav.performance"
   | "nav.library"
   | "nav.institutions"
+  | "nav.notifications"
   | "nav.profile"
+  | "nav.support"
   | "nav.admin"
   | "nav.reflab"
   | "nav.train"
@@ -99,7 +101,9 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     "nav.performance": "Ref Performance",
     "nav.library": "Biblioteca",
     "nav.institutions": "Instituciones",
+    "nav.notifications": "Notificaciones",
     "nav.profile": "Perfil",
+    "nav.support": "Soporte",
     "nav.admin": "Admin",
     "nav.reflab": "RefLab",
     "nav.train": "Entrenar",
@@ -182,7 +186,9 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     "nav.performance": "Ref Performance",
     "nav.library": "Library",
     "nav.institutions": "Institutions",
+    "nav.notifications": "Notifications",
     "nav.profile": "Profile",
+    "nav.support": "Support",
     "nav.admin": "Admin",
     "nav.reflab": "RefLab",
     "nav.train": "Train",
@@ -265,7 +271,9 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     "nav.performance": "Ref Performance",
     "nav.library": "Biblioteca",
     "nav.institutions": "Instituicoes",
+    "nav.notifications": "Notificacoes",
     "nav.profile": "Perfil",
+    "nav.support": "Suporte",
     "nav.admin": "Admin",
     "nav.reflab": "RefLab",
     "nav.train": "Treinar",

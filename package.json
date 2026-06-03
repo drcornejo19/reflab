@@ -12,6 +12,8 @@
     "@clerk/nextjs": "^7.2.5",
     "@supabase/supabase-js": "^2.104.1",
     "autoprefixer": "^10.5.0",
+    "firebase": "^12.14.0",
+    "firebase-admin": "^13.10.0",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.11.0",
     "next": "16.2.4",
