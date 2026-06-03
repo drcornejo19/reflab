@@ -1,7 +1,13 @@
 "use client";
 
 import { getApps, initializeApp } from "firebase/app";
-import { getMessaging, getToken, isSupported } from "firebase/messaging";
+import {
+  getMessaging,
+  getToken,
+  isSupported,
+  onMessage,
+  type MessagePayload,
+} from "firebase/messaging";
 
 type FirebasePublicConfig = {
   apiKey?: string;
@@ -10,6 +16,14 @@ type FirebasePublicConfig = {
   storageBucket?: string;
   messagingSenderId?: string;
   appId?: string;
+};
+
+export type ForegroundNotificationPayload = {
+  title: string;
+  body: string;
+  actionUrl: string;
+  actionLabel: string;
+  type?: string;
 };
 
 export function getFirebasePublicConfig() {
@@ -75,4 +89,36 @@ export async function requestFcmToken() {
   }
 
   return token;
+}
+
+export async function subscribeToForegroundMessages(
+  callback: (notification: ForegroundNotificationPayload, raw: MessagePayload) => void
+) {
+  if (typeof window === "undefined") return () => undefined;
+
+  const { firebaseConfig, isConfigured } = getFirebasePublicConfig();
+  if (!isConfigured) return () => undefined;
+
+  const supported = await isSupported();
+  if (!supported) return () => undefined;
+
+  const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+  const messaging = getMessaging(app);
+
+  return onMessage(messaging, (payload) => {
+    const notification = normalizeForegroundPayload(payload);
+    callback(notification, payload);
+  });
+}
+
+function normalizeForegroundPayload(
+  payload: MessagePayload
+): ForegroundNotificationPayload {
+  return {
+    title: payload.notification?.title || payload.data?.title || "RefLab",
+    body: payload.notification?.body || payload.data?.body || "",
+    actionUrl: payload.fcmOptions?.link || payload.data?.actionUrl || "/dashboard",
+    actionLabel: payload.data?.actionLabel || "Abrir",
+    type: payload.data?.type,
+  };
 }

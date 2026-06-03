@@ -19,6 +19,8 @@ import {
 import {
   hasFirebasePublicConfig,
   requestFcmToken,
+  subscribeToForegroundMessages,
+  type ForegroundNotificationPayload,
 } from "@/lib/firebaseClient";
 
 const examples = getNotificationExamples();
@@ -31,6 +33,8 @@ export function NotificationSettingsClient() {
   const [testingType, setTestingType] = useState<SmartNotificationType | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [foregroundNotification, setForegroundNotification] =
+    useState<ForegroundNotificationPayload | null>(null);
   const firebaseConfigured = hasFirebasePublicConfig();
 
   useEffect(() => {
@@ -60,6 +64,52 @@ export function NotificationSettingsClient() {
 
     loadPreferences();
   }, []);
+
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+
+    if (!firebaseConfigured || !preferences?.pushEnabled) return;
+
+    subscribeToForegroundMessages((notification) => {
+      setForegroundNotification(notification);
+      setMessage(`Notificacion recibida: ${notification.title}`);
+
+      if (
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        const browserNotification = new Notification(notification.title, {
+          body: notification.body,
+          icon: "/icon-512.png",
+          badge: "/icon-512.png",
+          data: { url: notification.actionUrl },
+        });
+
+        browserNotification.onclick = () => {
+          window.focus();
+          window.location.href = notification.actionUrl;
+        };
+      }
+    })
+      .then((nextUnsubscribe) => {
+        if (cancelled) {
+          nextUnsubscribe();
+          return;
+        }
+
+        unsubscribe = nextUnsubscribe;
+      })
+      .catch((foregroundError) => {
+        console.error("Foreground notification listener error", foregroundError);
+      });
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [firebaseConfigured, preferences?.pushEnabled]);
 
   async function savePreferences(nextPreferences: NotificationPreferences) {
     setPreferences(nextPreferences);
@@ -247,6 +297,29 @@ export function NotificationSettingsClient() {
           {error ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
           <span>{error || message}</span>
         </div>
+      )}
+
+      {foregroundNotification && (
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href = foregroundNotification.actionUrl;
+          }}
+          className="flex w-full items-start gap-3 rounded-[22px] border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-4 text-left text-sm text-lime-100 transition hover:bg-[#6fc11f]/15"
+        >
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#6fc11f] text-black">
+            <BellRing size={18} />
+          </div>
+          <div className="min-w-0">
+            <p className="font-black text-white">{foregroundNotification.title}</p>
+            <p className="mt-1 leading-6 text-lime-100/80">
+              {foregroundNotification.body || "Notificacion recibida en este dispositivo."}
+            </p>
+            <p className="mt-2 text-xs font-black uppercase tracking-[0.2em] text-[#6fc11f]">
+              {foregroundNotification.actionLabel}
+            </p>
+          </div>
+        </button>
       )}
 
       <section className="grid gap-3 md:grid-cols-2">
