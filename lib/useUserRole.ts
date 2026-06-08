@@ -62,17 +62,34 @@ export function useUserRole() {
           .maybeSingle();
       }
 
-      const nextRole =
+      let nextRole =
         roleResult.error || !roleResult.data?.role
           ? "individual_referee"
           : normalizeRole(roleResult.data.role);
-
-      setRole(nextRole);
-      setSubscriptionPlan(
+      let nextSubscriptionPlan =
         profileResult.error
           ? normalizeSubscriptionPlan(roleResult.data?.subscription_plan)
-          : normalizeSubscriptionPlan(profileResult.data?.subscription_plan ?? roleResult.data?.subscription_plan)
-      );
+          : normalizeSubscriptionPlan(profileResult.data?.subscription_plan ?? roleResult.data?.subscription_plan);
+
+      try {
+        const response = await fetch("/api/profile", { cache: "no-store" });
+        const data = (await response.json()) as {
+          profile?: {
+            role?: string | null;
+            subscriptionPlan?: string | null;
+          };
+        };
+
+        if (response.ok && data.profile) {
+          nextRole = normalizeRole(data.profile.role);
+          nextSubscriptionPlan = normalizeSubscriptionPlan(data.profile.subscriptionPlan);
+        }
+      } catch {
+        // The direct Supabase read above keeps the app usable if the server sync is unavailable.
+      }
+
+      setRole(nextRole);
+      setSubscriptionPlan(nextSubscriptionPlan);
 
       setLoadingRole(false);
     }

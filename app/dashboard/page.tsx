@@ -27,18 +27,29 @@ type DashboardData = {
   attempts: AttemptRecord[];
   examResults: ExamResultRecord[];
   rulesResults: RulesExamResultRecord[];
+  clips: DashboardClip[];
 };
 
 type PlayerTopic = {
   label: string;
   value: number | null;
   attempts: number;
+  hasClips: boolean;
+};
+
+type DashboardClip = {
+  id?: string | null;
+  topic?: string | null;
+  mode?: string | null;
+  module?: string | null;
+  is_active?: boolean | null;
 };
 
 const emptyData: DashboardData = {
   attempts: [],
   examResults: [],
   rulesResults: [],
+  clips: [],
 };
 
 const playerTopicKeys = [
@@ -69,7 +80,7 @@ export default function DashboardPage() {
       setLoading(true);
       setLoadError(null);
 
-      const [attemptsRes, examsRes, rulesRes] = await Promise.all([
+      const [attemptsRes, examsRes, rulesRes, clipsRes] = await Promise.all([
         supabase
           .from("attempts")
           .select("*")
@@ -85,9 +96,12 @@ export default function DashboardPage() {
           .select("*")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false }),
+        supabase
+          .from("clips")
+          .select("*"),
       ]);
 
-      if (attemptsRes.error || examsRes.error) {
+      if (attemptsRes.error || examsRes.error || clipsRes.error) {
         setLoadError(
           "No se pudieron cargar todas las metricas. El dashboard no inventa datos."
         );
@@ -103,6 +117,7 @@ export default function DashboardPage() {
         rulesResults: rulesRes.error
           ? []
           : ((rulesRes.data ?? []) as RulesExamResultRecord[]),
+        clips: clipsRes.error ? [] : ((clipsRes.data ?? []) as DashboardClip[]),
       });
 
       setLoading(false);
@@ -125,11 +140,35 @@ export default function DashboardPage() {
     () => getPerformanceSummary(dataset.items, dataset.sessions),
     [dataset.items, dataset.sessions]
   );
-  const topicMetrics = useMemo(() => getTopicPerformance(dataset.items), [dataset.items]);
+  const availableTopicSet = useMemo(() => getAvailableTechnicalTopics(data.clips), [data.clips]);
+  const technicalAttempts = useMemo(
+    () => getClipQualifiedAttempts(data.attempts, data.clips),
+    [data.attempts, data.clips]
+  );
+  const technicalDataset = useMemo(
+    () =>
+      buildPerformanceDataset({
+        attempts: technicalAttempts,
+        examResults: [],
+        rulesExamResults: [],
+      }),
+    [technicalAttempts]
+  );
+  const technicalSummary = useMemo(
+    () => getPerformanceSummary(technicalDataset.items, technicalDataset.sessions),
+    [technicalDataset.items, technicalDataset.sessions]
+  );
+  const topicMetrics = useMemo(
+    () => getTopicPerformance(technicalDataset.items),
+    [technicalDataset.items]
+  );
   const topics = useMemo(() => topicMetrics.slice(0, 5), [topicMetrics]);
-  const playerTopics = useMemo(() => buildPlayerTopics(topicMetrics), [topicMetrics]);
-  const criteria = useMemo(() => getCriterionPerformance(dataset.items), [dataset.items]);
-  const plan = useMemo(() => getRecommendedPlan(summary), [summary]);
+  const playerTopics = useMemo(
+    () => buildPlayerTopics(topicMetrics, availableTopicSet),
+    [availableTopicSet, topicMetrics]
+  );
+  const criteria = useMemo(() => getCriterionPerformance(technicalDataset.items), [technicalDataset.items]);
+  const plan = useMemo(() => getRecommendedPlan(technicalSummary), [technicalSummary]);
   const freemiumUsage = useMemo(
     () =>
       getFreemiumUsage({
@@ -174,7 +213,7 @@ export default function DashboardPage() {
           )}
 
           <FreeDashboardSummary
-            summary={summary}
+            summary={technicalSummary}
             usage={freemiumUsage}
           />
 
@@ -220,22 +259,22 @@ export default function DashboardPage() {
         <section className="grid grid-cols-2 overflow-hidden rounded-2xl border border-white/10 bg-[#17212a] md:grid-cols-4">
           <TopMetric
             title="Promedio general"
-            value={formatScore(summary.avgScore)}
-            detail={summary.status}
+            value={formatScore(technicalSummary.avgScore)}
+            detail={technicalSummary.status}
             featured
           />
-          <TopMetric title="Intentos" value={summary.totalAttempts} />
+          <TopMetric title="Intentos" value={technicalSummary.totalAttempts} />
           <TopMetric title="Evaluaciones" value={summary.totalEvaluations} />
-          <TopMetric title="Ultimo score" value={formatScore(summary.lastScore)} />
+          <TopMetric title="Ultimo score" value={formatScore(technicalSummary.lastScore)} />
         </section>
 
-        <TechnicalProfileCard topics={playerTopics} hasData={summary.hasData} />
+        <TechnicalProfileCard topics={playerTopics} hasData={technicalSummary.hasData} />
 
-        {!summary.hasData && (
+        {!technicalSummary.hasData && (
           <section className="rounded-3xl border border-dashed border-[#6fc11f]/25 bg-[#6fc11f]/5 p-6 text-center">
-            <p className="text-lg font-black text-white">Sin datos suficientes</p>
+            <p className="text-lg font-black text-white">Sin actividad registrada</p>
             <p className="mt-2 text-sm text-zinc-400">
-              Completa entrenamientos o evaluaciones para activar el diagnostico.
+              El mapa tecnico solo usa intentos vinculados a clips existentes.
             </p>
           </section>
         )}
@@ -245,17 +284,17 @@ export default function DashboardPage() {
             title="Fortalezas"
             tone="success"
             items={[
-              `Mejor criterio: ${summary.strongestCriterion?.label ?? "Sin datos"} ${
-                summary.strongestCriterion
-                  ? `(${formatPercent(summary.strongestCriterion.accuracy)})`
+              `Mejor criterio: ${technicalSummary.strongestCriterion?.label ?? "Sin datos"} ${
+                technicalSummary.strongestCriterion
+                  ? `(${formatPercent(technicalSummary.strongestCriterion.accuracy)})`
                   : ""
               }`,
-              `Mejor topico: ${summary.strongestTopic?.topic ?? "Sin datos"} ${
-                summary.strongestTopic
-                  ? `(${formatPercent(summary.strongestTopic.accuracy)})`
+              `Mejor topico: ${technicalSummary.strongestTopic?.topic ?? "Sin datos"} ${
+                technicalSummary.strongestTopic
+                  ? `(${formatPercent(technicalSummary.strongestTopic.accuracy)})`
                   : ""
               }`,
-              summary.sampleNote,
+              technicalSummary.sampleNote,
             ]}
           />
 
@@ -263,9 +302,9 @@ export default function DashboardPage() {
             title="A mejorar"
             tone="danger"
             items={[
-              `Criterio a mejorar: ${summary.weakestCriterion?.label ?? "Sin datos"}`,
-              `Topico a mejorar: ${summary.weakestTopic?.topic ?? "Sin datos"}`,
-              summary.weakestCriterion?.status ?? "Completa mas ejercicios para detectar patrones.",
+              `Criterio a mejorar: ${technicalSummary.weakestCriterion?.label ?? "Sin datos"}`,
+              `Topico a mejorar: ${technicalSummary.weakestTopic?.topic ?? "Sin datos"}`,
+              technicalSummary.weakestCriterion?.status ?? "Completa intentos con clips para detectar patrones.",
             ]}
           />
 
@@ -278,8 +317,8 @@ export default function DashboardPage() {
 
         <section className="grid gap-5 lg:grid-cols-[1fr_1fr]">
           <Panel title="Rendimiento por topico" href="/performance">
-            {topics.length === 0 ? (
-              <Empty text="Completa ejercicios para calcular topicos reales." />
+            {!technicalSummary.hasData ? (
+              <Empty text="Sin actividad registrada." />
             ) : (
               <div className="space-y-4">
                 {topics.map((item) => (
@@ -329,18 +368,90 @@ export default function DashboardPage() {
   );
 }
 
-function buildPlayerTopics(topicMetrics: TopicMetric[]): PlayerTopic[] {
+function buildPlayerTopics(topicMetrics: TopicMetric[], availableTopicSet: Set<string>): PlayerTopic[] {
   return playerTopicKeys.map((target) => {
-    const metric = topicMetrics.find((item) =>
-      target.aliases.some((alias) => item.topic.toLowerCase() === alias.toLowerCase())
-    );
+    const hasClips = availableTopicSet.has(target.label);
+    const metric = hasClips
+      ? topicMetrics.find((item) =>
+          target.aliases.some((alias) => item.topic.toLowerCase() === alias.toLowerCase())
+        )
+      : undefined;
 
     return {
       label: target.label,
       value: metric?.accuracy ?? null,
       attempts: metric?.attempts ?? 0,
+      hasClips,
     };
   });
+}
+
+function getClipQualifiedAttempts(attempts: AttemptRecord[], clips: DashboardClip[]) {
+  const activeClips = new Map(
+    clips
+      .filter(isActiveDashboardClip)
+      .map((clip) => [String(clip.id), clip])
+  );
+
+  return attempts.flatMap((attempt) => {
+    const clipId = attempt.clip_id?.trim();
+    if (!clipId) return [];
+
+    const clip = activeClips.get(clipId);
+    if (!clip) return [];
+
+    const topic = getDashboardClipTopic(clip);
+    if (!topic) return [];
+
+    return [
+      {
+        ...attempt,
+        topic,
+        mode: clip.mode ?? attempt.mode,
+        module: getDashboardClipModule(clip, attempt),
+      },
+    ];
+  });
+}
+
+function getAvailableTechnicalTopics(clips: DashboardClip[]) {
+  return new Set(
+    clips
+      .filter(isActiveDashboardClip)
+      .map(getDashboardClipTopic)
+      .filter((topic): topic is string => Boolean(topic))
+  );
+}
+
+function isActiveDashboardClip(clip: DashboardClip) {
+  return Boolean(clip.id) && clip.is_active !== false;
+}
+
+function getDashboardClipTopic(clip: DashboardClip) {
+  if (isVarDashboardClip(clip)) return "VAR";
+  return normalizeDashboardTopic(clip.topic);
+}
+
+function normalizeDashboardTopic(topic?: string | null) {
+  const value = topic?.trim().toLowerCase();
+  if (!value) return "";
+
+  const target = playerTopicKeys.find((item) =>
+    item.aliases.some((alias) => alias.toLowerCase() === value)
+  );
+
+  return target?.label ?? "";
+}
+
+function isVarDashboardClip(clip: DashboardClip) {
+  const value = `${clip.topic ?? ""} ${clip.mode ?? ""} ${clip.module ?? ""}`.toLowerCase();
+  return value.includes("var");
+}
+
+function getDashboardClipModule(clip: DashboardClip, attempt: AttemptRecord) {
+  if (isVarDashboardClip(clip)) return "var";
+  if (clip.mode === "english") return "english";
+  return clip.module ?? attempt.module ?? attempt.mode ?? "decision";
 }
 
 function FreeDashboardSummary({
@@ -427,8 +538,10 @@ function TechnicalProfileCard({ topics, hasData }: { topics: PlayerTopic[]; hasD
             {topics.map((topic) => (
               <div key={topic.label} className="min-w-0 rounded-2xl border border-white/10 bg-black/25 p-3">
                 <p className="break-words text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500 sm:tracking-[0.16em]">{topic.label}</p>
-                <p className="mt-2 text-2xl font-black text-white">{topic.value === null ? "-" : topic.value}</p>
-                <p className="mt-1 text-xs text-[#6fc11f]">{topic.attempts} intentos</p>
+                <p className="mt-2 text-2xl font-black text-white">{topic.value === null ? "—" : topic.value}</p>
+                <p className="mt-1 text-xs text-[#6fc11f]">
+                  {topic.hasClips ? `${topic.attempts} intentos` : "0 intentos"}
+                </p>
               </div>
             ))}
           </div>
@@ -470,7 +583,7 @@ function TechnicalProfileCard({ topics, hasData }: { topics: PlayerTopic[]; hasD
 
           {!hasData && (
             <div className="absolute inset-x-5 bottom-5 rounded-2xl border border-dashed border-[#6fc11f]/25 bg-[#050b12]/90 p-3 text-center text-xs font-bold text-zinc-300">
-              Completa ejercicios para activar este mapa con datos reales.
+              Sin actividad registrada.
             </div>
           )}
         </div>

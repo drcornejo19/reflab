@@ -25,6 +25,7 @@ import {
   Trophy,
   UserRound,
 } from "lucide-react";
+import { AvatarCropperModal } from "@/components/AvatarCropperModal";
 import { AppShell } from "@/components/AppShell";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { useI18n } from "@/lib/useI18n";
@@ -42,7 +43,7 @@ import {
   type RulesExamResultRecord,
   type TopicMetric,
 } from "@/lib/performance";
-import { generateRefCardId, getRefCardPublicUrl, resolveRefCardId } from "@/lib/refCard";
+import { generateRefCardId, getRefCardPublicUrl } from "@/lib/refCard";
 import { planLabels } from "@/lib/subscription";
 import { useUserRole } from "@/lib/useUserRole";
 
@@ -54,6 +55,25 @@ type RefCardTopic = {
   shortLabel: string;
   value: number | null;
   attempts: number;
+};
+
+type ProfileApiProfile = {
+  reflabName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  country?: string | null;
+  city?: string | null;
+  association?: string | null;
+  refereeType?: string | null;
+  mainRole?: string | null;
+  category?: string | null;
+  level?: string | null;
+  birthDate?: string | null;
+  avatarUrl?: string | null;
+  clerkImageUrl?: string | null;
+  refCardId?: string | null;
+  showRealNameInRanking?: boolean | null;
+  publicProfile?: boolean | null;
 };
 
 const refCardTopicConfig = [
@@ -70,23 +90,30 @@ export default function ProfilePage() {
   const { isPro, subscriptionPlan, loadingRole } = useUserRole();
 
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [avatarCropFile, setAvatarCropFile] = useState<File | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [rulesResults, setRulesResults] = useState<RulesExam[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
+  const [reflabName, setReflabName] = useState("");
   const [refereeType, setRefereeType] = useState("Amateur");
   const [mainRole, setMainRole] = useState("Arbitro principal");
   const [association, setAssociation] = useState("");
   const [category, setCategory] = useState("");
+  const [profileLevel, setProfileLevel] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [country, setCountry] = useState("");
   const [city, setCity] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [refCardId, setRefCardId] = useState("");
   const [showRealNameInRanking, setShowRealNameInRanking] = useState(false);
+  const [publicProfile, setPublicProfile] = useState(true);
   const [qrDataUrl, setQrDataUrl] = useState("");
 
   useEffect(() => {
@@ -99,8 +126,26 @@ export default function ProfilePage() {
       }
 
       setLoading(true);
+      setProfileError(null);
 
-      const [attemptsRes, examsRes, rulesRes, profileRes] = await Promise.all([
+      const profileRequest = fetch("/api/profile", { cache: "no-store" })
+        .then(async (response) => {
+          const data = (await response.json()) as {
+            profile?: ProfileApiProfile;
+            error?: string;
+            technical?: string;
+          };
+
+          return { response, data };
+        })
+        .catch((error) => ({
+          response: null,
+          data: {
+            error: error instanceof Error ? error.message : "No se pudo cargar el perfil.",
+          },
+        }));
+
+      const [attemptsRes, examsRes, rulesRes, profileApiRes] = await Promise.all([
         supabase
           .from("attempts")
           .select("*")
@@ -116,11 +161,7 @@ export default function ProfilePage() {
           .select("*")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false }),
-        supabase
-          .from("user_profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle(),
+        profileRequest,
       ]);
 
       setAttempts((attemptsRes.data ?? []) as Attempt[]);
@@ -131,21 +172,25 @@ export default function ProfilePage() {
         console.warn("Rules exam profile metrics unavailable:", rulesRes.error.message);
       }
 
-      if (profileRes.data) {
-        setRefereeType(profileRes.data.referee_type ?? "Amateur");
-        setMainRole(profileRes.data.main_role ?? "Arbitro principal");
-        setAssociation(profileRes.data.association ?? "");
-        setCategory(profileRes.data.category ?? "");
-        setCountry(profileRes.data.country ?? "");
-        setCity(profileRes.data.city ?? "");
-        setAvatarUrl(profileRes.data.avatar_url ?? "");
-        setFirstName(profileRes.data.first_name ?? user.firstName ?? "");
-        setLastName(profileRes.data.last_name ?? user.lastName ?? "");
-        setRefCardId(resolveRefCardId(user.id, profileRes.data));
-        setShowRealNameInRanking(Boolean(profileRes.data.show_real_name_in_ranking));
+      if (profileApiRes.response?.ok && profileApiRes.data.profile) {
+        applyProfile(profileApiRes.data.profile);
       } else {
+        const profileTechnical =
+          "technical" in profileApiRes.data ? profileApiRes.data.technical : undefined;
+        setProfileError(
+          profileTechnical ||
+            profileApiRes.data.error ||
+            "No se pudo cargar el perfil persistido."
+        );
+        setReflabName(
+          user.fullName ||
+            user.username ||
+            user.primaryEmailAddress?.emailAddress?.split("@")[0] ||
+            ""
+        );
         setFirstName(user.firstName ?? "");
         setLastName(user.lastName ?? "");
+        setAvatarUrl(user.imageUrl ?? "");
         setRefCardId(generateRefCardId(user.id));
       }
 
@@ -155,116 +200,111 @@ export default function ProfilePage() {
     loadProfile();
   }, [isLoaded, user]);
 
+  function applyProfile(profile: ProfileApiProfile) {
+    setReflabName(profile.reflabName ?? "");
+    setRefereeType(profile.refereeType ?? "Amateur");
+    setMainRole(profile.mainRole ?? "Arbitro principal");
+    setAssociation(profile.association ?? "");
+    setCategory(profile.category ?? "");
+    setProfileLevel(profile.level ?? "");
+    setBirthDate(profile.birthDate ?? "");
+    setCountry(profile.country ?? "");
+    setCity(profile.city ?? "");
+    setAvatarUrl(profile.avatarUrl || profile.clerkImageUrl || "");
+    setFirstName(profile.firstName ?? "");
+    setLastName(profile.lastName ?? "");
+    setRefCardId(profile.refCardId || (user ? generateRefCardId(user.id) : ""));
+    setShowRealNameInRanking(Boolean(profile.showRealNameInRanking));
+    setPublicProfile(profile.publicProfile !== false);
+  }
+
   async function saveProfile() {
     if (!user) return;
 
     setSavingProfile(true);
-
-    const resolvedRefCardId = refCardId || generateRefCardId(user.id);
-    const rankingDisplayName = [firstName, lastName].filter(Boolean).join(" ").trim();
-
-    const { error } = await upsertProfileSafely(
-      {
-        user_id: user.id,
-        email: user.primaryEmailAddress?.emailAddress ?? null,
-        referee_type: refereeType,
-        main_role: mainRole,
-        association,
-        category,
-        country,
-        city,
-        avatar_url: avatarUrl,
-        first_name: firstName,
-        last_name: lastName,
-        ref_card_id: resolvedRefCardId,
-        show_real_name_in_ranking: showRealNameInRanking,
-        ranking_display_name: rankingDisplayName || null,
-        updated_at: new Date().toISOString(),
-      },
-      {
-        user_id: user.id,
-        referee_type: refereeType,
-        main_role: mainRole,
-        association,
-        category,
-        avatar_url: avatarUrl,
-        updated_at: new Date().toISOString(),
-      }
-    );
-
-    setSavingProfile(false);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    alert(t("profile.saved"));
-  }
-
-  async function uploadAvatar(file: File) {
-    if (!user) return;
+    setProfileError(null);
+    setProfileMessage(null);
 
     try {
-      setUploadingAvatar(true);
-
-      const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
-      const fileName = `avatar-${Date.now()}.${fileExt}`;
-      const filePath = `${user.id}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(filePath, file, {
-          cacheControl: "3600",
-          upsert: true,
-        });
-
-      if (uploadError) {
-        alert(uploadError.message);
-        return;
-      }
-
-      const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
-      const publicUrl = `${data.publicUrl}?v=${Date.now()}`;
-      setAvatarUrl(publicUrl);
-
-      const resolvedRefCardId = refCardId || generateRefCardId(user.id);
-      const rankingDisplayName = [firstName, lastName].filter(Boolean).join(" ").trim();
-      const { error: profileError } = await upsertProfileSafely(
-        {
-          user_id: user.id,
-          email: user.primaryEmailAddress?.emailAddress ?? null,
-          referee_type: refereeType,
-          main_role: mainRole,
-          association,
-          category,
+      const response = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reflabName,
+          firstName,
+          lastName,
           country,
           city,
-          avatar_url: publicUrl,
-          first_name: firstName,
-          last_name: lastName,
-          ref_card_id: resolvedRefCardId,
-          show_real_name_in_ranking: showRealNameInRanking,
-          ranking_display_name: rankingDisplayName || null,
-          updated_at: new Date().toISOString(),
-        },
-        {
-          user_id: user.id,
-          referee_type: refereeType,
-          main_role: mainRole,
           association,
+          refereeType,
+          mainRole,
           category,
-          avatar_url: publicUrl,
-          updated_at: new Date().toISOString(),
-        }
-      );
+          level: profileLevel,
+          birthDate,
+          publicProfile,
+          hideRankingName: !showRealNameInRanking,
+          showRealNameInRanking,
+        }),
+      });
+      const data = (await response.json()) as {
+        success?: boolean;
+        profile?: ProfileApiProfile;
+        error?: string;
+        technical?: string;
+      };
 
-      if (profileError) {
-        alert(profileError.message);
-        return;
+      if (!response.ok || !data.success) {
+        throw new Error(data.technical || data.error || "No se pudo guardar el perfil.");
       }
 
-      alert("Foto actualizada correctamente.");
+      if (data.profile) applyProfile(data.profile);
+      setProfileMessage(t("profile.saved"));
+    } catch (saveError) {
+      setProfileError(saveError instanceof Error ? saveError.message : "Error desconocido.");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  function uploadAvatar(file: File) {
+    setProfileError(null);
+    setProfileMessage(null);
+    setAvatarCropFile(file);
+  }
+
+  async function saveCroppedAvatar(blob: Blob) {
+    if (!user) return;
+
+    setUploadingAvatar(true);
+    setProfileError(null);
+    setProfileMessage(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("avatar", blob, "profile.png");
+
+      const response = await fetch("/api/profile/avatar", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await response.json()) as {
+        success?: boolean;
+        avatarUrl?: string;
+        profile?: ProfileApiProfile;
+        error?: string;
+        technical?: string;
+      };
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.technical || data.error || "No se pudo guardar la foto.");
+      }
+
+      if (data.profile) applyProfile(data.profile);
+      if (data.avatarUrl) setAvatarUrl(data.avatarUrl);
+      setAvatarCropFile(null);
+      setProfileMessage("Foto actualizada correctamente.");
+    } catch (avatarError) {
+      setProfileError(avatarError instanceof Error ? avatarError.message : "Error desconocido.");
     } finally {
       setUploadingAvatar(false);
     }
@@ -366,7 +406,7 @@ export default function ProfilePage() {
   }
 
   const profileName = [firstName, lastName].filter(Boolean).join(" ").trim();
-  const displayName = profileName || user?.fullName || "Arbitro RefLab";
+  const displayName = reflabName || profileName || user?.fullName || "Arbitro RefLab";
   const email = user?.primaryEmailAddress?.emailAddress ?? "Sin email";
   const photo = avatarUrl || user?.imageUrl || "";
   const location = [city, country].filter(Boolean).join(", ") || t("common.notRegistered");
@@ -414,6 +454,16 @@ export default function ProfilePage() {
 
   return (
     <AppShell>
+      {avatarCropFile && (
+        <AvatarCropperModal
+          file={avatarCropFile}
+          saving={uploadingAvatar}
+          onCancel={() => {
+            if (!uploadingAvatar) setAvatarCropFile(null);
+          }}
+          onSave={saveCroppedAvatar}
+        />
+      )}
       <div className="mx-auto w-full max-w-[1240px] space-y-5 overflow-hidden">
         {isPro ? (
           <PlayerCard
@@ -468,6 +518,18 @@ export default function ProfilePage() {
           </>
         )}
 
+        {profileMessage && (
+          <div className="rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-4 text-sm font-bold text-[#b7ff8a]">
+            {profileMessage}
+          </div>
+        )}
+
+        {profileError && (
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-200">
+            {profileError}
+          </div>
+        )}
+
         <section className="space-y-4 rounded-[34px] border border-white/10 bg-[#071019] p-5 shadow-2xl lg:p-6">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
@@ -505,6 +567,7 @@ export default function ProfilePage() {
         </section>
 
         <section className="grid gap-4 md:grid-cols-2">
+          <ProfileInput label="Nombre RefLab" value={reflabName} onChange={setReflabName} placeholder="Ej: DRC RefLab" />
           <ProfileInput label={t("profile.firstName")} value={firstName} onChange={setFirstName} placeholder="Ej: David" />
           <ProfileInput label={t("profile.lastName")} value={lastName} onChange={setLastName} placeholder="Ej: Cornejo" />
 
@@ -526,6 +589,8 @@ export default function ProfilePage() {
 
           <ProfileInput label={t("profile.association")} value={association} onChange={setAssociation} placeholder="Ej: AFA, Liga regional, FAFI" />
           <ProfileInput label={t("profile.category")} value={category} onChange={setCategory} placeholder="Ej: Primera, Reserva, Amateur, Inferiores" />
+          <ProfileInput label="Nivel" value={profileLevel} onChange={setProfileLevel} placeholder="Ej: Nacional, Regional, Amateur" />
+          <ProfileDateInput label="Fecha de nacimiento" value={birthDate} onChange={setBirthDate} />
           <ProfileInput label={t("profile.country")} value={country} onChange={setCountry} placeholder="Ej: Argentina" />
           <ProfileInput label={t("profile.city")} value={city} onChange={setCity} placeholder="Ej: Buenos Aires" />
 
@@ -542,6 +607,15 @@ export default function ProfilePage() {
                 className="h-5 w-5 accent-[#6fc11f]"
               />
               <span className="font-black text-white">{t("profile.showRealName")}</span>
+            </label>
+            <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-black/25 p-4">
+              <input
+                type="checkbox"
+                checked={publicProfile}
+                onChange={(event) => setPublicProfile(event.target.checked)}
+                className="h-5 w-5 accent-[#6fc11f]"
+              />
+              <span className="font-black text-white">Perfil publico</span>
             </label>
             <p className="mt-3 text-xs text-zinc-400">
               {t("profile.rankingFallback")} {effectiveRefCardId || t("common.pending")}.
@@ -560,10 +634,13 @@ export default function ProfilePage() {
 
         <section className="grid gap-5 lg:grid-cols-[1fr_1fr]">
           <Panel title="Informacion principal" subtitle="Datos visibles en tu perfil y credencial.">
+            <InfoRow label="Nombre RefLab" value={reflabName || "Sin cargar"} />
             <InfoRow label="Tipo" value={refereeType} />
             <InfoRow label="Funcion" value={mainRole} />
             <InfoRow label="Asociacion / Liga" value={association || "Sin cargar"} />
             <InfoRow label="Categoria" value={category || "Sin cargar"} />
+            <InfoRow label="Nivel" value={profileLevel || "Sin cargar"} />
+            <InfoRow label="Nacimiento" value={birthDate || "Sin cargar"} />
             <InfoRow label={t("profile.country")} value={country || t("common.notRegistered")} />
             <InfoRow label={t("profile.city")} value={city || t("common.notRegistered")} />
             <InfoRow label="Nivel RefLab" value={stats.level} />
@@ -571,6 +648,7 @@ export default function ProfilePage() {
 
           <Panel title="Configuracion" subtitle="Preferencias y accesos de cuenta.">
             <InfoRow label="Plan actual" value={planLabels[subscriptionPlan]} />
+            <InfoRow label="Perfil publico" value={publicProfile ? "Activo" : "Oculto"} />
             <InfoRow label="Privacidad ranking" value={showRealNameInRanking ? "Nombre visible" : `Solo RefCard ${effectiveRefCardId || t("common.pending")}`} />
             <a
               href="/notifications"
@@ -1085,6 +1163,20 @@ function ProfileInput({ label, value, onChange, placeholder }: { label: string; 
   );
 }
 
+function ProfileDateInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <div className="rounded-[26px] border border-white/10 bg-[#101b24] p-5">
+      <p className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-[#6fc11f]">{label}</p>
+      <input
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-xl border border-white/10 bg-[#0b111b] px-4 py-3 text-white outline-none"
+      />
+    </div>
+  );
+}
+
 function MetricCard({ icon, title, value, detail }: { icon: React.ReactNode; title: string; value: string; detail: string }) {
   return (
     <div className="rounded-[24px] border border-white/10 bg-[#101b24] p-4">
@@ -1153,42 +1245,6 @@ function isFiniteNumber(value: number | null | undefined): value is number {
 function averageNumbers(values: number[]) {
   if (values.length === 0) return null;
   return Math.round(values.reduce((acc, value) => acc + value, 0) / values.length);
-}
-
-type ProfilePayload = Record<string, unknown>;
-type ProfileSaveError = { code?: string; message?: string; details?: string };
-
-async function upsertProfileSafely(primaryPayload: ProfilePayload, fallbackPayload: ProfilePayload) {
-  const primary = stripProfileUndefined(primaryPayload);
-  const primaryResult = await supabase.from("user_profiles").upsert(primary, { onConflict: "user_id" });
-
-  if (!primaryResult.error) {
-    return { error: null as ProfileSaveError | null };
-  }
-
-  if (!isProfileSchemaCompatibilityError(primaryResult.error)) {
-    return { error: primaryResult.error as ProfileSaveError };
-  }
-
-  const fallback = stripProfileUndefined(fallbackPayload);
-  const fallbackResult = await supabase.from("user_profiles").upsert(fallback, { onConflict: "user_id" });
-
-  return { error: (fallbackResult.error as ProfileSaveError | null) ?? null };
-}
-
-function stripProfileUndefined(payload: ProfilePayload) {
-  return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined));
-}
-
-function isProfileSchemaCompatibilityError(error: ProfileSaveError) {
-  const message = `${error.code ?? ""} ${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
-
-  return (
-    message.includes("pgrst204") ||
-    message.includes("could not find") ||
-    message.includes("schema cache") ||
-    message.includes("column")
-  );
 }
 
 function buildRefCardTopics(topicMetrics: TopicMetric[]): RefCardTopic[] {
