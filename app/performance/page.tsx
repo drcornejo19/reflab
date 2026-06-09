@@ -46,6 +46,7 @@ import {
   type CriterionMetric,
   type ExamResultRecord,
   type ModulePerformance,
+  type PerformanceClipRecord,
   type PerformanceItem,
   type RankingRow,
   type RankingProfileRecord,
@@ -63,6 +64,7 @@ type LoadState = {
   attempts: AttemptRecord[];
   examResults: ExamResultRecord[];
   rulesResults: RulesExamResultRecord[];
+  clips: PerformanceClipRecord[];
   rankingAttempts: AttemptRecord[];
   rankingProfiles: RankingProfileRecord[];
 };
@@ -71,6 +73,7 @@ const initialData: LoadState = {
   attempts: [],
   examResults: [],
   rulesResults: [],
+  clips: [],
   rankingAttempts: [],
   rankingProfiles: [],
 };
@@ -142,7 +145,7 @@ export default function PerformancePage() {
       setLoading(true);
       setLoadError(null);
 
-      const [attemptsRes, examsRes, rulesRes, rankingRes, profilesRes] = await Promise.all([
+      const [attemptsRes, examsRes, rulesRes, clipsRes, rankingRes, profilesRes] = await Promise.all([
         supabase
           .from("attempts")
           .select("*")
@@ -158,6 +161,9 @@ export default function PerformancePage() {
           .select("id,user_id,total_questions,correct_count,percentage,unanswered_count,finish_reason,level,details,topic_performance,created_at")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false }),
+        supabase
+          .from("clips")
+          .select("*"),
         supabase
           .from("attempts")
           .select("*")
@@ -180,6 +186,7 @@ export default function PerformancePage() {
         attempts: (attemptsRes.data ?? []) as AttemptRecord[],
         examResults: (examsRes.data ?? []) as ExamResultRecord[],
         rulesResults: rulesRes.error ? [] : ((rulesRes.data ?? []) as RulesExamResultRecord[]),
+        clips: clipsRes.error ? [] : ((clipsRes.data ?? []) as PerformanceClipRecord[]),
         rankingAttempts: (rankingRes.data ?? []) as AttemptRecord[],
         rankingProfiles: profilesRes.error ? [] : ((profilesRes.data ?? []) as RankingProfileRecord[]),
       });
@@ -196,8 +203,9 @@ export default function PerformancePage() {
         attempts: data.attempts,
         examResults: data.examResults,
         rulesExamResults: data.rulesResults,
+        clips: data.clips,
       }),
-    [data.attempts, data.examResults, data.rulesResults]
+    [data.attempts, data.examResults, data.rulesResults, data.clips]
   );
 
   const summary = useMemo(() => getPerformanceSummary(dataset.items, dataset.sessions), [dataset.items, dataset.sessions]);

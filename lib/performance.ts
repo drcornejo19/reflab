@@ -61,9 +61,10 @@ export type AttemptRecord = {
 };
 export type ExamAnswerRecord = {
   clipId?: string; clipTitle?: string; topic?: string | null; difficulty?: string | null;
-  foul?: boolean | null; restart?: string | null; discipline?: string | null;
-  technicalCorrect?: boolean | null; restartCorrect?: boolean | null;
-  disciplineCorrect?: boolean | null; subtypeCorrect?: boolean | null; score?: number | null;
+  foul?: boolean | null; correctFoul?: boolean | null; restart?: string | null; discipline?: string | null;
+  correctRestart?: string | null; correctDiscipline?: string | null; technicalCorrect?: boolean | null;
+  restartCorrect?: boolean | null; disciplineCorrect?: boolean | null; subtypeCorrect?: boolean | null;
+  score?: number | null;
 };
 export type ExamResultRecord = {
   id?: string; user_id?: string | null; total_questions?: number | null; total_score?: number | null;
@@ -106,6 +107,26 @@ export type EvolutionData = { historicalAverage: number | null; lastAverage: num
 export type PerformanceSummary = { hasData: boolean; avgScore: number | null; totalAttempts: number; totalTrainings: number; totalEvaluations: number; bestScore: number | null; lastScore: number | null; strongestTopic?: TopicMetric; weakestTopic?: TopicMetric; strongestCriterion?: CriterionMetric; weakestCriterion?: CriterionMetric; recommendedModule: string; status: string; sampleNote: string; metrics: SummaryMetric[]; };
 export type RecommendedPlan = { diagnosis: string; priority1: string; priority2: string; nextStep: string; reason: string; href: string; };
 export type RankingRow = { userId: string; position: number; name: string; refCardId: string; attempts: number; trainings: number; tests: number; avgScore: number; bestScore: number; lastAttempt: string; };
+export type PerformanceClipRecord = {
+  id?: string | null;
+  title?: string | null;
+  category?: string | null;
+  topic?: string | null;
+  mode?: string | null;
+  module?: string | null;
+  is_active?: boolean | null;
+  status?: string | null;
+  correct_foul?: boolean | null;
+  correct_decision?: string | null;
+  correct_restart?: string | null;
+  correct_discipline?: string | null;
+  final_expected_answer?: string | null;
+};
+export type PerformanceWarning = {
+  type: "attempt" | "clip" | "exam" | "rules_exam";
+  id: string;
+  message: string;
+};
 
 const criterionLabels: Record<CriterionKey, string> = { technical: "Decision tecnica", restart: "Reanudacion", discipline: "Sancion disciplinaria", interpretation: "Interpretacion", justification: "Justificacion", var: "Criterio VAR" };
 const criterionDescriptions: Record<CriterionKey, string> = { technical: "Si la decision principal fue correcta.", restart: "Si la reanudacion reglamentaria fue correcta.", discipline: "Si la sancion disciplinaria fue correcta.", interpretation: "Metrica futura: requiere mas contexto para no mostrar resultados engañosos.", justification: "Metrica futura: requiere una rubrica de fundamentos tecnicos.", var: "Metrica futura: requiere campos especificos de protocolo VAR." };
@@ -113,28 +134,86 @@ const topicDictionary: Record<string, string> = { Dispute: "Disputas", Challenge
 const coreTechnicalTopics = ["VAR", "Disputas", "Faltas tacticas", "Manos", "Fuera de juego"];
 const activeCriterionKeys: CriterionKey[] = ["technical", "restart", "discipline"];
 const futureCriterionKeys: CriterionKey[] = ["interpretation", "justification", "var"];
-export function buildPerformanceDataset({ attempts, examResults, rulesExamResults }: { attempts: AttemptRecord[]; examResults: ExamResultRecord[]; rulesExamResults: RulesExamResultRecord[]; }) {
+
+export function getCoreTechnicalTopics() {
+  return [...coreTechnicalTopics];
+}
+
+export function buildPerformanceDataset({
+  attempts,
+  examResults,
+  rulesExamResults,
+  clips = [],
+}: {
+  attempts: AttemptRecord[];
+  examResults: ExamResultRecord[];
+  rulesExamResults: RulesExamResultRecord[];
+  clips?: PerformanceClipRecord[];
+}) {
   const items: PerformanceItem[] = [];
   const sessions: PerformanceSession[] = [];
+  const warnings: PerformanceWarning[] = [];
+  const clipMap = new Map(
+    clips
+      .filter((clip) => Boolean(clip.id))
+      .map((clip) => [String(clip.id), clip])
+  );
+  const hasClipIndex = clipMap.size > 0;
+  const examAttemptKeys = new Set<string>();
+
+  validateClips(clips, warnings);
 
   attempts.forEach((attempt, index) => {
     const score = cleanScore(attempt.score);
-    const topic = normalizeTopic(attempt.topic);
+    const clipId = attempt.clip_id?.trim() ?? "";
+    const clip = clipId ? clipMap.get(clipId) : undefined;
+    const isExamAttempt = String(attempt.mode ?? "").toLowerCase() === "exam";
+    const hasMissingClip = hasClipIndex && clipId && !clip;
+
+    if (hasMissingClip) {
+      warnings.push({
+        type: "attempt",
+        id: attempt.id ?? clipId,
+        message: `Intento con clip_id ${clipId} sin clip asociado en clips.`,
+      });
+    }
+
+    if (hasMissingClip && !isExamAttempt) {
+      return;
+    }
+
+    if (clip && !isActiveClip(clip) && !isExamAttempt) {
+      warnings.push({
+        type: "attempt",
+        id: attempt.id ?? clipId,
+        message: `Intento vinculado a un clip inactivo: ${clipId}.`,
+      });
+      return;
+    }
+
+    const resolvedTopic = getClipTopic(clip) || attempt.topic;
+    const topic = normalizeTopic(resolvedTopic);
     const date = attempt.created_at ?? "";
-    const moduleKey = normalizeModule(attempt.module, attempt.mode, topic);
+    const moduleKey = normalizeModule(clip?.module ?? attempt.module, clip?.mode ?? attempt.mode, topic);
     const modeLabel = getModeLabel(moduleKey, attempt.mode, topic);
-    const title = attempt.clip_title ?? attempt.workout_name ?? fallbackTitleForModule(moduleKey);
+    const title = clip?.title ?? attempt.clip_title ?? attempt.workout_name ?? fallbackTitleForModule(moduleKey);
     const timeSpentSeconds = cleanDuration(attempt.time_spent_seconds ?? attempt.time_spent);
+
+    validateAttempt(attempt, topic, warnings);
+
+    if (isExamAttempt) {
+      examAttemptKeys.add(makeExamAnswerKey(clipId, topic, score));
+    }
 
     items.push({
       id: attempt.id ?? `attempt-${index}`,
-      source: "training",
+      source: isExamAttempt ? "exam" : "training",
       module: moduleKey,
       modeLabel,
       date,
       title,
       topic,
-      rawTopic: attempt.topic ?? topic,
+      rawTopic: resolvedTopic ?? topic,
       difficulty: attempt.difficulty,
       score,
       result: resultFromAttempt(attempt, score),
@@ -170,14 +249,16 @@ export function buildPerformanceDataset({ attempts, examResults, rulesExamResult
       },
     });
 
-    sessions.push({
-      id: attempt.id ?? `attempt-session-${index}`,
-      source: "training",
-      label: modeLabel,
-      date,
-      score,
-      totalItems: 1,
-    });
+    if (!isExamAttempt) {
+      sessions.push({
+        id: attempt.id ?? `attempt-session-${index}`,
+        source: "training",
+        label: modeLabel,
+        date,
+        score,
+        totalItems: 1,
+      });
+    }
   });
   examResults.forEach((exam, examIndex) => {
     const date = exam.created_at ?? "";
@@ -186,7 +267,15 @@ export function buildPerformanceDataset({ attempts, examResults, rulesExamResult
     sessions.push({ id: exam.id ?? `exam-session-${examIndex}`, source: "exam", label: "Examen arbitral", date, score, totalItems: Number(exam.total_questions ?? answers.length ?? 0) });
     answers.forEach((answer, answerIndex) => {
       const answerScore = cleanScore(answer.score);
-      const topic = normalizeTopic(answer.topic);
+      const clipId = answer.clipId?.trim() ?? "";
+      const clip = clipId ? clipMap.get(clipId) : undefined;
+      const topic = normalizeTopic(answer.topic ?? getClipTopic(clip));
+      const dedupeKey = makeExamAnswerKey(clipId, topic, answerScore);
+
+      if (examAttemptKeys.has(dedupeKey)) return;
+
+      validateExamAnswer(exam.id ?? `exam-${examIndex}`, answer, topic, warnings);
+
       items.push({
         id: `${exam.id ?? `exam-${examIndex}`}-${answer.clipId ?? answerIndex}`,
         source: "exam",
@@ -200,8 +289,11 @@ export function buildPerformanceDataset({ attempts, examResults, rulesExamResult
         score: answerScore,
         result: resultFromScore(answerScore),
         selectedDecision: decisionFromBoolean(answer.foul),
+        correctDecision: decisionFromBoolean(answer.correctFoul),
         selectedRestart: answer.restart,
+        correctRestart: answer.correctRestart,
         selectedDiscipline: answer.discipline,
+        correctDiscipline: answer.correctDiscipline,
         criteria: { technical: answer.technicalCorrect ?? undefined, restart: answer.restartCorrect ?? undefined, discipline: answer.disciplineCorrect ?? undefined, interpretation: undefined },
       });
     });
@@ -216,6 +308,9 @@ export function buildPerformanceDataset({ attempts, examResults, rulesExamResult
       const topic = normalizeTopic(answer.topic);
       const answered = answer.unanswered !== true;
       const scoreValue = answered ? (answer.is_correct ? 100 : 0) : 0;
+
+      validateRulesAnswer(exam.id ?? `rules-${examIndex}`, answer, topic, warnings);
+
       items.push({
         id: `${exam.id ?? `rules-${examIndex}`}-${answer.question_id ?? answerIndex}`,
         source: "rules_exam",
@@ -235,7 +330,9 @@ export function buildPerformanceDataset({ attempts, examResults, rulesExamResult
     });
   });
 
-  return { items: sortByDateDesc(items), sessions: sortByDateDesc(sessions) };
+  logPerformanceWarnings(warnings);
+
+  return { items: sortByDateDesc(items), sessions: sortByDateDesc(sessions), warnings };
 }
 export function getPerformanceSummary(items: PerformanceItem[], sessions: PerformanceSession[]): PerformanceSummary {
   const scores = items.map((item) => item.score).filter(isNumber);
@@ -486,6 +583,118 @@ export function formatDate(value: string | null | undefined) {
   if (Number.isNaN(parsed.getTime())) return "-";
   return parsed.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
+
+function validateClips(clips: PerformanceClipRecord[], warnings: PerformanceWarning[]) {
+  clips.forEach((clip, index) => {
+    const id = clip.id ?? `clip-${index}`;
+    if (!textValue(clip.topic)) {
+      warnings.push({ type: "clip", id, message: "Clip sin topico." });
+    }
+
+    if (!textValue(clip.category)) {
+      warnings.push({ type: "clip", id, message: "Clip sin categoria." });
+    }
+
+    if (!hasClipDecision(clip)) {
+      warnings.push({ type: "clip", id, message: "Clip sin respuesta correcta o decision tecnica." });
+    }
+
+    if (!textValue(clip.correct_restart)) {
+      warnings.push({ type: "clip", id, message: "Clip sin reanudacion correcta." });
+    }
+
+    if (!textValue(clip.correct_discipline)) {
+      warnings.push({ type: "clip", id, message: "Clip sin decision disciplinaria." });
+    }
+  });
+}
+
+function validateAttempt(attempt: AttemptRecord, topic: string, warnings: PerformanceWarning[]) {
+  const id = attempt.id ?? attempt.clip_id ?? "attempt";
+  const isPreparation = normalizeModule(attempt.module, attempt.mode, topic) === "preparation";
+  const isEnglish = normalizeModule(attempt.module, attempt.mode, topic) === "english";
+
+  if (!isPreparation && !isEnglish && topic === "Sin topico") {
+    warnings.push({ type: "attempt", id, message: "Intento sin topico." });
+  }
+
+  if (!isPreparation && !isEnglish && !textValue(attempt.correct_decision) && typeof attempt.is_correct !== "boolean") {
+    warnings.push({ type: "attempt", id, message: "Intento sin respuesta correcta o decision tecnica." });
+  }
+
+  if (!isPreparation && !isEnglish && !textValue(attempt.correct_restart)) {
+    warnings.push({ type: "attempt", id, message: "Intento sin reanudacion correcta." });
+  }
+}
+
+function validateExamAnswer(examId: string, answer: ExamAnswerRecord, topic: string, warnings: PerformanceWarning[]) {
+  const id = `${examId}:${answer.clipId ?? "answer"}`;
+
+  if (topic === "Sin topico") {
+    warnings.push({ type: "exam", id, message: "Resultado de examen sin topico." });
+  }
+
+  if (!textValue(answer.correctRestart) && answer.restart === undefined) {
+    warnings.push({ type: "exam", id, message: "Resultado de examen sin reanudacion." });
+  }
+
+  if (answer.score === undefined || answer.score === null) {
+    warnings.push({ type: "exam", id, message: "Resultado de examen sin score." });
+  }
+}
+
+function validateRulesAnswer(examId: string, answer: RulesAnswerRecord, topic: string, warnings: PerformanceWarning[]) {
+  const id = `${examId}:${answer.question_id ?? "question"}`;
+
+  if (topic === "Sin topico") {
+    warnings.push({ type: "rules_exam", id, message: "Pregunta de reglas sin topico." });
+  }
+
+  if (!textValue(answer.correct_text)) {
+    warnings.push({ type: "rules_exam", id, message: "Pregunta de reglas sin respuesta correcta." });
+  }
+}
+
+function logPerformanceWarnings(warnings: PerformanceWarning[]) {
+  if (warnings.length === 0 || typeof console === "undefined") return;
+
+  const compact = warnings.slice(0, 25).map((warning) => ({
+    type: warning.type,
+    id: warning.id,
+    message: warning.message,
+  }));
+
+  console.warn("[RefLab performance validation]", compact);
+}
+
+function isActiveClip(clip: PerformanceClipRecord) {
+  const status = String(clip.status ?? "").toLowerCase();
+  return clip.is_active !== false && status !== "archived" && status !== "inactive";
+}
+
+function getClipTopic(clip?: PerformanceClipRecord) {
+  if (!clip) return "";
+  const value = `${clip.topic ?? ""} ${clip.mode ?? ""} ${clip.module ?? ""}`.toLowerCase();
+  if (value.includes("var")) return "VAR";
+  return clip.topic ?? "";
+}
+
+function hasClipDecision(clip: PerformanceClipRecord) {
+  return (
+    typeof clip.correct_foul === "boolean" ||
+    textValue(clip.correct_decision) ||
+    textValue(clip.final_expected_answer)
+  );
+}
+
+function makeExamAnswerKey(clipId: string, topic: string, score: number | null) {
+  return [clipId, topic, score ?? "null"].join("|").toLowerCase();
+}
+
+function textValue(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 function normalizeModule(module?: string | null, mode?: string | null, topic?: string | null): ModuleKey {
   const value = `${module ?? ""} ${mode ?? ""} ${topic ?? ""}`.toLowerCase();
 

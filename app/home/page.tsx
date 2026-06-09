@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useUser } from "@clerk/nextjs";
 import {
   ArrowRight,
   BarChart3,
@@ -112,8 +114,9 @@ export default function HomePage() {
 
         <div className="relative z-10 mx-auto max-w-[1536px] px-5 pb-0 pt-5 sm:px-8 lg:px-10">
           <Header />
+          <AuthSync />
 
-          <div className="grid min-h-[540px] gap-8 pt-12 lg:grid-cols-[0.92fr_1.08fr] lg:pt-16">
+          <div className="grid min-h-[540px] gap-8 pt-12 lg:pt-16">
             <div className="max-w-[660px]">
               <h1 className="text-balance text-5xl font-black leading-[1.02] text-white sm:text-6xl lg:text-[64px]">
                 Entrená decisiones.
@@ -135,17 +138,6 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="relative hidden min-h-[440px] lg:block">
-              <div className="absolute right-8 top-4 xl:right-10">
-                <ScoreHud />
-              </div>
-              <div className="absolute bottom-24 left-[17%]">
-                <RadarHud />
-              </div>
-              <div className="absolute bottom-28 right-[8%]">
-                <EvolutionHud />
-              </div>
-            </div>
           </div>
 
           <div className="relative z-20 mx-auto mt-2 max-w-[980px] pb-8 lg:mt-0">
@@ -182,6 +174,9 @@ export default function HomePage() {
 }
 
 function Header() {
+  const { isLoaded, isSignedIn } = useUser();
+  const signInHref = isLoaded && isSignedIn ? "/dashboard" : "/sign-in";
+
   return (
     <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <Link href="/home" className="flex min-w-0 items-center gap-3">
@@ -200,7 +195,7 @@ function Header() {
 
       <nav className="flex gap-2 sm:gap-3" aria-label="Acceso de usuario">
         <Link
-          href="/sign-in"
+          href={signInHref}
           className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-white/45 bg-black/35 px-4 text-sm font-black text-white backdrop-blur transition hover:border-[#6fc11f]/60 hover:text-[#6fc11f] sm:flex-none sm:px-5"
         >
           <LogIn size={17} />
@@ -216,6 +211,20 @@ function Header() {
       </nav>
     </header>
   );
+}
+
+function AuthSync() {
+  const { isLoaded, isSignedIn } = useUser();
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+
+    fetch("/api/profile", { cache: "no-store" }).catch(() => {
+      // Dashboard and Profile also sync; Home should never block on this.
+    });
+  }, [isLoaded, isSignedIn]);
+
+  return null;
 }
 
 function BenefitPill({
@@ -241,6 +250,9 @@ function BenefitPill({
 }
 
 function AccessChooser() {
+  const { isLoaded, isSignedIn } = useUser();
+  const refereeHref = isLoaded && isSignedIn ? "/dashboard" : "/sign-in";
+
   return (
     <section className="overflow-hidden rounded-2xl border border-[#6fc11f]/35 bg-[#041018]/82 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-md">
       <div className="grid lg:grid-cols-2">
@@ -249,7 +261,7 @@ function AccessChooser() {
           title="Soy árbitro"
           description="Entrená, evaluá y medí tu rendimiento individual."
           button="Ingresar como árbitro"
-          href="/dashboard"
+          href={refereeHref}
           tone="referee"
         />
         <AccessPanel
@@ -320,90 +332,6 @@ function AccessPanel({
   );
 }
 
-function ScoreHud() {
-  return (
-    <div className="w-[250px] rounded-xl border border-[#6fc11f]/25 bg-[#041018]/72 p-5 shadow-[0_0_45px_rgba(111,193,31,0.1)] backdrop-blur-md">
-      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">
-        Rendimiento general
-      </p>
-      <div className="mt-2 flex items-end gap-2">
-        <span className="text-5xl font-black leading-none text-[#6fc11f]">95</span>
-        <span className="pb-1 text-xl font-black text-white">/100</span>
-      </div>
-      <p className="mt-3 text-sm font-black uppercase text-white">Élite</p>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/12">
-        <div className="h-full w-[88%] rounded-full bg-[#6fc11f]" />
-      </div>
-    </div>
-  );
-}
-
-function RadarHud() {
-  const points = radarPoints([92, 78, 86, 82, 76], 70, 90);
-  const ringValues = [100, 75, 50, 25];
-
-  return (
-    <div className="w-[260px] rounded-xl border border-white/10 bg-black/16 p-3 backdrop-blur-[2px]">
-      <p className="mb-1 text-center text-[10px] font-black uppercase tracking-[0.18em] text-[#6fc11f]">
-        Radar técnico
-      </p>
-      <svg viewBox="0 0 180 180" className="h-[190px] w-full">
-        {ringValues.map((value) => (
-          <polygon
-            key={value}
-            points={radarPoints([value, value, value, value, value], 70, 90)}
-            fill="none"
-            stroke="rgba(111,193,31,0.18)"
-            strokeWidth="1"
-          />
-        ))}
-        {["VAR", "F. juego", "Manos", "Disputas", "Faltas"].map((label, index) => {
-          const point = radarAxisPoint(index, 81, 90);
-          const line = radarAxisPoint(index, 70, 90);
-          return (
-            <g key={label}>
-              <line x1="90" y1="90" x2={line.x} y2={line.y} stroke="rgba(111,193,31,0.18)" />
-              <text
-                x={point.x}
-                y={point.y}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                className="fill-white text-[8px] font-black uppercase"
-              >
-                {label}
-              </text>
-            </g>
-          );
-        })}
-        <polygon points={points} fill="rgba(111,193,31,0.26)" stroke="#6fc11f" strokeWidth="3" />
-        <circle cx="90" cy="90" r="3.5" fill="#6fc11f" />
-      </svg>
-    </div>
-  );
-}
-
-function EvolutionHud() {
-  const values = [22, 38, 46, 42, 60, 76, 74, 95];
-
-  return (
-    <div className="w-[260px] rounded-xl border border-white/10 bg-[#041018]/56 p-4 backdrop-blur-md">
-      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">
-        Evolución semanal
-      </p>
-      <div className="mt-4 grid h-24 grid-cols-8 items-end gap-2">
-        {values.map((value, index) => (
-          <div key={`${value}-${index}`} className="h-full rounded-t bg-white/8">
-            <div
-              className="rounded-t bg-[#6fc11f]/85"
-              style={{ height: `${value}%`, minHeight: 10 }}
-            />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function LockedModule({
   title,
   description,
@@ -467,21 +395,4 @@ function TrustStrip() {
       </div>
     </section>
   );
-}
-
-function radarPoints(values: number[], radius: number, center: number) {
-  return values
-    .map((value, index) => {
-      const point = radarAxisPoint(index, radius * (Math.max(0, Math.min(value, 100)) / 100), center);
-      return `${point.x},${point.y}`;
-    })
-    .join(" ");
-}
-
-function radarAxisPoint(index: number, radius: number, center: number) {
-  const angle = (-90 + index * 72) * (Math.PI / 180);
-  return {
-    x: Math.round((center + Math.cos(angle) * radius) * 10) / 10,
-    y: Math.round((center + Math.sin(angle) * radius) * 10) / 10,
-  };
 }

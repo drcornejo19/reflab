@@ -12,7 +12,6 @@ import {
   Clock3,
   ClipboardList,
   Download,
-  Gauge,
   IdCard,
   LineChart,
   LogOut,
@@ -34,11 +33,11 @@ import {
   buildPerformanceDataset,
   getCriterionPerformance,
   getPerformanceSummary,
-  getRecentHistory,
   getTopicPerformance,
   type AttemptRecord,
   type CriterionMetric,
   type ExamResultRecord,
+  type PerformanceClipRecord,
   type PerformanceSummary,
   type RulesExamResultRecord,
   type TopicMetric,
@@ -50,6 +49,7 @@ import { useUserRole } from "@/lib/useUserRole";
 type Attempt = AttemptRecord;
 type Exam = ExamResultRecord;
 type RulesExam = RulesExamResultRecord;
+type ProfileClip = PerformanceClipRecord;
 type RefCardTopic = {
   label: string;
   shortLabel: string;
@@ -64,6 +64,7 @@ type ProfileApiProfile = {
   country?: string | null;
   city?: string | null;
   association?: string | null;
+  associationLogo?: string | null;
   refereeType?: string | null;
   mainRole?: string | null;
   category?: string | null;
@@ -95,6 +96,7 @@ export default function ProfilePage() {
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [rulesResults, setRulesResults] = useState<RulesExam[]>([]);
+  const [clips, setClips] = useState<ProfileClip[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
@@ -104,6 +106,7 @@ export default function ProfilePage() {
   const [refereeType, setRefereeType] = useState("Amateur");
   const [mainRole, setMainRole] = useState("Arbitro principal");
   const [association, setAssociation] = useState("");
+  const [associationLogo, setAssociationLogo] = useState("");
   const [category, setCategory] = useState("");
   const [profileLevel, setProfileLevel] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -145,7 +148,7 @@ export default function ProfilePage() {
           },
         }));
 
-      const [attemptsRes, examsRes, rulesRes, profileApiRes] = await Promise.all([
+      const [attemptsRes, examsRes, rulesRes, clipsRes, profileApiRes] = await Promise.all([
         supabase
           .from("attempts")
           .select("*")
@@ -161,12 +164,16 @@ export default function ProfilePage() {
           .select("*")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false }),
+        supabase
+          .from("clips")
+          .select("*"),
         profileRequest,
       ]);
 
       setAttempts((attemptsRes.data ?? []) as Attempt[]);
       setExams((examsRes.data ?? []) as Exam[]);
       setRulesResults(rulesRes.error ? [] : ((rulesRes.data ?? []) as RulesExam[]));
+      setClips(clipsRes.error ? [] : ((clipsRes.data ?? []) as ProfileClip[]));
 
       if (rulesRes.error) {
         console.warn("Rules exam profile metrics unavailable:", rulesRes.error.message);
@@ -205,6 +212,7 @@ export default function ProfilePage() {
     setRefereeType(profile.refereeType ?? "Amateur");
     setMainRole(profile.mainRole ?? "Arbitro principal");
     setAssociation(profile.association ?? "");
+    setAssociationLogo(profile.associationLogo ?? "");
     setCategory(profile.category ?? "");
     setProfileLevel(profile.level ?? "");
     setBirthDate(profile.birthDate ?? "");
@@ -316,8 +324,9 @@ export default function ProfilePage() {
         attempts,
         examResults: exams,
         rulesExamResults: rulesResults,
+        clips,
       }),
-    [attempts, exams, rulesResults]
+    [attempts, exams, rulesResults, clips]
   );
 
   const summary = useMemo(
@@ -354,7 +363,6 @@ export default function ProfilePage() {
   const criteria = useMemo(() => getCriterionPerformance(dataset.items), [dataset.items]);
   const topics = useMemo(() => getTopicPerformance(dataset.items), [dataset.items]);
   const refCardTopics = useMemo(() => buildRefCardTopics(topics), [topics]);
-  const trend = useMemo(() => getRecentHistory(dataset.items, 6), [dataset.items]);
   const trendScores = useMemo(
     () =>
       dataset.sessions
@@ -425,10 +433,9 @@ export default function ProfilePage() {
       name: displayName,
       rating: stats.rating,
       level: stats.level,
-      refereeType,
       mainRole,
       association: association || "Sin liga",
-      category: category || "Sin categoria",
+      associationLogo,
       location,
       photo: exportPhoto,
       refCardId: effectiveRefCardId,
@@ -479,6 +486,7 @@ export default function ProfilePage() {
             refereeType={refereeType}
             mainRole={mainRole}
             association={association || "No registrado"}
+            associationLogo={associationLogo}
             category={category || "No registrado"}
             location={location}
             discipline={disciplineLabel}
@@ -756,6 +764,7 @@ function PlayerCard({
   refereeType,
   mainRole,
   association,
+  associationLogo,
   category,
   location,
   discipline,
@@ -785,6 +794,7 @@ function PlayerCard({
   refereeType: string;
   mainRole: string;
   association: string;
+  associationLogo: string;
   category: string;
   location: string;
   discipline: string;
@@ -820,7 +830,7 @@ function PlayerCard({
         </p>
       </div>
 
-      <div className="relative grid gap-4 lg:grid-cols-[minmax(260px,0.72fr)_minmax(0,1fr)] lg:pt-14">
+      <div className="relative grid gap-4 lg:grid-cols-[minmax(230px,0.58fr)_minmax(0,1fr)] lg:pt-14">
         <div className="relative min-w-0 overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(145deg,rgba(111,193,31,0.16),rgba(0,0,0,0.42))] p-3 sm:p-4">
           <div className="absolute -left-16 top-12 h-56 w-32 rotate-12 rounded-[32px] bg-[#6fc11f]/25 blur-sm" />
           <label className="group relative block cursor-pointer overflow-hidden rounded-[26px] border border-[#6fc11f]/35 bg-[#04080d] shadow-[0_0_55px_rgba(111,193,31,0.16)]" title="Cambiar foto">
@@ -828,10 +838,10 @@ function PlayerCard({
               <img
                 src={photo}
                 alt="Foto de perfil"
-                className="aspect-[4/5] w-full object-cover object-center opacity-95 transition duration-300 group-hover:scale-[1.02]"
+                className="aspect-[3/4] w-full object-cover object-center opacity-95 transition duration-300 group-hover:scale-[1.02]"
               />
             ) : (
-              <div className="grid aspect-[4/5] w-full place-items-center bg-[radial-gradient(circle_at_center,rgba(111,193,31,0.18),transparent_58%),#101b24]">
+              <div className="grid aspect-[3/4] w-full place-items-center bg-[radial-gradient(circle_at_center,rgba(111,193,31,0.18),transparent_58%),#101b24]">
                 <UserRound className="text-[#6fc11f]" size={86} />
               </div>
             )}
@@ -882,8 +892,7 @@ function PlayerCard({
               </div>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <RefCardInfo icon={<ShieldCheck size={18} />} label="Asociacion" value={association} />
-                <RefCardInfo icon={<Gauge size={18} />} label="Nivel" value={level} />
+                <AssociationCard association={association} associationLogo={associationLogo} level={level} />
                 <RefCardInfo icon={<Trophy size={18} />} label="Categoria" value={category} />
                 <RefCardInfo icon={<MapPin size={18} />} label={t("profile.cityCountry")} value={location} />
               </div>
@@ -960,6 +969,52 @@ function PlayerCard({
   );
 }
 
+function AssociationCard({
+  association,
+  associationLogo,
+  level,
+}: {
+  association: string;
+  associationLogo: string;
+  level: string;
+}) {
+  const fallback = association || "No registrado";
+  const initials = fallback
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "RF";
+  const levelLabel = level
+    ? level.toLowerCase().startsWith("nivel")
+      ? level
+      : `Nivel ${level}`
+    : "Nivel no registrado";
+
+  return (
+    <div className="min-w-0 rounded-2xl border border-white/10 bg-black/25 p-3 sm:col-span-2">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10">
+          {associationLogo ? (
+            <img
+              src={associationLogo}
+              alt=""
+              className="h-full w-full object-contain p-2"
+            />
+          ) : (
+            <span className="text-lg font-black text-[#b7ff8a]">{initials}</span>
+          )}
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Asociacion</p>
+          <p className="mt-1 break-words text-lg font-black text-white">{fallback}</p>
+          <p className="mt-1 text-sm font-bold text-[#b7ff8a]">{levelLabel}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RefCardInfo({ icon, label, value, tone = "neutral" }: { icon: React.ReactNode; label: string; value: string; tone?: "neutral" | "green" }) {
   return (
     <div className={`min-w-0 rounded-2xl border p-3 ${tone === "green" ? "border-[#6fc11f]/25 bg-[#6fc11f]/10" : "border-white/10 bg-black/25"}`}>
@@ -986,10 +1041,10 @@ function SideMetric({ icon, label, value }: { icon: React.ReactNode; label: stri
 
 function RefStatCard({ icon, label, value, detail, featured = false }: { icon: React.ReactNode; label: string; value: string; detail: string; featured?: boolean }) {
   return (
-    <div className={`min-w-0 rounded-[24px] border p-4 ${featured ? "border-[#6fc11f]/35 bg-[#6fc11f]/10" : "border-white/10 bg-[#071019]"}`}>
+    <div className={`flex min-h-[168px] min-w-0 flex-col rounded-[24px] border p-4 ${featured ? "border-[#6fc11f]/35 bg-[#6fc11f]/10" : "border-white/10 bg-[#071019]"}`}>
       <div className="text-[#6fc11f]">{icon}</div>
       <p className="mt-3 text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">{label}</p>
-      <p className="mt-1 break-words text-5xl font-black leading-none text-white">{value}</p>
+      <p className="mt-1 break-words text-4xl font-black leading-none text-white sm:text-5xl">{value}</p>
       <p className={`mt-2 inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${featured ? "border-[#6fc11f]/45 text-[#b7ff8a]" : "border-white/10 text-zinc-400"}`}>
         {detail}
       </p>
@@ -999,7 +1054,7 @@ function RefStatCard({ icon, label, value, detail, featured = false }: { icon: R
 
 function RefTrendCard({ scores, label }: { scores: number[]; label: string }) {
   return (
-    <div className="min-w-0 rounded-[24px] border border-white/10 bg-[#071019] p-4">
+    <div className="flex min-h-[168px] min-w-0 flex-col rounded-[24px] border border-white/10 bg-[#071019] p-4">
       <div className="text-[#6fc11f]"><LineChart size={25} /></div>
       <p className="mt-3 text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">Rating trend</p>
       <TrendSparkline scores={scores} />
@@ -1011,7 +1066,15 @@ function RefTrendCard({ scores, label }: { scores: number[]; label: string }) {
 }
 
 function TrendSparkline({ scores }: { scores: number[] }) {
-  const values = scores.length >= 2 ? scores : [18, 34, 27, 48, 56, 68, 74, 86];
+  if (scores.length < 2) {
+    return (
+      <div className="mt-2 grid h-16 place-items-center rounded-2xl border border-dashed border-white/10 text-xs font-black uppercase tracking-[0.14em] text-zinc-500">
+        Sin datos
+      </div>
+    );
+  }
+
+  const values = scores;
   const points = values
     .map((value, index) => {
       const x = values.length === 1 ? 0 : (index / (values.length - 1)) * 150;
@@ -1097,7 +1160,7 @@ function RefRadar({ topics }: { topics: RefCardTopic[] }) {
 
           {!hasAnyData && (
             <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-dashed border-[#6fc11f]/25 bg-[#050b12]/90 p-3 text-center text-xs font-bold text-zinc-300">
-              Sin datos todavia
+              Sin datos suficientes
             </div>
           )}
         </div>
@@ -1207,37 +1270,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Bar({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <div className="mb-2 flex justify-between gap-3 text-sm">
-        <p className="font-black">{label}</p>
-        <p className="text-[#6fc11f]">{value}%</p>
-      </div>
-      <div className="h-3 rounded-full bg-white/10">
-        <div className="h-3 rounded-full bg-[#6fc11f] shadow-[0_0_18px_rgba(111,193,31,0.35)]" style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }} />
-      </div>
-    </div>
-  );
-}
-
-function HistoryRow({ title, date, meta, score }: { title: string; date?: string | null; meta: string; score?: number | null }) {
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/25 p-4">
-      <div className="min-w-0">
-        <p className="truncate font-black">{title}</p>
-        <p className="mt-1 text-xs text-zinc-500">{date ? new Date(date).toLocaleString("es-AR") : "Sin fecha"}</p>
-        <p className="mt-1 truncate text-xs text-zinc-400">{meta}</p>
-      </div>
-      <p className="text-2xl font-black text-[#6fc11f]">{score ?? "-"}</p>
-    </div>
-  );
-}
-
-function Empty({ text }: { text: string }) {
-  return <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-zinc-500">{text}</div>;
-}
-
 function isFiniteNumber(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -1287,7 +1319,7 @@ function getTrendLabel(scores: number[]) {
 }
 
 function formatShortDate(date?: string | null) {
-  if (!date) return "Pendiente";
+  if (!date) return "Sin registros";
   return new Date(date).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
 }
 
@@ -1312,10 +1344,9 @@ function createRefCardSvg({
   name,
   rating,
   level,
-  refereeType,
   mainRole,
   association,
-  category,
+  associationLogo,
   location,
   photo,
   refCardId,
@@ -1332,10 +1363,9 @@ function createRefCardSvg({
   name: string;
   rating: number;
   level: string;
-  refereeType: string;
   mainRole: string;
   association: string;
-  category: string;
+  associationLogo: string;
   location: string;
   photo: string;
   refCardId: string;
@@ -1358,12 +1388,21 @@ function createRefCardSvg({
   const scoreLabel = score === null ? "--" : String(score ?? rating ?? "--");
   const bestLabel = bestScore === null ? "--" : String(bestScore ?? "--");
   const testsLabel = evaluations > 0 ? String(evaluations) : "--";
+  const associationInitials = association
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "RF";
+  const associationMark = associationLogo
+    ? `<image href="${escapeXml(associationLogo)}" x="458" y="500" width="82" height="82" preserveAspectRatio="xMidYMid meet" />`
+    : `<rect x="458" y="500" width="82" height="82" rx="20" fill="#0a1308" stroke="#6fc11f" stroke-opacity="0.7"/><text x="499" y="551" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="900" fill="#b7ff8a">${escapeXml(associationInitials)}</text>`;
   const safePhoto = photo
     ? `<image href="${escapeXml(photo)}" x="60" y="132" width="322" height="492" clip-path="url(#photoClip)" preserveAspectRatio="xMidYMid slice" />`
     : `<rect x="60" y="132" width="322" height="492" rx="34" fill="#0d1821"/><text x="221" y="386" text-anchor="middle" font-size="94" font-weight="900" fill="#6fc11f">${escapeXml(initials)}</text>`;
   const qr = qrDataUrl
-    ? `<image href="${escapeXml(qrDataUrl)}" x="730" y="1174" width="116" height="116" preserveAspectRatio="xMidYMid meet" />`
-    : svgQrFallback(refCardUrl || refCardId, 730, 1174, 116);
+    ? `<image href="${escapeXml(qrDataUrl)}" x="734" y="1176" width="104" height="104" preserveAspectRatio="xMidYMid meet" />`
+    : svgQrFallback(refCardUrl || refCardId, 734, 1176, 104);
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1340" viewBox="0 0 900 1340">
   <defs>
@@ -1406,18 +1445,18 @@ function createRefCardSvg({
   <text x="430" y="428" font-family="Arial, sans-serif" font-size="24" font-weight="900" letter-spacing="5" fill="#b7ff8a">${escapeXml(mainRole.toUpperCase())}</text>
 
   <rect x="430" y="470" width="410" height="162" rx="24" fill="#071019" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.14"/>
-  ${svgSmallBars(466, 532)}
-  <text x="540" y="530" font-family="Arial, sans-serif" font-size="18" letter-spacing="4" fill="#9aa4af">ASOCIACION</text>
-  <text x="540" y="572" font-family="Arial, sans-serif" font-size="36" font-weight="900" fill="#ffffff">${escapeXml(compactText(association, 15))}</text>
-  <line x1="456" y1="590" x2="812" y2="590" stroke="#ffffff" stroke-opacity="0.14"/>
-  <text x="540" y="618" font-family="Arial, sans-serif" font-size="18" letter-spacing="4" fill="#9aa4af">NIVEL</text>
-  <text x="540" y="652" font-family="Arial, sans-serif" font-size="27" font-weight="900" fill="#ffffff">${escapeXml(compactText(level, 20))}</text>
+  ${associationMark}
+  <text x="560" y="512" font-family="Arial, sans-serif" font-size="17" letter-spacing="4" fill="#9aa4af">ASOCIACION</text>
+  <text x="560" y="552" font-family="Arial, sans-serif" font-size="34" font-weight="900" fill="#ffffff">${escapeXml(compactText(association, 15))}</text>
+  <line x1="560" y1="580" x2="812" y2="580" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="560" y="610" font-family="Arial, sans-serif" font-size="17" letter-spacing="4" fill="#9aa4af">NIVEL</text>
+  <text x="560" y="646" font-family="Arial, sans-serif" font-size="26" font-weight="900" fill="#b7ff8a">${escapeXml(compactText(level, 20))}</text>
 
   <rect x="54" y="680" width="792" height="170" rx="28" fill="#071019" fill-opacity="0.9" stroke="#ffffff" stroke-opacity="0.18"/>
   ${svgMetricBox(84, 714, 160, "SCORE", scoreLabel, status, "#6fc11f")}
   ${svgMetricBox(270, 714, 160, "TESTS", testsLabel, "COMPLETADOS", "#ffffff")}
   ${svgMetricBox(456, 714, 160, "BEST", bestLabel, "PUNTAJE MAXIMO", "#6fc11f")}
-  ${svgTrendSparkline(trendScoresFromTopics(topics, score), 666, 734, 130, 64)}
+  ${svgTrendSparkline(trendScoresFromTopics(topics), 666, 734, 130, 64)}
   <text x="664" y="726" font-family="Arial, sans-serif" font-size="16" font-weight="900" fill="#a7b2bd">RATING TREND</text>
   <rect x="664" y="802" width="138" height="30" rx="15" fill="#0a1308" stroke="#6fc11f" stroke-opacity="0.7"/>
   <text x="733" y="823" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="900" letter-spacing="3" fill="#b7ff8a">${escapeXml(compactText(status, 10).toUpperCase())}</text>
@@ -1439,7 +1478,7 @@ function createRefCardSvg({
   <text x="154" y="1268" font-family="Arial, sans-serif" font-size="15" font-weight="900" letter-spacing="2" fill="#8d98a5">${escapeXml(refCardId)}</text>
   <text x="505" y="1220" font-family="Arial, sans-serif" font-size="18" font-weight="900" letter-spacing="4" fill="#b7ff8a">REFLAB.APP</text>
   <text x="505" y="1252" font-family="Arial, sans-serif" font-size="13" letter-spacing="2" fill="#8d98a5">CREDENCIAL DIGITAL</text>
-  <rect x="718" y="1162" width="140" height="140" rx="20" fill="#d9e5d2" stroke="#6fc11f" stroke-width="4"/>
+  <rect x="720" y="1164" width="126" height="126" rx="20" fill="#d9e5d2" stroke="#6fc11f" stroke-width="4"/>
   ${qr}
 </svg>`;
 }
@@ -1451,16 +1490,13 @@ function svgMetricBox(x: number, y: number, width: number, label: string, value:
   <text x="${x}" y="${y + 126}" font-family="Arial, sans-serif" font-size="15" font-weight="900" letter-spacing="2" fill="#8d98a5">${escapeXml(compactText(detail, 18).toUpperCase())}</text>`;
 }
 
-function svgSmallBars(x: number, y: number) {
-  return [0, 1, 2, 3].map((index) => {
-    const height = 16 + index * 10;
-    const fill = index >= 2 ? "#6fc11f" : "#d6dde5";
-    return `<rect x="${x + index * 14}" y="${y - height}" width="10" height="${height}" rx="2" fill="${fill}"/>`;
-  }).join("");
-}
-
 function svgTrendSparkline(scores: number[], x: number, y: number, width: number, height: number) {
-  const values = scores.length >= 2 ? scores : [24, 42, 36, 56, 61, 72, 78, 90];
+  if (scores.length < 2) {
+    return `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="12" fill="#050b12" stroke="#ffffff" stroke-opacity="0.12" stroke-dasharray="4 4"/>
+  <text x="${x + width / 2}" y="${y + height / 2 + 5}" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="900" letter-spacing="2" fill="#8d98a5">SIN DATOS</text>`;
+  }
+
+  const values = scores;
   const points = values.map((value, index) => {
     const px = x + (index / Math.max(values.length - 1, 1)) * width;
     const py = y + height - (Math.max(0, Math.min(value, 100)) / 100) * height;
@@ -1495,23 +1531,32 @@ function svgExportRadar(
   const values = topics.map((topic) => topic.value ?? 0);
   const polygon = exportRadarPoints(values, radius, cx, cy);
   const rings = [25, 50, 75, 100].map((value) => exportRadarPoints([value, value, value, value, value], radius, cx, cy));
+  const hasData = topics.some((topic) => topic.value !== null);
   const labels = topics.map((topic, index) => {
     const point = exportRadarAxisPoint(index, labelRadius, cx, cy);
     return `<text x="${point.x}" y="${point.y}" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="12" font-weight="900" fill="#ffffff">${escapeXml(topic.shortLabel)}</text>`;
   }).join("");
 
-  return `<circle cx="${cx}" cy="${cy}" r="${labelRadius + 6}" fill="url(#radarGlow)"/>
+  const base = `<circle cx="${cx}" cy="${cy}" r="${labelRadius + 6}" fill="url(#radarGlow)"/>
   ${rings.map((ring) => `<polygon points="${ring}" fill="none" stroke="#ffffff" stroke-opacity="0.17"/>`).join("")}
   ${[0, 1, 2, 3, 4].map((index) => {
     const end = exportRadarAxisPoint(index, radius + 2, cx, cy);
     return `<line x1="${cx}" y1="${cy}" x2="${end.x}" y2="${end.y}" stroke="#ffffff" stroke-opacity="0.12"/>`;
   }).join("")}
+  ${labels}`;
+
+  if (!hasData) {
+    return `${base}
+  <rect x="${cx - 104}" y="${cy - 22}" width="208" height="44" rx="18" fill="#050b12" fill-opacity="0.92" stroke="#6fc11f" stroke-opacity="0.35" stroke-dasharray="5 5"/>
+  <text x="${cx}" y="${cy + 5}" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="900" letter-spacing="1.8" fill="#d6dde5">SIN DATOS SUFICIENTES</text>`;
+  }
+
+  return `${base}
   <polygon points="${polygon}" fill="#6fc11f" fill-opacity="0.36" stroke="#6fc11f" stroke-width="5" filter="url(#softGlow)"/>
   ${polygon.split(" ").map((point) => {
     const [x, y] = point.split(",");
     return `<circle cx="${x}" cy="${y}" r="7" fill="#b7ff8a"/>`;
-  }).join("")}
-  ${labels}`;
+  }).join("")}`;
 }
 
 function exportRadarPoints(values: number[], radius: number, cx: number, cy: number) {
@@ -1531,7 +1576,7 @@ function exportRadarAxisPoint(index: number, radius: number, cx: number, cy: num
 
 function svgSideInfo(x: number, y: number, label: string, value: string) {
   return `<text x="${x}" y="${y}" font-family="Arial, sans-serif" font-size="13" font-weight="900" letter-spacing="2.4" fill="#a7b2bd">${escapeXml(label)}</text>
-  <text x="${x}" y="${y + 28}" font-family="Arial, sans-serif" font-size="16" font-weight="900" fill="#ffffff">${escapeXml(compactText(value, 14).toUpperCase())}</text>
+  <text x="${x}" y="${y + 28}" font-family="Arial, sans-serif" font-size="15" font-weight="900" fill="#ffffff">${escapeXml(compactText(value, 16).toUpperCase())}</text>
   <line x1="${x}" y1="${y + 48}" x2="${x + 112}" y2="${y + 48}" stroke="#ffffff" stroke-opacity="0.13"/>`;
 }
 
@@ -1545,10 +1590,9 @@ function svgQrFallback(value: string, x: number, y: number, size: number) {
   }).join("");
 }
 
-function trendScoresFromTopics(topics: RefCardTopic[], score: number | null) {
+function trendScoresFromTopics(topics: RefCardTopic[]) {
   const values = topics.map((topic) => topic.value).filter(isFiniteNumber);
   if (values.length >= 2) return values;
-  if (score !== null) return [Math.max(0, score - 18), Math.max(0, score - 10), score];
   return [];
 }
 

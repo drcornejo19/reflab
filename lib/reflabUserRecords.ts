@@ -18,6 +18,7 @@ export type UserProfileRow = {
   country?: string | null;
   city?: string | null;
   association?: string | null;
+  association_logo?: string | null;
   referee_type?: string | null;
   main_role?: string | null;
   referee_role?: string | null;
@@ -55,6 +56,7 @@ export type ReflabUserProfile = {
   country: string;
   city: string;
   association: string;
+  associationLogo: string;
   refereeType: string;
   mainRole: string;
   refereeRole: string;
@@ -305,6 +307,7 @@ export function toClientProfile(
     country: textOrNull(profile?.country) ?? "",
     city: textOrNull(profile?.city) ?? "",
     association: textOrNull(profile?.association) ?? "",
+    associationLogo: textOrNull(profile?.association_logo) ?? "",
     refereeType: textOrNull(profile?.referee_type) ?? "Amateur",
     mainRole:
       textOrNull(profile?.main_role) ??
