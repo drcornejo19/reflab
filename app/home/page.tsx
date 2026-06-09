@@ -113,7 +113,7 @@ export default function HomePage() {
         <div className="relative z-10 mx-auto max-w-[1536px] px-5 pb-0 pt-5 sm:px-8 lg:px-10">
           <Header />
 
-          <div className="grid min-h-[570px] gap-8 pt-12 lg:grid-cols-[0.92fr_1.08fr] lg:pt-16">
+          <div className="grid min-h-[540px] gap-8 pt-12 lg:grid-cols-[0.92fr_1.08fr] lg:pt-16">
             <div className="max-w-[660px]">
               <h1 className="text-balance text-5xl font-black leading-[1.02] text-white sm:text-6xl lg:text-[64px]">
                 Entrená decisiones.
@@ -148,7 +148,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="relative z-20 mx-auto -mt-24 max-w-[980px] pb-6 lg:-mt-28">
+          <div className="relative z-20 mx-auto mt-2 max-w-[980px] pb-8 lg:mt-0">
             <AccessChooser />
           </div>
         </div>
