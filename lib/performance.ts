@@ -92,6 +92,8 @@ export type PerformanceItem = {
   id: string; source: PerformanceSource; module: ModuleKey; modeLabel: string; date: string;
   title: string; topic: string; rawTopic: string; difficulty?: string | null; score: number | null;
   result: "Correcto" | "Parcial" | "Incorrecto" | "Sin datos";
+  topicValid?: boolean;
+  clipId?: string | null;
   selectedDecision?: string | null; correctDecision?: string | null; selectedRestart?: string | null;
   correctRestart?: string | null; selectedDiscipline?: string | null; correctDiscipline?: string | null;
   answerText?: string | null; feedback?: string | null; timeSpentSeconds?: number | null;
@@ -191,18 +193,20 @@ export function buildPerformanceDataset({
       return;
     }
 
+    const storedTopic = normalizeTopic(attempt.topic);
     const resolvedTopic = getClipTopic(clip) || attempt.topic;
     const topic = normalizeTopic(resolvedTopic);
+    const topicValid = isValidTopicItem(topic, clip, hasClipIndex, storedTopic);
     const date = attempt.created_at ?? "";
     const moduleKey = normalizeModule(clip?.module ?? attempt.module, clip?.mode ?? attempt.mode, topic);
     const modeLabel = getModeLabel(moduleKey, attempt.mode, topic);
     const title = clip?.title ?? attempt.clip_title ?? attempt.workout_name ?? fallbackTitleForModule(moduleKey);
     const timeSpentSeconds = cleanDuration(attempt.time_spent_seconds ?? attempt.time_spent);
 
-    validateAttempt(attempt, topic, warnings);
+    validateAttempt(attempt, storedTopic, warnings);
 
     if (isExamAttempt) {
-      examAttemptKeys.add(makeExamAnswerKey(clipId, topic, score));
+      examAttemptKeys.add(makeExamAnswerKey(clipId, storedTopic, score));
     }
 
     items.push({
@@ -214,6 +218,8 @@ export function buildPerformanceDataset({
       title,
       topic,
       rawTopic: resolvedTopic ?? topic,
+      topicValid,
+      clipId: clipId || null,
       difficulty: attempt.difficulty,
       score,
       result: resultFromAttempt(attempt, score),
@@ -269,12 +275,14 @@ export function buildPerformanceDataset({
       const answerScore = cleanScore(answer.score);
       const clipId = answer.clipId?.trim() ?? "";
       const clip = clipId ? clipMap.get(clipId) : undefined;
-      const topic = normalizeTopic(answer.topic ?? getClipTopic(clip));
-      const dedupeKey = makeExamAnswerKey(clipId, topic, answerScore);
+      const storedTopic = normalizeTopic(answer.topic);
+      const topic = normalizeTopic(getClipTopic(clip) || answer.topic);
+      const dedupeKey = makeExamAnswerKey(clipId, storedTopic, answerScore);
+      const topicValid = isValidTopicItem(topic, clip, hasClipIndex, storedTopic);
 
       if (examAttemptKeys.has(dedupeKey)) return;
 
-      validateExamAnswer(exam.id ?? `exam-${examIndex}`, answer, topic, warnings);
+      validateExamAnswer(exam.id ?? `exam-${examIndex}`, answer, storedTopic, warnings);
 
       items.push({
         id: `${exam.id ?? `exam-${examIndex}`}-${answer.clipId ?? answerIndex}`,
@@ -285,6 +293,8 @@ export function buildPerformanceDataset({
         title: answer.clipTitle ?? "Clip de examen",
         topic,
         rawTopic: answer.topic ?? topic,
+        topicValid,
+        clipId: clipId || null,
         difficulty: answer.difficulty,
         score: answerScore,
         result: resultFromScore(answerScore),
@@ -320,6 +330,8 @@ export function buildPerformanceDataset({
         title: answer.question ?? "Pregunta de reglas",
         topic,
         rawTopic: answer.topic ?? topic,
+        topicValid: !coreTechnicalTopics.includes(topic),
+        clipId: null,
         score: scoreValue,
         result: answer.is_correct ? "Correcto" : "Incorrecto",
         selectedDecision: answer.selected_text,
@@ -396,7 +408,10 @@ export function getEvolutionData(sessions: PerformanceSession[]): EvolutionData 
 
 export function getTopicPerformance(items: PerformanceItem[]): TopicMetric[] {
   const coreTopicSet = new Set(coreTechnicalTopics);
-  const groups = groupBy(items.filter((item) => item.topic && coreTopicSet.has(item.topic)), (item) => item.topic);
+  const groups = groupBy(
+    items.filter((item) => item.topic && coreTopicSet.has(item.topic) && item.topicValid !== false),
+    (item) => item.topic
+  );
   return Array.from(groups.entries()).map(([topic, topicItems]) => {
     const scores = topicItems.map((item) => item.score).filter(isNumber);
     const correct = topicItems.filter((item) => item.result === "Correcto").length;
@@ -670,6 +685,19 @@ function logPerformanceWarnings(warnings: PerformanceWarning[]) {
 function isActiveClip(clip: PerformanceClipRecord) {
   const status = String(clip.status ?? "").toLowerCase();
   return clip.is_active !== false && status !== "archived" && status !== "inactive";
+}
+
+function isValidTopicItem(
+  topic: string,
+  clip: PerformanceClipRecord | undefined,
+  hasClipIndex: boolean,
+  storedTopic?: string
+) {
+  if (!coreTechnicalTopics.includes(topic)) return true;
+  if (!hasClipIndex) return true;
+  if (!clip || !isActiveClip(clip)) return false;
+  if (storedTopic && storedTopic !== "Sin topico" && storedTopic !== topic) return false;
+  return true;
 }
 
 function getClipTopic(clip?: PerformanceClipRecord) {
