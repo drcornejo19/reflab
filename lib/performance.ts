@@ -495,30 +495,30 @@ export function getModulePerformance(items: PerformanceItem[]): ModulePerformanc
     },
     {
       key: "english",
-      title: "Ingles arbitral",
-      description: "Evalua vocabulario, claridad, terminologia FIFA/VAR y comunicacion tecnica en ingles.",
+      title: "Comunicacion arbitral - IFAB English",
+      description: "Evalua vocabulario, claridad, terminologia IFAB y comunicacion tecnica en ingles.",
       status: moduleStatus(items, "english"),
       metrics: [
         metricFromItems("Respuestas en ingles", items.filter((item) => item.module === "english")),
-        metricFromAverage("Promedio del modulo", moduleAverage(items, "english")),
+        metricFromAverage("Vocabulary Score", moduleAverage(items, "english")),
         metricFromCriterion("Precision tecnica del texto", criteria.find((item) => item.key === "technical")),
-        metricUnavailable("Claridad comunicacional", "Proximamente: requiere rubrica especifica de comunicacion."),
-        metricUnavailable("Vocabulario FIFA", "Requiere rubrica especifica del feedback de ingles."),
-        metricUnavailable("Terminologia VAR", "Metrica preparada para respuestas VAR en ingles."),
+        metricUnavailable("Terminologia IFAB", "Disponible con la rubrica de comunicacion arbitral."),
+        metricUnavailable("Gramatica basica", "Disponible con la rubrica de ingles arbitral."),
+        metricUnavailable("Conceptos dominados", "Se activa con Trivia IFAB English."),
       ],
     },
     {
       key: "communication",
-      title: "Comunicacion y liderazgo",
-      description: "Este modulo medira autoridad, comunicacion, liderazgo, lenguaje corporal y manejo de conflictos dentro del partido.",
-      status: "Metricas en construccion",
+      title: "Comunicacion arbitral - Espanol",
+      description: "Evalua voz de estadio, explicacion de decisiones, claridad, precision y estructura tecnica.",
+      status: moduleStatus(items, "communication"),
       metrics: [
-        metricUnavailable("Manejo de protestas", "Metrica futura."),
-        metricUnavailable("Puesta de limites", "Metrica futura."),
-        metricUnavailable("Comunicacion verbal", "Metrica futura."),
-        metricUnavailable("Comunicacion no verbal", "Metrica futura."),
-        metricUnavailable("Control emocional", "Metrica futura."),
-        metricUnavailable("Resolucion de conflictos", "Metrica futura."),
+        metricFromItems("Explicaciones guardadas", items.filter((item) => item.module === "communication")),
+        metricFromAverage("Comunicacion global", moduleAverage(items, "communication")),
+        metricFromCriterion("Precision tecnica", criteria.find((item) => item.key === "technical")),
+        metricUnavailable("Terminologia arbitral", "Disponible con la rubrica de explicacion."),
+        metricUnavailable("Claridad", "Disponible con la rubrica de explicacion."),
+        metricUnavailable("Estructura", "Disponible con la rubrica de explicacion."),
       ],
     },
     {
@@ -737,9 +737,9 @@ function normalizeModule(module?: string | null, mode?: string | null, topic?: s
 
 function getModeLabel(module: ModuleKey, mode?: string | null, topic?: string | null) {
   if (module === "var") return "VAR Lab";
-  if (module === "english") return "Ingles arbitral";
+  if (module === "english") return "Ingles arbitral IFAB";
   if (module === "preparation") return mode === "physical_training" ? "Entrenamiento fisico" : "Preparacion del arbitro";
-  if (module === "communication") return "Comunicacion y liderazgo";
+  if (module === "communication") return "Comunicacion arbitral";
   if (module === "video") return "Video analisis";
   return topic === "VAR" ? "VAR Lab" : "Entrenamiento";
 }
@@ -749,8 +749,8 @@ function fallbackTitleForModule(module: ModuleKey) {
     decision: "Ejercicio de entrenamiento",
     video: "Analisis de video",
     var: "Caso VAR Lab",
-    english: "Respuesta de ingles arbitral",
-    communication: "Comunicacion y liderazgo",
+    english: "Respuesta de ingles arbitral IFAB",
+    communication: "Explicacion de decision",
     preparation: "Sesion de preparacion del arbitro",
   };
 

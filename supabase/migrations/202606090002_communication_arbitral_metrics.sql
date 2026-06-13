@@ -1,0 +1,16 @@
+alter table if exists public.attempts
+  add column if not exists answer_text text,
+  add column if not exists english_score integer,
+  add column if not exists communication_score integer,
+  add column if not exists vocabulary_score integer,
+  add column if not exists clarity_score integer,
+  add column if not exists terminology_score integer,
+  add column if not exists grammar_score integer,
+  add column if not exists technical_accuracy_score integer,
+  add column if not exists pronunciation_score integer,
+  add column if not exists structure_score integer,
+  add column if not exists communication_mode text,
+  add column if not exists global_communication_label text,
+  add column if not exists vocabulary_level text,
+  add column if not exists mastered_concepts jsonb not null default '[]'::jsonb,
+  add column if not exists pending_concepts jsonb not null default '[]'::jsonb;

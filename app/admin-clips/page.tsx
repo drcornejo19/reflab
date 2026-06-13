@@ -575,7 +575,7 @@ correct_var: isEnglishMode
                 },
                 {
                   value: "english",
-                  label: "Inglés",
+                  label: "Comunicacion",
                 },
                 {
                   value: "exam",
@@ -633,7 +633,7 @@ correct_var: isEnglishMode
     />
 
     <div className="rounded-2xl border border-[#6fc11f]/20 bg-[#6fc11f]/10 p-4 text-sm leading-6 text-[#6fc11f]">
-      Este clip pertenece al módulo de inglés arbitral.
+      Este clip pertenece al modulo de comunicacion arbitral.
       El usuario podrá responder por escrito y por voz.
       La IA devolverá feedback técnico para mejorar comunicación,
       pronunciación y vocabulario arbitral.

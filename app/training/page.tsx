@@ -8,7 +8,6 @@ import {
   Activity,
   ChevronRight,
   ClipboardCheck,
-  Languages,
   MessageCircle,
   MonitorCheck,
   PlaySquare,
@@ -57,26 +56,15 @@ const modules: TrainingModule[] = [
     freeNote: "VAR Lab es exclusivo de RefLab Pro.",
   },
   {
-    title: "Ingles arbitral",
+    title: "Comunicacion arbitral",
     category: "Comunicacion",
     description:
-      "Comunica decisiones en ingles tecnico con terminologia FIFA.",
+      "Explica decisiones en espanol, entrena ingles arbitral IFAB y aprende vocabulario tecnico.",
     href: "/training/english",
     status: "Beta",
-    icon: Languages,
-    proOnly: true,
-    freeNote: "El modulo de ingles arbitral se desbloquea con RefLab Pro.",
-  },
-  {
-    title: "Comunicacion y liderazgo",
-    category: "Gestion",
-    description:
-      "Trabaja autoridad, protestas, lenguaje corporal, limites y manejo de conflictos.",
-    href: "/training/communication",
-    status: "En construccion",
     icon: MessageCircle,
     proOnly: true,
-    freeNote: "Los modulos de comunicacion avanzada forman parte de RefLab Pro.",
+    freeNote: "Comunicacion arbitral se desbloquea con RefLab Pro.",
   },
   {
     title: "Preparacion del arbitro",

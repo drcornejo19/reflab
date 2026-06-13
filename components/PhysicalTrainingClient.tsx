@@ -78,6 +78,8 @@ const defaultConfig = {
   sets: 8,
 };
 
+const tabataCueSrc = "/audio/tabata-arbitral.wav";
+
 export function PhysicalTrainingClient() {
   const { user } = useUser();
   const [preparation, setPreparation] = useState(defaultConfig.preparation);
@@ -126,7 +128,7 @@ export function PhysicalTrainingClient() {
   function startTimer() {
     if (status === "paused") {
       setStatus("running");
-      playWhistle(soundEnabled);
+      playTabataCue(soundEnabled);
       return;
     }
 
@@ -136,7 +138,7 @@ export function PhysicalTrainingClient() {
     setPhase("preparation");
     setSecondsLeft(safePreparation);
     setStatus("running");
-    playWhistle(soundEnabled);
+    playTabataCue(soundEnabled);
   }
 
   function pauseTimer() {
@@ -158,7 +160,7 @@ export function PhysicalTrainingClient() {
     setStatus("finished");
     setScreenLocked(false);
     setSecondsLeft(0);
-    playWhistle(soundEnabled);
+    playTabataCue(soundEnabled);
 
     if (savedSessionRef.current) return;
     savedSessionRef.current = true;
@@ -216,13 +218,11 @@ export function PhysicalTrainingClient() {
     if (phase === "preparation") {
       setPhase("work");
       setSecondsLeft(safeWork);
-      playWhistle(soundEnabled);
+      playTabataCue(soundEnabled);
       return;
     }
 
     if (phase === "work") {
-      playWhistle(soundEnabled);
-
       if (currentSet >= safeSets) {
         void finishSession();
         return;
@@ -232,12 +232,13 @@ export function PhysicalTrainingClient() {
         setCurrentSet((value) => value + 1);
         setPhase("work");
         setSecondsLeft(safeWork);
-        playWhistle(soundEnabled);
+        playTabataCue(soundEnabled);
         return;
       }
 
       setPhase("rest");
       setSecondsLeft(safeRest);
+      playTabataCue(soundEnabled);
       return;
     }
 
@@ -245,7 +246,7 @@ export function PhysicalTrainingClient() {
       setCurrentSet((value) => value + 1);
       setPhase("work");
       setSecondsLeft(safeWork);
-      playWhistle(soundEnabled);
+      playTabataCue(soundEnabled);
     }
   }, [currentSet, finishSession, phase, safeRest, safeSets, safeWork, soundEnabled]);
 
@@ -443,8 +444,8 @@ export function PhysicalTrainingClient() {
             </button>
 
             <div className="mt-5 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm leading-6 text-zinc-300">
-              <p className="font-black text-white">Silbatos de transicion</p>
-              <p className="mt-1">Silbato fuerte al iniciar, al terminar cada ejercicio, al volver de la pausa y al finalizar toda la rutina. A los 10 segundos suena un beep y a los 5 segundos dos beeps.</p>
+              <p className="font-black text-white">Audio de transicion</p>
+              <p className="mt-1">El Tabata usa el audio personalizado de RefLab al iniciar, cambiar de fase y finalizar. A los 10 y 5 segundos conserva los avisos cortos anteriores.</p>
             </div>
 
             {sessionMessage && <div className="mt-5 rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4 text-sm font-bold text-[#b7ff8a]">{sessionMessage}</div>}
@@ -517,48 +518,24 @@ function getProgress(phase: Phase, currentSet: number, sets: number, secondsLeft
   return Math.max(0, Math.min(100, Math.round(((completedSets + phaseFraction) / sets) * 100)));
 }
 
-function playWhistle(enabled: boolean) {
+function playTabataCue(enabled: boolean, repetitions = 1) {
   if (!enabled || typeof window === "undefined") return;
 
-  try {
-    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
+  const playOnce = () => {
+    try {
+      const audio = new Audio(tabataCueSrc);
+      audio.volume = 0.9;
+      audio.currentTime = 0;
+      void audio.play().catch(() => undefined);
+    } catch {
+      // El sonido es opcional. Si el navegador lo bloquea, el timer sigue funcionando.
+    }
+  };
 
-    const context = new AudioContextClass();
-    const gain = context.createGain();
-    const oscillatorA = context.createOscillator();
-    const oscillatorB = context.createOscillator();
-    const oscillatorC = context.createOscillator();
-    const now = context.currentTime;
+  playOnce();
 
-    oscillatorA.type = "square";
-    oscillatorB.type = "sawtooth";
-    oscillatorC.type = "square";
-    oscillatorA.frequency.setValueAtTime(1480, now);
-    oscillatorB.frequency.setValueAtTime(1860, now);
-    oscillatorC.frequency.setValueAtTime(920, now);
-    oscillatorA.frequency.exponentialRampToValueAtTime(1720, now + 0.18);
-    oscillatorB.frequency.exponentialRampToValueAtTime(2100, now + 0.18);
-    oscillatorC.frequency.exponentialRampToValueAtTime(1080, now + 0.18);
-
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.38, now + 0.025);
-    gain.gain.setValueAtTime(0.38, now + 0.72);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.02);
-
-    oscillatorA.connect(gain);
-    oscillatorB.connect(gain);
-    oscillatorC.connect(gain);
-    gain.connect(context.destination);
-    oscillatorA.start(now);
-    oscillatorB.start(now);
-    oscillatorC.start(now);
-    oscillatorA.stop(now + 1.05);
-    oscillatorB.stop(now + 1.05);
-    oscillatorC.stop(now + 1.05);
-    window.setTimeout(() => void context.close(), 1150);
-  } catch {
-    // El sonido es opcional. Si el navegador lo bloquea, el timer sigue funcionando.
+  for (let index = 1; index < repetitions; index += 1) {
+    window.setTimeout(playOnce, index * 1900);
   }
 }
 

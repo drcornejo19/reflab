@@ -13,7 +13,7 @@ export const proBenefits = [
   "Examenes ilimitados",
   "Estadisticas completas",
   "Historial completo",
-  "Ingles arbitral",
+  "Comunicacion arbitral",
   "Preparacion arbitral",
   "Ranking",
   "RefCard",

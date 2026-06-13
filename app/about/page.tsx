@@ -14,8 +14,7 @@ const trainingAreas = [
   "Decision arbitral",
   "Video analisis",
   "VAR Lab",
-  "Ingles arbitral",
-  "Comunicacion y liderazgo",
+  "Comunicacion arbitral",
   "Preparacion del arbitro",
 ];
 
@@ -158,7 +157,7 @@ export default function AboutPage() {
               </div>
 
               <blockquote className="mt-7 border-l-4 border-[#6fc11f] pl-5 text-lg font-black leading-7 text-white lg:text-xl">
-                "RefLab existe para visualizar lo que no se ve y profesionalizar el camino del arbitro."
+                &quot;RefLab existe para visualizar lo que no se ve y profesionalizar el camino del arbitro.&quot;
               </blockquote>
 
               <div className="mt-7">
