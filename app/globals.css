@@ -47,6 +47,25 @@ textarea {
   font-size: 16px;
 }
 
+.control-input {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0b111b;
+  padding: 0.875rem 1rem;
+  color: #ffffff;
+  outline: none;
+}
+
+.control-input:focus {
+  border-color: rgba(111, 193, 31, 0.65);
+  box-shadow: 0 0 0 3px rgba(111, 193, 31, 0.12);
+}
+
+.control-input::placeholder {
+  color: rgba(161, 161, 170, 0.65);
+}
+
 @keyframes splashFade {
   0% {
     opacity: 0;

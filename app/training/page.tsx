@@ -6,6 +6,7 @@ import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { useUserRole } from "@/lib/useUserRole";
 import {
   Activity,
+  Brain,
   ChevronRight,
   ClipboardCheck,
   MessageCircle,
@@ -76,6 +77,17 @@ const modules: TrainingModule[] = [
     icon: Activity,
     proOnly: true,
     freeNote: "La preparacion arbitral completa se desbloquea con RefLab Pro.",
+  },
+  {
+    title: "Psicologia arbitral",
+    category: "Mental",
+    description:
+      "Check-ins pre y post partido, gestion del error, foco, confianza y presion competitiva.",
+    href: "/training/psychology",
+    status: "Beta",
+    icon: Brain,
+    proOnly: true,
+    freeNote: "Psicologia arbitral se desbloquea con RefLab Pro.",
   },
 ];
 

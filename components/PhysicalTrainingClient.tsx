@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { useUser } from "@clerk/nextjs";
 import {
@@ -32,6 +33,7 @@ type PrepModule = {
   description: string;
   status: "Disponible" | "En construccion" | "Proximamente";
   icon: IconType;
+  href?: string;
 };
 
 type TabataPresetKey = "yoyo" | "intermittent_40x75" | "sprint" | "resistance" | "recovery" | "custom";
@@ -49,7 +51,7 @@ const prepModules: PrepModule[] = [
   { title: "Preparacion integral", description: "Bienestar, rutina previa, habitos y control diario del arbitro.", status: "Disponible", icon: Target },
   { title: "Preparacion fisica", description: "Tabata arbitral configurable con presets de trabajo especifico.", status: "Disponible", icon: Dumbbell },
   { title: "Nutricion y recuperacion", description: "Hidratacion, descanso, retorno a la calma y habitos de recuperacion.", status: "Proximamente", icon: HeartPulse },
-  { title: "Psicologia arbitral", description: "Manejo de presion, confianza, tolerancia al error y control emocional.", status: "En construccion", icon: Brain },
+  { title: "Psicologia arbitral", description: "Check-ins mentales, gestion del error, confianza, foco y control emocional.", status: "Disponible", icon: Brain, href: "/training/psychology" },
   { title: "Planificacion arbitral", description: "Partidos, descanso, carga semanal y objetivos de preparacion.", status: "Proximamente", icon: CalendarCheck },
   { title: "Etica y deontologia", description: "Habitos profesionales, responsabilidad, informes y conducta arbitral.", status: "Proximamente", icon: Briefcase },
 ];
@@ -459,14 +461,31 @@ export function PhysicalTrainingClient() {
 function PreparationModuleCard({ module }: { module: PrepModule }) {
   const Icon = module.icon;
   const available = module.status === "Disponible";
-  return (
-    <article className={`rounded-[28px] border p-5 shadow-2xl ${available ? "border-[#6fc11f]/30 bg-[#6fc11f]/10" : "border-white/10 bg-[#101b24]"}`}>
+  const content = (
+    <>
       <div className="flex items-start justify-between gap-4">
         <div className="grid h-12 w-12 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]"><Icon size={24} /></div>
         <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${available ? "border-[#6fc11f]/30 bg-[#6fc11f] text-black" : "border-yellow-400/25 bg-yellow-400/10 text-yellow-200"}`}>{module.status}</span>
       </div>
       <h3 className="mt-4 text-lg font-black text-white">{module.title}</h3>
       <p className="mt-2 text-sm leading-6 text-zinc-400">{module.description}</p>
+    </>
+  );
+
+  if (module.href) {
+    return (
+      <Link
+        href={module.href}
+        className={`block rounded-[28px] border p-5 shadow-2xl transition hover:border-[#6fc11f]/55 hover:bg-[#6fc11f]/15 ${available ? "border-[#6fc11f]/30 bg-[#6fc11f]/10" : "border-white/10 bg-[#101b24]"}`}
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <article className={`rounded-[28px] border p-5 shadow-2xl ${available ? "border-[#6fc11f]/30 bg-[#6fc11f]/10" : "border-white/10 bg-[#101b24]"}`}>
+      {content}
     </article>
   );
 }

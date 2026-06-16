@@ -54,6 +54,7 @@ const trainingActivePrefixes = [
   "/training/english",
   "/training/communication",
   "/training/referee-preparation",
+  "/training/psychology",
   "/training/field",
   "/training/rules-practice",
   "/training/rules-premium-practice",
@@ -265,7 +266,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [language, setLanguage] = useState<AppLanguage>("es");
   const roleState = useUserRole();
-  const { isVideoAdmin, loadingRole } = roleState;
   const visibleNavItems = filterNavItems(navItems, roleState);
   const visibleMobileItems = filterNavItems(mobileItems, roleState);
   const mobileNavGrid =
@@ -280,8 +280,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    setLanguage(getStoredLanguage());
-    return subscribeToLanguageChange(setLanguage);
+    const timeout = window.setTimeout(() => {
+      setLanguage(getStoredLanguage());
+    }, 0);
+    const unsubscribe = subscribeToLanguageChange(setLanguage);
+
+    return () => {
+      window.clearTimeout(timeout);
+      unsubscribe();
+    };
   }, []);
 
   return (
