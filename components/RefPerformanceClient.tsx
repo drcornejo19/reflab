@@ -374,8 +374,8 @@ function Hero({ readiness }: { readiness: ReturnType<typeof calculateReadiness> 
     <header className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.2),transparent_36%),linear-gradient(145deg,#071019,#0b151f_62%,#111827)] p-4 shadow-2xl sm:p-6 lg:p-8">
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#6fc11f] sm:text-xs sm:tracking-[0.45em]">A. Como esta el arbitro hoy?</p>
-          <h1 className="mt-3 break-words text-4xl font-black leading-tight text-white sm:text-5xl">Registro fisico / wellness / readiness</h1>
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#6fc11f] sm:text-xs sm:tracking-[0.45em]">Registro fisico</p>
+          <h1 className="mt-3 break-words text-4xl font-black leading-tight text-white sm:text-5xl">Wellness, readiness y carga diaria</h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 sm:text-base">
             Registro diario de estado fisico, disponibilidad, fatiga, sueno, dolor muscular, carga percibida, RPE y comentarios pre o post actividad.
           </p>

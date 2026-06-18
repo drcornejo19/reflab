@@ -13,6 +13,7 @@ import {
   ClipboardCheck,
   Dumbbell,
   Gauge,
+  HeartPulse,
   History,
   Languages,
   LineChart,
@@ -58,6 +59,7 @@ import { useUserRole } from "@/lib/useUserRole";
 
 type HistoryMode = "ALL" | "training" | "exam" | "rules_exam";
 type HistoryResult = "ALL" | PerformanceItem["result"];
+type PerformanceSection = "physical" | "performance";
 type PerformanceView = "evolution" | "plan" | "topics" | "criteria" | "modules" | "history" | "ranking" | "complementary";
 
 type LoadState = {
@@ -130,6 +132,7 @@ export default function PerformancePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [historyMode, setHistoryMode] = useState<HistoryMode>("ALL");
   const [historyResult, setHistoryResult] = useState<HistoryResult>("ALL");
+  const [activeSection, setActiveSection] = useState<PerformanceSection | null>(null);
   const [activeView, setActiveView] = useState<PerformanceView | null>(null);
 
   useEffect(() => {
@@ -270,38 +273,72 @@ export default function PerformancePage() {
   return (
     <AppShell>
       <div className="mx-auto w-full max-w-full space-y-5 overflow-hidden lg:max-w-[1180px] lg:space-y-6">
-        <RefPerformanceClient />
-
-        <PerformanceHero />
-
-        {loadError && (
-          <div className="rounded-3xl border border-yellow-400/25 bg-yellow-400/10 p-4 text-sm font-bold leading-6 text-yellow-100">
-            {loadError}
-          </div>
-        )}
-
-        {activeView ? (
+        {!activeSection && (
           <>
-            <PerformanceModuleHeader activeView={activeView} onBack={() => setActiveView(null)} />
-            <PrimaryAnalysisView
-              activeView={activeView}
-              summary={summary}
-              evolution={evolution}
-              plan={plan}
-              topics={topics}
-              criteria={criteria}
-              modules={modules}
-              history={history}
-              historyMode={historyMode}
-              historyResult={historyResult}
-              setHistoryMode={setHistoryMode}
-              setHistoryResult={setHistoryResult}
-              ranking={ranking}
-              currentRanking={currentRanking}
+            <PerformanceHero />
+            <PerformanceSectionGrid
+              onSelect={(section) => {
+                setActiveSection(section);
+                setActiveView(null);
+              }}
             />
           </>
-        ) : (
-          <PerformanceEntryGrid activeView={activeView} onSelect={setActiveView} />
+        )}
+
+        {activeSection === "physical" && (
+          <>
+            <PerformanceSectionHeader
+              title="Registro Fisico"
+              subtitle="Wellness, readiness y carga diaria."
+              icon={HeartPulse}
+              onBack={() => setActiveSection(null)}
+            />
+            <RefPerformanceClient />
+          </>
+        )}
+
+        {activeSection === "performance" && (
+          <>
+            <PerformanceSectionHeader
+              title="Rendimiento"
+              subtitle="Evolucion, radar y metricas arbitrales."
+              icon={BarChart3}
+              onBack={() => {
+                setActiveSection(null);
+                setActiveView(null);
+              }}
+            />
+
+            {loadError && (
+              <div className="rounded-3xl border border-yellow-400/25 bg-yellow-400/10 p-4 text-sm font-bold leading-6 text-yellow-100">
+                {loadError}
+              </div>
+            )}
+
+            {activeView ? (
+              <>
+                <PerformanceModuleHeader activeView={activeView} onBack={() => setActiveView(null)} />
+                <PrimaryAnalysisView
+                  activeView={activeView}
+                  summary={summary}
+                  evolution={evolution}
+                  plan={plan}
+                  topics={topics}
+                  criteria={criteria}
+                  modules={modules}
+                  history={history}
+                  historyMode={historyMode}
+                  historyResult={historyResult}
+                  setHistoryMode={setHistoryMode}
+                  setHistoryResult={setHistoryResult}
+                  ranking={ranking}
+                  currentRanking={currentRanking}
+                />
+              </>
+            ) : (
+              <PerformanceEntryGrid activeView={activeView} onSelect={setActiveView} />
+            )}
+          </>
         )}
       </div>
     </AppShell>
@@ -367,6 +404,141 @@ function FreePerformanceOverview({
           }
           tone="danger"
         />
+      </div>
+    </section>
+  );
+}
+
+function PerformanceSectionGrid({
+  onSelect,
+}: {
+  onSelect: (section: PerformanceSection) => void;
+}) {
+  const sections: Array<{
+    id: PerformanceSection;
+    title: string;
+    subtitle: string;
+    content: string[];
+    icon: LucideIcon;
+  }> = [
+    {
+      id: "physical",
+      title: "Registro Fisico",
+      subtitle: "Wellness, readiness y carga diaria.",
+      content: [
+        "check-in diario",
+        "sueno",
+        "fatiga",
+        "molestias",
+        "entrenamiento",
+        "partido",
+        "RPE",
+        "readiness",
+      ],
+      icon: HeartPulse,
+    },
+    {
+      id: "performance",
+      title: "Rendimiento",
+      subtitle: "Evolucion, radar y metricas arbitrales.",
+      content: [
+        "radar arbitral",
+        "promedio general",
+        "topicos fuertes",
+        "topicos a mejorar",
+        "historial",
+        "evolucion",
+        "plan recomendado",
+      ],
+      icon: BarChart3,
+    },
+  ];
+
+  return (
+    <section className="grid gap-5 lg:grid-cols-2">
+      {sections.map((section) => {
+        const Icon = section.icon;
+
+        return (
+          <button
+            key={section.id}
+            type="button"
+            onClick={() => onSelect(section.id)}
+            className="group min-h-[320px] min-w-0 rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.12),transparent_34%),#101b24] p-5 text-left shadow-2xl transition hover:-translate-y-1 hover:border-[#6fc11f]/45 hover:bg-[#13212b] active:scale-[0.98] sm:p-7"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="grid h-16 w-16 shrink-0 place-items-center rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f] transition group-hover:bg-[#6fc11f] group-hover:text-black">
+                <Icon size={30} />
+              </div>
+              <ArrowRight className="h-6 w-6 shrink-0 text-zinc-600 transition group-hover:translate-x-1 group-hover:text-[#6fc11f]" />
+            </div>
+
+            <h2 className="mt-6 break-words text-3xl font-black leading-tight text-white">
+              {section.title}
+            </h2>
+            <p className="mt-2 text-base font-bold leading-7 text-zinc-300">
+              {section.subtitle}
+            </p>
+
+            <div className="mt-6 grid gap-2 sm:grid-cols-2">
+              {section.content.map((item) => (
+                <span
+                  key={`${section.id}-${item}`}
+                  className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] text-zinc-400"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+
+            <p className="mt-6 text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f]">
+              Abrir modulo
+            </p>
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
+function PerformanceSectionHeader({
+  title,
+  subtitle,
+  icon: Icon,
+  onBack,
+}: {
+  title: string;
+  subtitle: string;
+  icon: LucideIcon;
+  onBack: () => void;
+}) {
+  return (
+    <section className="rounded-[30px] border border-[#6fc11f]/25 bg-[#071019] p-4 shadow-2xl sm:p-5 lg:p-6">
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-black text-zinc-200 transition hover:border-[#6fc11f]/40 hover:text-[#6fc11f]"
+      >
+        <ArrowLeft size={18} />
+        Volver a Ref Performance
+      </button>
+
+      <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:tracking-[0.35em]">
+            Ref Performance
+          </p>
+          <h1 className="mt-2 break-words text-3xl font-black leading-tight text-white sm:text-5xl">
+            {title}
+          </h1>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">
+            {subtitle}
+          </p>
+        </div>
+
+        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/35 bg-[#6fc11f]/10 text-[#6fc11f]">
+          <Icon size={26} />
+        </div>
       </div>
     </section>
   );
@@ -566,10 +738,10 @@ function PerformanceHero() {
   return (
     <header className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-4 shadow-2xl sm:rounded-[34px] lg:p-7">
       <div>
-        <p className="break-words text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.45em]">B. Como viene evolucionando el arbitro?</p>
-        <h1 className="mt-3 break-words text-3xl font-black leading-tight md:mt-4 md:text-5xl">Rendimiento y evolucion</h1>
+        <p className="break-words text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.45em]">REFLAB PERFORMANCE</p>
+        <h1 className="mt-3 break-words text-3xl font-black leading-tight md:mt-4 md:text-5xl">Ref Performance</h1>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 md:text-base">
-          Metricas derivadas de intentos reales: radar arbitral, promedio general, historial, fortalezas, aspectos a mejorar, rendimiento por topico, rendimiento por criterio y plan recomendado.
+          Un centro para registrar como esta el arbitro hoy y revisar como viene evolucionando con datos reales de actividad.
         </p>
       </div>
     </header>

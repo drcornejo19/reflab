@@ -82,9 +82,9 @@ const defaultConfig = {
 
 const tabataCueSrc = "/audio/tabata-arbitral.wav";
 const tabataCountdownSrc = "/sounds/beeps-3-seconds.mp3";
-const mainCueGain = 2;
-const countdownGain = 2;
-const beepGain = 0.36;
+const mainCueGain = 2.8;
+const countdownGain = 2.6;
+const beepGain = 0.72;
 
 export function PhysicalTrainingClient() {
   const { user } = useUser();
@@ -267,8 +267,8 @@ export function PhysicalTrainingClient() {
   useEffect(() => {
     if (status !== "running") return;
 
-    if ((phase === "preparation" || phase === "work") && secondsLeft === 3) {
-      playSoundOnce(`countdown:${phase}:${currentSet}`, () => playCountdownCue(soundEnabled));
+    if ((phase === "preparation" || phase === "work") && secondsLeft <= 3 && secondsLeft >= 1) {
+      playSoundOnce(`countdown:${phase}:${currentSet}:${secondsLeft}`, () => playCountdownCue(soundEnabled));
     }
 
     if (phase === "rest" && secondsLeft === 10) {
@@ -471,7 +471,7 @@ export function PhysicalTrainingClient() {
             <div className="mt-5 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm leading-6 text-zinc-300">
               <p className="font-black text-white">Audio de transicion</p>
               <p className="mt-1">
-                Preparacion y ejercicio usan cuenta regresiva final de 3 segundos. En descanso se mantienen los avisos de 10 y 5 segundos, y cada cambio de fase dispara el sonido principal fuerte.
+                Preparacion y ejercicio reproducen beep en 3, 2 y 1. En descanso se mantienen los avisos de 10 y 5 segundos, y cada cambio de fase dispara el sonido principal fuerte.
               </p>
             </div>
 
@@ -575,10 +575,10 @@ function playTabataCue(enabled: boolean, repetitions = 1) {
 }
 
 function playCountdownCue(enabled: boolean) {
-  playAmplifiedAudio(tabataCountdownSrc, enabled, countdownGain);
+  playAmplifiedAudio(tabataCountdownSrc, enabled, countdownGain, 0.45);
 }
 
-function playAmplifiedAudio(src: string, enabled: boolean, gainValue: number) {
+function playAmplifiedAudio(src: string, enabled: boolean, gainValue: number, maxDurationSeconds?: number) {
   if (!enabled || typeof window === "undefined") return;
 
   try {
@@ -609,7 +609,11 @@ function playAmplifiedAudio(src: string, enabled: boolean, gainValue: number) {
     gain.connect(compressor);
     compressor.connect(context.destination);
 
+    let cleaned = false;
     const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      audio.pause();
       try {
         source.disconnect();
         gain.disconnect();
@@ -622,6 +626,9 @@ function playAmplifiedAudio(src: string, enabled: boolean, gainValue: number) {
 
     audio.addEventListener("ended", cleanup, { once: true });
     audio.addEventListener("error", cleanup, { once: true });
+    if (maxDurationSeconds) {
+      window.setTimeout(cleanup, maxDurationSeconds * 1000);
+    }
 
     const startPlayback = async () => {
       if (context.state === "suspended") await context.resume();

@@ -12,5 +12,5 @@ alter table if exists public.attempts
   add column if not exists communication_mode text,
   add column if not exists global_communication_label text,
   add column if not exists vocabulary_level text,
-  add column if not exists mastered_concepts jsonb not null default '[]'::jsonb,
+    add column if not exists mastered_concepts jsonb not null default '[]'::jsonb,
   add column if not exists pending_concepts jsonb not null default '[]'::jsonb;

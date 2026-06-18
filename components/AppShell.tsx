@@ -10,7 +10,6 @@ import {
   Bell,
   CircleAlert,
   Clapperboard,
-  Dumbbell,
   GraduationCap,
   Home,
   Info,
@@ -54,13 +53,13 @@ const trainingActivePrefixes = [
   "/training/english",
   "/training/communication",
   "/training/field",
+  "/training/referee-preparation",
+  "/training/psychology",
   "/training/rules-practice",
   "/training/rules-premium-practice",
 ];
 const evaluationsActivePaths = ["/evaluations", "/training/exam", "/training/rules-exam", "/training/video-analysis"];
 const evaluationsActivePrefixes = ["/evaluations", "/training/video-analysis"];
-const preparationActivePaths = ["/training/referee-preparation"];
-const preparationActivePrefixes = ["/training/referee-preparation", "/training/psychology"];
 
 const navItems: NavItem[] = [
   {
@@ -101,14 +100,6 @@ const navItems: NavItem[] = [
     icon: ShieldCheck,
     activePaths: evaluationsActivePaths,
     activePrefixes: evaluationsActivePrefixes,
-  },
-  {
-    label: "Preparacion Integral",
-    href: "/training/referee-preparation",
-    icon: Dumbbell,
-    activePaths: preparationActivePaths,
-    activePrefixes: preparationActivePrefixes,
-    individualOnly: true,
   },
   {
     label: "Ref Performance",
@@ -205,14 +196,6 @@ const mobileItems: NavItem[] = [
     icon: ShieldCheck,
     activePaths: evaluationsActivePaths,
     activePrefixes: evaluationsActivePrefixes,
-  },
-  {
-    label: "Prep.",
-    href: "/training/referee-preparation",
-    icon: Dumbbell,
-    activePaths: preparationActivePaths,
-    activePrefixes: preparationActivePrefixes,
-    individualOnly: true,
   },
   {
     label: "Ref Perf.",
