@@ -10,6 +10,7 @@ import {
   Bell,
   CircleAlert,
   Clapperboard,
+  Dumbbell,
   GraduationCap,
   Home,
   Info,
@@ -49,16 +50,17 @@ type NavItem = {
 const trainingActivePaths = ["/training", "/mobile-var"];
 const trainingActivePrefixes = [
   "/training/decision",
-  "/training/video-analysis",
   "/training/var",
   "/training/english",
   "/training/communication",
-  "/training/referee-preparation",
-  "/training/psychology",
   "/training/field",
   "/training/rules-practice",
   "/training/rules-premium-practice",
 ];
+const evaluationsActivePaths = ["/evaluations", "/training/exam", "/training/rules-exam", "/training/video-analysis"];
+const evaluationsActivePrefixes = ["/evaluations", "/training/video-analysis"];
+const preparationActivePaths = ["/training/referee-preparation"];
+const preparationActivePrefixes = ["/training/referee-preparation", "/training/psychology"];
 
 const navItems: NavItem[] = [
   {
@@ -97,8 +99,16 @@ const navItems: NavItem[] = [
     labelKey: "nav.evaluations",
     href: "/evaluations",
     icon: ShieldCheck,
-    activePaths: ["/evaluations", "/training/exam", "/training/rules-exam"],
-    activePrefixes: ["/evaluations"],
+    activePaths: evaluationsActivePaths,
+    activePrefixes: evaluationsActivePrefixes,
+  },
+  {
+    label: "Preparacion Integral",
+    href: "/training/referee-preparation",
+    icon: Dumbbell,
+    activePaths: preparationActivePaths,
+    activePrefixes: preparationActivePrefixes,
+    individualOnly: true,
   },
   {
     label: "Ref Performance",
@@ -110,7 +120,7 @@ const navItems: NavItem[] = [
     individualOnly: true,
   },
   {
-    label: "Biblioteca",
+    label: "Biblioteca IFAB",
     labelKey: "nav.library",
     href: "/learning",
     icon: BookOpen,
@@ -193,8 +203,16 @@ const mobileItems: NavItem[] = [
     labelKey: "nav.evaluate",
     href: "/evaluations",
     icon: ShieldCheck,
-    activePaths: ["/evaluations", "/training/exam", "/training/rules-exam"],
-    activePrefixes: ["/evaluations"],
+    activePaths: evaluationsActivePaths,
+    activePrefixes: evaluationsActivePrefixes,
+  },
+  {
+    label: "Prep.",
+    href: "/training/referee-preparation",
+    icon: Dumbbell,
+    activePaths: preparationActivePaths,
+    activePrefixes: preparationActivePrefixes,
+    individualOnly: true,
   },
   {
     label: "Ref Perf.",
@@ -203,13 +221,6 @@ const mobileItems: NavItem[] = [
     icon: Activity,
     activePaths: ["/performance", "/stats", "/ranking", "/mobile-stats"],
     activePrefixes: ["/performance"],
-    individualOnly: true,
-  },
-  {
-    label: "Perfil",
-    labelKey: "nav.profile",
-    href: "/profile",
-    icon: User,
     individualOnly: true,
   },
 ];
@@ -223,11 +234,19 @@ const secondaryMobileItems: NavItem[] = [
     activePaths: ["/about"],
   },
   {
-    label: "Biblioteca",
+    label: "Biblioteca IFAB",
     labelKey: "nav.library",
     href: "/learning",
     icon: BookOpen,
     activePaths: ["/learning"],
+  },
+  {
+    label: "Perfil",
+    labelKey: "nav.profile",
+    href: "/profile",
+    icon: User,
+    activePaths: ["/profile"],
+    individualOnly: true,
   },
   {
     label: "Instituciones",

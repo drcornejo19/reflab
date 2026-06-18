@@ -12,10 +12,10 @@ type StoryBlock = {
 
 const trainingAreas = [
   "Decision arbitral",
-  "Video analisis",
+  "Evaluaciones por video",
   "VAR Lab",
   "Comunicacion arbitral",
-  "Preparacion del arbitro",
+  "Preparacion Integral",
 ];
 
 const storyBlocks: StoryBlock[] = [

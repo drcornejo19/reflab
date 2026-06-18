@@ -523,7 +523,7 @@ export function getModulePerformance(items: PerformanceItem[]): ModulePerformanc
     },
     {
       key: "preparation",
-      title: "Preparacion del arbitro",
+      title: "Preparacion Integral",
       description: "Evalua adherencia, constancia, sesiones completadas y progreso de preparacion fisica y mental.",
       status: preparationItems.length > 0 ? "Disponible" : "Metricas en construccion",
       metrics: [
@@ -738,7 +738,7 @@ function normalizeModule(module?: string | null, mode?: string | null, topic?: s
 function getModeLabel(module: ModuleKey, mode?: string | null, topic?: string | null) {
   if (module === "var") return "VAR Lab";
   if (module === "english") return "Ingles arbitral IFAB";
-  if (module === "preparation") return mode === "physical_training" ? "Entrenamiento fisico" : "Preparacion del arbitro";
+  if (module === "preparation") return mode === "physical_training" ? "Entrenamiento fisico" : "Preparacion Integral";
   if (module === "communication") return "Comunicacion arbitral";
   if (module === "video") return "Video analisis";
   return topic === "VAR" ? "VAR Lab" : "Entrenamiento";

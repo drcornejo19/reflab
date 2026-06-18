@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Languages,
   MonitorCheck,
+  PlaySquare,
   ShieldCheck,
   Timer,
   type LucideIcon,
@@ -24,6 +25,14 @@ type EvaluationCard = {
 };
 
 const evaluations: EvaluationCard[] = [
+  {
+    titleKey: "evaluations.videoAnalysis.title",
+    categoryKey: "evaluations.videoAnalysis.category",
+    descriptionKey: "evaluations.videoAnalysis.description",
+    status: "Disponible",
+    href: "/training/video-analysis",
+    icon: PlaySquare,
+  },
   {
     titleKey: "evaluations.refereeExam.title",
     categoryKey: "evaluations.refereeExam.category",

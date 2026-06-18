@@ -81,6 +81,10 @@ const defaultConfig = {
 };
 
 const tabataCueSrc = "/audio/tabata-arbitral.wav";
+const tabataCountdownSrc = "/sounds/beeps-3-seconds.mp3";
+const mainCueGain = 2;
+const countdownGain = 2;
+const beepGain = 0.36;
 
 export function PhysicalTrainingClient() {
   const { user } = useUser();
@@ -97,6 +101,7 @@ export function PhysicalTrainingClient() {
   const [screenLocked, setScreenLocked] = useState(false);
   const [sessionMessage, setSessionMessage] = useState<string | null>(null);
   const savedSessionRef = useRef(false);
+  const playedSoundKeysRef = useRef<Set<string>>(new Set());
 
   const safePreparation = clampSeconds(preparation, 1, 600);
   const safeWork = clampSeconds(work, 1, 600);
@@ -104,6 +109,12 @@ export function PhysicalTrainingClient() {
   const safeSets = clampSeconds(sets, 1, 99);
   const activeDuration = getActiveDuration(phase, safePreparation, safeWork, safeRest);
   const progress = getProgress(phase, currentSet, safeSets, secondsLeft, activeDuration);
+
+  const playSoundOnce = useCallback((key: string, play: () => void) => {
+    if (playedSoundKeysRef.current.has(key)) return;
+    playedSoundKeysRef.current.add(key);
+    play();
+  }, []);
 
   function updateNumber(value: string, setter: (value: number) => void, min: number, max: number, onNext?: (next: number) => void) {
     const parsed = Number(value);
@@ -125,22 +136,22 @@ export function PhysicalTrainingClient() {
     setCurrentSet(1);
     setSecondsLeft(preset.preparation);
     setSessionMessage(null);
+    playedSoundKeysRef.current.clear();
   }
 
   function startTimer() {
     if (status === "paused") {
       setStatus("running");
-      playTabataCue(soundEnabled);
       return;
     }
 
     savedSessionRef.current = false;
+    playedSoundKeysRef.current.clear();
     setSessionMessage(null);
     setCurrentSet(1);
     setPhase("preparation");
     setSecondsLeft(safePreparation);
     setStatus("running");
-    playTabataCue(soundEnabled);
   }
 
   function pauseTimer() {
@@ -155,6 +166,7 @@ export function PhysicalTrainingClient() {
     setSessionMessage(null);
     setScreenLocked(false);
     savedSessionRef.current = false;
+    playedSoundKeysRef.current.clear();
   }
 
   const finishSession = useCallback(async () => {
@@ -162,7 +174,7 @@ export function PhysicalTrainingClient() {
     setStatus("finished");
     setScreenLocked(false);
     setSecondsLeft(0);
-    playTabataCue(soundEnabled);
+    playSoundOnce(`main:finish:${currentSet}`, () => playTabataCue(soundEnabled));
 
     if (savedSessionRef.current) return;
     savedSessionRef.current = true;
@@ -211,16 +223,16 @@ export function PhysicalTrainingClient() {
     const result = await insertAttemptSafely(supabase, primaryPayload, fallbackPayload);
     setSessionMessage(
       result.saved
-        ? "Tabata registrado para futuras metricas de Preparacion del arbitro."
+        ? "Tabata registrado para futuras metricas de Preparacion Integral."
         : "Rutina completada. Registro de sesiones en construccion hasta habilitar campos fisicos en Supabase."
     );
-  }, [safePreparation, safeRest, safeSets, safeWork, selectedPreset, soundEnabled, user]);
+  }, [currentSet, playSoundOnce, safePreparation, safeRest, safeSets, safeWork, selectedPreset, soundEnabled, user]);
 
   const advancePhase = useCallback(() => {
     if (phase === "preparation") {
       setPhase("work");
       setSecondsLeft(safeWork);
-      playTabataCue(soundEnabled);
+      playSoundOnce(`main:preparation-to-work:${currentSet}`, () => playTabataCue(soundEnabled));
       return;
     }
 
@@ -234,13 +246,13 @@ export function PhysicalTrainingClient() {
         setCurrentSet((value) => value + 1);
         setPhase("work");
         setSecondsLeft(safeWork);
-        playTabataCue(soundEnabled);
+        playSoundOnce(`main:work-to-next-work:${currentSet}`, () => playTabataCue(soundEnabled));
         return;
       }
 
       setPhase("rest");
       setSecondsLeft(safeRest);
-      playTabataCue(soundEnabled);
+      playSoundOnce(`main:work-to-rest:${currentSet}`, () => playTabataCue(soundEnabled));
       return;
     }
 
@@ -248,9 +260,25 @@ export function PhysicalTrainingClient() {
       setCurrentSet((value) => value + 1);
       setPhase("work");
       setSecondsLeft(safeWork);
-      playTabataCue(soundEnabled);
+      playSoundOnce(`main:rest-to-work:${currentSet}`, () => playTabataCue(soundEnabled));
     }
-  }, [currentSet, finishSession, phase, safeRest, safeSets, safeWork, soundEnabled]);
+  }, [currentSet, finishSession, phase, playSoundOnce, safeRest, safeSets, safeWork, soundEnabled]);
+
+  useEffect(() => {
+    if (status !== "running") return;
+
+    if ((phase === "preparation" || phase === "work") && secondsLeft === 3) {
+      playSoundOnce(`countdown:${phase}:${currentSet}`, () => playCountdownCue(soundEnabled));
+    }
+
+    if (phase === "rest" && secondsLeft === 10) {
+      playSoundOnce(`rest-warning-10:${currentSet}`, () => playBeep(soundEnabled, 1));
+    }
+
+    if (phase === "rest" && secondsLeft === 5) {
+      playSoundOnce(`rest-warning-5:${currentSet}`, () => playBeep(soundEnabled, 2));
+    }
+  }, [currentSet, phase, playSoundOnce, secondsLeft, soundEnabled, status]);
 
   useEffect(() => {
     if (status !== "running") return;
@@ -258,12 +286,7 @@ export function PhysicalTrainingClient() {
     const interval = window.setInterval(() => {
       setSecondsLeft((current) => {
         if (current > 1) {
-          const next = current - 1;
-          if (["preparation", "work", "rest"].includes(phase)) {
-            if (next === 10) playBeep(soundEnabled, 1);
-            if (next === 5) playBeep(soundEnabled, 2);
-          }
-          return next;
+          return current - 1;
         }
         advancePhase();
         return 0;
@@ -298,7 +321,7 @@ export function PhysicalTrainingClient() {
       <section className="rounded-[34px] border border-[#6fc11f]/25 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_36%),#071019] p-5 shadow-2xl lg:p-7">
         <div className="grid gap-5 lg:grid-cols-[1fr_360px] lg:items-end">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">Preparacion del arbitro</p>
+            <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">Preparacion Integral</p>
             <h1 className="mt-3 text-3xl font-black md:text-5xl">Preparacion integral</h1>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-300">
               Un espacio individual para preparar al arbitro desde bienestar, fisico, nutricion, psicologia, planificacion y etica profesional. Hoy el foco operativo es el Tabata arbitral.
@@ -447,7 +470,9 @@ export function PhysicalTrainingClient() {
 
             <div className="mt-5 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm leading-6 text-zinc-300">
               <p className="font-black text-white">Audio de transicion</p>
-              <p className="mt-1">El Tabata usa el audio personalizado de RefLab al iniciar, cambiar de fase y finalizar. A los 10 y 5 segundos conserva los avisos cortos anteriores.</p>
+              <p className="mt-1">
+                Preparacion y ejercicio usan cuenta regresiva final de 3 segundos. En descanso se mantienen los avisos de 10 y 5 segundos, y cada cambio de fase dispara el sonido principal fuerte.
+              </p>
             </div>
 
             {sessionMessage && <div className="mt-5 rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4 text-sm font-bold text-[#b7ff8a]">{sessionMessage}</div>}
@@ -540,21 +565,72 @@ function getProgress(phase: Phase, currentSet: number, sets: number, secondsLeft
 function playTabataCue(enabled: boolean, repetitions = 1) {
   if (!enabled || typeof window === "undefined") return;
 
-  const playOnce = () => {
-    try {
-      const audio = new Audio(tabataCueSrc);
-      audio.volume = 0.9;
-      audio.currentTime = 0;
-      void audio.play().catch(() => undefined);
-    } catch {
-      // El sonido es opcional. Si el navegador lo bloquea, el timer sigue funcionando.
-    }
-  };
+  const playOnce = () => playAmplifiedAudio(tabataCueSrc, enabled, mainCueGain);
 
   playOnce();
 
   for (let index = 1; index < repetitions; index += 1) {
     window.setTimeout(playOnce, index * 1900);
+  }
+}
+
+function playCountdownCue(enabled: boolean) {
+  playAmplifiedAudio(tabataCountdownSrc, enabled, countdownGain);
+}
+
+function playAmplifiedAudio(src: string, enabled: boolean, gainValue: number) {
+  if (!enabled || typeof window === "undefined") return;
+
+  try {
+    const audio = new Audio(src);
+    audio.preload = "auto";
+    audio.volume = 1;
+    audio.currentTime = 0;
+
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) {
+      void audio.play().catch(() => undefined);
+      return;
+    }
+
+    const context = new AudioContextClass();
+    const source = context.createMediaElementSource(audio);
+    const gain = context.createGain();
+    const compressor = context.createDynamicsCompressor();
+
+    gain.gain.setValueAtTime(gainValue, context.currentTime);
+    compressor.threshold.setValueAtTime(-10, context.currentTime);
+    compressor.knee.setValueAtTime(16, context.currentTime);
+    compressor.ratio.setValueAtTime(6, context.currentTime);
+    compressor.attack.setValueAtTime(0.003, context.currentTime);
+    compressor.release.setValueAtTime(0.18, context.currentTime);
+
+    source.connect(gain);
+    gain.connect(compressor);
+    compressor.connect(context.destination);
+
+    const cleanup = () => {
+      try {
+        source.disconnect();
+        gain.disconnect();
+        compressor.disconnect();
+      } catch {
+        // La limpieza del grafo de audio no debe afectar el temporizador.
+      }
+      void context.close().catch(() => undefined);
+    };
+
+    audio.addEventListener("ended", cleanup, { once: true });
+    audio.addEventListener("error", cleanup, { once: true });
+
+    const startPlayback = async () => {
+      if (context.state === "suspended") await context.resume();
+      await audio.play();
+    };
+
+    void startPlayback().catch(cleanup);
+  } catch {
+    // El sonido es opcional. Si el navegador lo bloquea, el timer sigue funcionando.
   }
 }
 
@@ -576,7 +652,7 @@ function playBeep(enabled: boolean, count: 1 | 2) {
       oscillator.type = "square";
       oscillator.frequency.setValueAtTime(1320, start);
       gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.18, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(beepGain, start + 0.015);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
 
       oscillator.connect(gain);

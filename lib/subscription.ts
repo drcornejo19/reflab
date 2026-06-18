@@ -14,7 +14,7 @@ export const proBenefits = [
   "Estadisticas completas",
   "Historial completo",
   "Comunicacion arbitral",
-  "Preparacion arbitral",
+  "Preparacion Integral",
   "Ranking",
   "RefCard",
   "Evolucion avanzada",

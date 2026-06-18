@@ -6,12 +6,10 @@ import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { useUserRole } from "@/lib/useUserRole";
 import {
   Activity,
-  Brain,
   ChevronRight,
   ClipboardCheck,
   MessageCircle,
   MonitorCheck,
-  PlaySquare,
   type LucideIcon,
 } from "lucide-react";
 
@@ -37,15 +35,6 @@ const modules: TrainingModule[] = [
     icon: ClipboardCheck,
   },
   {
-    title: "Video analisis",
-    category: "Clips",
-    description:
-      "Analiza clips reales, justifica decisiones y mejora tu lectura tecnica.",
-    href: "/training/video-analysis",
-    status: "Disponible",
-    icon: PlaySquare,
-  },
-  {
     title: "VAR Lab",
     category: "Protocolo",
     description:
@@ -68,26 +57,15 @@ const modules: TrainingModule[] = [
     freeNote: "Comunicacion arbitral se desbloquea con RefLab Pro.",
   },
   {
-    title: "Preparacion del arbitro",
+    title: "Preparacion Integral",
     category: "Desarrollo",
     description:
-      "Psicologia, fisico, nutricion, recuperacion, etica y carrera arbitral.",
+      "Entrenamiento fisico, Tabata, psicologia arbitral, preparacion mental y rutinas pre/post partido.",
     href: "/training/referee-preparation",
-    status: "En construccion",
+    status: "Disponible",
     icon: Activity,
     proOnly: true,
-    freeNote: "La preparacion arbitral completa se desbloquea con RefLab Pro.",
-  },
-  {
-    title: "Psicologia arbitral",
-    category: "Mental",
-    description:
-      "Check-ins pre y post partido, gestion del error, foco, confianza y presion competitiva.",
-    href: "/training/psychology",
-    status: "Beta",
-    icon: Brain,
-    proOnly: true,
-    freeNote: "Psicologia arbitral se desbloquea con RefLab Pro.",
+    freeNote: "Preparacion Integral se desbloquea con RefLab Pro.",
   },
 ];
 
@@ -109,7 +87,7 @@ export default function TrainingPage() {
               </h1>
 
               <p className="mt-4 max-w-3xl text-sm leading-6 text-zinc-400 sm:text-base sm:leading-7 lg:text-lg lg:leading-8">
-                Elegi un area para entrenar habilidades tecnicas, cognitivas, comunicacionales y fisicas del arbitraje.
+                Elegi actividades practicas para entrenar habilidades tecnicas, comunicacionales y de preparacion del arbitraje.
               </p>
             </div>
 
@@ -128,7 +106,7 @@ export default function TrainingPage() {
           <ProUpgradeCard
             compact
             title="Entrenamiento FREE activo"
-            description="Podes probar RefLab con decision arbitral, video analisis y contenidos base. Cuando quieras entrenar sin limites, desbloqueas la experiencia completa."
+            description="Podes probar RefLab con decision arbitral y contenidos base. Las evaluaciones por video ahora viven en el modulo Evaluaciones."
             reason="Plan FREE: hasta 5 clips por semana y 1 examen semanal."
           />
         )}

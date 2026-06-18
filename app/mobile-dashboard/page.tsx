@@ -169,10 +169,6 @@ export default function MobileDashboardPage() {
     return getWeakest(criterionPerformance);
   }, [criterionPerformance]);
 
-  const strongestTopic = useMemo(() => {
-    return getStrongest(topicPerformance);
-  }, [topicPerformance]);
-
   const weakestTopic = useMemo(() => {
     return getWeakest(topicPerformance);
   }, [topicPerformance]);
@@ -417,10 +413,10 @@ export default function MobileDashboardPage() {
           />
 
           <QuickAction
-            href="/training/video-analysis"
+            href="/evaluations"
             icon={PlaySquare}
-            title="Video"
-            text="Analisis tecnico"
+            title="Evaluar"
+            text="Video analisis"
           />
 
           <QuickAction

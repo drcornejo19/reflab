@@ -566,10 +566,10 @@ function PerformanceHero() {
   return (
     <header className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-4 shadow-2xl sm:rounded-[34px] lg:p-7">
       <div>
-        <p className="break-words text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.45em]">REFLAB PERFORMANCE</p>
-        <h1 className="mt-3 break-words text-3xl font-black leading-tight md:mt-4 md:text-5xl">Rendimiento</h1>
+        <p className="break-words text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.45em]">B. Como viene evolucionando el arbitro?</p>
+        <h1 className="mt-3 break-words text-3xl font-black leading-tight md:mt-4 md:text-5xl">Rendimiento y evolucion</h1>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 md:text-base">
-          Elegi un modulo de analisis para revisar evolucion, plan recomendado, topicos, criterios, modulos, historial, ranking o diagnostico complementario.
+          Metricas derivadas de intentos reales: radar arbitral, promedio general, historial, fortalezas, aspectos a mejorar, rendimiento por topico, rendimiento por criterio y plan recomendado.
         </p>
       </div>
     </header>

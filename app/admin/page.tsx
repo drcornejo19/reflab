@@ -75,11 +75,12 @@ const adminAreas: AdminArea[] = [
     icon: BellRing,
   },
   {
-    title: "Biblioteca",
+    title: "Biblioteca IFAB",
     category: "Recursos",
     description:
-      "Gestion futura de documentos, glosario, material RefLab y temporadas IFAB.",
-    status: "Proximamente",
+      "Carga documentos oficiales, circulares, resumenes, vigencias y material IFAB.",
+    status: "Disponible",
+    href: "/admin/library",
     icon: BookOpen,
   },
   {

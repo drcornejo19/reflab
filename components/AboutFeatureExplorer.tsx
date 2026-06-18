@@ -31,7 +31,7 @@ const features: Feature[] = [
     title: "VAR Lab",
     eyebrow: "Protocolo",
     description:
-      "Entrena protocolo VAR, OFR, APP, errores claros y obvios, factual vs interpretativo y decisiÃ³n final.",
+      "Entrena protocolo VAR, OFR, APP, errores claros y obvios, factual vs interpretativo y decision final.",
     href: "/training/var",
     cta: "Abrir VAR Lab",
     icon: MonitorCheck,
@@ -48,12 +48,12 @@ const features: Feature[] = [
   },
   {
     id: "analyze",
-    title: "Analiza",
-    eyebrow: "Lectura tecnica",
+    title: "Evalua",
+    eyebrow: "Video analisis",
     description:
-      "Revisa jugadas, fundamentos, posicionamiento, comunicacion y toma de decisiones con una mirada tecnica.",
-    href: "/training/video-analysis",
-    cta: "Analizar clips",
+      "Resuelve clips reales como evaluacion de toma de decisiones: tecnica, disciplina, reanudacion y criterio.",
+    href: "/evaluations",
+    cta: "Ir a Evaluaciones",
     icon: PlaySquare,
   },
   {

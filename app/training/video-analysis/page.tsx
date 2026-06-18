@@ -11,12 +11,12 @@ export default function VideoAnalysisPage() {
           </p>
 
           <h1 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">
-            Video Análisis
+            Video Analisis
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-            Analizá clips reales, justificá decisiones y trabajá la lectura
-            técnica de jugadas.
+            Evaluacion por video para analizar clips reales, justificar decisiones
+            y medir lectura tecnica de jugadas.
           </p>
         </header>
 
