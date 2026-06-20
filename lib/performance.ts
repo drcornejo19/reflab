@@ -694,7 +694,10 @@ function isValidTopicItem(
   storedTopic?: string
 ) {
   if (!coreTechnicalTopics.includes(topic)) return true;
-  if (!hasClipIndex) return true;
+  // Technical radar values are valid only while their source clip still
+  // exists and is active. Historical rows remain stored, but cannot leak
+  // into another topic or keep a retired module visible in the radar.
+  if (!hasClipIndex) return false;
   if (!clip || !isActiveClip(clip)) return false;
   if (storedTopic && storedTopic !== "Sin topico" && storedTopic !== topic) return false;
   return true;

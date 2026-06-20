@@ -12,13 +12,20 @@ import {
   Trophy,
 } from "lucide-react";
 import { insertAttemptSafely } from "@/lib/attemptPersistence";
+import {
+  ifabGlossaryTerms,
+  spanishDecisionExercises,
+  triviaItems,
+  type SpanishDecisionExercise,
+  type TriviaItem,
+  type TriviaMode,
+} from "@/lib/communicationContent";
 import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
 import { supabase } from "@/lib/supabase";
 import { getEnglishClips, type ClipRecord } from "@/lib/clips";
 
 type EnglishClip = ClipRecord;
 type CommunicationMode = "spanish" | "english" | "trivia";
-type TriviaMode = "choice" | "true_false" | "match" | "flashcards";
 
 type FeedbackScores = {
   terminology?: number | null;
@@ -30,16 +37,6 @@ type FeedbackScores = {
   global?: number | null;
   globalLabel?: string | null;
   modelAnswer?: string | null;
-};
-
-type TriviaItem = {
-  id: string;
-  mode: TriviaMode;
-  term: string;
-  prompt: string;
-  options?: string[];
-  answer: string;
-  explanation: string;
 };
 
 const modeCards: {
@@ -68,111 +65,6 @@ const modeCards: {
   },
 ];
 
-const usefulTerms = [
-  "Direct Free Kick",
-  "Indirect Free Kick",
-  "Penalty Kick",
-  "Yellow Card",
-  "Red Card",
-  "Serious Foul Play",
-  "Violent Conduct",
-  "SPA",
-  "DOGSO",
-  "Play On",
-  "Check Complete",
-  "On-Field Review",
-  "No Offence",
-  "Handball",
-  "Offside",
-];
-
-const triviaItems: TriviaItem[] = [
-  {
-    id: "yellow-card",
-    mode: "choice",
-    term: "Yellow Card",
-    prompt: "Como se dice Tarjeta Amarilla?",
-    options: ["Red Card", "Yellow Card", "Warning Card", "Referee Card"],
-    answer: "Yellow Card",
-    explanation: "Yellow Card es la amonestacion disciplinaria.",
-  },
-  {
-    id: "play-on",
-    mode: "choice",
-    term: "Play On",
-    prompt: "Como se comunica Ventaja?",
-    options: ["Continue", "Play On", "Advantage Game", "Let Play"],
-    answer: "Play On",
-    explanation: "Play On es la comunicacion usada para indicar ventaja.",
-  },
-  {
-    id: "dogso",
-    mode: "choice",
-    term: "DOGSO",
-    prompt: "Que significa DOGSO?",
-    options: [
-      "Denying an Obvious Goal-Scoring Opportunity",
-      "Direct Offside Goal Situation Opportunity",
-      "Dangerous Offensive Goal Situation",
-      "None",
-    ],
-    answer: "Denying an Obvious Goal-Scoring Opportunity",
-    explanation: "DOGSO describe impedir una oportunidad manifiesta de gol.",
-  },
-  {
-    id: "var-official",
-    mode: "true_false",
-    term: "Video Assistant Referee",
-    prompt: "Video Assistant Referee significa arbitro asistente de video.",
-    options: ["Verdadero", "Falso"],
-    answer: "Verdadero",
-    explanation: "Es la denominacion IFAB para el oficial VAR.",
-  },
-  {
-    id: "no-offence",
-    mode: "true_false",
-    term: "No Offence",
-    prompt: "No Offence se usa para comunicar que hubo infraccion sancionable.",
-    options: ["Verdadero", "Falso"],
-    answer: "Falso",
-    explanation: "No Offence indica que no hay infraccion sancionable.",
-  },
-  {
-    id: "restart-dfk",
-    mode: "match",
-    term: "Direct Free Kick",
-    prompt: "Relaciona Direct Free Kick con su significado.",
-    options: ["Tiro libre directo", "Saque de esquina", "Balon a tierra", "Saque de meta"],
-    answer: "Tiro libre directo",
-    explanation: "Direct Free Kick es tiro libre directo.",
-  },
-  {
-    id: "restart-dropped",
-    mode: "match",
-    term: "Dropped Ball",
-    prompt: "Relaciona Dropped Ball con su significado.",
-    options: ["Penal", "Balon a tierra", "Tiro libre indirecto", "Saque de banda"],
-    answer: "Balon a tierra",
-    explanation: "Dropped Ball es balon a tierra.",
-  },
-  {
-    id: "flash-penalty-area",
-    mode: "flashcards",
-    term: "Penalty Area",
-    prompt: "Penalty Area",
-    answer: "Area penal",
-    explanation: "Zona del campo donde pueden sancionarse penales por infracciones directas.",
-  },
-  {
-    id: "flash-ofr",
-    mode: "flashcards",
-    term: "On-Field Review",
-    prompt: "On-Field Review",
-    answer: "Revision en campo",
-    explanation: "Revision realizada por el arbitro en el monitor del area de revision.",
-  },
-];
-
 export function EnglishExercise() {
   const { user } = useUser();
   const startedAtRef = useRef<number>(0);
@@ -180,6 +72,9 @@ export function EnglishExercise() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loadingClips, setLoadingClips] = useState(true);
   const [activeMode, setActiveMode] = useState<CommunicationMode>("spanish");
+  const [selectedSpanishExerciseId, setSelectedSpanishExerciseId] = useState(
+    spanishDecisionExercises[0]?.id ?? ""
+  );
 
   const [answer, setAnswer] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -194,6 +89,17 @@ export function EnglishExercise() {
   const chunksRef = useRef<Blob[]>([]);
 
   const currentClip = clips[currentIndex];
+  const spanishExerciseOptions = useMemo(
+    () =>
+      spanishDecisionExercises.map((exercise) => ({
+        ...exercise,
+        clipIndex: clips.findIndex((clip) => matchesSpanishExercise(clip, exercise)),
+      })),
+    [clips]
+  );
+  const selectedSpanishExercise = spanishDecisionExercises.find(
+    (exercise) => exercise.id === selectedSpanishExerciseId
+  );
 
   useEffect(() => {
     let active = true;
@@ -249,7 +155,10 @@ export function EnglishExercise() {
           clipTitle: currentClip?.title,
           topic: currentClip?.topic,
           answer,
-          expected: currentClip?.explanation,
+          expected:
+            activeMode === "spanish" && selectedSpanishExercise
+              ? `${selectedSpanishExercise.prompt}\n${currentClip?.explanation ?? ""}`
+              : currentClip?.explanation,
           hasVoiceRecording: Boolean(audioBlob),
           feedbackLanguage: getBrowserFeedbackLanguage(),
         }),
@@ -300,7 +209,10 @@ export function EnglishExercise() {
     const primaryPayload = {
       user_id: user.id,
       clip_id: currentClip.id,
-      clip_title: currentClip.title ?? "Comunicacion arbitral",
+      clip_title:
+        activeMode === "spanish" && selectedSpanishExercise
+          ? selectedSpanishExercise.title
+          : currentClip.title ?? "Comunicacion arbitral",
       module: isEnglishMode ? "english_referee" : "communication_referee",
       mode: isEnglishMode ? "english" : "decision_explanation_es",
       communication_mode: isEnglishMode ? "ifab_english" : "decision_explanation_es",
@@ -467,6 +379,48 @@ export function EnglishExercise() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1.35fr_0.9fr]">
           <section className="space-y-4">
+            {activeMode === "spanish" && (
+              <div className="rounded-2xl border border-white/10 bg-[#0b131b] p-4">
+                <p className="text-xs font-black uppercase tracking-[0.24em] text-[#6fc11f]">
+                  5 ejercicios de explicación pública
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {spanishExerciseOptions.map((exercise) => {
+                    const available = exercise.clipIndex >= 0;
+                    const selected = exercise.id === selectedSpanishExerciseId;
+
+                    return (
+                      <button
+                        key={exercise.id}
+                        type="button"
+                        disabled={!available}
+                        onClick={() => {
+                          resetAnswer();
+                          setSelectedSpanishExerciseId(exercise.id);
+                          setCurrentIndex(exercise.clipIndex);
+                        }}
+                        className={`rounded-xl border p-3 text-left transition ${
+                          selected
+                            ? "border-[#6fc11f]/60 bg-[#6fc11f]/10"
+                            : "border-white/10 bg-white/[0.03]"
+                        } disabled:cursor-not-allowed disabled:opacity-45`}
+                      >
+                        <p className="text-sm font-black text-white">{exercise.title}</p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          {available ? "Clip compatible disponible" : "Pendiente de clip compatible"}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedSpanishExercise && (
+                  <p className="mt-3 rounded-xl bg-black/20 p-3 text-sm leading-6 text-zinc-300">
+                    {selectedSpanishExercise.prompt}
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#0b131b] p-4">
               <button
                 onClick={previousClip}
@@ -510,7 +464,7 @@ export function EnglishExercise() {
 
               <div className="mt-3 flex flex-wrap gap-2">
                 {(activeMode === "english"
-                  ? usefulTerms
+                  ? ifabGlossaryTerms
                   : [
                       "Luego de la revision observo...",
                       "Decision final",
@@ -785,10 +739,12 @@ function IfabTrivia({ userId }: { userId: string | null }) {
           <>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.24em] text-[#6fc11f]">
-                  {current.term}
-                </p>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em]">
+                  <span className="rounded-full bg-[#6fc11f]/10 px-3 py-1 text-[#6fc11f]">{current.term}</span>
+                  <span className="rounded-full bg-white/5 px-3 py-1 text-zinc-400">{current.difficulty}</span>
+                </div>
                 <h3 className="mt-3 text-2xl font-black text-white">{current.prompt}</h3>
+                <p className="mt-2 text-xs font-bold text-zinc-500">{current.reference}</p>
               </div>
               <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-black text-zinc-400">
                 {index + 1}/{items.length}
@@ -940,12 +896,44 @@ async function saveTriviaAttempt(
     clip_title: item.term,
     score,
     topic: "IFAB English Vocabulary",
-    difficulty: "ifab_trivia",
+    difficulty: item.difficulty.toLowerCase(),
     is_correct: correct,
     technical_correct: correct,
   };
 
   await insertAttemptSafely(supabase, primaryPayload, fallbackPayload);
+}
+
+function matchesSpanishExercise(
+  clip: EnglishClip,
+  exercise: SpanishDecisionExercise
+) {
+  const topic = normalizeMatchValue(clip.topic);
+  const restart = normalizeMatchValue(clip.correct_restart);
+  const discipline = normalizeMatchValue(clip.correct_discipline);
+  const expectedTopic = normalizeMatchValue(exercise.match.topic);
+  const expectedRestart = normalizeMatchValue(exercise.match.correctRestart);
+  const expectedDiscipline = normalizeMatchValue(exercise.match.correctDiscipline);
+
+  if (expectedTopic && topic !== expectedTopic) return false;
+  if (expectedRestart && restart !== expectedRestart) return false;
+  if (expectedDiscipline && !discipline.includes(expectedDiscipline)) return false;
+  if (
+    typeof exercise.match.correctFoul === "boolean" &&
+    clip.correct_foul !== exercise.match.correctFoul
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function normalizeMatchValue(value?: string | null) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
 }
 
 function normalizeScores(value: unknown): FeedbackScores | null {

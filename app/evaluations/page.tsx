@@ -60,7 +60,8 @@ const evaluations: EvaluationCard[] = [
     titleKey: "evaluations.englishExam.title",
     categoryKey: "evaluations.englishExam.category",
     descriptionKey: "evaluations.englishExam.description",
-    status: "Proximamente",
+    status: "Beta",
+    href: "/training/communication",
     icon: Languages,
   },
   {

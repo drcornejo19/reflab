@@ -10,8 +10,8 @@ export async function GET() {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "",
   };
   const body = `
-importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/12.14.0/firebase-messaging-compat.js");
 
 const firebaseConfig = ${JSON.stringify(firebaseConfig)};
 const isConfigured =

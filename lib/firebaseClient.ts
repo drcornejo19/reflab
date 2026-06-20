@@ -26,6 +26,17 @@ export type ForegroundNotificationPayload = {
   type?: string;
 };
 
+export type PushEnvironment = {
+  isIos: boolean;
+  isStandalone: boolean;
+  isSecure: boolean;
+  hasNotificationApi: boolean;
+  hasServiceWorker: boolean;
+  permission: NotificationPermission | "unsupported";
+  ready: boolean;
+  message: string;
+};
+
 export function getFirebasePublicConfig() {
   const firebaseConfig: FirebasePublicConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -50,7 +61,71 @@ export function hasFirebasePublicConfig() {
   return getFirebasePublicConfig().isConfigured;
 }
 
+export function getPushEnvironment(): PushEnvironment {
+  if (typeof window === "undefined") {
+    return {
+      isIos: false,
+      isStandalone: false,
+      isSecure: false,
+      hasNotificationApi: false,
+      hasServiceWorker: false,
+      permission: "unsupported",
+      ready: false,
+      message: "Disponible al abrir RefLab desde el dispositivo.",
+    };
+  }
+
+  const navigatorWithStandalone = navigator as Navigator & { standalone?: boolean };
+  const isIos =
+    /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    navigatorWithStandalone.standalone === true;
+  const isSecure = window.isSecureContext;
+  const hasNotificationApi = "Notification" in window;
+  const hasServiceWorker = "serviceWorker" in navigator;
+  const permission = hasNotificationApi ? Notification.permission : "unsupported";
+  const ready =
+    isSecure &&
+    hasNotificationApi &&
+    hasServiceWorker &&
+    (!isIos || isStandalone) &&
+    permission !== "denied";
+
+  let message = "El dispositivo es compatible con Web Push.";
+  if (!isSecure) message = "Web Push requiere HTTPS.";
+  else if (isIos && !isStandalone) {
+    message = "En iPhone o iPad, instala RefLab en la pantalla de inicio y abre la app instalada.";
+  } else if (!hasNotificationApi || !hasServiceWorker) {
+    message = "Este navegador no ofrece las APIs necesarias para Web Push.";
+  } else if (permission === "denied") {
+    message = "El permiso está bloqueado en la configuración del dispositivo o navegador.";
+  } else if (permission === "granted") {
+    message = "Permiso concedido en este dispositivo.";
+  }
+
+  return {
+    isIos,
+    isStandalone,
+    isSecure,
+    hasNotificationApi,
+    hasServiceWorker,
+    permission,
+    ready,
+    message,
+  };
+}
+
 export async function requestFcmToken() {
+  return getFcmToken(true);
+}
+
+export async function refreshFcmToken() {
+  return getFcmToken(false);
+}
+
+async function getFcmToken(requestPermission: boolean) {
   if (typeof window === "undefined") {
     throw new Error("Las notificaciones push solo pueden activarse desde el navegador.");
   }
@@ -60,8 +135,9 @@ export async function requestFcmToken() {
     throw new Error("Firebase Cloud Messaging no esta configurado en las variables de entorno.");
   }
 
-  if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-    throw new Error("Este navegador no soporta notificaciones web push.");
+  const environment = getPushEnvironment();
+  if (!environment.ready) {
+    throw new Error(environment.message);
   }
 
   const supported = await isSupported();
@@ -69,14 +145,23 @@ export async function requestFcmToken() {
     throw new Error("Firebase Cloud Messaging no esta disponible en este navegador.");
   }
 
-  const permission = await Notification.requestPermission();
+  const permission =
+    Notification.permission === "default" && requestPermission
+      ? await Notification.requestPermission()
+      : Notification.permission;
   if (permission !== "granted") {
-    throw new Error("Permiso de notificaciones no concedido.");
+    throw new Error(
+      permission === "denied"
+        ? "El permiso de notificaciones está bloqueado en este dispositivo."
+        : "Activa las notificaciones desde el botón para conceder el permiso."
+    );
   }
 
   const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
     scope: "/",
+    updateViaCache: "none",
   });
+  await registration.update().catch(() => undefined);
   const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
   const messaging = getMessaging(app);
   const token = await getToken(messaging, {
@@ -89,6 +174,20 @@ export async function requestFcmToken() {
   }
 
   return token;
+}
+
+export async function showForegroundPush(notification: ForegroundNotificationPayload) {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+  const registration = await navigator.serviceWorker.ready;
+  await registration.showNotification(notification.title, {
+    body: notification.body,
+    icon: "/icon-512.png",
+    badge: "/icon-512.png",
+    tag: notification.type ? `reflab-${notification.type}` : "reflab",
+    data: { url: notification.actionUrl },
+  });
 }
 
 export async function subscribeToForegroundMessages(

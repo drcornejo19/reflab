@@ -5,8 +5,10 @@ import {
   AlertCircle,
   BellRing,
   CheckCircle2,
+  Download,
   Loader2,
   Send,
+  Smartphone,
 } from "lucide-react";
 import {
   type NotificationPreferences,
@@ -14,9 +16,13 @@ import {
 } from "@/lib/notifications";
 import {
   hasFirebasePublicConfig,
+  getPushEnvironment,
+  refreshFcmToken,
   requestFcmToken,
+  showForegroundPush,
   subscribeToForegroundMessages,
   type ForegroundNotificationPayload,
+  type PushEnvironment,
 } from "@/lib/firebaseClient";
 
 export function NotificationSettingsClient() {
@@ -29,7 +35,16 @@ export function NotificationSettingsClient() {
   const [error, setError] = useState<string | null>(null);
   const [foregroundNotification, setForegroundNotification] =
     useState<ForegroundNotificationPayload | null>(null);
+  const [pushEnvironment, setPushEnvironment] = useState<PushEnvironment | null>(null);
   const firebaseConfigured = hasFirebasePublicConfig();
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPushEnvironment(getPushEnvironment());
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     async function loadPreferences() {
@@ -68,24 +83,9 @@ export function NotificationSettingsClient() {
     subscribeToForegroundMessages((notification) => {
       setForegroundNotification(notification);
       setMessage(`Notificacion recibida: ${notification.title}`);
-
-      if (
-        typeof window !== "undefined" &&
-        "Notification" in window &&
-        Notification.permission === "granted"
-      ) {
-        const browserNotification = new Notification(notification.title, {
-          body: notification.body,
-          icon: "/icon-512.png",
-          badge: "/icon-512.png",
-          data: { url: notification.actionUrl },
-        });
-
-        browserNotification.onclick = () => {
-          window.focus();
-          window.location.href = notification.actionUrl;
-        };
-      }
+      void showForegroundPush(notification).catch((foregroundPushError) => {
+        console.warn("Foreground push display unavailable", foregroundPushError);
+      });
     })
       .then((nextUnsubscribe) => {
         if (cancelled) {
@@ -102,6 +102,37 @@ export function NotificationSettingsClient() {
     return () => {
       cancelled = true;
       unsubscribe?.();
+    };
+  }, [firebaseConfigured, preferences?.pushEnabled]);
+
+  useEffect(() => {
+    if (!firebaseConfigured || !preferences?.pushEnabled) return;
+
+    const environment = getPushEnvironment();
+    if (environment.permission !== "granted" || !environment.ready) return;
+
+    let cancelled = false;
+
+    refreshFcmToken()
+      .then(async (token) => {
+        if (cancelled) return;
+        const response = await fetch("/api/notifications/register-token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data?.technical || data?.error || "No se pudo renovar el dispositivo.");
+        }
+      })
+      .catch((tokenError) => {
+        console.warn("Push token refresh unavailable", tokenError);
+      });
+
+    return () => {
+      cancelled = true;
     };
   }, [firebaseConfigured, preferences?.pushEnabled]);
 
@@ -164,6 +195,7 @@ export function NotificationSettingsClient() {
         pushEnabled: true,
       };
       setPreferences(nextPreferences);
+      setPushEnvironment(getPushEnvironment());
       setMessage("Notificaciones push activadas para este dispositivo.");
     } catch (pushError) {
       setError(
@@ -289,6 +321,27 @@ export function NotificationSettingsClient() {
           {error ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
           <span>{error || message}</span>
         </div>
+      )}
+
+      {pushEnvironment && (
+        <section className="rounded-[24px] border border-white/10 bg-white/[0.035] p-4 sm:p-5">
+          <div className="flex items-start gap-3">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]">
+              {pushEnvironment.isIos && !pushEnvironment.isStandalone ? <Download size={20} /> : <Smartphone size={20} />}
+            </div>
+            <div className="min-w-0">
+              <p className="font-black text-white">
+                {pushEnvironment.isIos ? "Estado push en iPhone / iPad" : "Estado push de este dispositivo"}
+              </p>
+              <p className="mt-1 text-sm leading-6 text-zinc-400">{pushEnvironment.message}</p>
+              {pushEnvironment.isIos && !pushEnvironment.isStandalone && (
+                <p className="mt-2 text-xs font-bold leading-5 text-[#b7ff8a]">
+                  Abrí Compartir, elegí “Agregar a pantalla de inicio” y activá push dentro de la app instalada.
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
       )}
 
       {foregroundNotification && (

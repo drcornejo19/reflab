@@ -2,10 +2,6 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { feedbackLanguageInstruction } from "@/lib/feedbackLanguage";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 type FeedbackMode = "decision_explanation_es" | "ifab_english";
 
 export async function POST(req: Request) {
@@ -31,7 +27,7 @@ export async function POST(req: Request) {
       languageInstruction,
     });
 
-    const response = await client.chat.completions.create({
+    const response = await getOpenAIClient().chat.completions.create({
       model: "gpt-4o-mini",
       response_format: { type: "json_object" },
       messages: [
@@ -64,6 +60,10 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+}
+
+function getOpenAIClient() {
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
 function buildPrompt({

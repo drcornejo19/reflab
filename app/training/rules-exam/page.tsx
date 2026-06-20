@@ -28,40 +28,19 @@ export default function RulesExamPage() {
   const { isPro, loadingRole } = useUserRole();
 
   const questions = useMemo(() => {
-    const heavyTopics = [
-      "Fuera de juego",
-      "Mano",
-      "SPA / DOGSO",
-      "VAR",
-      "Disciplina",
-      "Situaciones especiales",
-    ];
-
-    const heavyQuestions = rulesQuestions.filter((q) =>
-      heavyTopics.includes(q.topic)
+    const lawTopics = Array.from({ length: 17 }, (_, index) => `Regla ${index + 1}`);
+    const selectedByLaw = lawTopics.flatMap((topic) =>
+      shuffle(rulesQuestions.filter((question) => question.topic === topic)).slice(0, 1)
+    );
+    const selectedIds = new Set(selectedByLaw.map((question) => question.id));
+    const advancedPool = rulesQuestions.filter(
+      (question) => !selectedIds.has(question.id) && (question.topic === "VAR" || question.difficulty === "Avanzada")
     );
 
-    const otherQuestions = rulesQuestions.filter(
-      (q) => !heavyTopics.includes(q.topic)
-    );
-
-    const selectedHeavy = shuffle(heavyQuestions).slice(0, 14);
-    const selectedOther = shuffle(otherQuestions).slice(0, 6);
-
-    const selected = [...selectedHeavy, ...selectedOther];
-    const selectedIds = new Set(selected.map((q) => q.id));
-
-    const missingCount = EXAM_LIMIT - selected.length;
-
-    const filler =
-      missingCount > 0
-        ? shuffle(rulesQuestions.filter((q) => !selectedIds.has(q.id))).slice(
-            0,
-            missingCount
-          )
-        : [];
-
-    return shuffle([...selected, ...filler]).slice(0, EXAM_LIMIT);
+    return shuffle([
+      ...selectedByLaw,
+      ...shuffle(advancedPool).slice(0, EXAM_LIMIT - selectedByLaw.length),
+    ]).slice(0, EXAM_LIMIT);
   }, []);
 
   const [started, setStarted] = useState(false);
@@ -120,16 +99,17 @@ export default function RulesExamPage() {
   useEffect(() => {
     if (!started || finished) return;
 
-    if (timeLeft <= 0) {
-      finishExam("time");
-      return;
-    }
+    const timer = window.setTimeout(() => {
+      if (timeLeft <= 1) {
+        setTimeLeft(0);
+        finishExam("time");
+        return;
+      }
 
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => prev - 1);
+      setTimeLeft(timeLeft - 1);
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => window.clearTimeout(timer);
   }, [started, finished, timeLeft, finishExam]);
 
   useEffect(() => {
@@ -284,6 +264,9 @@ export default function RulesExamPage() {
         is_correct: isCorrect,
         unanswered: !isAnswered,
         explanation: question.explanation,
+        ifab_explanation: question.ifabExplanation,
+        law_reference: question.lawReference,
+        difficulty: question.difficulty,
       };
     });
 
@@ -506,6 +489,46 @@ export default function RulesExamPage() {
             </p>
           </section>
 
+          <section className="rounded-3xl border border-white/10 bg-[#101820] p-4 sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#6fc11f]">
+              Revisión técnica
+            </p>
+            <h2 className="mt-3 text-2xl font-black">Respuestas y fundamento IFAB</h2>
+            <div className="mt-5 space-y-3">
+              {questions.map((question, questionIndex) => {
+                const selectedAnswer = answers[questionIndex];
+                const answeredCorrectly = selectedAnswer === question.correct;
+
+                return (
+                  <article
+                    key={question.id}
+                    className={`rounded-2xl border p-4 ${
+                      answeredCorrectly
+                        ? "border-[#6fc11f]/25 bg-[#6fc11f]/5"
+                        : "border-red-400/20 bg-red-500/5"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em]">
+                      <span className="rounded-full bg-white/5 px-3 py-1 text-zinc-300">{question.lawReference}</span>
+                      <span className="rounded-full bg-white/5 px-3 py-1 text-zinc-400">{question.difficulty}</span>
+                    </div>
+                    <p className="mt-3 font-black leading-6 text-white">{question.question}</p>
+                    <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                      <p className="rounded-xl bg-black/20 p-3 text-zinc-300">
+                        Tu respuesta: <strong className={answeredCorrectly ? "text-[#6fc11f]" : "text-red-300"}>{selectedAnswer === undefined ? "Sin responder" : question.options[selectedAnswer]}</strong>
+                      </p>
+                      <p className="rounded-xl bg-black/20 p-3 text-zinc-300">
+                        Correcta: <strong className="text-white">{question.options[question.correct]}</strong>
+                      </p>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-zinc-300">{question.explanation}</p>
+                    <p className="mt-2 text-sm leading-6 text-zinc-400">{question.ifabExplanation}</p>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+
           <div className="grid gap-3 md:grid-cols-2">
             <button
               onClick={saveRulesExam}
@@ -561,8 +584,13 @@ export default function RulesExamPage() {
         </header>
 
         <section className="rounded-3xl border border-white/10 bg-[#101820] p-6">
-          <div className="mb-4 inline-flex rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-xs font-black text-[#6fc11f]">
-            {currentQuestion.topic}
+          <div className="mb-4 flex flex-wrap gap-2">
+            <span className="inline-flex rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-xs font-black text-[#6fc11f]">
+              {currentQuestion.lawReference}
+            </span>
+            <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-black text-zinc-300">
+              {currentQuestion.difficulty}
+            </span>
           </div>
 
           <p className="text-lg font-bold leading-8">

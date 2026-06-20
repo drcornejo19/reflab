@@ -9,7 +9,7 @@ import {
   type SmartNotificationType,
 } from "@/lib/notifications";
 
-type SupabaseAnyClient = SupabaseClient<any, any, any>;
+type SupabaseAnyClient = SupabaseClient;
 
 type NotificationPreferenceRow = {
   training_enabled?: boolean | null;
@@ -191,10 +191,32 @@ export async function sendSmartNotificationToUser(
   }
 
   const results = await Promise.all(
-    tokens.map(async ({ token }) => sendFcmNotification(token, notification))
+    tokens.map(async ({ id, token }) => ({
+      id,
+      ...(await sendFcmNotification(token, notification)),
+    }))
   );
   const failed = results.filter((result) => !result.ok);
   const successCount = results.length - failed.length;
+  const invalidTokenIds = failed
+    .filter((result) =>
+      [
+        "messaging/registration-token-not-registered",
+        "messaging/invalid-registration-token",
+      ].includes(result.errorCode ?? "")
+    )
+    .map((result) => result.id);
+
+  if (invalidTokenIds.length > 0) {
+    const { error: disableError } = await supabase
+      .from("notification_tokens")
+      .update({ enabled: false, updated_at: new Date().toISOString() })
+      .in("id", invalidTokenIds);
+
+    if (disableError) {
+      console.error("Invalid notification token cleanup failed", disableError);
+    }
+  }
 
   await recordNotificationEvent(
     supabase,

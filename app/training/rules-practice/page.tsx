@@ -1,15 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { rulesQuestions } from "@/lib/rulesQuestions";
 
 const FREE_LIMIT = 10;
 
 export default function RulesPracticePage() {
-  const questions = useMemo(() => {
-    return [...rulesQuestions].sort(() => Math.random() - 0.5).slice(0, FREE_LIMIT);
-  }, []);
+  const [questions] = useState(() => rulesQuestions.slice(0, FREE_LIMIT));
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
@@ -93,8 +91,13 @@ export default function RulesPracticePage() {
         </header>
 
         <section className="rounded-3xl border border-white/10 bg-[#101820] p-6">
-          <div className="mb-4 inline-flex rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-xs font-black text-[#6fc11f]">
-            {currentQuestion.topic}
+          <div className="mb-4 flex flex-wrap gap-2">
+            <span className="inline-flex rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-xs font-black text-[#6fc11f]">
+              {currentQuestion.lawReference}
+            </span>
+            <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-black text-zinc-300">
+              {currentQuestion.difficulty}
+            </span>
           </div>
 
           <p className="text-lg font-bold leading-8">
@@ -140,6 +143,10 @@ export default function RulesPracticePage() {
 
               <p className="mt-2 text-sm leading-6 text-zinc-300">
                 {currentQuestion.explanation}
+              </p>
+              <p className="mt-3 border-t border-[#6fc11f]/20 pt-3 text-sm leading-6 text-zinc-400">
+                <strong className="text-white">Fundamento IFAB:</strong>{" "}
+                {currentQuestion.ifabExplanation}
               </p>
             </div>
           )}

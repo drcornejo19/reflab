@@ -91,12 +91,12 @@ export default function InstitutionalPage() {
 
       <header className="relative z-10 mx-auto flex w-full max-w-[1180px] items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
         <Link href="/home" className="flex min-w-0 items-center gap-3">
-          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[#6fc11f]/35 bg-black/45 p-1.5 shadow-[0_0_24px_rgba(111,193,31,0.18)]">
+          <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-[#6fc11f]/40 bg-[#06110c]/55 p-0.5 shadow-[0_0_22px_rgba(111,193,31,0.2)]">
             <Image
               src="/rf-logo.png"
               alt="Logo RefLab"
-              width={40}
-              height={40}
+              width={52}
+              height={52}
               className="h-full w-full object-contain"
             />
           </div>
@@ -120,12 +120,12 @@ export default function InstitutionalPage() {
 
       <section className="relative z-10 mx-auto grid w-full max-w-[1180px] gap-8 px-4 pb-12 pt-6 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:px-8 lg:pb-20 lg:pt-16">
         <div className="flex min-w-0 flex-col justify-center">
-          <div className="grid h-20 w-20 place-items-center rounded-full border border-[#6fc11f]/35 bg-black/45 p-2 shadow-[0_0_34px_rgba(111,193,31,0.22)]">
+          <div className="grid h-24 w-24 place-items-center rounded-full border border-[#6fc11f]/45 bg-[#06110c]/45 p-1 shadow-[0_0_30px_rgba(111,193,31,0.24)] sm:h-28 sm:w-28">
             <Image
               src="/rf-logo.png"
               alt="Logo RefLab"
-              width={64}
-              height={64}
+              width={104}
+              height={104}
               className="h-full w-full object-contain"
               priority
             />

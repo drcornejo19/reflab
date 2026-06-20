@@ -63,9 +63,14 @@ export async function sendFcmNotification(
 
     return { ok: true, id };
   } catch (error) {
+    const errorCode =
+      typeof error === "object" && error && "code" in error
+        ? String((error as { code?: unknown }).code ?? "")
+        : "";
     console.error("FCM notificationError", {
       tokenPreview: `${token.slice(0, 12)}...`,
       type: notification.type,
+      errorCode,
       error,
     });
 
@@ -75,6 +80,7 @@ export async function sendFcmNotification(
         error instanceof Error
           ? error.message
           : "Error desconocido al enviar notificacion push.",
+      errorCode,
       details: error,
     };
   }
