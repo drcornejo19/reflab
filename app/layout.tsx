@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
+import { RF_LOGO_SRC } from "@/lib/brand";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -24,8 +25,8 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
   },
   icons: {
-    icon: "/icon-512.png",
-    apple: "/icon-512.png",
+    icon: RF_LOGO_SRC,
+    apple: RF_LOGO_SRC,
   },
 };
 

@@ -8,6 +8,7 @@ import {
   onMessage,
   type MessagePayload,
 } from "firebase/messaging";
+import { RF_LOGO_SRC } from "@/lib/brand";
 
 type FirebasePublicConfig = {
   apiKey?: string;
@@ -36,6 +37,13 @@ export type PushEnvironment = {
   ready: boolean;
   message: string;
 };
+
+type PushDiagnosticDetails = Record<string, string | number | boolean | null | undefined>;
+
+export function logPushDiagnostic(event: string, details: PushDiagnosticDetails = {}) {
+  // Temporary structured diagnostics for the mobile Web Push rollout.
+  console.info("[RefLab Push]", event, details);
+}
 
 export function getFirebasePublicConfig() {
   const firebaseConfig: FirebasePublicConfig = {
@@ -136,19 +144,35 @@ async function getFcmToken(requestPermission: boolean) {
   }
 
   const environment = getPushEnvironment();
+  logPushDiagnostic("environment_checked", {
+    isIos: environment.isIos,
+    isStandalone: environment.isStandalone,
+    isSecure: environment.isSecure,
+    hasNotificationApi: environment.hasNotificationApi,
+    hasServiceWorker: environment.hasServiceWorker,
+    permission: environment.permission,
+    ready: environment.ready,
+  });
   if (!environment.ready) {
+    logPushDiagnostic("environment_blocked", { reason: environment.message });
     throw new Error(environment.message);
   }
 
   const supported = await isSupported();
+  logPushDiagnostic("firebase_support_checked", { supported });
   if (!supported) {
     throw new Error("Firebase Cloud Messaging no esta disponible en este navegador.");
   }
 
+  logPushDiagnostic("permission_before_request", {
+    permission: Notification.permission,
+    requestPermission,
+  });
   const permission =
     Notification.permission === "default" && requestPermission
       ? await Notification.requestPermission()
       : Notification.permission;
+  logPushDiagnostic("permission_resolved", { permission });
   if (permission !== "granted") {
     throw new Error(
       permission === "denied"
@@ -160,6 +184,14 @@ async function getFcmToken(requestPermission: boolean) {
   const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
     scope: "/",
     updateViaCache: "none",
+  });
+  logPushDiagnostic("service_worker_registered", {
+    scope: registration.scope,
+    state:
+      registration.active?.state ??
+      registration.waiting?.state ??
+      registration.installing?.state ??
+      "unknown",
   });
   await registration.update().catch(() => undefined);
   const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
@@ -173,6 +205,10 @@ async function getFcmToken(requestPermission: boolean) {
     throw new Error("No se pudo obtener el token de notificaciones.");
   }
 
+  logPushDiagnostic("fcm_token_obtained", {
+    fingerprint: getTokenFingerprint(token),
+  });
+
   return token;
 }
 
@@ -181,10 +217,14 @@ export async function showForegroundPush(notification: ForegroundNotificationPay
   if (!("Notification" in window) || Notification.permission !== "granted") return;
 
   const registration = await navigator.serviceWorker.ready;
+  logPushDiagnostic("foreground_notification_display", {
+    type: notification.type,
+    actionUrl: notification.actionUrl,
+  });
   await registration.showNotification(notification.title, {
     body: notification.body,
-    icon: "/icon-512.png",
-    badge: "/icon-512.png",
+    icon: RF_LOGO_SRC,
+    badge: RF_LOGO_SRC,
     tag: notification.type ? `reflab-${notification.type}` : "reflab",
     data: { url: notification.actionUrl },
   });
@@ -206,8 +246,17 @@ export async function subscribeToForegroundMessages(
 
   return onMessage(messaging, (payload) => {
     const notification = normalizeForegroundPayload(payload);
+    logPushDiagnostic("foreground_message_received", {
+      messageId: payload.messageId,
+      type: notification.type,
+    });
     callback(notification, payload);
   });
+}
+
+export function getTokenFingerprint(token: string) {
+  if (token.length <= 16) return `${token.slice(0, 4)}...`;
+  return `${token.slice(0, 8)}...${token.slice(-6)}`;
 }
 
 function normalizeForegroundPayload(

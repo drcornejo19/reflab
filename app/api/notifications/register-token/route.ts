@@ -17,7 +17,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as { token?: string };
+    const body = (await request.json()) as {
+      token?: string;
+      diagnostics?: {
+        isIos?: boolean;
+        isStandalone?: boolean;
+        isSecure?: boolean;
+        permission?: string;
+        hasServiceWorker?: boolean;
+      };
+    };
     const token = typeof body.token === "string" ? body.token.trim() : "";
 
     if (token.length < 20) {
@@ -29,6 +38,16 @@ export async function POST(request: Request) {
 
     const now = new Date().toISOString();
     const supabase = createSupabaseAdminClient();
+    const platform = detectPlatform(request.headers.get("user-agent"));
+    console.info("[RefLab Push] token_registration_requested", {
+      userId,
+      platform,
+      isStandalone: Boolean(body.diagnostics?.isStandalone),
+      permission: body.diagnostics?.permission ?? "unknown",
+      isSecure: Boolean(body.diagnostics?.isSecure),
+      hasServiceWorker: Boolean(body.diagnostics?.hasServiceWorker),
+      tokenFingerprint: tokenFingerprint(token),
+    });
     const { error } = await supabase.from("notification_tokens").upsert(
       {
         user_id: userId,
@@ -43,6 +62,12 @@ export async function POST(request: Request) {
     );
 
     if (error) {
+      console.error("[RefLab Push] token_registration_failed", {
+        userId,
+        platform,
+        code: error.code,
+        message: error.message,
+      });
       return NextResponse.json(
         {
           error: "No se pudo registrar el dispositivo para notificaciones.",
@@ -58,7 +83,13 @@ export async function POST(request: Request) {
       pushEnabled: true,
     });
 
-    return NextResponse.json({ success: true });
+    console.info("[RefLab Push] token_registration_succeeded", {
+      userId,
+      platform,
+      tokenFingerprint: tokenFingerprint(token),
+    });
+
+    return NextResponse.json({ success: true, platform });
   } catch (error) {
     return NextResponse.json(
       {
@@ -68,4 +99,15 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+function detectPlatform(userAgent: string | null) {
+  if (!userAgent) return "unknown";
+  if (/iPad|iPhone|iPod/i.test(userAgent)) return "ios";
+  if (/Android/i.test(userAgent)) return "android";
+  return "desktop";
+}
+
+function tokenFingerprint(token: string) {
+  return `${token.slice(0, 8)}...${token.slice(-6)}`;
 }

@@ -17,6 +17,8 @@ import {
 import {
   hasFirebasePublicConfig,
   getPushEnvironment,
+  getTokenFingerprint,
+  logPushDiagnostic,
   refreshFcmToken,
   requestFcmToken,
   showForegroundPush,
@@ -36,6 +38,8 @@ export function NotificationSettingsClient() {
   const [foregroundNotification, setForegroundNotification] =
     useState<ForegroundNotificationPayload | null>(null);
   const [pushEnvironment, setPushEnvironment] = useState<PushEnvironment | null>(null);
+  const [currentDeviceRegistered, setCurrentDeviceRegistered] = useState(false);
+  const [checkingDevice, setCheckingDevice] = useState(true);
   const firebaseConfigured = hasFirebasePublicConfig();
 
   useEffect(() => {
@@ -106,33 +110,60 @@ export function NotificationSettingsClient() {
   }, [firebaseConfigured, preferences?.pushEnabled]);
 
   useEffect(() => {
-    if (!firebaseConfigured || !preferences?.pushEnabled) return;
-
-    const environment = getPushEnvironment();
-    if (environment.permission !== "granted" || !environment.ready) return;
-
     let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (!firebaseConfigured || !preferences?.pushEnabled) {
+        setCheckingDevice(false);
+        return;
+      }
 
-    refreshFcmToken()
-      .then(async (token) => {
-        if (cancelled) return;
-        const response = await fetch("/api/notifications/register-token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
+      const environment = getPushEnvironment();
+      setPushEnvironment(environment);
+      if (environment.permission !== "granted" || !environment.ready) {
+        setCurrentDeviceRegistered(false);
+        setCheckingDevice(false);
+        logPushDiagnostic("device_sync_skipped", {
+          permission: environment.permission,
+          ready: environment.ready,
+          reason: environment.message,
         });
+        return;
+      }
 
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data?.technical || data?.error || "No se pudo renovar el dispositivo.");
-        }
-      })
-      .catch((tokenError) => {
-        console.warn("Push token refresh unavailable", tokenError);
-      });
+      refreshFcmToken()
+        .then(async (token) => {
+          if (cancelled) return;
+          const response = await fetch("/api/notifications/register-token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              token,
+              diagnostics: buildDeviceDiagnostics(environment),
+            }),
+          });
+
+          if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data?.technical || data?.error || "No se pudo renovar el dispositivo.");
+          }
+          setCurrentDeviceRegistered(true);
+          logPushDiagnostic("device_token_registered", {
+            fingerprint: getTokenFingerprint(token),
+            source: "automatic_refresh",
+          });
+        })
+        .catch((tokenError) => {
+          setCurrentDeviceRegistered(false);
+          console.warn("Push token refresh unavailable", tokenError);
+        })
+        .finally(() => {
+          if (!cancelled) setCheckingDevice(false);
+        });
+    }, 0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [firebaseConfigured, preferences?.pushEnabled]);
 
@@ -174,10 +205,14 @@ export function NotificationSettingsClient() {
 
     try {
       const token = await requestFcmToken();
+      const environment = getPushEnvironment();
       const response = await fetch("/api/notifications/register-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({
+          token,
+          diagnostics: buildDeviceDiagnostics(environment),
+        }),
       });
       const data = await response.json();
 
@@ -195,7 +230,12 @@ export function NotificationSettingsClient() {
         pushEnabled: true,
       };
       setPreferences(nextPreferences);
-      setPushEnvironment(getPushEnvironment());
+      setPushEnvironment(environment);
+      setCurrentDeviceRegistered(true);
+      logPushDiagnostic("device_token_registered", {
+        fingerprint: getTokenFingerprint(token),
+        source: "user_activation",
+      });
       setMessage("Notificaciones push activadas para este dispositivo.");
     } catch (pushError) {
       setError(
@@ -276,11 +316,15 @@ export function NotificationSettingsClient() {
               </div>
               <div>
                 <p className="text-sm font-black text-white">
-                  {preferences?.pushEnabled ? "Push activo" : "Push inactivo"}
+                  {currentDeviceRegistered
+                    ? "Dispositivo conectado"
+                    : "Dispositivo sin conectar"}
                 </p>
                 <p className="text-xs text-zinc-500">
                   {firebaseConfigured
-                    ? "Listo para activar en este dispositivo."
+                    ? currentDeviceRegistered
+                      ? "Este dispositivo ya tiene su token registrado."
+                      : "Activa este dispositivo para generar su propio token."
                     : "Faltan variables publicas de Firebase."}
                 </p>
               </div>
@@ -289,22 +333,23 @@ export function NotificationSettingsClient() {
             <button
               type="button"
               onClick={() => {
-                if (preferences?.pushEnabled) {
-                  savePreferences({ ...preferences, pushEnabled: false });
-                } else {
-                  activatePush();
-                }
+                if (!currentDeviceRegistered) activatePush();
               }}
-              disabled={activating || saving || (!firebaseConfigured && !preferences?.pushEnabled)}
+              disabled={
+                activating ||
+                checkingDevice ||
+                currentDeviceRegistered ||
+                !firebaseConfigured
+              }
               className="mt-4 min-h-12 w-full rounded-2xl bg-[#6fc11f] px-4 text-sm font-black text-black transition hover:bg-[#7de026] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {preferences?.pushEnabled
-                ? saving
-                  ? "Desactivando..."
-                  : "Desactivar push"
-                : activating
-                  ? "Activando..."
-                  : "Activar push"}
+              {checkingDevice
+                ? "Verificando dispositivo..."
+                : currentDeviceRegistered
+                  ? "Dispositivo conectado"
+                  : activating
+                    ? "Activando..."
+                    : "Activar en este dispositivo"}
             </button>
           </div>
         </div>
@@ -456,4 +501,14 @@ export function NotificationSettingsClient() {
       </section>
     </div>
   );
+}
+
+function buildDeviceDiagnostics(environment: PushEnvironment) {
+  return {
+    isIos: environment.isIos,
+    isStandalone: environment.isStandalone,
+    isSecure: environment.isSecure,
+    permission: environment.permission,
+    hasServiceWorker: environment.hasServiceWorker,
+  };
 }

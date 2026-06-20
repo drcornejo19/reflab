@@ -1,6 +1,8 @@
 ﻿"use client";
 
 import Image from "next/image";
+import { RF_LOGO_SIZE, RF_LOGO_SRC } from "@/lib/brand";
+import { PushDeviceSync } from "@/components/PushDeviceSync";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -295,6 +297,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#050b12] text-white">
+      <PushDeviceSync />
       <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[260px] border-r border-white/10 bg-[#050b12] p-5 lg:block">
         <Logo />
 
@@ -390,12 +393,13 @@ function Logo({ compact = false }: { compact?: boolean }) {
       className="flex min-w-0 items-center gap-3"
     >
       <Image
-        src="/logo.png"
+        src={RF_LOGO_SRC}
         alt="RefLab"
-        width={compact ? 42 : 46}
-        height={compact ? 42 : 46}
+        width={RF_LOGO_SIZE}
+        height={RF_LOGO_SIZE}
+        sizes={compact ? "42px" : "46px"}
         priority
-        className="shrink-0 rounded-full object-cover shadow-[0_0_24px_rgba(111,193,31,0.18)]"
+        className={`${compact ? "h-[42px] w-[42px]" : "h-[46px] w-[46px]"} shrink-0 object-contain drop-shadow-[0_0_10px_rgba(111,193,31,0.2)]`}
       />
 
       <div className="min-w-0">

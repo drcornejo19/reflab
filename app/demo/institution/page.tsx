@@ -32,6 +32,7 @@ import {
   schoolVideoTopics,
   type InstitutionType,
 } from "@/lib/institutionalExperience";
+import { RF_LOGO_SIZE, RF_LOGO_SRC } from "@/lib/brand";
 
 const institutionTypes: InstitutionType[] = activeInstitutionTypes;
 
@@ -52,13 +53,14 @@ export default function InstitutionDemoPage() {
         <header className="flex flex-col gap-4 rounded-[32px] border border-white/10 bg-[#0b131b]/95 p-5 shadow-[0_30px_100px_rgba(0,0,0,0.35)] sm:p-7 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="mb-5 flex items-center gap-3">
-              <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-[#6fc11f]/35 bg-black/45 p-2 shadow-[0_0_28px_rgba(111,193,31,0.18)]">
+              <div className="grid h-14 w-14 shrink-0 place-items-center">
                 <Image
-                  src="/rf-logo.png"
+                  src={RF_LOGO_SRC}
                   alt="Logo RefLab"
-                  width={44}
-                  height={44}
-                  className="h-full w-full object-contain"
+                  width={RF_LOGO_SIZE}
+                  height={RF_LOGO_SIZE}
+                  sizes="56px"
+                  className="h-14 w-14 object-contain drop-shadow-[0_0_10px_rgba(111,193,31,0.2)]"
                 />
               </div>
               <div>

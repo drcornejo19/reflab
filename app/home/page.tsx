@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useUser } from "@clerk/nextjs";
+import { RF_LOGO_SIZE, RF_LOGO_SRC } from "@/lib/brand";
 import {
   ArrowRight,
   BarChart3,
@@ -146,7 +147,15 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="relative bg-[#02070c] px-5 pb-8 pt-5 sm:px-8 lg:px-10">
+      <section className="relative overflow-hidden bg-[#02070c] px-5 pb-8 pt-5 sm:px-8 lg:px-10">
+        <Image
+          src={RF_LOGO_SRC}
+          alt=""
+          width={RF_LOGO_SIZE}
+          height={RF_LOGO_SIZE}
+          sizes="(min-width: 1024px) 360px, 224px"
+          className="pointer-events-none absolute -right-16 top-10 h-56 w-56 object-contain opacity-[0.07] lg:right-4 lg:h-[360px] lg:w-[360px]"
+        />
         <div className="mx-auto max-w-[1536px]">
           <div className="text-center">
             <div className="inline-flex items-center gap-2 text-[#6fc11f]">
@@ -180,9 +189,15 @@ function Header() {
   return (
     <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <Link href="/home" className="flex min-w-0 items-center gap-3">
-        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[#6fc11f] bg-black/50 text-base font-black text-[#6fc11f] shadow-[0_0_24px_rgba(111,193,31,0.25)]">
-          RF
-        </div>
+        <Image
+          src={RF_LOGO_SRC}
+          alt="RF Logo RefLab"
+          width={RF_LOGO_SIZE}
+          height={RF_LOGO_SIZE}
+          sizes="48px"
+          priority
+          className="h-12 w-12 shrink-0 object-contain drop-shadow-[0_0_10px_rgba(111,193,31,0.2)]"
+        />
         <div className="min-w-0">
           <p className="break-words text-3xl font-black leading-none tracking-tight">
             REF<span className="text-[#6fc11f]">LAB</span>

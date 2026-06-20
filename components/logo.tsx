@@ -1,14 +1,16 @@
 import Image from "next/image";
+import { RF_LOGO_SIZE, RF_LOGO_SRC } from "@/lib/brand";
 
 export function Logo() {
   return (
     <div className="flex items-center gap-3">
       <Image
-        src="/rf-logo.png"
+        src={RF_LOGO_SRC}
         alt="RefLab RF Logo"
-        width={52}
-        height={52}
-        className="rounded-full"
+        width={RF_LOGO_SIZE}
+        height={RF_LOGO_SIZE}
+        sizes="52px"
+        className="h-[52px] w-[52px] object-contain"
         priority
       />
 

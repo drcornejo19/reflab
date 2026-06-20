@@ -1,6 +1,7 @@
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import type { SmartNotification } from "@/lib/notifications";
+import { RF_LOGO_SRC } from "@/lib/brand";
 
 export function isFirebaseAdminConfigured() {
   return Boolean(
@@ -25,6 +26,10 @@ export async function sendFcmNotification(
   }
 
   try {
+    console.info("[RefLab Push] fcm_send_requested", {
+      tokenFingerprint: tokenFingerprint(token),
+      type: notification.type,
+    });
     const id = await getMessaging(app).send({
       token,
       notification: {
@@ -44,8 +49,8 @@ export async function sendFcmNotification(
         notification: {
           title: notification.title,
           body: notification.message,
-          icon: "/icon-512.png",
-          badge: "/icon-512.png",
+          icon: RF_LOGO_SRC,
+          badge: RF_LOGO_SRC,
           tag: `reflab-${notification.type}`,
           requireInteraction: false,
           actions: [
@@ -61,6 +66,12 @@ export async function sendFcmNotification(
       },
     });
 
+    console.info("[RefLab Push] fcm_send_accepted", {
+      tokenFingerprint: tokenFingerprint(token),
+      type: notification.type,
+      messageId: id,
+    });
+
     return { ok: true, id };
   } catch (error) {
     const errorCode =
@@ -68,7 +79,7 @@ export async function sendFcmNotification(
         ? String((error as { code?: unknown }).code ?? "")
         : "";
     console.error("FCM notificationError", {
-      tokenPreview: `${token.slice(0, 12)}...`,
+      tokenFingerprint: tokenFingerprint(token),
       type: notification.type,
       errorCode,
       error,
@@ -84,6 +95,10 @@ export async function sendFcmNotification(
       details: error,
     };
   }
+}
+
+function tokenFingerprint(token: string) {
+  return `${token.slice(0, 8)}...${token.slice(-6)}`;
 }
 
 function getFirebaseAdminApp(): App | null {

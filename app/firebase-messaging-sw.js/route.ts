@@ -10,38 +10,11 @@ export async function GET() {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "",
   };
   const body = `
-importScripts("https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/12.14.0/firebase-messaging-compat.js");
-
-const firebaseConfig = ${JSON.stringify(firebaseConfig)};
-const isConfigured =
-  firebaseConfig.apiKey &&
-  firebaseConfig.projectId &&
-  firebaseConfig.messagingSenderId &&
-  firebaseConfig.appId;
-
-if (isConfigured && self.firebase && !firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-  const messaging = firebase.messaging();
-
-  messaging.onBackgroundMessage((payload) => {
-    const title = payload.notification?.title || payload.data?.title || "RefLab";
-    const body = payload.notification?.body || payload.data?.body || "";
-    const url = payload.fcmOptions?.link || payload.data?.actionUrl || "/dashboard";
-    const actionLabel = payload.data?.actionLabel || "Abrir";
-
-    self.registration.showNotification(title, {
-      body,
-      icon: "/icon-512.png",
-      badge: "/icon-512.png",
-      tag: payload.data?.type ? "reflab-" + payload.data.type : "reflab",
-      data: { url },
-      actions: [{ action: "open", title: actionLabel }],
-    });
-  });
-}
-
 self.addEventListener("notificationclick", (event) => {
+  console.info("[RefLab Push SW] notification_clicked", {
+    tag: event.notification.tag,
+    url: event.notification.data?.url,
+  });
   event.notification.close();
   const targetUrl = event.notification.data?.url || "/dashboard";
   const absoluteUrl = new URL(targetUrl, self.location.origin).href;
@@ -56,14 +29,56 @@ self.addEventListener("notificationclick", (event) => {
           }
         }
 
-        if (clients.openWindow) {
-          return clients.openWindow(absoluteUrl);
-        }
-
-        return undefined;
+        return clients.openWindow ? clients.openWindow(absoluteUrl) : undefined;
       })
   );
 });
+
+importScripts("https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/12.14.0/firebase-messaging-compat.js");
+
+const firebaseConfig = ${JSON.stringify(firebaseConfig)};
+const isConfigured =
+  firebaseConfig.apiKey &&
+  firebaseConfig.projectId &&
+  firebaseConfig.messagingSenderId &&
+  firebaseConfig.appId;
+
+if (isConfigured && self.firebase && !firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+  const messaging = firebase.messaging();
+
+  console.info("[RefLab Push SW] firebase_initialized", {
+    projectId: firebaseConfig.projectId,
+  });
+
+  messaging.onBackgroundMessage((payload) => {
+    console.info("[RefLab Push SW] background_message_received", {
+      messageId: payload.messageId,
+      type: payload.data?.type,
+      hasNotificationPayload: Boolean(payload.notification),
+    });
+
+    // Notification payloads are displayed automatically by FCM in background.
+    if (payload.notification) return;
+
+    const title = payload.notification?.title || payload.data?.title || "RefLab";
+    const body = payload.notification?.body || payload.data?.body || "";
+    const url = payload.fcmOptions?.link || payload.data?.actionUrl || "/dashboard";
+    const actionLabel = payload.data?.actionLabel || "Abrir";
+
+    self.registration.showNotification(title, {
+      body,
+      icon: "/RF%20LOGO.png",
+      badge: "/RF%20LOGO.png",
+      tag: payload.data?.type ? "reflab-" + payload.data.type : "reflab",
+      data: { url },
+      actions: [{ action: "open", title: actionLabel }],
+    });
+  });
+} else {
+  console.error("[RefLab Push SW] firebase_not_configured");
+}
 `;
 
   return new Response(body, {

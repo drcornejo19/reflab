@@ -1,10 +1,12 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/lib/supabase";
+import { RF_LOGO_SIZE, RF_LOGO_SRC } from "@/lib/brand";
 import {
   Activity,
   BarChart3,
@@ -206,10 +208,13 @@ export default function MobileDashboardPage() {
           <div className="absolute right-[-45px] top-[-45px] h-36 w-36 rounded-full bg-[#6fc11f]/10 blur-3xl" />
 
           <div className="relative flex items-center gap-3">
-            <img
-              src="/rf-logo.png"
+            <Image
+              src={RF_LOGO_SRC}
               alt="RF"
-              className="h-12 w-12 shrink-0 rounded-full object-cover shadow-[0_0_28px_rgba(111,193,31,0.28)] sm:h-14 sm:w-14"
+              width={RF_LOGO_SIZE}
+              height={RF_LOGO_SIZE}
+              sizes="(min-width: 640px) 56px, 48px"
+              className="h-12 w-12 shrink-0 object-contain drop-shadow-[0_0_10px_rgba(111,193,31,0.2)] sm:h-14 sm:w-14"
             />
 
             <div className="min-w-0">
