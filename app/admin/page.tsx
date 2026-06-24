@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import {
   BookOpen,
+  Brain,
   Building2,
   ChevronRight,
   Clapperboard,
@@ -82,6 +83,15 @@ const adminAreas: AdminArea[] = [
     status: "Disponible",
     href: "/admin/library",
     icon: BookOpen,
+  },
+  {
+    title: "Psicologia arbitral",
+    category: "Preparacion Integral",
+    description:
+      "Ordena registros por modulitos, revisa categorias y corrige contenidos sin clasificar.",
+    status: "Disponible",
+    href: "/admin/psychology",
+    icon: Brain,
   },
   {
     title: "Evaluaciones",

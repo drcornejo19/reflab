@@ -1,13 +1,22 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import {
+  buildPsychologyInterfaceData,
+  normalizePsychologyModuleSlug,
+  type PsychologyCheckinRecord,
+  type PsychologyExerciseRecord,
+  type PsychologyWellbeingRecord,
+} from "@/lib/psychology";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 type PsychologyCheckInType = "pre_match" | "post_match" | "error_recovery";
 type PsychologyExerciseType = "focus_reset" | "pressure_scenario" | "self_talk" | "team_prebrief";
 
 type PsychologyInput = {
+  moduleSlug?: unknown;
   checkinType?: PsychologyCheckInType;
   matchContext?: unknown;
   pressureSource?: unknown;
@@ -31,6 +40,7 @@ type PsychologyInput = {
 };
 
 type WellbeingInput = {
+  moduleSlug?: unknown;
   weekContext?: unknown;
   stressors?: unknown;
   protectiveFactors?: unknown;
@@ -48,6 +58,7 @@ type WellbeingInput = {
 };
 
 type ExerciseInput = {
+  moduleSlug?: unknown;
   exerciseType?: PsychologyExerciseType;
   scenarioId?: unknown;
   scenarioTitle?: unknown;
@@ -66,6 +77,7 @@ type ExerciseInput = {
 type SavedPsychologyRow = {
   id: string;
   user_id: string;
+  module_slug: string | null;
   checkin_type: PsychologyCheckInType;
   mental_score: number | null;
   mental_status: string | null;
@@ -79,36 +91,52 @@ type SavedPsychologyRow = {
   recovery_score: number | null;
   process_orientation_score: number | null;
   feedback: PsychologyFeedback | null;
+  responses: {
+    notes?: string | null;
+  } | null;
   created_at: string;
 };
 
 type SavedWellbeingRow = {
   id: string;
   user_id: string;
+  module_slug: string | null;
   burnout_risk_score: number | null;
   burnout_risk_level: string | null;
   emotional_exhaustion_score: number | null;
   cynicism_score: number | null;
   motivation_score: number | null;
+  sleep_disruption_score: number | null;
+  concentration_difficulty_score: number | null;
   external_pressure_score: number | null;
   institutional_support_score: number | null;
   violence_exposure_score: number | null;
   recovery_quality_score: number | null;
   workload_score: number | null;
+  stressors: string[] | null;
+  protective_factors: string[] | null;
   feedback: WellbeingFeedback | null;
+  notes: string | null;
   created_at: string;
 };
 
 type SavedExerciseRow = {
   id: string;
   user_id: string;
+  module_slug: string | null;
   exercise_type: PsychologyExerciseType;
   scenario_title: string | null;
   pressure_level: number | null;
   before_score: number | null;
   after_score: number | null;
   clarity_score: number | null;
+  response_strategy: string | null;
+  internal_dialogue_before: string | null;
+  internal_dialogue_after: string | null;
+  communication_phrase: string | null;
+  action_plan: string | null;
   feedback: ExerciseFeedback | null;
+  notes: string | null;
   created_at: string;
 };
 
@@ -172,6 +200,7 @@ export async function POST(request: Request) {
       const { error } = await supabase.from("psychology_exercise_sessions").insert([
         {
           user_id: userId,
+          module_slug: payload.module_slug,
           exercise_type: payload.exercise_type,
           scenario_id: payload.scenario_id,
           scenario_title: payload.scenario_title,
@@ -212,6 +241,7 @@ export async function POST(request: Request) {
       const { error } = await supabase.from("psychology_wellbeing_assessments").insert([
         {
           user_id: userId,
+          module_slug: payload.module_slug,
           week_start: now.slice(0, 10),
           week_context: payload.week_context,
           emotional_exhaustion_score: payload.emotional_exhaustion_score,
@@ -256,6 +286,7 @@ export async function POST(request: Request) {
     const { error } = await supabase.from("psychology_checkins").insert([
       {
         user_id: userId,
+        module_slug: payload.module_slug,
         checkin_type: payload.checkin_type,
         match_context: payload.match_context,
         pressure_source: payload.pressure_source,
@@ -337,6 +368,11 @@ async function loadPsychologyData(supabase: ReturnType<typeof createSupabaseAdmi
   const checkins = (checkinsRes.data ?? []) as SavedPsychologyRow[];
   const wellbeingAssessments = (wellbeingRes.data ?? []) as SavedWellbeingRow[];
   const exerciseSessions = (exercisesRes.data ?? []) as SavedExerciseRow[];
+  const modularData = buildPsychologyInterfaceData({
+    checkins: checkins as PsychologyCheckinRecord[],
+    wellbeingAssessments: wellbeingAssessments as PsychologyWellbeingRecord[],
+    exerciseSessions: exerciseSessions as PsychologyExerciseRecord[],
+  });
 
   return {
     checkins,
@@ -345,6 +381,7 @@ async function loadPsychologyData(supabase: ReturnType<typeof createSupabaseAdmi
     wellbeingSummary: buildWellbeingSummary(wellbeingAssessments),
     exerciseSessions,
     exerciseSummary: buildExerciseSummary(exerciseSessions),
+    ...modularData,
   };
 }
 
@@ -352,6 +389,8 @@ function normalizeInput(input: PsychologyInput) {
   const checkinType = isCheckInType(input.checkinType) ? input.checkinType : "pre_match";
 
   return {
+    module_slug:
+      normalizePsychologyModuleSlug(input.moduleSlug) ?? defaultModuleForCheckinType(checkinType),
     checkin_type: checkinType,
     match_context: cleanText(input.matchContext),
     pressure_source: cleanText(input.pressureSource),
@@ -377,6 +416,7 @@ function normalizeInput(input: PsychologyInput) {
 
 function normalizeWellbeingInput(input: WellbeingInput) {
   return {
+    module_slug: normalizePsychologyModuleSlug(input.moduleSlug) ?? "resiliencia",
     week_context: cleanText(input.weekContext),
     stressors: cleanTextArray(input.stressors),
     protective_factors: cleanTextArray(input.protectiveFactors),
@@ -398,6 +438,8 @@ function normalizeExerciseInput(input: ExerciseInput) {
   const exerciseType = isExerciseType(input.exerciseType) ? input.exerciseType : "focus_reset";
 
   return {
+    module_slug:
+      normalizePsychologyModuleSlug(input.moduleSlug) ?? defaultModuleForExerciseType(exerciseType),
     exercise_type: exerciseType,
     scenario_id: cleanText(input.scenarioId),
     scenario_title: cleanText(input.scenarioTitle),
@@ -656,6 +698,19 @@ function isCheckInType(value: unknown): value is PsychologyCheckInType {
 
 function isExerciseType(value: unknown): value is PsychologyExerciseType {
   return value === "focus_reset" || value === "pressure_scenario" || value === "self_talk" || value === "team_prebrief";
+}
+
+function defaultModuleForCheckinType(checkinType: PsychologyCheckInType) {
+  if (checkinType === "error_recovery") return "gestion-error" as const;
+  if (checkinType === "post_match") return "evaluacion-post-partido" as const;
+  return "preparacion-mental-pre-partido" as const;
+}
+
+function defaultModuleForExerciseType(exerciseType: PsychologyExerciseType) {
+  if (exerciseType === "pressure_scenario") return "presion-competitiva" as const;
+  if (exerciseType === "self_talk") return "confianza-arbitral" as const;
+  if (exerciseType === "team_prebrief") return "preparacion-mental-pre-partido" as const;
+  return "concentracion-foco" as const;
 }
 
 function cleanText(value: unknown) {

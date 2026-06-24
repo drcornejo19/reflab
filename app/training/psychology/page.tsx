@@ -8,7 +8,7 @@ export default function PsychologyTrainingPage() {
       <div className="mx-auto w-full max-w-[1180px]">
         <ProFeatureGate
           title="Psicologia arbitral se desbloquea con RefLab Pro"
-          description="Accede a check-ins mentales, gestion del error, rutinas de foco y seguimiento psicologico orientativo."
+          description="Accede a modulitos internos de gestion del error, presion, foco, confianza, resiliencia y rutinas mentales de partido."
           reason="El plan FREE mantiene entrenamiento tecnico base; la preparacion mental forma parte de RefLab Pro."
         >
           <PsychologyTrainingClient />

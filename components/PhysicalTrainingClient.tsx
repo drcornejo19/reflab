@@ -51,7 +51,7 @@ const prepModules: PrepModule[] = [
   { title: "Preparacion integral", description: "Bienestar, rutina previa, habitos y control diario del arbitro.", status: "Disponible", icon: Target },
   { title: "Preparacion fisica", description: "Tabata arbitral configurable con presets de trabajo especifico.", status: "Disponible", icon: Dumbbell },
   { title: "Nutricion y recuperacion", description: "Hidratacion, descanso, retorno a la calma y habitos de recuperacion.", status: "Proximamente", icon: HeartPulse },
-  { title: "Psicologia arbitral", description: "Check-ins mentales, gestion del error, confianza, foco y control emocional.", status: "Disponible", icon: Brain, href: "/training/psychology" },
+  { title: "Psicologia arbitral", description: "Modulitos internos de error, presion, foco, confianza, resiliencia y cierre mental.", status: "Disponible", icon: Brain, href: "/training/psychology" },
   { title: "Planificacion arbitral", description: "Partidos, descanso, carga semanal y objetivos de preparacion.", status: "Proximamente", icon: CalendarCheck },
   { title: "Etica y deontologia", description: "Habitos profesionales, responsabilidad, informes y conducta arbitral.", status: "Proximamente", icon: Briefcase },
 ];
