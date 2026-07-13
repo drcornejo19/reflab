@@ -22,6 +22,7 @@ import {
   Zap,
 } from "lucide-react";
 import { insertAttemptSafely } from "@/lib/attemptPersistence";
+import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
 import { supabase } from "@/lib/supabase";
 
 type IconType = ComponentType<{ size?: number; className?: string }>;
@@ -189,11 +190,15 @@ export function PhysicalTrainingClient() {
     const workoutName = `Tabata arbitral - ${preset?.title ?? "Personalizado"}`;
     const primaryPayload = {
       user_id: user.id,
+      sport_type: DEFAULT_SPORT_TYPE,
+      activity_type: "physical_training",
       module: "referee_preparation",
       mode: "physical_training",
       clip_title: workoutName,
       workout_name: workoutName,
       topic: "Preparacion fisica",
+      season: "2026/27",
+      source_version: "RefLab football_11 physical training",
       score: null,
       total_duration: totalDuration,
       time_spent_seconds: totalDuration,
@@ -206,6 +211,8 @@ export function PhysicalTrainingClient() {
 
     const fallbackPayload = {
       user_id: user.id,
+      sport_type: DEFAULT_SPORT_TYPE,
+      activity_type: "physical_training",
       clip_title: workoutName,
       foul: null,
       restart: null,
@@ -213,10 +220,13 @@ export function PhysicalTrainingClient() {
       var_review: null,
       score: null,
       topic: "Preparacion fisica",
+      season: "2026/27",
+      source_version: "RefLab football_11 physical training",
       difficulty: "physical_training",
       technical_correct: null,
       restart_correct: null,
       discipline_correct: null,
+      disciplinary_correct: null,
       var_correct: null,
     };
 

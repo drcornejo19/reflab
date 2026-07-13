@@ -5,6 +5,7 @@ import { useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { rulesQuestions } from "@/lib/rulesQuestions";
+import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
 import { supabase } from "@/lib/supabase";
 import { FREE_WEEKLY_EXAM_LIMIT, getCurrentWeekStart } from "@/lib/subscription";
 import { useUserRole } from "@/lib/useUserRole";
@@ -275,6 +276,10 @@ export default function RulesExamPage() {
     const { error } = await supabase.from("rules_exam_results").insert([
       {
         user_id: user.id,
+        sport_type: DEFAULT_SPORT_TYPE,
+        activity_type: "rules_exam",
+        season: "2026/27",
+        source_version: "Laws of the Game 2026/27",
         total_questions: questions.length,
         correct_count: result.correct,
         percentage: result.percentage,

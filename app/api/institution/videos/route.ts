@@ -1,5 +1,11 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import {
+  DEFAULT_SPORT_TYPE,
+  getGoverningBodyForSport,
+  isTopicAllowedForSport,
+  normalizeSportType,
+} from "@/lib/sports";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +24,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("institutional_clips")
     .select(
-      "id, title, description, match_context, incident_minute, category, topic, correct_decision, correct_restart, correct_discipline, final_expected_answer, explanation, ifab_var_criteria, difficulty, mode, is_public, status, review_notes, source_url, storage_path, original_filename, created_at"
+      "id, title, description, match_context, incident_minute, category, topic, subtopic, rule_reference, correct_decision, correct_restart, correct_discipline, final_expected_answer, explanation, ifab_var_criteria, difficulty, mode, is_public, status, review_notes, source_url, storage_path, original_filename, created_at, sport_type, season, source_version, source_official, governing_body, technical_resolution, disciplinary_resolution, normative_status, language, reviewed_at"
     )
     .eq("uploaded_by", userId)
     .order("created_at", { ascending: false })
@@ -59,10 +65,29 @@ export async function POST(request: Request) {
       );
     }
 
+    const sportType = normalizeSportType(payload.sport_type ?? DEFAULT_SPORT_TYPE);
+    const governingBody =
+      payload.governing_body || getGoverningBodyForSport(sportType);
+
+    if (!isTopicAllowedForSport(sportType, payload.topic)) {
+      return NextResponse.json(
+        { error: "El topico no coincide con la disciplina del clip." },
+        { status: 400 }
+      );
+    }
+
+    if (governingBody !== getGoverningBodyForSport(sportType)) {
+      return NextResponse.json(
+        { error: "El organismo rector no coincide con la disciplina del clip." },
+        { status: 400 }
+      );
+    }
+
     const { data, error } = await supabase
       .from("institutional_clips")
       .insert({
         uploaded_by: userId,
+        sport_type: sportType,
         source_url: payload.source_url || null,
         storage_path: payload.storage_path || null,
         original_filename: payload.original_filename || null,
@@ -72,6 +97,8 @@ export async function POST(request: Request) {
         incident_minute: payload.incident_minute || null,
         category: payload.category || null,
         topic: payload.topic || null,
+        subtopic: payload.subtopic || null,
+        rule_reference: payload.rule_reference || null,
         correct_decision: payload.correct_decision || null,
         correct_restart: payload.correct_restart || null,
         correct_discipline: payload.correct_discipline || null,
@@ -82,9 +109,18 @@ export async function POST(request: Request) {
         mode: payload.mode || "institutional_video",
         is_public: Boolean(payload.is_public),
         status: "uploaded",
+        season: payload.season || null,
+        source_version: payload.source_version || null,
+        source_official: payload.source_official || null,
+        governing_body: governingBody,
+        technical_resolution: payload.technical_resolution || null,
+        disciplinary_resolution: payload.disciplinary_resolution || null,
+        normative_status: payload.normative_status || null,
+        language: payload.language || null,
+        reviewed_at: payload.reviewed_at || null,
       })
       .select(
-        "id, title, description, match_context, incident_minute, category, topic, correct_decision, correct_restart, correct_discipline, final_expected_answer, explanation, ifab_var_criteria, difficulty, mode, is_public, status, review_notes, source_url, storage_path, original_filename, created_at"
+        "id, title, description, match_context, incident_minute, category, topic, subtopic, rule_reference, correct_decision, correct_restart, correct_discipline, final_expected_answer, explanation, ifab_var_criteria, difficulty, mode, is_public, status, review_notes, source_url, storage_path, original_filename, created_at, sport_type, season, source_version, source_official, governing_body, technical_resolution, disciplinary_resolution, normative_status, language, reviewed_at"
       )
       .single();
 
@@ -112,11 +148,14 @@ export async function POST(request: Request) {
 
 type ClipPayload = {
   title: string;
+  sport_type?: string;
   description?: string;
   match_context?: string;
   incident_minute?: string;
   category?: string;
   topic?: string;
+  subtopic?: string;
+  rule_reference?: string;
   correct_decision?: string;
   correct_restart?: string;
   correct_discipline?: string;
@@ -126,6 +165,15 @@ type ClipPayload = {
   difficulty?: string;
   mode?: string;
   is_public?: boolean;
+  season?: string;
+  source_version?: string;
+  source_official?: string;
+  governing_body?: string;
+  technical_resolution?: string;
+  disciplinary_resolution?: string;
+  normative_status?: string;
+  language?: string;
+  reviewed_at?: string;
   source_url?: string;
   storage_path?: string;
   original_filename?: string;
@@ -135,11 +183,14 @@ async function readJsonPayload(request: Request): Promise<ClipPayload> {
   const body = (await request.json()) as Partial<ClipPayload>;
   return {
     title: String(body.title ?? ""),
+    sport_type: nullableString(body.sport_type),
     description: nullableString(body.description),
     match_context: nullableString(body.match_context),
     incident_minute: nullableString(body.incident_minute),
     category: nullableString(body.category),
     topic: nullableString(body.topic),
+    subtopic: nullableString(body.subtopic),
+    rule_reference: nullableString(body.rule_reference),
     correct_decision: nullableString(body.correct_decision),
     correct_restart: nullableString(body.correct_restart),
     correct_discipline: nullableString(body.correct_discipline),
@@ -149,6 +200,15 @@ async function readJsonPayload(request: Request): Promise<ClipPayload> {
     difficulty: nullableString(body.difficulty),
     mode: nullableString(body.mode),
     is_public: Boolean(body.is_public),
+    season: nullableString(body.season),
+    source_version: nullableString(body.source_version),
+    source_official: nullableString(body.source_official),
+    governing_body: nullableString(body.governing_body),
+    technical_resolution: nullableString(body.technical_resolution),
+    disciplinary_resolution: nullableString(body.disciplinary_resolution),
+    normative_status: nullableString(body.normative_status),
+    language: nullableString(body.language),
+    reviewed_at: nullableString(body.reviewed_at),
     source_url: nullableString(body.source_url),
   };
 }
@@ -183,11 +243,14 @@ async function readFormPayload(
 
   return {
     title: formString(form, "title") ?? "",
+    sport_type: formString(form, "sport_type") ?? DEFAULT_SPORT_TYPE,
     description: formString(form, "description"),
     match_context: formString(form, "match_context"),
     incident_minute: formString(form, "incident_minute"),
     category: formString(form, "category"),
     topic: formString(form, "topic"),
+    subtopic: formString(form, "subtopic"),
+    rule_reference: formString(form, "rule_reference"),
     correct_decision: formString(form, "correct_decision"),
     correct_restart: formString(form, "correct_restart"),
     correct_discipline: formString(form, "correct_discipline"),
@@ -197,6 +260,15 @@ async function readFormPayload(
     difficulty: formString(form, "difficulty"),
     mode: formString(form, "mode") || "institutional_video",
     is_public: form.get("is_public") === "true",
+    season: formString(form, "season"),
+    source_version: formString(form, "source_version"),
+    source_official: formString(form, "source_official"),
+    governing_body: formString(form, "governing_body"),
+    technical_resolution: formString(form, "technical_resolution"),
+    disciplinary_resolution: formString(form, "disciplinary_resolution"),
+    normative_status: formString(form, "normative_status"),
+    language: formString(form, "language"),
+    reviewed_at: formString(form, "reviewed_at"),
     source_url: formString(form, "source_url"),
     storage_path: storagePath,
     original_filename: originalFilename,

@@ -3,6 +3,20 @@
 :root {
   --background: #02070d;
   --foreground: #ededed;
+  --font-geist-sans:
+    "Segoe UI Variable",
+    "Segoe UI",
+    "Helvetica Neue",
+    "Arial Nova",
+    Arial,
+    sans-serif;
+  --font-geist-mono:
+    "Cascadia Code",
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    Menlo,
+    monospace;
 }
 
 @theme inline {
@@ -18,7 +32,7 @@ body {
   padding: 0;
   background: #02070d;
   color: #ededed;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans);
   overflow-x: hidden;
 }
 

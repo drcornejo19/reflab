@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
+import { SportDisciplineSwitch } from "@/components/SportDisciplineSwitch";
 import { useUserRole } from "@/lib/useUserRole";
 import {
   Activity,
@@ -75,6 +76,27 @@ export default function TrainingPage() {
   return (
     <AppShell>
       <div className="w-full max-w-full space-y-5 overflow-hidden lg:space-y-6">
+        <SportDisciplineSwitch
+          items={[
+            {
+              key: "football_11",
+              label: "Futbol 11",
+              description:
+                "Entrenamiento tecnico, comunicacional y de preparacion para futbol 11.",
+              href: "/training",
+              active: true,
+            },
+            {
+              key: "futsal",
+              label: "Futsal",
+              description:
+                "Modulo independiente con videoanalisis y reglas especificas de futsal.",
+              href: "/futsal",
+              active: false,
+            },
+          ]}
+        />
+
         <section className="rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-4 shadow-2xl sm:rounded-[34px] sm:p-6 lg:p-7">
           <p className="break-words text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.45em]">
             REFLAB TRAINING

@@ -13,18 +13,35 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import {
+  getActiveSeasonForSport,
+  getDefaultSourceVersionForSport,
+  getGoverningBodyForSport,
+  normalizeSportType,
+  type SportType,
+} from "@/lib/sports";
+import {
   institutionalClipStatusLabels,
   type InstitutionalClipStatus,
 } from "@/lib/institutionalExperience";
+import {
+  clipDifficultyOptions,
+  getVideoTopicOptionsForSport,
+  languageOptions,
+  normativeStatusOptions,
+  sportTypeOptions,
+} from "@/lib/sportFormOptions";
 
 type InstitutionalClip = {
   id: string;
+  sport_type: string;
   title: string;
   description: string | null;
   match_context: string | null;
   incident_minute: string | null;
   category: string | null;
   topic: string | null;
+  subtopic: string | null;
+  rule_reference: string | null;
   correct_decision: string | null;
   correct_restart: string | null;
   correct_discipline: string | null;
@@ -36,6 +53,15 @@ type InstitutionalClip = {
   is_public: boolean;
   status: InstitutionalClipStatus;
   review_notes: string | null;
+  season: string | null;
+  source_version: string | null;
+  source_official: string | null;
+  governing_body: string | null;
+  technical_resolution: string | null;
+  disciplinary_resolution: string | null;
+  normative_status: string | null;
+  language: string | null;
+  reviewed_at: string | null;
   source_url: string | null;
   storage_path: string | null;
   original_filename: string | null;
@@ -44,12 +70,16 @@ type InstitutionalClip = {
 
 type FormState = {
   title: string;
+  sport_type: SportType;
+  governing_body: string;
   source_url: string;
   description: string;
   match_context: string;
   incident_minute: string;
   category: string;
   topic: string;
+  subtopic: string;
+  rule_reference: string;
   correct_decision: string;
   correct_restart: string;
   correct_discipline: string;
@@ -57,26 +87,50 @@ type FormState = {
   explanation: string;
   ifab_var_criteria: string;
   difficulty: string;
+  season: string;
+  source_version: string;
+  source_official: string;
+  technical_resolution: string;
+  disciplinary_resolution: string;
+  normative_status: string;
+  language: string;
+  reviewed_at: string;
   is_public: boolean;
 };
 
-const initialForm: FormState = {
-  title: "",
-  source_url: "",
-  description: "",
-  match_context: "",
-  incident_minute: "",
-  category: "",
-  topic: "",
-  correct_decision: "",
-  correct_restart: "",
-  correct_discipline: "",
-  final_expected_answer: "",
-  explanation: "",
-  ifab_var_criteria: "",
-  difficulty: "",
-  is_public: false,
-};
+function createInitialForm(sportType: SportType = "football_11"): FormState {
+  return {
+    title: "",
+    sport_type: sportType,
+    governing_body: getGoverningBodyForSport(sportType),
+    source_url: "",
+    description: "",
+    match_context: "",
+    incident_minute: "",
+    category: "",
+    topic: "",
+    subtopic: "",
+    rule_reference: "",
+    correct_decision: "",
+    correct_restart: "",
+    correct_discipline: "",
+    final_expected_answer: "",
+    explanation: "",
+    ifab_var_criteria: "",
+    difficulty: "",
+    season: getActiveSeasonForSport(sportType),
+    source_version: getDefaultSourceVersionForSport(sportType),
+    source_official: "",
+    technical_resolution: "",
+    disciplinary_resolution: "",
+    normative_status: "vigente",
+    language: "es",
+    reviewed_at: "",
+    is_public: false,
+  };
+}
+
+const initialForm: FormState = createInitialForm();
 
 const inputClass =
   "w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white outline-none placeholder:text-zinc-600 focus:border-[#6fc11f]/50";
@@ -94,6 +148,7 @@ export default function InstitutionVideosPage() {
   const { user, isLoaded } = useUser();
   const [clips, setClips] = useState<InstitutionalClip[]>([]);
   const [form, setForm] = useState<FormState>(initialForm);
+  const [clipSportFilter, setClipSportFilter] = useState<"all" | SportType>("all");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -123,6 +178,19 @@ export default function InstitutionVideosPage() {
       } as Record<InstitutionalClipStatus | "total", number>
     );
   }, [clips]);
+
+  const topicOptions = useMemo(
+    () => getVideoTopicOptionsForSport(form.sport_type),
+    [form.sport_type]
+  );
+
+  const visibleClips = useMemo(() => {
+    if (clipSportFilter === "all") return clips;
+
+    return clips.filter(
+      (clip) => normalizeSportType(clip.sport_type) === clipSportFilter
+    );
+  }, [clipSportFilter, clips]);
 
   async function loadClips() {
     setLoading(true);
@@ -178,7 +246,7 @@ export default function InstitutionVideosPage() {
       }
 
       setMessage("Clip recibido. Quedo pendiente para revision del equipo RefLab.");
-      setForm(initialForm);
+      setForm(createInitialForm(form.sport_type));
       setVideoFile(null);
       setClips((current) => [data.clip!, ...current]);
       event.currentTarget.reset();
@@ -252,10 +320,46 @@ export default function InstitutionVideosPage() {
             </div>
 
             <div className="mt-6 grid gap-4">
-              <Field label="Titulo del clip" required>
-                <input
-                  value={form.title}
-                  onChange={(event) => updateForm("title", event.target.value)}
+                <Field label="Disciplina" required>
+                  <select
+                    value={form.sport_type}
+                    onChange={(event) => {
+                      const nextSportType = event.target.value as SportType;
+                      setForm((current) => ({
+                        ...createInitialForm(nextSportType),
+                        sport_type: nextSportType,
+                        governing_body: getGoverningBodyForSport(nextSportType),
+                        title: current.title,
+                        source_url: current.source_url,
+                        description: current.description,
+                        match_context: current.match_context,
+                        incident_minute: current.incident_minute,
+                        category: current.category,
+                        is_public: current.is_public,
+                      }));
+                    }}
+                    className={inputClass}
+                  >
+                    {sportTypeOptions.map((item) => (
+                      <option key={item.value} value={item.value} className="bg-[#0b131b]">
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Organismo rector">
+                  <input
+                    value={form.governing_body}
+                    readOnly
+                    className={`${inputClass} opacity-80`}
+                  />
+                </Field>
+
+                <Field label="Titulo del clip" required>
+                  <input
+                    value={form.title}
+                    onChange={(event) => updateForm("title", event.target.value)}
                   className={inputClass}
                   placeholder="Ej: Falta tactica que corta un ataque prometedor"
                   required
@@ -282,12 +386,18 @@ export default function InstitutionVideosPage() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Topico arbitral">
-                  <input
+                  <select
                     value={form.topic}
                     onChange={(event) => updateForm("topic", event.target.value)}
                     className={inputClass}
-                    placeholder="Fuera de juego, manos, disputas, faltas tacticas, VAR..."
-                  />
+                  >
+                    <option value="" className="bg-[#0b131b]">Seleccionar topico</option>
+                    {topicOptions.map((option) => (
+                      <option key={option.value} value={option.value} className="bg-[#0b131b]">
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
                 <Field label="Minuto de la jugada">
                   <input
@@ -295,6 +405,14 @@ export default function InstitutionVideosPage() {
                     onChange={(event) => updateForm("incident_minute", event.target.value)}
                     className={inputClass}
                     placeholder="Ej: 62:30"
+                  />
+                </Field>
+                <Field label="Subtopico">
+                  <input
+                    value={form.subtopic}
+                    onChange={(event) => updateForm("subtopic", event.target.value)}
+                    className={inputClass}
+                    placeholder="Detalle del caso o subtipo"
                   />
                 </Field>
                 <Field label="Categoria">
@@ -312,10 +430,79 @@ export default function InstitutionVideosPage() {
                     className={inputClass}
                   >
                     <option value="" className="bg-[#0b131b]">Sin definir</option>
-                    <option value="basic" className="bg-[#0b131b]">Basica</option>
-                    <option value="intermediate" className="bg-[#0b131b]">Intermedia</option>
-                    <option value="advanced" className="bg-[#0b131b]">Avanzada</option>
-                    <option value="elite" className="bg-[#0b131b]">Elite</option>
+                    {clipDifficultyOptions.map((option) => (
+                      <option
+                        key={option.value}
+                        value={option.value}
+                        className="bg-[#0b131b]"
+                      >
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Referencia reglamentaria">
+                  <input
+                    value={form.rule_reference}
+                    onChange={(event) => updateForm("rule_reference", event.target.value)}
+                    className={inputClass}
+                    placeholder="Regla o articulo aplicable"
+                  />
+                </Field>
+                <Field label="Temporada normativa">
+                  <input
+                    value={form.season}
+                    onChange={(event) => updateForm("season", event.target.value)}
+                    className={inputClass}
+                    placeholder="2026/27 o 2024-25"
+                  />
+                </Field>
+                <Field label="Version / documento fuente">
+                  <input
+                    value={form.source_version}
+                    onChange={(event) => updateForm("source_version", event.target.value)}
+                    className={inputClass}
+                    placeholder="Laws of the Game 2026/27"
+                  />
+                </Field>
+                <Field label="Idioma">
+                  <select
+                    value={form.language}
+                    onChange={(event) => updateForm("language", event.target.value)}
+                    className={inputClass}
+                  >
+                    {languageOptions.map((item) => (
+                      <option key={item.value} value={item.value} className="bg-[#0b131b]">
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Fuente oficial">
+                  <input
+                    value={form.source_official}
+                    onChange={(event) => updateForm("source_official", event.target.value)}
+                    className={inputClass}
+                    placeholder="URL del documento o circular"
+                  />
+                </Field>
+                <Field label="Estado normativo">
+                  <select
+                    value={form.normative_status}
+                    onChange={(event) => updateForm("normative_status", event.target.value)}
+                    className={inputClass}
+                  >
+                    {normativeStatusOptions.map((item) => (
+                      <option key={item.value} value={item.value} className="bg-[#0b131b]">
+                        {item.label}
+                      </option>
+                    ))}
                   </select>
                 </Field>
               </div>
@@ -365,12 +552,39 @@ export default function InstitutionVideosPage() {
                 />
               </Field>
 
+              <Field label="Resolucion tecnica">
+                <textarea
+                  value={form.technical_resolution}
+                  onChange={(event) => updateForm("technical_resolution", event.target.value)}
+                  className={`${inputClass} min-h-20 resize-y`}
+                  placeholder="Lectura tecnica oficial de la jugada."
+                />
+              </Field>
+
+              <Field label="Resolucion disciplinaria">
+                <textarea
+                  value={form.disciplinary_resolution}
+                  onChange={(event) => updateForm("disciplinary_resolution", event.target.value)}
+                  className={`${inputClass} min-h-20 resize-y`}
+                  placeholder="Consecuencia disciplinaria oficial."
+                />
+              </Field>
+
               <Field label="Explicacion tecnica / criterios IFAB o VAR">
                 <textarea
                   value={form.explanation}
                   onChange={(event) => updateForm("explanation", event.target.value)}
                   className={`${inputClass} min-h-28 resize-y`}
                   placeholder="Fundamento tecnico, protocolo VAR, punto de contacto, intensidad, APP..."
+                />
+              </Field>
+
+              <Field label="Fecha de revision">
+                <input
+                  type="date"
+                  value={form.reviewed_at}
+                  onChange={(event) => updateForm("reviewed_at", event.target.value)}
+                  className={inputClass}
                 />
               </Field>
 
@@ -393,9 +607,9 @@ export default function InstitutionVideosPage() {
               </label>
 
               <div className="rounded-2xl border border-[#6fc11f]/20 bg-[#6fc11f]/10 p-4 text-xs font-bold leading-5 text-[#d8ff9b]">
-                En escuelas, los videos se limitan a fuera de juego, manos,
-                disputas y faltas tacticas. En asociaciones tambien puede
-                trabajarse VAR Lab y clips propios de mayor complejidad.
+                RefLab separa futbol 11 y futsal desde el origen del clip.
+                En futsal no se admite fuera de juego y el contenido debe quedar
+                asociado a normativa FIFA.
               </div>
 
               {message && (
@@ -433,18 +647,34 @@ export default function InstitutionVideosPage() {
             </div>
 
             <div className="mt-6 grid gap-4">
+              <div className="flex flex-wrap gap-2">
+                <FilterChip
+                  active={clipSportFilter === "all"}
+                  label="Todas las disciplinas"
+                  onClick={() => setClipSportFilter("all")}
+                />
+                {sportTypeOptions.map((item) => (
+                  <FilterChip
+                    key={item.value}
+                    active={clipSportFilter === item.value}
+                    label={item.label}
+                    onClick={() => setClipSportFilter(item.value)}
+                  />
+                ))}
+              </div>
+
               {loading ? (
                 <div className="flex min-h-52 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-zinc-400">
                   <Loader2 className="mr-2 animate-spin" size={18} />
                   Cargando clips...
                 </div>
-              ) : clips.length === 0 ? (
+              ) : visibleClips.length === 0 ? (
                 <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-6 text-sm leading-6 text-zinc-400">
-                  Todavia no hay clips enviados. Carga el primer video para activar
-                  el circuito de revision audiovisual.
+                  Todavia no hay clips enviados para este filtro. Carga el primer
+                  video para activar el circuito de revision audiovisual.
                 </div>
               ) : (
-                clips.map((clip) => <ClipCard key={clip.id} clip={clip} />)
+                visibleClips.map((clip) => <ClipCard key={clip.id} clip={clip} />)
               )}
             </div>
           </section>
@@ -466,6 +696,30 @@ function Metric({ label, value }: { label: string; value: number }) {
       </p>
       <p className="mt-3 text-3xl font-black text-[#6fc11f]">{value}</p>
     </div>
+  );
+}
+
+function FilterChip({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] transition ${
+        active
+          ? "border-[#6fc11f]/40 bg-[#6fc11f]/10 text-[#b7ff67]"
+          : "border-white/10 bg-black/20 text-zinc-400 hover:border-[#6fc11f]/30"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -507,9 +761,12 @@ function ClipCard({ clip }: { clip: InstitutionalClip }) {
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
+        <Chip label={clip.sport_type === "futsal" ? "Futsal" : "Futbol 11"} />
         <Chip label={clip.topic || "Topico s/d"} />
+        {clip.subtopic ? <Chip label={clip.subtopic} /> : null}
         <Chip label={clip.category || "Categoria s/d"} />
         <Chip label={clip.incident_minute ? `Min ${clip.incident_minute}` : "Minuto s/d"} />
+        {clip.season ? <Chip label={clip.season} /> : null}
         <span className="inline-flex min-h-8 items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-300">
           {clip.is_public ? (
             <>

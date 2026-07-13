@@ -4,7 +4,8 @@ import Image from "next/image";
 import { RF_LOGO_SIZE, RF_LOGO_SRC } from "@/lib/brand";
 import { PushDeviceSync } from "@/components/PushDeviceSync";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   BookOpen,
@@ -18,6 +19,8 @@ import {
   Landmark,
   Languages,
   Menu,
+  MonitorCheck,
+  NotebookTabs,
   ShieldCheck,
   LifeBuoy,
   Settings,
@@ -34,6 +37,8 @@ import {
   type AppLanguage,
   type TranslationKey,
 } from "@/lib/languagePreference";
+import { useDiscipline } from "@/components/DisciplineProvider";
+import { getDisciplineRoute } from "@/lib/discipline";
 import { useUserRole } from "@/lib/useUserRole";
 
 type NavItem = {
@@ -48,7 +53,11 @@ type NavItem = {
   institutionalStudentOnly?: boolean;
 };
 
-const trainingActivePaths = ["/training", "/mobile-var"];
+const trainingActivePaths = [
+  "/training",
+  "/mobile-var",
+  "/futsal/rules-practice",
+];
 const trainingActivePrefixes = [
   "/training/decision",
   "/training/var",
@@ -59,229 +68,298 @@ const trainingActivePrefixes = [
   "/training/psychology",
   "/training/rules-practice",
   "/training/rules-premium-practice",
+  "/futsal/rules-practice",
 ];
-const evaluationsActivePaths = ["/evaluations", "/training/exam", "/training/rules-exam", "/training/video-analysis"];
-const evaluationsActivePrefixes = ["/evaluations", "/training/video-analysis"];
+const evaluationsActivePaths = [
+  "/evaluations",
+  "/training/exam",
+  "/training/rules-exam",
+  "/training/video-analysis",
+  "/futsal/video-analysis",
+  "/futsal/rules-exam",
+];
+const evaluationsActivePrefixes = [
+  "/evaluations",
+  "/training/video-analysis",
+  "/futsal/video-analysis",
+  "/futsal/rules-exam",
+];
+const futsalActivePaths = ["/futsal"];
+const matchesActivePaths = ["/matches"];
+const matchesActivePrefixes = ["/matches"];
 
-const navItems: NavItem[] = [
-  {
-    label: "Mi Programa",
-    href: "/demo/student",
-    icon: GraduationCap,
-    activePaths: ["/demo/student"],
-    institutionalStudentOnly: true,
-  },
-  {
-    label: "Material IFAB",
-    href: "/institution/rules",
-    icon: BookOpen,
-    activePaths: ["/institution/rules"],
-    activePrefixes: ["/institution/rules"],
-    institutionalStudentOnly: true,
-  },
-  {
-    label: "Dashboard",
-    labelKey: "nav.dashboard",
-    href: "/dashboard",
-    icon: Home,
-    individualOnly: true,
-  },
-  {
-    label: "Entrenamiento",
-    labelKey: "nav.training",
-    href: "/training",
-    icon: CircleAlert,
-    activePaths: trainingActivePaths,
-    activePrefixes: trainingActivePrefixes,
-    individualOnly: true,
-  },
-  {
-    label: "Evaluaciones",
-    labelKey: "nav.evaluations",
-    href: "/evaluations",
-    icon: ShieldCheck,
-    activePaths: evaluationsActivePaths,
-    activePrefixes: evaluationsActivePrefixes,
-  },
-  {
-    label: "Ref Performance",
-    labelKey: "nav.performance",
-    href: "/performance",
-    icon: Activity,
-    activePaths: ["/performance", "/stats", "/ranking", "/mobile-stats"],
-    activePrefixes: ["/performance"],
-    individualOnly: true,
-  },
-  {
-    label: "Biblioteca IFAB",
-    labelKey: "nav.library",
-    href: "/learning",
-    icon: BookOpen,
-    activePaths: ["/learning"],
-  },
-  {
-    label: "Instituciones",
-    labelKey: "nav.institutions",
-    href: "/institutional",
-    icon: Landmark,
-    activePaths: ["/institutional"],
-  },
-  {
-    label: "Perfil",
-    labelKey: "nav.profile",
-    href: "/profile",
-    icon: User,
-    individualOnly: true,
-  },
-  {
-    label: "Notificaciones",
-    labelKey: "nav.notifications",
-    href: "/notifications",
-    icon: Bell,
-    activePaths: ["/notifications"],
-  },
-  {
-    label: "Soporte",
-    labelKey: "nav.support",
-    href: "/support",
-    icon: LifeBuoy,
-    activePaths: ["/support"],
-  },
-  {
-    label: "Admin",
-    labelKey: "nav.admin",
-    href: "/admin",
-    icon: Clapperboard,
-    activePaths: ["/admin", "/admin-clips"],
-    activePrefixes: ["/admin"],
-    adminOnly: true,
-  },
-];
+function getDesktopNavItems(trainingHref: string, evaluationsHref: string) {
+  return [
+    {
+      label: "Mi Programa",
+      href: "/demo/student",
+      icon: GraduationCap,
+      activePaths: ["/demo/student"],
+      institutionalStudentOnly: true,
+    },
+    {
+      label: "Reglas",
+      href: "/institution/rules",
+      icon: BookOpen,
+      activePaths: ["/institution/rules"],
+      activePrefixes: ["/institution/rules"],
+      institutionalStudentOnly: true,
+    },
+    {
+      label: "Dashboard",
+      labelKey: "nav.dashboard",
+      href: "/dashboard",
+      icon: Home,
+      individualOnly: true,
+    },
+    {
+      label: "Entrenamiento",
+      labelKey: "nav.training",
+      href: trainingHref,
+      icon: CircleAlert,
+      activePaths: trainingActivePaths,
+      activePrefixes: trainingActivePrefixes,
+      individualOnly: true,
+    },
+    {
+      label: "Evaluaciones",
+      labelKey: "nav.evaluations",
+      href: evaluationsHref,
+      icon: ShieldCheck,
+      activePaths: evaluationsActivePaths,
+      activePrefixes: evaluationsActivePrefixes,
+    },
+    {
+      label: "Futsal",
+      href: "/futsal",
+      icon: MonitorCheck,
+      activePaths: futsalActivePaths,
+      individualOnly: true,
+    },
+    {
+      label: "Mis partidos",
+      labelKey: "nav.matches",
+      href: "/matches",
+      icon: NotebookTabs,
+      activePaths: matchesActivePaths,
+      activePrefixes: matchesActivePrefixes,
+    },
+    {
+      label: "Ref Performance",
+      labelKey: "nav.performance",
+      href: "/performance",
+      icon: Activity,
+      activePaths: ["/performance", "/stats", "/ranking", "/mobile-stats"],
+      activePrefixes: ["/performance"],
+      individualOnly: true,
+    },
+    {
+      label: "Biblioteca",
+      labelKey: "nav.library",
+      href: "/learning",
+      icon: BookOpen,
+      activePaths: ["/learning"],
+    },
+    {
+      label: "Instituciones",
+      labelKey: "nav.institutions",
+      href: "/institutional",
+      icon: Landmark,
+      activePaths: ["/institutional"],
+    },
+    {
+      label: "Perfil",
+      labelKey: "nav.profile",
+      href: "/profile",
+      icon: User,
+      individualOnly: true,
+    },
+    {
+      label: "Notificaciones",
+      labelKey: "nav.notifications",
+      href: "/notifications",
+      icon: Bell,
+      activePaths: ["/notifications"],
+    },
+    {
+      label: "Soporte",
+      labelKey: "nav.support",
+      href: "/support",
+      icon: LifeBuoy,
+      activePaths: ["/support"],
+    },
+    {
+      label: "Admin",
+      labelKey: "nav.admin",
+      href: "/admin",
+      icon: Clapperboard,
+      activePaths: ["/admin", "/admin-clips"],
+      activePrefixes: ["/admin"],
+      adminOnly: true,
+    },
+  ] satisfies NavItem[];
+}
 
-const mobileItems: NavItem[] = [
-  {
-    label: "Programa",
-    href: "/demo/student",
-    icon: GraduationCap,
-    activePaths: ["/demo/student"],
-    institutionalStudentOnly: true,
-  },
-  {
-    label: "IFAB",
-    href: "/institution/rules",
-    icon: BookOpen,
-    activePaths: ["/institution/rules"],
-    activePrefixes: ["/institution/rules"],
-    institutionalStudentOnly: true,
-  },
-  {
-    label: "Dashboard",
-    labelKey: "nav.dashboard",
-    href: "/mobile-dashboard",
-    icon: Home,
-    activePaths: ["/mobile-dashboard", "/dashboard"],
-    individualOnly: true,
-  },
-  {
-    label: "Entrenar",
-    labelKey: "nav.train",
-    href: "/training",
-    icon: CircleAlert,
-    activePaths: trainingActivePaths,
-    activePrefixes: trainingActivePrefixes,
-    individualOnly: true,
-  },
-  {
-    label: "Evaluar",
-    labelKey: "nav.evaluate",
-    href: "/evaluations",
-    icon: ShieldCheck,
-    activePaths: evaluationsActivePaths,
-    activePrefixes: evaluationsActivePrefixes,
-  },
-  {
-    label: "Ref Perf.",
-    labelKey: "nav.performance",
-    href: "/performance",
-    icon: Activity,
-    activePaths: ["/performance", "/stats", "/ranking", "/mobile-stats"],
-    activePrefixes: ["/performance"],
-    individualOnly: true,
-  },
-];
+function getPrimaryMobileItems(trainingHref: string, evaluationsHref: string) {
+  return [
+    {
+      label: "Programa",
+      href: "/demo/student",
+      icon: GraduationCap,
+      activePaths: ["/demo/student"],
+      institutionalStudentOnly: true,
+    },
+    {
+      label: "Reglas",
+      href: "/institution/rules",
+      icon: BookOpen,
+      activePaths: ["/institution/rules"],
+      activePrefixes: ["/institution/rules"],
+      institutionalStudentOnly: true,
+    },
+    {
+      label: "Dashboard",
+      labelKey: "nav.dashboard",
+      href: "/mobile-dashboard",
+      icon: Home,
+      activePaths: ["/mobile-dashboard", "/dashboard"],
+      individualOnly: true,
+    },
+    {
+      label: "Entrenar",
+      labelKey: "nav.train",
+      href: trainingHref,
+      icon: CircleAlert,
+      activePaths: trainingActivePaths,
+      activePrefixes: trainingActivePrefixes,
+      individualOnly: true,
+    },
+    {
+      label: "Evaluar",
+      labelKey: "nav.evaluate",
+      href: evaluationsHref,
+      icon: ShieldCheck,
+      activePaths: evaluationsActivePaths,
+      activePrefixes: evaluationsActivePrefixes,
+    },
+    {
+      label: "Futsal",
+      href: "/futsal",
+      icon: MonitorCheck,
+      activePaths: futsalActivePaths,
+      individualOnly: true,
+    },
+    {
+      label: "Ref Perf.",
+      labelKey: "nav.performance",
+      href: "/performance",
+      icon: Activity,
+      activePaths: ["/performance", "/stats", "/ranking", "/mobile-stats"],
+      activePrefixes: ["/performance"],
+      individualOnly: true,
+    },
+  ] satisfies NavItem[];
+}
 
-const secondaryMobileItems: NavItem[] = [
-  {
-    label: "RefLab",
-    labelKey: "nav.reflab",
-    href: "/about",
-    icon: Info,
-    activePaths: ["/about"],
-  },
-  {
-    label: "Biblioteca IFAB",
-    labelKey: "nav.library",
-    href: "/learning",
-    icon: BookOpen,
-    activePaths: ["/learning"],
-  },
-  {
-    label: "Perfil",
-    labelKey: "nav.profile",
-    href: "/profile",
-    icon: User,
-    activePaths: ["/profile"],
-    individualOnly: true,
-  },
-  {
-    label: "Instituciones",
-    labelKey: "nav.institutions",
-    href: "/institutional",
-    icon: Landmark,
-    activePaths: ["/institutional"],
-  },
-  {
-    label: "Notificaciones",
-    labelKey: "nav.notifications",
-    href: "/notifications",
-    icon: Bell,
-    activePaths: ["/notifications"],
-  },
-  {
-    label: "Soporte",
-    labelKey: "nav.support",
-    href: "/support",
-    icon: LifeBuoy,
-    activePaths: ["/support"],
-  },
-  {
-    label: "Admin",
-    labelKey: "nav.admin",
-    href: "/admin",
-    icon: Clapperboard,
-    activePaths: ["/admin", "/admin-clips"],
-    activePrefixes: ["/admin"],
-    adminOnly: true,
-  },
-];
+function getSecondaryMobileItems() {
+  return [
+    {
+      label: "Mis partidos",
+      labelKey: "nav.matches",
+      href: "/matches",
+      icon: NotebookTabs,
+      activePaths: matchesActivePaths,
+      activePrefixes: matchesActivePrefixes,
+    },
+    {
+      label: "RefLab",
+      labelKey: "nav.reflab",
+      href: "/about",
+      icon: Info,
+      activePaths: ["/about"],
+    },
+    {
+      label: "Biblioteca",
+      labelKey: "nav.library",
+      href: "/learning",
+      icon: BookOpen,
+      activePaths: ["/learning"],
+    },
+    {
+      label: "Perfil",
+      labelKey: "nav.profile",
+      href: "/profile",
+      icon: User,
+      activePaths: ["/profile"],
+      individualOnly: true,
+    },
+    {
+      label: "Instituciones",
+      labelKey: "nav.institutions",
+      href: "/institutional",
+      icon: Landmark,
+      activePaths: ["/institutional"],
+    },
+    {
+      label: "Notificaciones",
+      labelKey: "nav.notifications",
+      href: "/notifications",
+      icon: Bell,
+      activePaths: ["/notifications"],
+    },
+    {
+      label: "Soporte",
+      labelKey: "nav.support",
+      href: "/support",
+      icon: LifeBuoy,
+      activePaths: ["/support"],
+    },
+    {
+      label: "Admin",
+      labelKey: "nav.admin",
+      href: "/admin",
+      icon: Clapperboard,
+      activePaths: ["/admin", "/admin-clips"],
+      activePrefixes: ["/admin"],
+      adminOnly: true,
+    },
+  ] satisfies NavItem[];
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { userId, isLoaded: authLoaded } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [language, setLanguage] = useState<AppLanguage>("es");
+  const { currentDiscipline, hasSelectedDiscipline, isHydrated } =
+    useDiscipline();
   const roleState = useUserRole();
-  const visibleNavItems = filterNavItems(navItems, roleState);
-  const visibleMobileItems = filterNavItems(mobileItems, roleState);
+  const trainingHref = getDisciplineRoute(currentDiscipline, "trainingHub");
+  const evaluationsHref = getDisciplineRoute(
+    currentDiscipline,
+    "evaluationsHub"
+  );
+  const visibleNavItems = filterNavItems(
+    getDesktopNavItems(trainingHref, evaluationsHref),
+    roleState
+  );
+  const visibleMobileItems = filterNavItems(
+    getPrimaryMobileItems(trainingHref, evaluationsHref),
+    roleState
+  );
   const mobileNavGrid =
     visibleMobileItems.length <= 3
       ? "grid-cols-3"
       : visibleMobileItems.length === 4
         ? "grid-cols-4"
         : "grid-cols-5";
-  const visibleSecondaryItems = filterNavItems(
-    secondaryMobileItems,
-    roleState
-  );
+  const visibleSecondaryItems = filterNavItems(getSecondaryMobileItems(), roleState);
+  const requiresDisciplineSelection =
+    authLoaded &&
+    Boolean(userId) &&
+    !hasSelectedDiscipline &&
+    !isDisciplineExemptPath(pathname);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -295,6 +373,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!requiresDisciplineSelection) return;
+    if (!isHydrated) return;
+
+    router.replace(`/discipline?next=${encodeURIComponent(pathname)}`);
+  }, [isHydrated, pathname, requiresDisciplineSelection, router]);
+
+  if (requiresDisciplineSelection || (authLoaded && Boolean(userId) && !isHydrated && !isDisciplineExemptPath(pathname))) {
+    return (
+      <div className="min-h-screen overflow-hidden bg-[#050b12] text-white">
+        <div className="flex min-h-screen items-center justify-center px-6">
+          <div className="w-full max-w-[420px] rounded-[30px] border border-white/10 bg-[#0b131b] p-7 text-center shadow-2xl">
+            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-white/10 border-t-[#6fc11f]" />
+            <p className="mt-5 text-sm font-black uppercase tracking-[0.26em] text-[#6fc11f]">
+              RefLab
+            </p>
+            <p className="mt-3 text-lg font-black">
+              Preparando tu entorno de trabajo
+            </p>
+            <p className="mt-2 text-sm leading-6 text-zinc-400">
+              Cargando la disciplina activa para mantener Dashboard, Biblioteca,
+              Perfil y rendimiento sincronizados.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#050b12] text-white">
       <PushDeviceSync />
@@ -304,7 +411,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="mt-10 space-y-2" aria-label="Navegacion principal">
           {visibleNavItems.map((item) => (
             <NavLink
-              key={item.href}
+              key={`${item.label}-${item.href}`}
               item={item}
               language={language}
               active={isItemActive(pathname, item)}
@@ -337,7 +444,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="grid gap-2">
               {visibleSecondaryItems.map((item) => (
                 <MobileMenuLink
-                  key={item.href}
+                  key={`${item.label}-${item.href}`}
                   item={item}
                   language={language}
                   active={isItemActive(pathname, item)}
@@ -367,7 +474,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           return (
             <Link
-              key={item.href}
+              key={`${item.label}-${item.href}`}
               href={item.href}
               className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-[20px] px-0.5 text-[9px] font-black leading-none transition active:scale-95 sm:px-1 sm:text-[10px] ${
                 active
@@ -503,6 +610,10 @@ function isItemActive(pathname: string, item: NavItem) {
       (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
     )
   );
+}
+
+function isDisciplineExemptPath(pathname: string) {
+  return pathname === "/about";
 }
 
 function LanguageSettings({

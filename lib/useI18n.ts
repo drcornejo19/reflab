@@ -10,10 +10,9 @@ import {
 } from "@/lib/languagePreference";
 
 export function useAppLanguage() {
-  const [language, setLanguage] = useState<AppLanguage>("es");
+  const [language, setLanguage] = useState<AppLanguage>(() => getStoredLanguage());
 
   useEffect(() => {
-    setLanguage(getStoredLanguage());
     return subscribeToLanguageChange(setLanguage);
   }, []);
 

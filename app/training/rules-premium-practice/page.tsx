@@ -1,15 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { rulesQuestions } from "@/lib/rulesQuestions";
 
 const isPremium = false;
 
 export default function RulesPremiumPracticePage() {
-  const questions = useMemo(() => {
-    return [...rulesQuestions].sort(() => Math.random() - 0.5);
-  }, []);
+  const [questions] = useState(() => shuffleQuestions(rulesQuestions));
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
@@ -197,4 +195,15 @@ export default function RulesPremiumPracticePage() {
       </div>
     </AppShell>
   );
+}
+
+function shuffleQuestions<T>(items: T[]) {
+  const shuffled = [...items];
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const nextIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[nextIndex]] = [shuffled[nextIndex], shuffled[index]];
+  }
+
+  return shuffled;
 }

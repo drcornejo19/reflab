@@ -1,4 +1,5 @@
 import { getPublicRankingName, resolveRefCardId } from "@/lib/refCard";
+import { DEFAULT_SPORT_TYPE, normalizeSportType, type SportType } from "@/lib/sports";
 
 export type PerformanceSource = "training" | "exam" | "rules_exam";
 export type ModuleKey = "decision" | "video" | "var" | "english" | "communication" | "preparation";
@@ -7,6 +8,8 @@ export type CriterionKey = "technical" | "restart" | "discipline" | "interpretat
 export type AttemptRecord = {
   id?: string;
   user_id?: string | null;
+  sport_type?: SportType | null;
+  activity_type?: string | null;
   ref_card_id?: string | null;
   clip_id?: string | null;
   clip_title?: string | null;
@@ -17,6 +20,10 @@ export type AttemptRecord = {
   discipline?: string | null;
   score?: number | null;
   topic?: string | null;
+  subtopic?: string | null;
+  rule_reference?: string | null;
+  season?: string | null;
+  source_version?: string | null;
   difficulty?: string | null;
   is_correct?: boolean | null;
   selected_decision?: string | null;
@@ -40,7 +47,11 @@ export type AttemptRecord = {
   technical_correct?: boolean | null;
   restart_correct?: boolean | null;
   discipline_correct?: boolean | null;
+  disciplinary_correct?: boolean | null;
   subtype_correct?: boolean | null;
+  accumulated_foul_correct?: boolean | null;
+  four_second_correct?: boolean | null;
+  goalkeeper_correct?: boolean | null;
   justification_correct?: boolean | null;
   var_correct?: boolean | null;
   app_correct?: boolean | null;
@@ -69,6 +80,7 @@ export type ExamAnswerRecord = {
 export type ExamResultRecord = {
   id?: string; user_id?: string | null; total_questions?: number | null; total_score?: number | null;
   avg_score?: number | null; correct_count?: number | null; details?: ExamAnswerRecord[] | null; created_at?: string | null;
+  sport_type?: SportType | null; activity_type?: string | null; season?: string | null; source_version?: string | null;
 };
 export type RulesAnswerRecord = {
   question_id?: string | number | null; topic?: string | null; question?: string | null;
@@ -79,6 +91,7 @@ export type RulesExamResultRecord = {
   id?: string; user_id?: string | null; total_questions?: number | null; correct_count?: number | null;
   percentage?: number | null; unanswered_count?: number | null; finish_reason?: string | null; level?: string | null;
   details?: RulesAnswerRecord[] | null; topic_performance?: unknown[] | null; created_at?: string | null;
+  sport_type?: SportType | null; activity_type?: string | null; season?: string | null; source_version?: string | null;
 };
 export type RankingProfileRecord = {
   user_id?: string | null;
@@ -109,11 +122,34 @@ export type EvolutionData = { historicalAverage: number | null; lastAverage: num
 export type PerformanceSummary = { hasData: boolean; avgScore: number | null; totalAttempts: number; totalTrainings: number; totalEvaluations: number; bestScore: number | null; lastScore: number | null; strongestTopic?: TopicMetric; weakestTopic?: TopicMetric; strongestCriterion?: CriterionMetric; weakestCriterion?: CriterionMetric; recommendedModule: string; status: string; sampleNote: string; metrics: SummaryMetric[]; };
 export type RecommendedPlan = { diagnosis: string; priority1: string; priority2: string; nextStep: string; reason: string; href: string; };
 export type RankingRow = { userId: string; position: number; name: string; refCardId: string; attempts: number; trainings: number; tests: number; avgScore: number; bestScore: number; lastAttempt: string; };
+export type RadarMetric = {
+  key: string;
+  label: string;
+  shortLabel: string;
+  description: string;
+  attempts: number;
+  measurements: number;
+  correct: number;
+  accuracy: number | null;
+  emptyStateLabel: string;
+};
 export type PerformanceClipRecord = {
   id?: string | null;
+  sport_type?: SportType | null;
   title?: string | null;
   category?: string | null;
   topic?: string | null;
+  subtopic?: string | null;
+  rule_reference?: string | null;
+  season?: string | null;
+  source_version?: string | null;
+  source_official?: string | null;
+  governing_body?: string | null;
+  technical_resolution?: string | null;
+  disciplinary_resolution?: string | null;
+  normative_status?: string | null;
+  language?: string | null;
+  reviewed_at?: string | null;
   mode?: string | null;
   module?: string | null;
   is_active?: boolean | null;
@@ -130,7 +166,14 @@ export type PerformanceWarning = {
   message: string;
 };
 
-const criterionLabels: Record<CriterionKey, string> = { technical: "Decision tecnica", restart: "Reanudacion", discipline: "Sancion disciplinaria", interpretation: "Interpretacion", justification: "Justificacion", var: "Criterio VAR" };
+const criterionLabels: Record<CriterionKey, string> = {
+  technical: "Decision tecnica",
+  restart: "Reanudacion",
+  discipline: "Sancion disciplinaria",
+  interpretation: "Interpretacion",
+  justification: "Justificacion",
+  var: "Criterio VAR",
+};
 const criterionDescriptions: Record<CriterionKey, string> = { technical: "Si la decision principal fue correcta.", restart: "Si la reanudacion reglamentaria fue correcta.", discipline: "Si la sancion disciplinaria fue correcta.", interpretation: "Metrica futura: requiere mas contexto para no mostrar resultados engañosos.", justification: "Metrica futura: requiere una rubrica de fundamentos tecnicos.", var: "Metrica futura: requiere campos especificos de protocolo VAR." };
 const topicDictionary: Record<string, string> = { Dispute: "Disputas", Challenge: "Disputas", "Tactical foul": "Faltas tacticas", Handball: "Manos", Mano: "Manos", Offside: "Fuera de juego", VAR: "VAR", "SPA / DOGSO": "SPA / DOGSO", SPA: "SPA / DOGSO", DOGSO: "SPA / DOGSO", Disciplina: "Disciplina" };
 const coreTechnicalTopics = ["VAR", "Disputas", "Faltas tacticas", "Manos", "Fuera de juego"];
@@ -146,17 +189,20 @@ export function buildPerformanceDataset({
   examResults,
   rulesExamResults,
   clips = [],
+  sportType = DEFAULT_SPORT_TYPE,
 }: {
   attempts: AttemptRecord[];
   examResults: ExamResultRecord[];
   rulesExamResults: RulesExamResultRecord[];
   clips?: PerformanceClipRecord[];
+  sportType?: SportType;
 }) {
   const items: PerformanceItem[] = [];
   const sessions: PerformanceSession[] = [];
   const warnings: PerformanceWarning[] = [];
   const clipMap = new Map(
     clips
+      .filter((clip) => normalizeSportType(clip.sport_type) === sportType)
       .filter((clip) => Boolean(clip.id))
       .map((clip) => [String(clip.id), clip])
   );
@@ -166,6 +212,8 @@ export function buildPerformanceDataset({
   validateClips(clips, warnings);
 
   attempts.forEach((attempt, index) => {
+    if (normalizeSportType(attempt.sport_type) !== sportType) return;
+
     const score = cleanScore(attempt.score);
     const clipId = attempt.clip_id?.trim() ?? "";
     const clip = clipId ? clipMap.get(clipId) : undefined;
@@ -239,7 +287,10 @@ export function buildPerformanceDataset({
           attempt.is_correct ??
           booleanFromScore(attempt.technical_accuracy_score),
         restart: attempt.restart_correct ?? undefined,
-        discipline: attempt.discipline_correct ?? undefined,
+        discipline:
+          attempt.disciplinary_correct ??
+          attempt.discipline_correct ??
+          undefined,
         interpretation: undefined,
         justification:
           attempt.justification_correct ??
@@ -267,6 +318,8 @@ export function buildPerformanceDataset({
     }
   });
   examResults.forEach((exam, examIndex) => {
+    if (normalizeSportType(exam.sport_type) !== sportType) return;
+
     const date = exam.created_at ?? "";
     const score = cleanScore(exam.avg_score);
     const answers = Array.isArray(exam.details) ? exam.details : [];
@@ -310,6 +363,8 @@ export function buildPerformanceDataset({
   });
 
   rulesExamResults.forEach((exam, examIndex) => {
+    if (normalizeSportType(exam.sport_type) !== sportType) return;
+
     const date = exam.created_at ?? "";
     const score = cleanScore(exam.percentage);
     const answers = Array.isArray(exam.details) ? exam.details : [];
@@ -559,13 +614,26 @@ export function getRecommendedPlan(summary: PerformanceSummary): RecommendedPlan
   return { diagnosis: weakTopic ? `El topico que mas conviene reforzar es ${weakTopic.topic}.` : "El sistema detecta una oportunidad general de mejora.", priority1: weakTopic ? `Entrenar ${weakTopic.topic}.` : "Entrenar Decision arbitral.", priority2: weakCriterion ? `Cuidar especialmente ${weakCriterion.label.toLowerCase()}.` : "Completar ejercicios de distintos topicos.", nextStep: "Completar una serie corta de 5 clips.", reason: "El plan se basa en la debilidad real mas marcada de tu actividad.", href: "/training/decision" };
 }
 
-export function getRankingRows(attempts: AttemptRecord[], currentUserId?: string | null, profiles: RankingProfileRecord[] = []): RankingRow[] {
+export function getRankingRows(
+  attempts: AttemptRecord[],
+  currentUserId?: string | null,
+  profiles: RankingProfileRecord[] = [],
+  sportType: SportType = DEFAULT_SPORT_TYPE
+): RankingRow[] {
   const profileMap = new Map(
     profiles
       .filter((profile) => profile.user_id)
       .map((profile) => [profile.user_id as string, profile])
   );
-  const grouped = groupBy(attempts.filter((attempt) => attempt.user_id && isNumber(cleanScore(attempt.score))), (attempt) => attempt.user_id as string);
+  const grouped = groupBy(
+    attempts.filter(
+      (attempt) =>
+        attempt.user_id &&
+        normalizeSportType(attempt.sport_type) === sportType &&
+        isNumber(cleanScore(attempt.score))
+    ),
+    (attempt) => attempt.user_id as string
+  );
   const rows = Array.from(grouped.entries()).map(([userId, userAttempts]) => {
     const scores = userAttempts.map((attempt) => cleanScore(attempt.score)).filter(isNumber);
     const sorted = sortByDateDesc(userAttempts);

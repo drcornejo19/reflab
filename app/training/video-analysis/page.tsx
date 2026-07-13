@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/AppShell";
-import { ExamClient } from "@/components/ExamClient";
+import { TrainingClient } from "@/components/TrainingClient";
 
 export default function VideoAnalysisPage() {
   return (
@@ -15,12 +15,13 @@ export default function VideoAnalysisPage() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-            Evaluacion por video para analizar clips reales, justificar decisiones
-            y medir lectura tecnica de jugadas.
+            Actividad audiovisual principal para analizar clips reales, recibir
+            feedback inmediato y guardar intentos que alimentan el mapa tecnico
+            y las metricas de rendimiento.
           </p>
         </header>
 
-        <ExamClient />
+        <TrainingClient mode="field" />
       </div>
     </AppShell>
   );

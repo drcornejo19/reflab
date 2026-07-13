@@ -48,7 +48,7 @@ const platformFeatures = [
   "Cohortes y grupos",
   "Evaluaciones formales",
   "Video analisis",
-  "Biblioteca IFAB para escuelas",
+  "Biblioteca reglamentaria para escuelas",
   "Clips propios para asociaciones",
   "Licencias semestrales/anuales",
 ];

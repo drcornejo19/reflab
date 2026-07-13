@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { SportDisciplineSwitch } from "@/components/SportDisciplineSwitch";
 import { useI18n } from "@/lib/useI18n";
 import type { TranslationKey } from "@/lib/languagePreference";
 import {
@@ -79,6 +80,27 @@ export default function EvaluationsPage() {
   return (
     <AppShell>
       <div className="space-y-6">
+        <SportDisciplineSwitch
+          items={[
+            {
+              key: "football_11",
+              label: "Futbol 11",
+              description:
+                "Evaluaciones audiovisuales y reglamentarias del arbitraje de futbol 11.",
+              href: "/evaluations",
+              active: true,
+            },
+            {
+              key: "futsal",
+              label: "Futsal",
+              description:
+                "Acceso a videoanalisis y examenes de reglas de futsal con trazabilidad propia.",
+              href: "/futsal",
+              active: false,
+            },
+          ]}
+        />
+
         <header className="rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-7 shadow-2xl">
           <p className="text-xs font-black uppercase tracking-[0.45em] text-[#6fc11f]">
             {t("evaluations.kicker")}

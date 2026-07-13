@@ -12,6 +12,7 @@ export type TranslationKey =
   | "nav.dashboard"
   | "nav.training"
   | "nav.evaluations"
+  | "nav.matches"
   | "nav.performance"
   | "nav.library"
   | "nav.institutions"
@@ -101,8 +102,9 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     "nav.dashboard": "Dashboard",
     "nav.training": "Entrenamiento",
     "nav.evaluations": "Evaluaciones",
+    "nav.matches": "Mis partidos",
     "nav.performance": "Ref Performance",
-    "nav.library": "Biblioteca IFAB",
+    "nav.library": "Biblioteca",
     "nav.institutions": "Instituciones",
     "nav.notifications": "Notificaciones",
     "nav.profile": "Perfil",
@@ -168,7 +170,7 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     "evaluations.description": "Rendi simulaciones y examenes para medir tu criterio arbitral bajo condiciones formales.",
     "evaluations.videoAnalysis.title": "Video Analisis",
     "evaluations.videoAnalysis.category": "Evaluacion por video",
-    "evaluations.videoAnalysis.description": "Analiza clips reales por disputas, faltas tacticas, manos y fuera de juego. Registra decision tecnica, disciplina y criterio.",
+    "evaluations.videoAnalysis.description": "Analiza clips reales con feedback inmediato. Registra decision tecnica, disciplina, criterio e intentos que alimentan tus metricas.",
     "evaluations.refereeExam.title": "Examen arbitral",
     "evaluations.refereeExam.category": "Formal",
     "evaluations.refereeExam.description": "Clips consecutivos sin feedback inmediato, score final y cierre tecnico del examen.",
@@ -189,8 +191,9 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     "nav.dashboard": "Dashboard",
     "nav.training": "Training",
     "nav.evaluations": "Evaluations",
+    "nav.matches": "My matches",
     "nav.performance": "Ref Performance",
-    "nav.library": "IFAB Library",
+    "nav.library": "Library",
     "nav.institutions": "Institutions",
     "nav.notifications": "Notifications",
     "nav.profile": "Profile",
@@ -256,7 +259,7 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     "evaluations.description": "Take simulations and exams to measure your referee criteria under formal conditions.",
     "evaluations.videoAnalysis.title": "Video Analysis",
     "evaluations.videoAnalysis.category": "Video evaluation",
-    "evaluations.videoAnalysis.description": "Analyze real clips by duels, tactical fouls, handball and offside. Records technical decision, discipline and criteria.",
+    "evaluations.videoAnalysis.description": "Analyze real clips with instant feedback. Records technical decision, discipline, criteria and attempts that feed your metrics.",
     "evaluations.refereeExam.title": "Referee exam",
     "evaluations.refereeExam.category": "Formal",
     "evaluations.refereeExam.description": "Consecutive clips without instant feedback, final score and technical exam summary.",
@@ -277,8 +280,9 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     "nav.dashboard": "Painel",
     "nav.training": "Treinamento",
     "nav.evaluations": "Avaliacoes",
+    "nav.matches": "Meus jogos",
     "nav.performance": "Ref Performance",
-    "nav.library": "Biblioteca IFAB",
+    "nav.library": "Biblioteca",
     "nav.institutions": "Instituicoes",
     "nav.notifications": "Notificacoes",
     "nav.profile": "Perfil",
@@ -344,7 +348,7 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     "evaluations.description": "Realize simulacoes e provas para medir seu criterio arbitral em condicoes formais.",
     "evaluations.videoAnalysis.title": "Video Analise",
     "evaluations.videoAnalysis.category": "Avaliacao por video",
-    "evaluations.videoAnalysis.description": "Analise clipes reais por disputas, faltas taticas, mao na bola e impedimento. Registra decisao tecnica, disciplina e criterio.",
+    "evaluations.videoAnalysis.description": "Analise clipes reais com feedback imediato. Registra decisao tecnica, disciplina, criterio e tentativas que alimentam suas metricas.",
     "evaluations.refereeExam.title": "Exame arbitral",
     "evaluations.refereeExam.category": "Formal",
     "evaluations.refereeExam.description": "Clipes consecutivos sem feedback imediato, score final e fechamento tecnico do exame.",

@@ -267,9 +267,9 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
       </div>
 
       {mode === "var" || currentClip.topic === "VAR" || currentClip.mode === "var" ? (
-        <VarExercise clip={currentClip} />
+        <VarExercise key={currentClip.id} clip={currentClip} />
       ) : (
-        <ClipExercise clip={currentClip} />
+        <ClipExercise key={currentClip.id} clip={currentClip} />
       )}
     </div>
   );

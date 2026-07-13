@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { resolveRefCardId } from "@/lib/refCard";
+import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
 import { supabase } from "@/lib/supabase";
 import { calculateScore, normalizeDiscipline } from "@/lib/scoring";
 import { getExamClips, type ClipRecord } from "@/lib/clips";
@@ -175,15 +176,16 @@ const videoLocked = remainingVideoPlays <= 0;
   }, [user, isPro]);
 
   useEffect(() => {
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth",
-  });
-}, [index, finished]); 
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }, [index, finished]);
 
-useEffect(() => {
-  setVideoPlays(0);
-}, [currentClip?.id]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- The formal exam resets playback limits whenever the clip changes.
+    setVideoPlays(0);
+  }, [currentClip?.id]);
 
   useEffect(() => {
     if (!currentClip) return;
@@ -196,6 +198,7 @@ useEffect(() => {
       currentClip.sub_type === "no_sancionable";
 
     if (isNoOffside || isNoHandball) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Some formal clips start from a predefined "no offense" baseline.
       setFoul(false);
       setRestart("Seguir el juego");
       setDiscipline("Sin sancion");
@@ -208,6 +211,7 @@ useEffect(() => {
     if (!currentClip) return;
 
     if (foul === true && !foulRestartOptions.includes(restart)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Restart defaults are corrected after the foul toggle to keep the answer valid.
       setRestart(
         currentClip.topic === "Offside"
           ? "Tiro libre indirecto"
@@ -370,6 +374,10 @@ function handleVideoEnded() {
     const { error } = await supabase.from("exam_results").insert([
       {
         user_id: user.id,
+        sport_type: DEFAULT_SPORT_TYPE,
+        activity_type: "video_exam",
+        season: "2026/27",
+        source_version: "RefLab football_11 video exam",
         total_questions: answers.length,
         total_score: totalScore,
         avg_score: avgScore,
@@ -387,12 +395,16 @@ function handleVideoEnded() {
             supabase,
             {
               user_id: user.id,
+              sport_type: DEFAULT_SPORT_TYPE,
+              activity_type: "video_exam",
               ref_card_id: refCardId,
               clip_id: answer.clipId,
               clip_title: answer.clipTitle,
               module: answer.topic === "VAR" ? "var_lab" : "decision",
               mode: "exam",
               topic: answer.topic,
+              season: "2026/27",
+              source_version: "RefLab football_11 video exam",
               difficulty: answer.difficulty,
               score: answer.score,
               is_correct: answer.score >= 85,
@@ -408,6 +420,7 @@ function handleVideoEnded() {
               technical_correct: answer.technicalCorrect,
               restart_correct: answer.restartCorrect,
               discipline_correct: answer.disciplineCorrect,
+              disciplinary_correct: answer.disciplineCorrect,
               subtype_correct: answer.subtypeCorrect,
               criterion_result: {
                 technical: answer.technicalCorrect,
@@ -420,16 +433,21 @@ function handleVideoEnded() {
             },
             {
               user_id: user.id,
+              sport_type: DEFAULT_SPORT_TYPE,
+              activity_type: "video_exam",
               clip_title: answer.clipTitle,
               foul: answer.foul,
               restart: answer.restart,
               discipline: answer.discipline,
               score: answer.score,
               topic: answer.topic,
+              season: "2026/27",
+              source_version: "RefLab football_11 video exam",
               difficulty: answer.difficulty,
               technical_correct: answer.technicalCorrect,
               restart_correct: answer.restartCorrect,
               discipline_correct: answer.disciplineCorrect,
+              disciplinary_correct: answer.disciplineCorrect,
               subtype_correct: answer.subtypeCorrect,
             }
           )

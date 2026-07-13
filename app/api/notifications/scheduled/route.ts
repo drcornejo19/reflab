@@ -86,25 +86,65 @@ export async function GET(request: Request) {
       );
     }
 
-    const hasMatchToday = await hasTodayMatchCheckin(supabase, userId);
-    const hasPostMatchToday = await hasTodayPostActivity(supabase, userId);
+    const upcomingAppointment = await getUpcomingAppointment(supabase, userId);
+    const pendingPostMatchAppointment = await getPendingPostMatchAppointment(
+      supabase,
+      userId
+    );
 
     if (
-      hasMatchToday &&
-      !(await hasRecentNotification(supabase, userId, "match_reminder", 12))
+      upcomingAppointment &&
+      !(await hasRecentNotification(
+        supabase,
+        userId,
+        "match_reminder",
+        12,
+        upcomingAppointment.id
+      ))
     ) {
       results.push(
-        await sendSmartNotificationToUser(supabase, userId, "match_reminder")
+        await sendSmartNotificationToUser(
+          supabase,
+          userId,
+          "match_reminder",
+          {
+            message: `Tienes ${upcomingAppointment.label} programado. Completa tu preparacion previa en RefLab.`,
+            actionUrl: `/matches/${upcomingAppointment.id}`,
+          },
+          {
+            appointmentId: upcomingAppointment.id,
+            fixtureId: upcomingAppointment.fixture_id,
+            sportType: upcomingAppointment.sport_type,
+          }
+        )
       );
     }
 
     if (
-      hasMatchToday &&
-      !hasPostMatchToday &&
-      !(await hasRecentNotification(supabase, userId, "post_match_reminder", 12))
+      pendingPostMatchAppointment &&
+      !(await hasRecentNotification(
+        supabase,
+        userId,
+        "post_match_reminder",
+        12,
+        pendingPostMatchAppointment.id
+      ))
     ) {
       results.push(
-        await sendSmartNotificationToUser(supabase, userId, "post_match_reminder")
+        await sendSmartNotificationToUser(
+          supabase,
+          userId,
+          "post_match_reminder",
+          {
+            message: `Quedo pendiente el cierre post partido de ${pendingPostMatchAppointment.label}.`,
+            actionUrl: `/matches/${pendingPostMatchAppointment.id}`,
+          },
+          {
+            appointmentId: pendingPostMatchAppointment.id,
+            fixtureId: pendingPostMatchAppointment.fixture_id,
+            sportType: pendingPostMatchAppointment.sport_type,
+          }
+        )
       );
     }
   }
@@ -134,38 +174,95 @@ async function getLatestActivityAt(supabase: ReturnType<typeof createSupabaseAdm
   return dates.sort((a, b) => b.getTime() - a.getTime())[0];
 }
 
-async function hasTodayMatchCheckin(
+async function getUpcomingAppointment(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
   userId: string
 ) {
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const limit = new Date(now.getTime() + 18 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
-    .from("performance_checkins")
-    .select("id")
+    .from("appointments")
+    .select("id,fixture_id,sport_type,fixtures!inner(kickoff_at,home_team_id,away_team_id,teams_home:teams!fixtures_home_team_id_fkey(name),teams_away:teams!fixtures_away_team_id_fkey(name))")
     .eq("user_id", userId)
-    .eq("date", today)
-    .eq("has_match_today", true)
+    .in("status", ["draft", "pending_confirmation", "confirmed", "modified"])
+    .lte("fixtures.kickoff_at", limit)
+    .gte("fixtures.kickoff_at", now.toISOString())
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 
-  return !error && Boolean(data?.id);
+  if (error || !data?.id) return null;
+
+  const fixture = Array.isArray((data as { fixtures?: unknown }).fixtures)
+    ? null
+    : ((data as { fixtures?: { teams_home?: { name?: string | null }; teams_away?: { name?: string | null } } }).fixtures ?? null);
+  const label = fixture
+    ? `${fixture.teams_home?.name ?? "Local"} vs ${fixture.teams_away?.name ?? "Visitante"}`
+    : "tu partido";
+
+  return {
+    id: String(data.id),
+    fixture_id: String(data.fixture_id ?? ""),
+    sport_type: String(data.sport_type ?? ""),
+    label,
+  };
 }
 
-async function hasTodayPostActivity(
+async function getPendingPostMatchAppointment(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
   userId: string
 ) {
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const from = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
-    .from("performance_checkins")
-    .select("id")
+    .from("appointments")
+    .select("id,fixture_id,sport_type,fixtures!inner(kickoff_at,teams_home:teams!fixtures_home_team_id_fkey(name),teams_away:teams!fixtures_away_team_id_fkey(name))")
     .eq("user_id", userId)
-    .eq("date", today)
-    .eq("checkin_type", "post")
-    .limit(1)
-    .maybeSingle();
+    .in("status", ["confirmed", "modified", "completed"])
+    .gte("fixtures.kickoff_at", from)
+    .lte("fixtures.kickoff_at", now.toISOString())
+    .order("created_at", { ascending: false })
+    .limit(5);
 
-  return !error && Boolean(data?.id);
+  if (error) return null;
+
+  for (const row of data ?? []) {
+    const appointmentId = String(row.id ?? "");
+    if (!appointmentId) continue;
+
+    const [reviewRes, postCheckinRes] = await Promise.all([
+      supabase
+        .from("post_match_reviews")
+        .select("id")
+        .eq("appointment_id", appointmentId)
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("performance_checkins")
+        .select("id")
+        .eq("appointment_id", appointmentId)
+        .eq("checkin_type", "post")
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    if (reviewRes.data?.id || postCheckinRes.data?.id) continue;
+
+    const fixture = Array.isArray((row as { fixtures?: unknown }).fixtures)
+      ? null
+      : ((row as { fixtures?: { teams_home?: { name?: string | null }; teams_away?: { name?: string | null } } }).fixtures ?? null);
+
+    return {
+      id: appointmentId,
+      fixture_id: String(row.fixture_id ?? ""),
+      sport_type: String(row.sport_type ?? ""),
+      label: fixture
+        ? `${fixture.teams_home?.name ?? "Local"} vs ${fixture.teams_away?.name ?? "Visitante"}`
+        : "tu partido",
+    };
+  }
+
+  return null;
 }
 
 async function getWeakTopic(
@@ -236,7 +333,7 @@ async function getTrainingStreakDays(
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
-  let cursor = dates.has(toDateKey(today)) ? today : dates.has(toDateKey(yesterday)) ? yesterday : null;
+  const cursor = dates.has(toDateKey(today)) ? today : dates.has(toDateKey(yesterday)) ? yesterday : null;
   if (!cursor) return 0;
 
   let streak = 0;
@@ -252,17 +349,22 @@ async function hasRecentNotification(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
   userId: string,
   type: string,
-  hours: number
+  hours: number,
+  appointmentId?: string
 ) {
   const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
+  let query = supabase
     .from("notification_events")
     .select("id")
     .eq("user_id", userId)
     .eq("type", type)
-    .gte("created_at", since)
-    .limit(1)
-    .maybeSingle();
+    .gte("created_at", since);
+
+  if (appointmentId) {
+    query = query.eq("appointment_id", appointmentId);
+  }
+
+  const { data, error } = await query.limit(1).maybeSingle();
 
   return !error && Boolean(data?.id);
 }

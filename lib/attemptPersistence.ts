@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
 
 type AttemptPayload = Record<string, unknown>;
 
@@ -19,7 +20,7 @@ export async function insertAttemptSafely(
   primaryPayload: AttemptPayload,
   fallbackPayload?: AttemptPayload
 ): Promise<SaveAttemptResult> {
-  const primary = stripUndefined(primaryPayload);
+  const primary = stripUndefined(normalizeAttemptPayload(primaryPayload));
   const validation = validateAttemptPayload(primary);
 
   if (validation.length > 0) {
@@ -45,7 +46,7 @@ export async function insertAttemptSafely(
     };
   }
 
-  const fallback = stripUndefined(fallbackPayload);
+  const fallback = stripUndefined(normalizeAttemptPayload(fallbackPayload));
   const fallbackResult = await supabase.from("attempts").insert([fallback]);
 
   if (!fallbackResult.error) {
@@ -63,6 +64,34 @@ export function stripUndefined(payload: AttemptPayload): AttemptPayload {
   return Object.fromEntries(
     Object.entries(payload).filter(([, value]) => value !== undefined)
   );
+}
+
+function normalizeAttemptPayload(payload: AttemptPayload) {
+  const normalized = { ...payload };
+
+  if (!textValue(normalized.sport_type)) {
+    normalized.sport_type = DEFAULT_SPORT_TYPE;
+  }
+
+  if (
+    typeof normalized.discipline_correct === "boolean" &&
+    typeof normalized.disciplinary_correct !== "boolean"
+  ) {
+    normalized.disciplinary_correct = normalized.discipline_correct;
+  }
+
+  if (
+    typeof normalized.disciplinary_correct === "boolean" &&
+    typeof normalized.discipline_correct !== "boolean"
+  ) {
+    normalized.discipline_correct = normalized.disciplinary_correct;
+  }
+
+  if (!textValue(normalized.subtopic) && textValue(normalized.sub_type)) {
+    normalized.subtopic = normalized.sub_type;
+  }
+
+  return normalized;
 }
 
 function isSchemaCompatibilityError(error: SupabaseInsertError) {
@@ -98,6 +127,10 @@ function validateAttemptPayload(payload: AttemptPayload) {
 
   if (!topic) {
     warnings.push("Intento sin topico.");
+  }
+
+  if (!textValue(payload.sport_type)) {
+    warnings.push("Intento sin sport_type.");
   }
 
   if (isNonTechnical) {

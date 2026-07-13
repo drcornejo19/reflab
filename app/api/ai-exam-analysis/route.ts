@@ -7,7 +7,12 @@ const client = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as {
+      avgScore: number;
+      correctCount: number;
+      totalQuestions: number;
+      answers: unknown[];
+    };
 
     const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
@@ -52,11 +57,11 @@ Formato:
       "No se pudo generar análisis.";
 
     return NextResponse.json({ feedback });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("AI EXAM ERROR:", error);
 
     return NextResponse.json(
-      { error: error?.message ?? "Error IA examen" },
+      { error: error instanceof Error ? error.message : "Error IA examen" },
       { status: 500 }
     );
   }

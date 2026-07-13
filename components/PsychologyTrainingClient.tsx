@@ -113,6 +113,14 @@ type ExerciseFormState = {
   notes: string;
 };
 
+type MatchContext = {
+  appointmentId: string | null;
+  fixtureId: string | null;
+  sportType: string | null;
+  refereeRoleKey: string | null;
+  matchLabel: string | null;
+};
+
 type ScenarioOption = {
   id: string;
   exerciseType: ExerciseType;
@@ -347,6 +355,13 @@ export function PsychologyTrainingClient() {
     "concentracion-foco": createExerciseFormForModule("concentracion-foco"),
     "confianza-arbitral": createExerciseFormForModule("confianza-arbitral"),
   });
+  const matchContext: MatchContext = {
+    appointmentId: searchParams.get("appointmentId"),
+    fixtureId: searchParams.get("fixtureId"),
+    sportType: searchParams.get("sport"),
+    refereeRoleKey: searchParams.get("roleKey"),
+    matchLabel: searchParams.get("matchLabel"),
+  };
 
   const selectedModuleSlug = normalizePsychologyModuleSlug(searchParams.get("module"));
   const modules = data?.modules?.length ? data.modules : defaultModules;
@@ -376,6 +391,23 @@ export function PsychologyTrainingClient() {
     activeModule && isExerciseModuleSlug(activeModule.slug)
       ? exerciseForms[activeModule.slug]
       : null;
+
+  useEffect(() => {
+    if (!matchContext.appointmentId) return;
+
+    setPreMatchForm((current) => ({
+      ...current,
+      matchContext: current.matchContext || matchContext.matchLabel || "",
+    }));
+    setPostMatchForm((current) => ({
+      ...current,
+      matchContext: current.matchContext || matchContext.matchLabel || "",
+    }));
+    setErrorRecoveryForm((current) => ({
+      ...current,
+      matchContext: current.matchContext || matchContext.matchLabel || "",
+    }));
+  }, [matchContext.appointmentId, matchContext.matchLabel]);
 
   useEffect(() => {
     async function loadPsychology() {
@@ -529,6 +561,10 @@ export function PsychologyTrainingClient() {
       {
         moduleSlug: "preparacion-mental-pre-partido",
         checkinType: "pre_match",
+        appointmentId: matchContext.appointmentId,
+        fixtureId: matchContext.fixtureId,
+        sportType: matchContext.sportType,
+        refereeRoleKey: matchContext.refereeRoleKey,
         ...preMatchForm,
       },
       "Registro pre partido guardado."
@@ -541,6 +577,10 @@ export function PsychologyTrainingClient() {
       {
         moduleSlug: "evaluacion-post-partido",
         checkinType: "post_match",
+        appointmentId: matchContext.appointmentId,
+        fixtureId: matchContext.fixtureId,
+        sportType: matchContext.sportType,
+        refereeRoleKey: matchContext.refereeRoleKey,
         matchContext: postMatchForm.matchContext,
         incidentSummary: postMatchForm.incidentSummary,
         learning: postMatchForm.learning,
@@ -563,6 +603,10 @@ export function PsychologyTrainingClient() {
       {
         moduleSlug: "gestion-error",
         checkinType: "error_recovery",
+        appointmentId: matchContext.appointmentId,
+        fixtureId: matchContext.fixtureId,
+        sportType: matchContext.sportType,
+        refereeRoleKey: matchContext.refereeRoleKey,
         matchContext: errorRecoveryForm.matchContext,
         incidentMinute: errorRecoveryForm.incidentMinute
           ? Number(errorRecoveryForm.incidentMinute)
@@ -619,6 +663,10 @@ export function PsychologyTrainingClient() {
       "save_exercise",
       {
         moduleSlug,
+        appointmentId: matchContext.appointmentId,
+        fixtureId: matchContext.fixtureId,
+        sportType: matchContext.sportType,
+        refereeRoleKey: matchContext.refereeRoleKey,
         exerciseType: currentExerciseForm.exerciseType,
         scenarioId: currentExerciseForm.scenarioId,
         scenarioTitle: currentExerciseForm.scenarioTitle,
@@ -646,11 +694,11 @@ export function PsychologyTrainingClient() {
               Entrenamiento / Preparacion Integral / Psicologia Arbitral
             </p>
             <h1 className="mt-4 text-3xl font-black md:text-5xl">
-              Psicologia arbitral por modulitos
+              Psicologia arbitral
             </h1>
             <p className="mt-3 text-sm leading-7 text-zinc-300">
               Cada registro deja de vivir en una lista mezclada y pasa a su propio
-              modulito: error, presion, foco, confianza, resiliencia, rutina previa
+              modulo: error, presion, foco, confianza, resiliencia, rutina previa
               y cierre post partido.
             </p>
           </div>
@@ -689,7 +737,7 @@ export function PsychologyTrainingClient() {
           icon={Sparkles}
           label="Modulos trabajados"
           value={`${futureMetrics.workedModules}/7`}
-          detail="Cobertura por modulitos"
+          detail="Cobertura por modulos"
         />
         <MetricCard
           icon={HeartPulse}
@@ -717,6 +765,15 @@ export function PsychologyTrainingClient() {
 
       {error && <Notice tone="error">{error}</Notice>}
       {message && <Notice tone="success">{message}</Notice>}
+      {matchContext.appointmentId && (
+        <Notice tone="success">
+          Este trabajo psicologico queda vinculado a{" "}
+          <span className="text-white">
+            {matchContext.matchLabel ?? "tu partido asignado"}
+          </span>
+          .
+        </Notice>
+      )}
 
       {activeModule ? (
         <div className="space-y-6">
@@ -728,7 +785,7 @@ export function PsychologyTrainingClient() {
                   className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-zinc-500 transition hover:text-[#6fc11f]"
                 >
                   <ArrowLeft size={16} />
-                  Volver a modulitos
+                  Volver a modulos
                 </Link>
                 <p className="mt-4 text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">
                   {activeModule.statusLabel}

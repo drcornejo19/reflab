@@ -1,20 +1,35 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
+import { useDiscipline } from "@/components/DisciplineProvider";
+import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
+import { SportPageSwitch } from "@/components/SportPageSwitch";
 import {
   getRankingRows,
   type AttemptRecord,
   type RankingProfileRecord,
   type RankingRow,
 } from "@/lib/performance";
+import { getSportLabel } from "@/lib/sports";
 import { supabase } from "@/lib/supabase";
 import { useUserRole } from "@/lib/useUserRole";
 
+export const dynamic = "force-dynamic";
+
 export default function RankingPage() {
+  return (
+    <Suspense fallback={<PageShellFallback message="Cargando ranking..." />}>
+      <RankingPageContent />
+    </Suspense>
+  );
+}
+
+function RankingPageContent() {
   const { user } = useUser();
+  const { currentDiscipline: sportType } = useDiscipline();
   const { isPro, loadingRole } = useUserRole();
   const [attempts, setAttempts] = useState<AttemptRecord[]>([]);
   const [profiles, setProfiles] = useState<RankingProfileRecord[]>([]);
@@ -42,8 +57,8 @@ export default function RankingPage() {
   }, []);
 
   const ranking = useMemo(
-    () => getRankingRows(attempts, user?.id, profiles),
-    [attempts, profiles, user?.id]
+    () => getRankingRows(attempts, user?.id, profiles, sportType),
+    [attempts, profiles, sportType, user?.id]
   );
   const podium = ranking.slice(0, 3);
   const rest = ranking.slice(3);
@@ -74,6 +89,7 @@ export default function RankingPage() {
               tiene datos suficientes para competir con sentido.
             </p>
           </header>
+          <SportPageSwitch title="Disciplina de ranking" />
           <ProUpgradeCard
             title="Ranking exclusivo de RefLab Pro"
             description="Desbloquea posicion, promedio, mejor score, cantidad de examenes, entrenamientos y actividad comparada con otros arbitros."
@@ -97,13 +113,15 @@ export default function RankingPage() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-            Clasificacion general segun promedio, mejor score, entrenamientos y evaluaciones. La identidad publica respeta la privacidad elegida en Perfil.
+            Clasificacion por {getSportLabel(sportType).toLowerCase()} segun promedio, mejor score, entrenamientos y evaluaciones. La identidad publica respeta la privacidad elegida en Perfil.
           </p>
         </header>
 
+        <SportPageSwitch title="Disciplina de ranking" />
+
         {ranking.length === 0 ? (
           <div className="rounded-3xl border border-white/10 bg-[#0b131b] p-8 text-center text-zinc-400">
-            Todavia no hay intentos registrados para generar ranking.
+            Todavia no hay intentos registrados para generar ranking en esta disciplina.
           </div>
         ) : (
           <>

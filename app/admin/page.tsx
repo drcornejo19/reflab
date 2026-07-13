@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Clapperboard,
   BellRing,
+  CalendarRange,
   Settings,
   ShieldCheck,
   Users,
@@ -76,10 +77,10 @@ const adminAreas: AdminArea[] = [
     icon: BellRing,
   },
   {
-    title: "Biblioteca IFAB",
+    title: "Biblioteca reglamentaria",
     category: "Recursos",
     description:
-      "Carga documentos oficiales, circulares, resumenes, vigencias y material IFAB.",
+      "Carga documentos oficiales, circulares, resumenes, vigencias y material por disciplina.",
     status: "Disponible",
     href: "/admin/library",
     icon: BookOpen,
@@ -88,10 +89,19 @@ const adminAreas: AdminArea[] = [
     title: "Psicologia arbitral",
     category: "Preparacion Integral",
     description:
-      "Ordena registros por modulitos, revisa categorias y corrige contenidos sin clasificar.",
+      "Ordena registros por modulos, revisa categorias y corrige contenidos sin clasificar.",
     status: "Disponible",
     href: "/admin/psychology",
     icon: Brain,
+  },
+  {
+    title: "Partidos",
+    category: "Operaciones",
+    description:
+      "Audita designaciones, fuentes, estados y readiness de proveedores para Mis partidos.",
+    status: "Disponible",
+    href: "/admin/matches",
+    icon: CalendarRange,
   },
   {
     title: "Evaluaciones",

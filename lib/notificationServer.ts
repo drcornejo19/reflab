@@ -25,6 +25,12 @@ type NotificationTokenRow = {
   token: string;
 };
 
+type NotificationContext = {
+  appointmentId?: string | null;
+  fixtureId?: string | null;
+  sportType?: string | null;
+};
+
 export function preferencesToRow(preferences: NotificationPreferences) {
   return {
     training_enabled: preferences.training,
@@ -118,11 +124,15 @@ export async function recordNotificationEvent(
   userId: string,
   notification: SmartNotification,
   status: "queued" | "sent" | "failed" | "skipped",
-  error?: string | null
+  error?: string | null,
+  context: NotificationContext = {}
 ) {
   const now = new Date().toISOString();
   const { error: insertError } = await supabase.from("notification_events").insert({
     user_id: userId,
+    appointment_id: context.appointmentId ?? null,
+    fixture_id: context.fixtureId ?? null,
+    sport_type: context.sportType ?? null,
     type: notification.type,
     category: notification.category,
     title: notification.title,
@@ -150,7 +160,8 @@ export async function sendSmartNotificationToUser(
   supabase: SupabaseAnyClient,
   userId: string,
   type: SmartNotificationType,
-  overrides: Partial<Pick<SmartNotification, "message" | "actionUrl">> = {}
+  overrides: Partial<Pick<SmartNotification, "message" | "actionUrl">> = {},
+  context: NotificationContext = {}
 ) {
   const notification = getSmartNotification(type, overrides);
   const preferences = await getUserNotificationPreferences(supabase, userId);
@@ -161,7 +172,8 @@ export async function sendSmartNotificationToUser(
       userId,
       notification,
       "skipped",
-      "Preferencia desactivada."
+      "Preferencia desactivada.",
+      context
     );
 
     return {
@@ -179,7 +191,8 @@ export async function sendSmartNotificationToUser(
       userId,
       notification,
       "skipped",
-      "El usuario no tiene dispositivos registrados."
+      "El usuario no tiene dispositivos registrados.",
+      context
     );
 
     return {
@@ -223,7 +236,8 @@ export async function sendSmartNotificationToUser(
     userId,
     notification,
     successCount > 0 ? "sent" : "failed",
-    failed.length > 0 ? failed.map((result) => result.error).join(" | ") : null
+    failed.length > 0 ? failed.map((result) => result.error).join(" | ") : null,
+    context
   );
 
   return {

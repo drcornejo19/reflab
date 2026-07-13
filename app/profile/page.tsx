@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { SignOutButton, useUser } from "@clerk/nextjs";
 import QRCode from "qrcode";
 import {
@@ -26,25 +26,31 @@ import {
 } from "lucide-react";
 import { AvatarCropperModal } from "@/components/AvatarCropperModal";
 import { AppShell } from "@/components/AppShell";
+import { useDiscipline } from "@/components/DisciplineProvider";
+import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
+import { SportPageSwitch } from "@/components/SportPageSwitch";
+import { SportRadarGraphic } from "@/components/SportRadarGraphic";
+import {
+  buildSportPerformanceDataset,
+  getSportPerformanceSummary,
+  getSportRadarData,
+  type RadarMetric,
+} from "@/lib/performanceBySport";
+import { getSportLabel } from "@/lib/sports";
 import { useI18n } from "@/lib/useI18n";
 import { supabase } from "@/lib/supabase";
 import {
-  buildPerformanceDataset,
-  getCriterionPerformance,
-  getPerformanceSummary,
-  getTopicPerformance,
   type AttemptRecord,
-  type CriterionMetric,
   type ExamResultRecord,
   type PerformanceClipRecord,
-  type PerformanceSummary,
   type RulesExamResultRecord,
-  type TopicMetric,
 } from "@/lib/performance";
 import { generateRefCardId, getRefCardPublicUrl } from "@/lib/refCard";
 import { planLabels } from "@/lib/subscription";
 import { useUserRole } from "@/lib/useUserRole";
+
+export const dynamic = "force-dynamic";
 
 type Attempt = AttemptRecord;
 type Exam = ExamResultRecord;
@@ -77,16 +83,17 @@ type ProfileApiProfile = {
   publicProfile?: boolean | null;
 };
 
-const refCardTopicConfig = [
-  { label: "VAR", shortLabel: "VAR", aliases: ["VAR"] },
-  { label: "Fuera de juego", shortLabel: "FDJ", aliases: ["Fuera de juego", "Offside"] },
-  { label: "Manos", shortLabel: "Manos", aliases: ["Manos", "Mano", "Handball"] },
-  { label: "Disputas", shortLabel: "Disputas", aliases: ["Disputas", "Dispute", "Challenge"] },
-  { label: "Faltas tacticas", shortLabel: "Faltas", aliases: ["Faltas tacticas", "Tactical foul"] },
-];
-
 export default function ProfilePage() {
+  return (
+    <Suspense fallback={<PageShellFallback message="Cargando perfil..." />}>
+      <ProfilePageContent />
+    </Suspense>
+  );
+}
+
+function ProfilePageContent() {
   const { user, isLoaded } = useUser();
+  const { currentDiscipline: sportType } = useDiscipline();
   const { t } = useI18n();
   const { isPro, subscriptionPlan, loadingRole } = useUserRole();
 
@@ -118,6 +125,25 @@ export default function ProfilePage() {
   const [showRealNameInRanking, setShowRealNameInRanking] = useState(false);
   const [publicProfile, setPublicProfile] = useState(true);
   const [qrDataUrl, setQrDataUrl] = useState("");
+
+  const applyProfile = useCallback((profile: ProfileApiProfile) => {
+    setReflabName(profile.reflabName ?? "");
+    setRefereeType(profile.refereeType ?? "Amateur");
+    setMainRole(profile.mainRole ?? "Arbitro principal");
+    setAssociation(profile.association ?? "");
+    setAssociationLogo(profile.associationLogo ?? "");
+    setCategory(profile.category ?? "");
+    setProfileLevel(profile.level ?? "");
+    setBirthDate(profile.birthDate ?? "");
+    setCountry(profile.country ?? "");
+    setCity(profile.city ?? "");
+    setAvatarUrl(profile.avatarUrl || profile.clerkImageUrl || "");
+    setFirstName(profile.firstName ?? "");
+    setLastName(profile.lastName ?? "");
+    setRefCardId(profile.refCardId || (user ? generateRefCardId(user.id) : ""));
+    setShowRealNameInRanking(Boolean(profile.showRealNameInRanking));
+    setPublicProfile(profile.publicProfile !== false);
+  }, [user]);
 
   useEffect(() => {
     async function loadProfile() {
@@ -204,27 +230,8 @@ export default function ProfilePage() {
       setLoading(false);
     }
 
-    loadProfile();
-  }, [isLoaded, user]);
-
-  function applyProfile(profile: ProfileApiProfile) {
-    setReflabName(profile.reflabName ?? "");
-    setRefereeType(profile.refereeType ?? "Amateur");
-    setMainRole(profile.mainRole ?? "Arbitro principal");
-    setAssociation(profile.association ?? "");
-    setAssociationLogo(profile.associationLogo ?? "");
-    setCategory(profile.category ?? "");
-    setProfileLevel(profile.level ?? "");
-    setBirthDate(profile.birthDate ?? "");
-    setCountry(profile.country ?? "");
-    setCity(profile.city ?? "");
-    setAvatarUrl(profile.avatarUrl || profile.clerkImageUrl || "");
-    setFirstName(profile.firstName ?? "");
-    setLastName(profile.lastName ?? "");
-    setRefCardId(profile.refCardId || (user ? generateRefCardId(user.id) : ""));
-    setShowRealNameInRanking(Boolean(profile.showRealNameInRanking));
-    setPublicProfile(profile.publicProfile !== false);
-  }
+    void loadProfile();
+  }, [applyProfile, isLoaded, user]);
 
   async function saveProfile() {
     if (!user) return;
@@ -320,18 +327,19 @@ export default function ProfilePage() {
 
   const dataset = useMemo(
     () =>
-      buildPerformanceDataset({
+      buildSportPerformanceDataset({
         attempts,
         examResults: exams,
         rulesExamResults: rulesResults,
         clips,
+        sportType,
       }),
-    [attempts, exams, rulesResults, clips]
+    [attempts, exams, rulesResults, clips, sportType]
   );
 
   const summary = useMemo(
-    () => getPerformanceSummary(dataset.items, dataset.sessions),
-    [dataset.items, dataset.sessions]
+    () => getSportPerformanceSummary(dataset.items, dataset.sessions, sportType),
+    [dataset.items, dataset.sessions, sportType]
   );
 
   const stats = useMemo(() => {
@@ -360,9 +368,11 @@ export default function ProfilePage() {
     };
   }, [dataset.sessions, summary]);
 
-  const criteria = useMemo(() => getCriterionPerformance(dataset.items), [dataset.items]);
-  const topics = useMemo(() => getTopicPerformance(dataset.items), [dataset.items]);
-  const refCardTopics = useMemo(() => buildRefCardTopics(topics), [topics]);
+  const radarAxes = useMemo(
+    () => getSportRadarData(dataset.items, sportType),
+    [dataset.items, sportType]
+  );
+  const refCardTopics = useMemo(() => buildRefCardTopics(radarAxes), [radarAxes]);
   const trendScores = useMemo(
     () =>
       dataset.sessions
@@ -371,7 +381,6 @@ export default function ProfilePage() {
         .slice(-8),
     [dataset.sessions]
   );
-  const disciplineMetric = criteria.find((item) => item.key === "discipline");
   const lastTestDate = useMemo(() => {
     const testSessions = dataset.sessions
       .filter((session) => session.source !== "training" && session.date)
@@ -379,7 +388,7 @@ export default function ProfilePage() {
     return testSessions[0]?.date ?? exams[0]?.created_at ?? rulesResults[0]?.created_at ?? null;
   }, [dataset.sessions, exams, rulesResults]);
   const refCardBadge = getRefCardBadge(summary, refereeType);
-  const disciplineLabel = getDisciplineLabel(disciplineMetric);
+  const disciplineLabel = getSportLabel(sportType);
   const trendLabel = getTrendLabel(trendScores);
   const effectiveRefCardId = useMemo(
     () => (user ? refCardId || generateRefCardId(user.id) : ""),
@@ -472,6 +481,7 @@ export default function ProfilePage() {
         />
       )}
       <div className="mx-auto w-full max-w-[1240px] space-y-5 overflow-hidden">
+        <SportPageSwitch title="Disciplina del perfil" />
         {isPro ? (
           <PlayerCard
             name={displayName}
@@ -494,7 +504,7 @@ export default function ProfilePage() {
             lastTest={formatShortDate(lastTestDate)}
             ranking="Pendiente"
             trainings={stats.totalAttempts}
-            topics={refCardTopics}
+            radarAxes={radarAxes}
             trendScores={trendScores}
             trendLabel={trendLabel}
             refCardId={effectiveRefCardId}
@@ -707,6 +717,7 @@ function BasicProfileCard({
         <div className="min-w-0">
           <div className="relative mx-auto h-56 w-full max-w-[220px] overflow-hidden rounded-[28px] border border-[#6fc11f]/30 bg-black/35 shadow-[0_0_38px_rgba(111,193,31,0.12)]">
             {photo ? (
+              /* eslint-disable-next-line @next/next/no-img-element -- Dynamic profile photos come from Clerk/Supabase URLs that are not restricted to a fixed host list. */
               <img src={photo} alt={name} className="h-full w-full object-cover object-center" />
             ) : (
               <div className="grid h-full place-items-center text-[#6fc11f]">
@@ -772,7 +783,7 @@ function PlayerCard({
   lastTest,
   ranking,
   trainings,
-  topics,
+  radarAxes,
   trendScores,
   trendLabel,
   refCardId,
@@ -802,7 +813,7 @@ function PlayerCard({
   lastTest: string;
   ranking: string;
   trainings: number;
-  topics: RefCardTopic[];
+  radarAxes: RadarMetric[];
   trendScores: number[];
   trendLabel: string;
   refCardId: string;
@@ -835,6 +846,7 @@ function PlayerCard({
           <div className="absolute -left-16 top-12 h-56 w-32 rotate-12 rounded-[32px] bg-[#6fc11f]/25 blur-sm" />
           <label className="group relative block cursor-pointer overflow-hidden rounded-[26px] border border-[#6fc11f]/35 bg-[#04080d] shadow-[0_0_55px_rgba(111,193,31,0.16)]" title="Cambiar foto">
             {photo ? (
+              /* eslint-disable-next-line @next/next/no-img-element -- Dynamic profile photos come from Clerk/Supabase URLs that are not restricted to a fixed host list. */
               <img
                 src={photo}
                 alt="Foto de perfil"
@@ -915,7 +927,7 @@ function PlayerCard({
           </section>
 
           <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
-            <RefRadar topics={topics} />
+            <RefRadar axes={radarAxes} />
             <div className="grid gap-4">
               <div className="rounded-[26px] border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4">
                 <div className="flex items-center gap-3">
@@ -996,6 +1008,7 @@ function AssociationCard({
       <div className="flex min-w-0 items-center gap-3">
         <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10">
           {associationLogo ? (
+            /* eslint-disable-next-line @next/next/no-img-element -- Association logos are institution-provided external assets with variable origins. */
             <img
               src={associationLogo}
               alt=""
@@ -1101,11 +1114,8 @@ function TrendSparkline({ scores }: { scores: number[] }) {
   );
 }
 
-function RefRadar({ topics }: { topics: RefCardTopic[] }) {
-  const points = profileRadarPoints(topics.map((topic) => topic.value ?? 0), 84, 110);
-  const guideRings = [25, 50, 75, 100].map((value) => profileRadarPoints([value, value, value, value, value], 84, 110));
-  const hasAnyData = topics.some((topic) => topic.value !== null);
-
+function RefRadar({ axes }: { axes: RadarMetric[] }) {
+  const hasAnyData = axes.some((axis) => axis.accuracy !== null);
   return (
     <div className="min-w-0 overflow-hidden rounded-[30px] border border-white/10 bg-[#050b12] p-4 shadow-[inset_0_0_60px_rgba(111,193,31,0.08)] sm:p-5">
       <div className="mb-4 flex items-center gap-2">
@@ -1115,55 +1125,22 @@ function RefRadar({ topics }: { topics: RefCardTopic[] }) {
 
       <div className="grid gap-4 lg:grid-cols-[0.78fr_1fr] lg:items-center">
         <div className="space-y-3">
-          {topics.map((topic) => (
-            <div key={topic.label} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-              <p className="break-words text-sm font-black uppercase tracking-[0.08em] text-zinc-200">{topic.shortLabel}</p>
-              <p className="text-lg font-black text-[#6fc11f]">{topic.value === null ? "--" : topic.value}</p>
+          {axes.map((axis) => (
+            <div key={axis.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+              <p className="break-words text-sm font-black uppercase tracking-[0.08em] text-zinc-200">{axis.shortLabel}</p>
+              <p className="text-lg font-black text-[#6fc11f]">
+                {axis.accuracy === null ? "Sin datos" : `${axis.accuracy}%`}
+              </p>
               <div className="col-span-2 h-px bg-gradient-to-r from-white/15 to-transparent" />
             </div>
           ))}
         </div>
 
-        <div className="relative mx-auto aspect-square w-full max-w-[280px] overflow-hidden rounded-[26px] border border-[#6fc11f]/20 bg-black/30 p-3">
-          <svg viewBox="0 0 220 220" className="h-full w-full">
-            <defs>
-              <filter id="profileRadarGlow">
-                <feGaussianBlur stdDeviation="3" result="coloredBlur" />
-                <feMerge>
-                  <feMergeNode in="coloredBlur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-            {guideRings.map((ring, index) => (
-              <polygon key={index} points={ring} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
-            ))}
-            {topics.map((topic, index) => {
-              const end = profileRadarAxisPoint(index, 84, 110);
-              const label = profileRadarAxisPoint(index, 100, 110);
-              return (
-                <g key={topic.label}>
-                  <line x1="110" y1="110" x2={end.x} y2={end.y} stroke="rgba(255,255,255,0.12)" />
-                  <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" className="fill-white text-[7px] font-black uppercase">
-                    {topic.shortLabel}
-                  </text>
-                </g>
-              );
-            })}
-            <polygon points={points} fill="rgba(111,193,31,0.34)" stroke="#6fc11f" strokeWidth="4" filter="url(#profileRadarGlow)" />
-            {points.split(" ").map((point) => {
-              const [x, y] = point.split(",").map(Number);
-              return <circle key={point} cx={x} cy={y} r="4" fill="#b7ff8a" />;
-            })}
-            <circle cx="110" cy="110" r="4" fill="#6fc11f" />
-          </svg>
-
-          {!hasAnyData && (
-            <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-dashed border-[#6fc11f]/25 bg-[#050b12]/90 p-3 text-center text-xs font-bold text-zinc-300">
-              Sin datos suficientes
-            </div>
-          )}
-        </div>
+        <SportRadarGraphic
+          axes={axes}
+          glowId="profile-radar-glow"
+          overlayText={hasAnyData ? null : "Sin datos suficientes"}
+        />
       </div>
     </div>
   );
@@ -1174,6 +1151,7 @@ function RefCardQr({ value, qrDataUrl }: { value: string; qrDataUrl: string }) {
 
   if (qrDataUrl) {
     return (
+      /* eslint-disable-next-line @next/next/no-img-element -- QR images are generated as in-memory data URLs, so next/image adds no benefit here. */
       <img
         src={qrDataUrl}
         alt="QR unico de RefCard"
@@ -1279,34 +1257,24 @@ function averageNumbers(values: number[]) {
   return Math.round(values.reduce((acc, value) => acc + value, 0) / values.length);
 }
 
-function buildRefCardTopics(topicMetrics: TopicMetric[]): RefCardTopic[] {
-  return refCardTopicConfig.map((target) => {
-    const metric = topicMetrics.find((item) =>
-      target.aliases.some((alias) => item.topic.toLowerCase() === alias.toLowerCase())
-    );
-
-    return {
-      label: target.label,
-      shortLabel: target.shortLabel,
-      value: metric?.accuracy ?? null,
-      attempts: metric?.attempts ?? 0,
-    };
-  });
+function buildRefCardTopics(radarAxes: RadarMetric[]): RefCardTopic[] {
+  return radarAxes.map((axis) => ({
+    label: axis.label,
+    shortLabel: axis.shortLabel,
+    value: axis.accuracy,
+    attempts: axis.attempts,
+  }));
 }
 
-function getRefCardBadge(summary: PerformanceSummary, refereeType: string) {
+function getRefCardBadge(
+  summary: ReturnType<typeof getSportPerformanceSummary>,
+  refereeType: string
+) {
   if (!summary.hasData) return refereeType || "Amateur";
   if (summary.status === "Elite") return "Elite";
   if (summary.status === "Avanzado" || summary.status === "Solido") return "Avanzado";
   if (summary.status === "En desarrollo" || summary.status === "Inicial") return "Proyeccion";
   return refereeType || "Amateur";
-}
-
-function getDisciplineLabel(metric?: CriterionMetric) {
-  if (!metric || metric.accuracy === null || metric.attempts === 0) return "Pendiente";
-  if (metric.accuracy >= 85) return "Excelente";
-  if (metric.accuracy >= 70) return "Correcta";
-  return "A mejorar";
 }
 
 function getTrendLabel(scores: number[]) {
@@ -1321,23 +1289,6 @@ function getTrendLabel(scores: number[]) {
 function formatShortDate(date?: string | null) {
   if (!date) return "Sin registros";
   return new Date(date).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-function profileRadarPoints(values: number[], radius: number, center: number) {
-  return values
-    .map((value, index) => {
-      const point = profileRadarAxisPoint(index, radius * (Math.max(0, Math.min(value, 100)) / 100), center);
-      return `${point.x},${point.y}`;
-    })
-    .join(" ");
-}
-
-function profileRadarAxisPoint(index: number, radius: number, center: number) {
-  const angle = (-90 + index * 72) * (Math.PI / 180);
-  return {
-    x: Math.round((center + Math.cos(angle) * radius) * 10) / 10,
-    y: Math.round((center + Math.sin(angle) * radius) * 10) / 10,
-  };
 }
 
 function createRefCardSvg({

@@ -6,6 +6,7 @@ import { calculateScore, normalizeDiscipline } from "@/lib/scoring";
 import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
 import { resolveRefCardId } from "@/lib/refCard";
+import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
 import { supabase } from "@/lib/supabase";
 import type { Clip } from "@/lib/types";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
@@ -32,6 +33,12 @@ type ClipWithDetails = Clip & {
   decision_detail?: string | null;
 };
 
+type ClipDecisionState = {
+  foul: boolean | null;
+  restart: string;
+  discipline: string;
+};
+
 const MAX_VIDEO_PLAYS = 3;
 
 const foulRestartOptions = [
@@ -48,6 +55,29 @@ const noFoulRestartOptions = [
   "Gol",
   "Balón a tierra",
 ];
+function createInitialClipDecisionState(clip: ClipWithDetails): ClipDecisionState {
+  const isNoOffside = clip.topic === "Offside" && clip.sub_type === "no_offside";
+
+  if (isNoOffside) {
+    return {
+      foul: false,
+      restart: "Seguir el juego",
+      discipline: "Sin sanciÃ³n",
+    };
+  }
+
+  return {
+    foul: null,
+    restart: "",
+    discipline: "",
+  };
+}
+
+function getSavedClipPlayCount(clipId: string) {
+  if (typeof window === "undefined") return 0;
+
+  return Number(window.localStorage.getItem(`clip-plays-${clipId}`) ?? "0");
+}
 
 export function ClipExercise({
   clip,
@@ -56,33 +86,34 @@ export function ClipExercise({
   onBack,
 }: ClipExerciseProps) {
   const typedClip = clip as ClipWithDetails;
+  const initialDecisionState = createInitialClipDecisionState(typedClip);
 
   const { user } = useUser();
   const { isPro, loadingRole } = useUserRole();
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const [foul, setFoul] = useState<boolean | null>(null);
-  const [restart, setRestart] = useState("");
-  const [discipline, setDiscipline] = useState("");
+  const [foul, setFoul] = useState<boolean | null>(() => initialDecisionState.foul);
+  const [restart, setRestart] = useState(() => initialDecisionState.restart);
+  const [discipline, setDiscipline] = useState(() => initialDecisionState.discipline);
   const [justification, setJustification] = useState("");
   const [result, setResult] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
-  const [playCount, setPlayCount] = useState(0);
+  const [playCount, setPlayCount] = useState(() => getSavedClipPlayCount(typedClip.id));
   const [weeklyClipCount, setWeeklyClipCount] = useState(0);
 
   const isOffside = typedClip.topic === "Offside";
   const isVarClip = typedClip.topic === "VAR";
-  const isNoOffside =
-    typedClip.topic === "Offside" && typedClip.sub_type === "no_offside";
 
   const restartOptions = useMemo(() => {
-    if (foul === true) return foulRestartOptions;
+    if (foul === true) {
+      return isOffside ? ["Tiro libre indirecto"] : foulRestartOptions;
+    }
     if (foul === false) return noFoulRestartOptions;
     return [...foulRestartOptions, ...noFoulRestartOptions];
-  }, [foul]);
+  }, [foul, isOffside]);
 
   const remainingPlays = Math.max(MAX_VIDEO_PLAYS - playCount, 0);
   const videoLocked = remainingPlays <= 0;
@@ -121,6 +152,7 @@ export function ClipExercise({
       localStorage.getItem(`clip-plays-${typedClip.id}`) ?? "0"
     );
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Legacy clip flow resets local playback counters when the active clip changes.
     setPlayCount(savedCount);
     reset(false);
 
@@ -128,18 +160,21 @@ export function ClipExercise({
       videoRef.current.pause();
       videoRef.current.currentTime = 0;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- The reset only needs to react to clip identity changes.
   }, [typedClip.id]);
 
   useEffect(() => {
-    if (isNoOffside) {
+    if (typedClip.topic === "Offside" && typedClip.sub_type === "no_offside") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- No-offside clips boot with a fixed answer state to preserve the existing training flow.
       setFoul(false);
       setRestart("Seguir el juego");
       setDiscipline("Sin sanción");
     }
-  }, [isNoOffside]);
+  }, [typedClip.topic, typedClip.sub_type]);
 
   useEffect(() => {
     if (foul === true && !foulRestartOptions.includes(restart)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Restart defaults are corrected after the foul toggle to keep the answer valid.
       setRestart("Tiro libre directo");
     }
 
@@ -232,6 +267,8 @@ export function ClipExercise({
       supabase,
       {
         user_id: user.id,
+        sport_type: typedClip.sport_type ?? DEFAULT_SPORT_TYPE,
+        activity_type: isVarClip ? "var_training" : "video_training",
         ref_card_id: refCardId,
         clip_id: typedClip.id,
         clip_title: typedClip.title,
@@ -243,6 +280,11 @@ export function ClipExercise({
         var_review: typedClip.correct_var,
         score,
         topic: typedClip.topic,
+        subtopic: typedClip.subtopic ?? typedClip.sub_type ?? null,
+        rule_reference: typedClip.rule_reference ?? null,
+        season: typedClip.season ?? "2026/27",
+        source_version:
+          typedClip.source_version ?? "RefLab football_11 video training",
         difficulty: typedClip.difficulty,
         is_correct: score >= 85,
         selected_decision: decisionLabel(foul),
@@ -254,6 +296,7 @@ export function ClipExercise({
         technical_correct: technicalCorrect,
         restart_correct: restartCorrect,
         discipline_correct: disciplineCorrect,
+        disciplinary_correct: disciplineCorrect,
         var_correct: null,
         criterion_result: {
           technical: technicalCorrect,
@@ -263,6 +306,8 @@ export function ClipExercise({
       },
       {
         user_id: user.id,
+        sport_type: typedClip.sport_type ?? DEFAULT_SPORT_TYPE,
+        activity_type: isVarClip ? "var_training" : "video_training",
         clip_title: typedClip.title,
         foul,
         restart,
@@ -270,10 +315,16 @@ export function ClipExercise({
         var_review: typedClip.correct_var,
         score,
         topic: typedClip.topic,
+        subtopic: typedClip.subtopic ?? typedClip.sub_type ?? null,
+        rule_reference: typedClip.rule_reference ?? null,
+        season: typedClip.season ?? "2026/27",
+        source_version:
+          typedClip.source_version ?? "RefLab football_11 video training",
         difficulty: typedClip.difficulty,
         technical_correct: technicalCorrect,
         restart_correct: restartCorrect,
         discipline_correct: disciplineCorrect,
+        disciplinary_correct: disciplineCorrect,
         var_correct: null,
       },
     );
@@ -327,9 +378,11 @@ export function ClipExercise({
   }
 
   function reset(resetVideoCount = false) {
-    setFoul(null);
-    setRestart("");
-    setDiscipline("");
+    const nextState = createInitialClipDecisionState(typedClip);
+
+    setFoul(nextState.foul);
+    setRestart(nextState.restart);
+    setDiscipline(nextState.discipline);
     setJustification("");
     setResult(null);
     setSaveError(null);
@@ -520,7 +573,10 @@ export function ClipExercise({
                 active={foul === true}
                 onClick={() => {
                   setFoul(true);
-                  setRestart("Tiro libre directo");
+                  setRestart(isOffside ? "Tiro libre indirecto" : "Tiro libre directo");
+                  if (isOffside) {
+                    setDiscipline("Sin sanciÃ³n");
+                  }
                 }}
               >
                 Sí

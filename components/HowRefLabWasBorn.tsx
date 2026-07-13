@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 export function HowRefLabWasBorn() {
   return (
     <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#05070d] px-6 py-12 text-white shadow-2xl md:px-10">
@@ -61,11 +63,13 @@ export function HowRefLabWasBorn() {
         <div className="relative">
           <div className="absolute -inset-4 rounded-3xl bg-green-500/20 blur-2xl" />
 
-          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5">
-            <img
+          <div className="relative h-[500px] overflow-hidden rounded-3xl border border-white/10 bg-white/5">
+            <Image
               src="/david-referee.jpg"
               alt="David Cornejo, fundador de RefLab"
-              className="h-[500px] w-full object-cover grayscale"
+              fill
+              sizes="(max-width: 768px) 100vw, 45vw"
+              className="object-cover grayscale"
             />
           </div>
         </div>

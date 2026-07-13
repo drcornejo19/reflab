@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useUser } from "@clerk/nextjs";
 import { insertAttemptSafely } from "@/lib/attemptPersistence";
+import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
 import { supabase } from "@/lib/supabase";
 import type { Clip } from "@/lib/types";
 
@@ -161,11 +162,15 @@ export function VarExercise({ clip }: VarExerciseProps) {
 
     const primaryPayload = {
       user_id: user.id,
+      sport_type: DEFAULT_SPORT_TYPE,
+      activity_type: "var_training",
       clip_id: clip.id,
       clip_title: clip.title,
       module: "var_lab",
       mode: "var",
       topic: clip.topic ?? "VAR",
+      season: clip.season ?? "2026/27",
+      source_version: clip.source_version ?? "RefLab football_11 var training",
       difficulty: clip.difficulty,
       score: computedScore,
       is_correct: computedScore >= 85,
@@ -191,6 +196,8 @@ export function VarExercise({ clip }: VarExerciseProps) {
 
     const fallbackPayload = {
       user_id: user.id,
+      sport_type: DEFAULT_SPORT_TYPE,
+      activity_type: "var_training",
       clip_title: clip.title,
       foul: null,
       restart: translateVarDecision(varDecision),
@@ -198,10 +205,13 @@ export function VarExercise({ clip }: VarExerciseProps) {
       var_review: varDecision !== "check_complete",
       score: computedScore,
       topic: clip.topic ?? "VAR",
+      season: clip.season ?? "2026/27",
+      source_version: clip.source_version ?? "RefLab football_11 var training",
       difficulty: clip.difficulty,
       technical_correct: incidentCorrect,
       restart_correct: appCorrect,
       discipline_correct: clearErrorCorrect,
+      disciplinary_correct: clearErrorCorrect,
       var_correct: interventionCorrect,
     };
 

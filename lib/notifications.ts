@@ -12,6 +12,10 @@ export type SmartNotificationType =
   | "weekly_progress"
   | "weakness_detected"
   | "training_streak"
+  | "appointment_registered"
+  | "appointment_confirmed"
+  | "appointment_updated"
+  | "appointment_cancelled"
   | "match_reminder"
   | "post_match_reminder"
   | "admin_broadcast";
@@ -121,6 +125,38 @@ const notificationTemplates: Record<SmartNotificationType, SmartNotification> = 
     message: "Llevas 7 dias consecutivos entrenando en RefLab.",
     actionLabel: "Continuar",
     actionUrl: "/dashboard",
+  },
+  appointment_registered: {
+    type: "appointment_registered",
+    category: "matches",
+    title: "Designacion registrada",
+    message: "Ya tienes un partido cargado en Mis partidos para comenzar tu preparacion.",
+    actionLabel: "Abrir Mis partidos",
+    actionUrl: "/matches",
+  },
+  appointment_confirmed: {
+    type: "appointment_confirmed",
+    category: "matches",
+    title: "Designacion confirmada",
+    message: "Tu partido fue confirmado y ya puedes completar la preparacion previa.",
+    actionLabel: "Ver ficha",
+    actionUrl: "/matches",
+  },
+  appointment_updated: {
+    type: "appointment_updated",
+    category: "matches",
+    title: "Designacion actualizada",
+    message: "Hubo un cambio en uno de tus partidos asignados.",
+    actionLabel: "Revisar partido",
+    actionUrl: "/matches",
+  },
+  appointment_cancelled: {
+    type: "appointment_cancelled",
+    category: "matches",
+    title: "Designacion cancelada",
+    message: "Uno de tus partidos fue cancelado o suspendido.",
+    actionLabel: "Revisar partido",
+    actionUrl: "/matches",
   },
   match_reminder: {
     type: "match_reminder",

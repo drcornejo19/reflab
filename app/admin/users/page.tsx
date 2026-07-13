@@ -276,6 +276,7 @@ export default function AdminUsersPage() {
                       <div className="flex min-w-0 items-center gap-3">
                         <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]">
                           {item.avatarUrl ? (
+                            /* eslint-disable-next-line @next/next/no-img-element -- Admin avatars come from dynamic Clerk/profile URLs with variable external origins. */
                             <img
                               src={item.avatarUrl}
                               alt=""

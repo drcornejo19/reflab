@@ -43,3 +43,8 @@ yarn-error.log*
 next-env.d.ts
 
 *.log
+
+# local companion projects / generated artifacts
+amison-crm/
+outputs/
+tmp/

@@ -1,18 +1,8 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
-import { Geist, Geist_Mono } from "next/font/google";
+import { DisciplineProvider } from "@/components/DisciplineProvider";
 import { RF_LOGO_SRC } from "@/lib/brand";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "RefLab",
@@ -37,11 +27,10 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html
-        lang="es"
-        className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-      >
-        <body className="min-h-full flex flex-col">{children}</body>
+      <html lang="es" className="h-full antialiased">
+        <body className="min-h-full flex flex-col">
+          <DisciplineProvider>{children}</DisciplineProvider>
+        </body>
       </html>
     </ClerkProvider>
   );

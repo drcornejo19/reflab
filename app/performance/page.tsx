@@ -1,8 +1,9 @@
 ﻿"use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import {
   Activity,
@@ -27,28 +28,37 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { useDiscipline } from "@/components/DisciplineProvider";
+import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { RefPerformanceClient } from "@/components/RefPerformanceClient";
+import { SportPageSwitch } from "@/components/SportPageSwitch";
+import { SportRadarGraphic } from "@/components/SportRadarGraphic";
+import {
+  buildSportPerformanceDataset,
+  getSportCriterionPerformance,
+  getSportModulePerformance,
+  getSportPerformanceSummary,
+  getSportRadarData,
+  getSportRecommendedPlan,
+  getSportTopicPerformance,
+  type RadarMetric,
+  type SportCriterionMetric,
+  type SportModulePerformance,
+  type SportPerformanceItem,
+} from "@/lib/performanceBySport";
+import { type SportType } from "@/lib/sports";
 import { supabase } from "@/lib/supabase";
 import {
-  buildPerformanceDataset,
   formatDate,
   formatPercent,
   formatScore,
-  getCriterionPerformance,
   getEvolutionData,
-  getModulePerformance,
-  getPerformanceSummary,
   getRankingRows,
   getRecentHistory,
-  getRecommendedPlan,
-  getTopicPerformance,
   type AttemptRecord,
-  type CriterionMetric,
   type ExamResultRecord,
-  type ModulePerformance,
   type PerformanceClipRecord,
-  type PerformanceItem,
   type RankingRow,
   type RankingProfileRecord,
   type RulesExamResultRecord,
@@ -57,8 +67,10 @@ import {
 } from "@/lib/performance";
 import { useUserRole } from "@/lib/useUserRole";
 
+export const dynamic = "force-dynamic";
+
 type HistoryMode = "ALL" | "training" | "exam" | "rules_exam";
-type HistoryResult = "ALL" | PerformanceItem["result"];
+type HistoryResult = "ALL" | SportPerformanceItem["result"];
 type PerformanceSection = "physical" | "performance";
 type PerformanceView = "evolution" | "plan" | "topics" | "criteria" | "modules" | "history" | "ranking" | "complementary";
 
@@ -104,8 +116,6 @@ const moduleIcons: Record<string, LucideIcon> = {
   preparation: Dumbbell,
 };
 
-const mainTopicOrder = ["VAR", "Fuera de juego", "Manos", "Disputas", "Faltas tacticas"];
-
 const performanceViewMeta: Record<
   PerformanceView,
   {
@@ -125,7 +135,17 @@ const performanceViewMeta: Record<
 };
 
 export default function PerformancePage() {
+  return (
+    <Suspense fallback={<PageShellFallback message="Cargando centro de rendimiento..." />}>
+      <PerformancePageContent />
+    </Suspense>
+  );
+}
+
+function PerformancePageContent() {
   const { user, isLoaded } = useUser();
+  const searchParams = useSearchParams();
+  const { currentDiscipline: sportType } = useDiscipline();
   const { isPro, loadingRole } = useUserRole();
   const [data, setData] = useState<LoadState>(initialData);
   const [loading, setLoading] = useState(true);
@@ -134,6 +154,16 @@ export default function PerformancePage() {
   const [historyResult, setHistoryResult] = useState<HistoryResult>("ALL");
   const [activeSection, setActiveSection] = useState<PerformanceSection | null>(null);
   const [activeView, setActiveView] = useState<PerformanceView | null>(null);
+  const requestedSection = searchParams.get("section");
+
+  useEffect(() => {
+    if (requestedSection === "physical" || requestedSection === "performance") {
+      setActiveSection(requestedSection);
+      if (requestedSection === "physical") {
+        setActiveView(null);
+      }
+    }
+  }, [requestedSection]);
 
   useEffect(() => {
     async function loadPerformance() {
@@ -202,22 +232,51 @@ export default function PerformancePage() {
 
   const dataset = useMemo(
     () =>
-      buildPerformanceDataset({
+      buildSportPerformanceDataset({
         attempts: data.attempts,
         examResults: data.examResults,
         rulesExamResults: data.rulesResults,
         clips: data.clips,
+        sportType,
       }),
-    [data.attempts, data.examResults, data.rulesResults, data.clips]
+    [data.attempts, data.examResults, data.rulesResults, data.clips, sportType]
   );
 
-  const summary = useMemo(() => getPerformanceSummary(dataset.items, dataset.sessions), [dataset.items, dataset.sessions]);
+  const summary = useMemo(
+    () => getSportPerformanceSummary(dataset.items, dataset.sessions, sportType),
+    [dataset.items, dataset.sessions, sportType]
+  );
   const evolution = useMemo(() => getEvolutionData(dataset.sessions), [dataset.sessions]);
-  const topics = useMemo(() => getTopicPerformance(dataset.items), [dataset.items]);
-  const criteria = useMemo(() => getCriterionPerformance(dataset.items), [dataset.items]);
-  const modules = useMemo(() => getModulePerformance(dataset.items), [dataset.items]);
-  const plan = useMemo(() => getRecommendedPlan(summary), [summary]);
-  const ranking = useMemo(() => getRankingRows(data.rankingAttempts, user?.id, data.rankingProfiles), [data.rankingAttempts, data.rankingProfiles, user?.id]);
+  const topics = useMemo(
+    () => getSportTopicPerformance(dataset.items, sportType),
+    [dataset.items, sportType]
+  );
+  const criteria = useMemo(
+    () => getSportCriterionPerformance(dataset.items, sportType),
+    [dataset.items, sportType]
+  );
+  const radarAxes = useMemo(
+    () => getSportRadarData(dataset.items, sportType),
+    [dataset.items, sportType]
+  );
+  const modules = useMemo(
+    () => getSportModulePerformance(dataset.items, sportType),
+    [dataset.items, sportType]
+  );
+  const plan = useMemo(
+    () => getSportRecommendedPlan(summary, sportType),
+    [summary, sportType]
+  );
+  const ranking = useMemo(
+    () =>
+      getRankingRows(
+        data.rankingAttempts,
+        user?.id,
+        data.rankingProfiles,
+        sportType
+      ),
+    [data.rankingAttempts, data.rankingProfiles, user?.id, sportType]
+  );
   const currentRanking = ranking.find((row) => row.userId === user?.id);
 
   const history = useMemo(() => {
@@ -254,6 +313,7 @@ export default function PerformancePage() {
       <AppShell>
         <div className="mx-auto w-full max-w-[1180px] space-y-5 overflow-hidden">
           <PerformanceHero />
+          <SportPageSwitch title="Disciplina de Ref Performance" />
           {loadError && (
             <div className="rounded-3xl border border-yellow-400/25 bg-yellow-400/10 p-4 text-sm font-bold leading-6 text-yellow-100">
               {loadError}
@@ -271,8 +331,9 @@ export default function PerformancePage() {
   }
 
   return (
-    <AppShell>
+      <AppShell>
       <div className="mx-auto w-full max-w-full space-y-5 overflow-hidden lg:max-w-[1180px] lg:space-y-6">
+        <SportPageSwitch title="Disciplina de Ref Performance" />
         {!activeSection && (
           <>
             <PerformanceHero />
@@ -293,7 +354,7 @@ export default function PerformancePage() {
               icon={HeartPulse}
               onBack={() => setActiveSection(null)}
             />
-            <RefPerformanceClient />
+            <RefPerformanceClient sportType={sportType} />
           </>
         )}
 
@@ -324,6 +385,7 @@ export default function PerformancePage() {
                   evolution={evolution}
                   plan={plan}
                   topics={topics}
+                  radarAxes={radarAxes}
                   criteria={criteria}
                   modules={modules}
                   history={history}
@@ -333,6 +395,7 @@ export default function PerformancePage() {
                   setHistoryResult={setHistoryResult}
                   ranking={ranking}
                   currentRanking={currentRanking}
+                  sportType={sportType}
                 />
               </>
             ) : (
@@ -348,7 +411,7 @@ export default function PerformancePage() {
 function FreePerformanceOverview({
   summary,
 }: {
-  summary: ReturnType<typeof getPerformanceSummary>;
+  summary: ReturnType<typeof getSportPerformanceSummary>;
 }) {
   return (
     <section className="rounded-[34px] border border-white/10 bg-[#101b24] p-4 shadow-2xl sm:p-5 lg:p-6">
@@ -629,6 +692,7 @@ function PrimaryAnalysisView({
   evolution,
   plan,
   topics,
+  radarAxes,
   criteria,
   modules,
   history,
@@ -638,27 +702,30 @@ function PrimaryAnalysisView({
   setHistoryResult,
   ranking,
   currentRanking,
+  sportType,
 }: {
   activeView: PerformanceView;
-  summary: ReturnType<typeof getPerformanceSummary>;
+  summary: ReturnType<typeof getSportPerformanceSummary>;
+  radarAxes: RadarMetric[];
   evolution: ReturnType<typeof getEvolutionData>;
-  plan: ReturnType<typeof getRecommendedPlan>;
+  plan: ReturnType<typeof getSportRecommendedPlan>;
   topics: TopicMetric[];
-  criteria: CriterionMetric[];
-  modules: ModulePerformance[];
-  history: PerformanceItem[];
+  criteria: SportCriterionMetric[];
+  modules: SportModulePerformance[];
+  history: SportPerformanceItem[];
   historyMode: HistoryMode;
   historyResult: HistoryResult;
   setHistoryMode: (value: HistoryMode) => void;
   setHistoryResult: (value: HistoryResult) => void;
   ranking: RankingRow[];
   currentRanking?: RankingRow;
+  sportType: SportType;
 }) {
   return (
     <section className="rounded-[34px] border border-[#6fc11f]/25 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.12),transparent_36%),#061018] p-3 shadow-2xl sm:p-4 lg:p-5">
       {activeView === "evolution" && <EvolutionPanel evolution={evolution} />}
       {activeView === "plan" && <RecommendedPlanPanel plan={plan} />}
-      {activeView === "topics" && <TopicsPanel topics={topics} />}
+      {activeView === "topics" && <TopicsPanel topics={topics} radarAxes={radarAxes} />}
       {activeView === "criteria" && <CriteriaPanel criteria={criteria} />}
       {activeView === "modules" && <ModulesPanel modules={modules} />}
       {activeView === "history" && (
@@ -670,13 +737,19 @@ function PrimaryAnalysisView({
           setHistoryResult={setHistoryResult}
         />
       )}
-      {activeView === "ranking" && <RankingPanel ranking={ranking} currentRanking={currentRanking} />}
+      {activeView === "ranking" && (
+        <RankingPanel
+          ranking={ranking}
+          currentRanking={currentRanking}
+          sportType={sportType}
+        />
+      )}
       {activeView === "complementary" && <ComplementaryAnalysisPanel summary={summary} />}
     </section>
   );
 }
 
-function ComplementaryAnalysisPanel({ summary }: { summary: ReturnType<typeof getPerformanceSummary> }) {
+function ComplementaryAnalysisPanel({ summary }: { summary: ReturnType<typeof getSportPerformanceSummary> }) {
   const criterionWeak = {
     label: "Criterio debil",
     value: summary.weakestCriterion?.label ?? "Sin datos",
@@ -843,7 +916,7 @@ function EvolutionBars({ series }: { series: ReturnType<typeof getEvolutionData>
   );
 }
 
-function RecommendedPlanPanel({ plan }: { plan: ReturnType<typeof getRecommendedPlan> }) {
+function RecommendedPlanPanel({ plan }: { plan: ReturnType<typeof getSportRecommendedPlan> }) {
   return (
     <div id="plan-recomendado">
       <Panel
@@ -867,24 +940,27 @@ function RecommendedPlanPanel({ plan }: { plan: ReturnType<typeof getRecommended
     </div>
   );
 }
-function TopicsPanel({ topics }: { topics: TopicMetric[] }) {
-  const technicalTopics = buildTechnicalTopics(topics);
-  const visibleTopics = topics.filter((topic) => mainTopicOrder.some((label) => label.toLowerCase() === topic.topic.toLowerCase()));
-
+function TopicsPanel({
+  topics,
+  radarAxes,
+}: {
+  topics: TopicMetric[];
+  radarAxes: RadarMetric[];
+}) {
   return (
     <Panel
       eyebrow="Por topicos"
       title="En que jugadas rendis mejor o peor"
-      description="Concentra el analisis en los cinco pilares tecnicos: VAR, disputas, faltas tacticas, manos y fuera de juego."
+      description="El mapa tecnico cambia por disciplina y usa solo registros reales del deporte seleccionado."
       icon={BarChart3}
     >
-      <TopicTechnicalMap topics={technicalTopics} />
+      <TopicTechnicalMap axes={radarAxes} />
 
-      {visibleTopics.length === 0 ? (
+      {topics.length === 0 ? (
         <InlineEmpty text="Todavia no hay topicos suficientes. Completa ejercicios para activar este analisis." />
       ) : (
         <div className="space-y-3">
-          {visibleTopics.map((topic) => (
+          {topics.map((topic) => (
             <TopicRow key={topic.topic} topic={topic} />
           ))}
         </div>
@@ -893,27 +969,8 @@ function TopicsPanel({ topics }: { topics: TopicMetric[] }) {
   );
 }
 
-
-type TechnicalTopic = {
-  label: string;
-  shortLabel: string;
-  value: number | null;
-  attempts: number;
-};
-
-function buildTechnicalTopics(topics: TopicMetric[]): TechnicalTopic[] {
-  return mainTopicOrder.map((label) => {
-    const metric = topics.find((topic) => topic.topic.toLowerCase() === label.toLowerCase());
-    return {
-      label,
-      shortLabel: shortTopicLabel(label),
-      value: metric?.accuracy ?? null,
-      attempts: metric?.attempts ?? 0,
-    };
-  });
-}
-
-function TopicTechnicalMap({ topics }: { topics: TechnicalTopic[] }) {
+function TopicTechnicalMap({ axes }: { axes: RadarMetric[] }) {
+  const hasData = axes.some((axis) => axis.accuracy !== null);
   return (
     <section className="mb-5 rounded-[30px] border border-[#6fc11f]/25 bg-[linear-gradient(145deg,#071019,#0b151d_58%,#101820)] p-4 sm:p-5">
       <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
@@ -925,31 +982,42 @@ function TopicTechnicalMap({ topics }: { topics: TechnicalTopic[] }) {
             Mapa tecnico por topicos
           </h3>
           <p className="mt-2 text-sm leading-6 text-zinc-400">
-            Vista mobile y desktop de los ejes principales: VAR, fuera de juego, manos, disputas y faltas tacticas.
+            Los ejes se recalculan automaticamente segun la disciplina seleccionada.
           </p>
         </div>
 
-        <div className="grid gap-3 min-[390px]:grid-cols-2 xl:grid-cols-5">
-          {topics.map((topic) => (
-            <div key={topic.label} className="rounded-2xl border border-white/10 bg-black/25 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] font-black uppercase tracking-[0.12em] text-zinc-400">
-                  {topic.label}
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-center">
+          <div className="grid gap-3 min-[390px]:grid-cols-2">
+            {axes.map((axis) => (
+              <div key={axis.key} className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[11px] font-black uppercase tracking-[0.12em] text-zinc-400">
+                    {axis.label}
+                  </p>
+                  <span className="text-xs font-black text-[#6fc11f]">{axis.attempts} int.</span>
+                </div>
+                <p className="mt-2 text-2xl font-black text-white">
+                  {axis.accuracy === null ? "Sin datos" : `${axis.accuracy}%`}
                 </p>
-                <span className="text-xs font-black text-[#6fc11f]">{topic.attempts} int.</span>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-[#6fc11f] shadow-[0_0_18px_rgba(111,193,31,0.35)]"
+                    style={{ width: `${Math.max(0, Math.min(axis.accuracy ?? 0, 100))}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-[10px] text-zinc-500">
+                  {axis.measurements > 0
+                    ? `${axis.correct}/${axis.measurements} mediciones validas`
+                    : axis.emptyStateLabel}
+                </p>
               </div>
-              <p className="mt-2 text-2xl font-black text-white">
-                {topic.value === null ? "Sin datos" : `${topic.value}%`}
-              </p>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-[#6fc11f] shadow-[0_0_18px_rgba(111,193,31,0.35)]"
-                  style={{ width: `${Math.max(0, Math.min(topic.value ?? 0, 100))}%` }}
-                />
-              </div>
-              <p className="mt-2 text-[10px] text-zinc-500">{topic.shortLabel}</p>
-            </div>
-          ))}
+            ))}
+          </div>
+          <SportRadarGraphic
+            axes={axes}
+            glowId="performance-radar-glow"
+            overlayText={hasData ? null : "Sin datos suficientes"}
+          />
         </div>
       </div>
     </section>
@@ -979,57 +1047,26 @@ function TopicRow({ topic }: { topic: TopicMetric }) {
   );
 }
 
-function CriteriaPanel({ criteria }: { criteria: CriterionMetric[] }) {
-  const activeCriteria = criteria.filter((criterion) => ["technical", "restart", "discipline"].includes(criterion.key));
-  const futureCriteria = criteria.filter((criterion) => ["interpretation", "justification", "var"].includes(criterion.key));
-
+function CriteriaPanel({ criteria }: { criteria: SportCriterionMetric[] }) {
   return (
     <div id="por-criterio">
       <Panel
       eyebrow="Por criterio"
       title="Que parte de la decision estas resolviendo mal"
-      description="Por ahora RefLab muestra solo criterios con logica suficiente: decision tecnica, reanudacion y sancion disciplinaria."
+      description="Solo se muestran criterios que pueden calcularse con registros reales de la disciplina seleccionada."
       icon={ListChecks}
     >
       <div className="space-y-3">
-        {activeCriteria.map((criterion) => (
+        {criteria.map((criterion) => (
           <CriterionRow key={criterion.key} criterion={criterion} />
         ))}
-      </div>
-
-      <div className="mt-5 rounded-[26px] border border-yellow-400/20 bg-yellow-400/10 p-4">
-        <p className="text-xs font-black uppercase tracking-[0.22em] text-yellow-200">Proximamente</p>
-        <p className="mt-2 text-sm leading-6 text-yellow-50/80">
-          Estas metricas quedan preparadas, pero no muestran resultados hasta tener una logica tecnica suficientemente confiable.
-        </p>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          {futureCriteria.map((criterion) => (
-            <FutureCriterionCard key={criterion.key} criterion={criterion} />
-          ))}
-        </div>
       </div>
       </Panel>
     </div>
   );
 }
 
-function FutureCriterionCard({ criterion }: { criterion: CriterionMetric }) {
-  return (
-    <article className="rounded-2xl border border-yellow-400/20 bg-black/25 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-black text-white">{criterion.label}</p>
-          <p className="mt-1 text-xs leading-5 text-zinc-400">{criterion.description}</p>
-        </div>
-        <span className="rounded-full border border-yellow-400/25 bg-yellow-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-yellow-200">
-          En construccion
-        </span>
-      </div>
-    </article>
-  );
-}
-
-function CriterionRow({ criterion }: { criterion: CriterionMetric }) {
+function CriterionRow({ criterion }: { criterion: SportCriterionMetric }) {
   const hasData = criterion.accuracy !== null;
 
   return (
@@ -1055,7 +1092,7 @@ function CriterionRow({ criterion }: { criterion: CriterionMetric }) {
   );
 }
 
-function ModulesPanel({ modules }: { modules: ModulePerformance[] }) {
+function ModulesPanel({ modules }: { modules: SportModulePerformance[] }) {
   return (
     <section className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[#071019] p-4 shadow-2xl sm:rounded-[34px] sm:p-5 lg:p-7">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
@@ -1077,7 +1114,7 @@ function ModulesPanel({ modules }: { modules: ModulePerformance[] }) {
   );
 }
 
-function ModuleCard({ module }: { module: ModulePerformance }) {
+function ModuleCard({ module }: { module: SportModulePerformance }) {
   const Icon = moduleIcons[module.key] ?? Activity;
   const construction = module.status === "Metricas en construccion";
 
@@ -1114,7 +1151,7 @@ function HistoryPanel({
   setHistoryMode,
   setHistoryResult,
 }: {
-  history: PerformanceItem[];
+  history: SportPerformanceItem[];
   historyMode: HistoryMode;
   historyResult: HistoryResult;
   setHistoryMode: (value: HistoryMode) => void;
@@ -1149,7 +1186,7 @@ function HistoryPanel({
   );
 }
 
-function HistoryItem({ item }: { item: PerformanceItem }) {
+function HistoryItem({ item }: { item: SportPerformanceItem }) {
   return (
     <article className="rounded-2xl border border-white/10 bg-black/20 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1175,7 +1212,15 @@ function HistoryItem({ item }: { item: PerformanceItem }) {
   );
 }
 
-function RankingPanel({ ranking, currentRanking }: { ranking: RankingRow[]; currentRanking?: RankingRow }) {
+function RankingPanel({
+  ranking,
+  currentRanking,
+  sportType,
+}: {
+  ranking: RankingRow[];
+  currentRanking?: RankingRow;
+  sportType: SportType;
+}) {
   return (
     <Panel
       eyebrow="Ranking"
@@ -1211,7 +1256,10 @@ function RankingPanel({ ranking, currentRanking }: { ranking: RankingRow[]; curr
             ))}
           </div>
 
-          <Link href="/ranking" className="mt-4 flex min-h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-white transition hover:border-[#6fc11f]/40 hover:text-[#6fc11f]">
+          <Link
+            href={`/ranking?sport=${sportType}`}
+            className="mt-4 flex min-h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-white transition hover:border-[#6fc11f]/40 hover:text-[#6fc11f]"
+          >
             Abrir ranking completo
           </Link>
         </>
@@ -1262,11 +1310,4 @@ function LoadingCard() {
 
 function InfoChip({ label, value }: { label: string; value: string }) {
   return <div className="rounded-xl bg-white/[0.04] px-3 py-2"><p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{label}</p><p className="mt-1 font-bold text-zinc-300">{value}</p></div>;
-}
-
-function shortTopicLabel(label: string) {
-  if (label === "Fuera de juego") return "FDJ";
-  if (label === "Faltas tacticas") return "FT";
-  if (label === "Disputas") return "DISP";
-  return label;
 }

@@ -1,40 +1,43 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
+import { useDiscipline } from "@/components/DisciplineProvider";
+import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
+import { SportPageSwitch } from "@/components/SportPageSwitch";
+import { SportRadarGraphic } from "@/components/SportRadarGraphic";
+import {
+  buildSportPerformanceDataset,
+  getSportCriterionPerformance,
+  getSportPerformanceSummary,
+  getSportRecommendedPlan,
+  getSportRadarData,
+  getSportTopicPerformance,
+  type RadarMetric,
+  type SportCriterionMetric,
+} from "@/lib/performanceBySport";
 import { supabase } from "@/lib/supabase";
 import {
-  buildPerformanceDataset,
   formatPercent,
   formatScore,
-  getCriterionPerformance,
-  getPerformanceSummary,
-  getRecommendedPlan,
-  getTopicPerformance,
   type AttemptRecord,
-  type CriterionMetric,
   type ExamResultRecord,
   type PerformanceClipRecord,
   type RulesExamResultRecord,
-  type TopicMetric,
 } from "@/lib/performance";
 import { getFreemiumUsage } from "@/lib/subscription";
 import { useUserRole } from "@/lib/useUserRole";
+
+export const dynamic = "force-dynamic";
 
 type DashboardData = {
   attempts: AttemptRecord[];
   examResults: ExamResultRecord[];
   rulesResults: RulesExamResultRecord[];
   clips: DashboardClip[];
-};
-
-type PlayerTopic = {
-  label: string;
-  value: number | null;
-  attempts: number;
 };
 
 type DashboardClip = PerformanceClipRecord;
@@ -46,16 +49,17 @@ const emptyData: DashboardData = {
   clips: [],
 };
 
-const playerTopicKeys = [
-  { label: "VAR", aliases: ["VAR"] },
-  { label: "Fuera de juego", aliases: ["Fuera de juego", "Offside"] },
-  { label: "Manos", aliases: ["Manos", "Handball", "Mano"] },
-  { label: "Disputas", aliases: ["Disputas", "Dispute", "Challenge"] },
-  { label: "Faltas tacticas", aliases: ["Faltas tacticas", "Tactical foul"] },
-];
-
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={<PageShellFallback message="Cargando dashboard..." />}>
+      <DashboardPageContent />
+    </Suspense>
+  );
+}
+
+function DashboardPageContent() {
   const { user, isLoaded } = useUser();
+  const { currentDiscipline: sportType } = useDiscipline();
   const { isPro, loadingRole } = useUserRole();
   const [data, setData] = useState<DashboardData>(emptyData);
   const [loading, setLoading] = useState(true);
@@ -122,32 +126,39 @@ export default function DashboardPage() {
 
   const dataset = useMemo(
     () =>
-      buildPerformanceDataset({
+      buildSportPerformanceDataset({
         attempts: data.attempts,
         examResults: data.examResults,
         rulesExamResults: data.rulesResults,
         clips: data.clips,
+        sportType,
       }),
-    [data.attempts, data.examResults, data.rulesResults, data.clips]
+    [data.attempts, data.examResults, data.rulesResults, data.clips, sportType]
   );
 
   const summary = useMemo(
-    () => getPerformanceSummary(dataset.items, dataset.sessions),
-    [dataset.items, dataset.sessions]
+    () => getSportPerformanceSummary(dataset.items, dataset.sessions, sportType),
+    [dataset.items, dataset.sessions, sportType]
   );
   const technicalSummary = summary;
   const topicMetrics = useMemo(
-    () => getTopicPerformance(dataset.items),
-    [dataset.items]
+    () => getSportTopicPerformance(dataset.items, sportType),
+    [dataset.items, sportType]
   );
   const topics = useMemo(() => topicMetrics.slice(0, 5), [topicMetrics]);
-  const playerTopics = useMemo(
-    () => buildPlayerTopics(topicMetrics),
-    [topicMetrics]
+  const radarAxes = useMemo(
+    () => getSportRadarData(dataset.items, sportType),
+    [dataset.items, sportType]
   );
-  const playerTopicHasData = playerTopics.some((topic) => topic.attempts > 0);
-  const criteria = useMemo(() => getCriterionPerformance(dataset.items), [dataset.items]);
-  const plan = useMemo(() => getRecommendedPlan(technicalSummary), [technicalSummary]);
+  const playerTopicHasData = radarAxes.some((axis) => axis.accuracy !== null);
+  const criteria = useMemo(
+    () => getSportCriterionPerformance(dataset.items, sportType),
+    [dataset.items, sportType]
+  );
+  const plan = useMemo(
+    () => getSportRecommendedPlan(technicalSummary, sportType),
+    [technicalSummary, sportType]
+  );
   const freemiumUsage = useMemo(
     () =>
       getFreemiumUsage({
@@ -191,6 +202,8 @@ export default function DashboardPage() {
             </div>
           )}
 
+          <SportPageSwitch title="Disciplina del dashboard" />
+
           <FreeDashboardSummary
             summary={technicalSummary}
             usage={freemiumUsage}
@@ -222,7 +235,7 @@ export default function DashboardPage() {
           </div>
 
           <Link
-            href="/training/exam"
+            href={sportType === "futsal" ? "/futsal/rules-exam" : "/training/exam"}
             className="flex min-h-12 w-full items-center justify-center rounded-2xl bg-[#6fc11f] px-5 py-3 text-center font-black text-black transition hover:bg-[#82dc2a] sm:w-auto sm:px-6 sm:py-4"
           >
             Rendir examen
@@ -234,6 +247,8 @@ export default function DashboardPage() {
             {loadError}
           </div>
         )}
+
+        <SportPageSwitch title="Disciplina del dashboard" />
 
         <section className="grid grid-cols-2 overflow-hidden rounded-2xl border border-white/10 bg-[#17212a] md:grid-cols-4">
           <TopMetric
@@ -247,7 +262,7 @@ export default function DashboardPage() {
           <TopMetric title="Ultimo score" value={formatScore(technicalSummary.lastScore)} />
         </section>
 
-        <TechnicalProfileCard topics={playerTopics} hasData={playerTopicHasData} />
+        <TechnicalProfileCard axes={radarAxes} hasData={playerTopicHasData} />
 
         {!playerTopicHasData && (
           <section className="rounded-3xl border border-dashed border-[#6fc11f]/25 bg-[#6fc11f]/5 p-6 text-center">
@@ -347,25 +362,11 @@ export default function DashboardPage() {
   );
 }
 
-function buildPlayerTopics(topicMetrics: TopicMetric[]): PlayerTopic[] {
-  return playerTopicKeys.map((target) => {
-    const metric = topicMetrics.find((item) =>
-      target.aliases.some((alias) => item.topic.toLowerCase() === alias.toLowerCase())
-    );
-
-    return {
-      label: target.label,
-      value: metric?.accuracy ?? null,
-      attempts: metric?.attempts ?? 0,
-    };
-  });
-}
-
 function FreeDashboardSummary({
   summary,
   usage,
 }: {
-  summary: ReturnType<typeof getPerformanceSummary>;
+  summary: ReturnType<typeof getSportPerformanceSummary>;
   usage: ReturnType<typeof getFreemiumUsage>;
 }) {
   return (
@@ -424,10 +425,13 @@ function FreeDashboardSummary({
   );
 }
 
-function TechnicalProfileCard({ topics, hasData }: { topics: PlayerTopic[]; hasData: boolean }) {
-  const points = radarPoints(topics.map((topic) => topic.value ?? 0), 92, 110);
-  const guideRings = [25, 50, 75, 100].map((value) => radarPoints([value, value, value, value, value], 92, 110));
-
+function TechnicalProfileCard({
+  axes,
+  hasData,
+}: {
+  axes: RadarMetric[];
+  hasData: boolean;
+}) {
   return (
     <section className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(145deg,#071019,#0b151d_58%,#101820)] p-4 shadow-2xl sm:rounded-[34px] lg:p-6">
       <div className="grid min-w-0 gap-5 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
@@ -436,91 +440,32 @@ function TechnicalProfileCard({ topics, hasData }: { topics: PlayerTopic[]; hasD
             Mapa tecnico
           </p>
           <h2 className="mt-3 break-words text-2xl font-black leading-tight text-white md:text-3xl lg:text-4xl">
-            Perfil por topicos
+            Radar por disciplina
           </h2>
           <p className="mt-3 text-sm leading-6 text-zinc-400">
-            Lectura resumida de los cinco ejes principales del criterio arbitral: VAR, fuera de juego, manos, disputas y faltas tacticas.
+            El mapa tecnico usa solo actividad real de la disciplina seleccionada y mantiene sus ejes separados.
           </p>
           <div className="mt-5 grid grid-cols-1 gap-3 min-[380px]:grid-cols-2">
-            {topics.map((topic) => (
-              <div key={topic.label} className="min-w-0 rounded-2xl border border-white/10 bg-black/25 p-3">
-                <p className="break-words text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500 sm:tracking-[0.16em]">{topic.label}</p>
-                <p className="mt-2 text-2xl font-black text-white">{topic.value === null ? "—" : topic.value}</p>
+            {axes.map((axis) => (
+              <div key={axis.key} className="min-w-0 rounded-2xl border border-white/10 bg-black/25 p-3">
+                <p className="break-words text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500 sm:tracking-[0.16em]">{axis.label}</p>
+                <p className="mt-2 text-2xl font-black text-white">{axis.accuracy === null ? "Sin datos" : `${axis.accuracy}%`}</p>
                 <p className="mt-1 text-xs text-[#6fc11f]">
-                  {topic.attempts > 0 ? `${topic.attempts} intentos` : "0 intentos"}
+                  {axis.attempts > 0 ? `${axis.attempts} intentos` : axis.emptyStateLabel}
                 </p>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="relative mx-auto aspect-square w-full max-w-[300px] overflow-hidden rounded-[28px] border border-[#6fc11f]/20 bg-[#050b12] p-3 shadow-[inset_0_0_50px_rgba(111,193,31,0.08)] sm:max-w-[380px] sm:p-5 lg:max-w-[410px]">
-          <svg viewBox="0 0 220 220" className="h-full w-full">
-            <defs>
-              <filter id="radarGlow">
-                <feGaussianBlur stdDeviation="3" result="coloredBlur" />
-                <feMerge>
-                  <feMergeNode in="coloredBlur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-            {guideRings.map((ring, index) => (
-              <polygon key={index} points={ring} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
-            ))}
-            {topics.map((topic, index) => {
-              const end = radarAxisPoint(index, 92, 110);
-              const label = radarAxisPoint(index, 99, 110);
-              return (
-                <g key={topic.label}>
-                  <line x1="110" y1="110" x2={end.x} y2={end.y} stroke="rgba(255,255,255,0.12)" />
-                  <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" className="fill-white text-[7px] font-black uppercase sm:text-[8px]">
-                    {shortTopicLabel(topic.label)}
-                  </text>
-                </g>
-              );
-            })}
-            <polygon points={points} fill="rgba(111,193,31,0.32)" stroke="#6fc11f" strokeWidth="3" filter="url(#radarGlow)" />
-            {points.split(" ").map((point, index) => {
-              const [x, y] = point.split(",").map(Number);
-              return <circle key={index} cx={x} cy={y} r="4" fill="#b7ff8a" />;
-            })}
-            <circle cx="110" cy="110" r="4" fill="#6fc11f" />
-          </svg>
-
-          {!hasData && (
-            <div className="absolute inset-x-5 bottom-5 rounded-2xl border border-dashed border-[#6fc11f]/25 bg-[#050b12]/90 p-3 text-center text-xs font-bold text-zinc-300">
-              Sin actividad registrada.
-            </div>
-          )}
-        </div>
+        <SportRadarGraphic
+          axes={axes}
+          glowId="dashboard-radar-glow"
+          overlayText={hasData ? null : "Sin actividad registrada."}
+        />
       </div>
     </section>
   );
-}
-
-function radarPoints(values: number[], radius: number, center: number) {
-  return values
-    .map((value, index) => {
-      const point = radarAxisPoint(index, radius * (Math.max(0, Math.min(value, 100)) / 100), center);
-      return `${point.x},${point.y}`;
-    })
-    .join(" ");
-}
-
-function radarAxisPoint(index: number, radius: number, center: number) {
-  const angle = (-90 + index * 72) * (Math.PI / 180);
-  return {
-    x: Math.round((center + Math.cos(angle) * radius) * 10) / 10,
-    y: Math.round((center + Math.sin(angle) * radius) * 10) / 10,
-  };
-}
-
-function shortTopicLabel(label: string) {
-  if (label === "Fuera de juego") return "FDJ";
-  if (label === "Faltas tacticas") return "FT";
-  if (label === "Disputas") return "DISP";
-  return label;
 }
 
 function TopMetric({ title, value, detail, featured = false }: { title: string; value: string | number; detail?: string; featured?: boolean }) {
@@ -587,7 +532,7 @@ function ProgressRow({ label, value, suffix }: { label: string; value: number; s
   );
 }
 
-function CriterionRow({ item }: { item: CriterionMetric }) {
+function CriterionRow({ item }: { item: SportCriterionMetric }) {
   if (item.accuracy === null) {
     return <Empty text={`${item.label}: metrica en construccion o sin datos.`} compact />;
   }

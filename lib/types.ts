@@ -1,3 +1,5 @@
+import type { SportType } from "@/lib/sports";
+
 export type TrainingMode =
   | "field"
   | "var"
@@ -7,6 +9,19 @@ export type TrainingMode =
 
 export type Clip = {
   id: string;
+  sport_type?: SportType | null;
+  subtopic?: string | null;
+  rule_reference?: string | null;
+  season?: string | null;
+  source_version?: string | null;
+  source_official?: string | null;
+  governing_body?: string | null;
+  technical_resolution?: string | null;
+  disciplinary_resolution?: string | null;
+  normative_status?: string | null;
+  language?: string | null;
+  reviewed_at?: string | null;
+  analysis_answers?: Record<string, string | boolean | null> | null;
 
   title: string;
   description?: string | null;

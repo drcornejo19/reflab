@@ -1,16 +1,18 @@
-export type RuleQuestion = {
-  id: number;
-  question: string;
-  options: string[];
-  correct: number;
-  topic: string;
-  lawReference: string;
-  difficulty: "Media" | "Avanzada";
-  explanation: string;
-  ifabExplanation: string;
-};
+import { withQuestionDefaults, type RuleQuestion } from "@/lib/questionBank";
 
-export const rulesQuestions: RuleQuestion[] = [
+type LegacyRuleQuestion = Omit<
+  RuleQuestion,
+  | "sport_type"
+  | "question_mode"
+  | "season"
+  | "language"
+  | "source_official"
+  | "source_version"
+  | "governing_body"
+  | "rule_reference"
+>;
+
+const legacyRulesQuestions: LegacyRuleQuestion[] = [
   {
     id: 1,
     topic: "Regla 1",
@@ -474,3 +476,15 @@ export const rulesQuestions: RuleQuestion[] = [
     ifabExplanation: "Tras la reanudación, el protocolo solo permite revisión por identidad equivocada o una posible expulsión relacionada con conducta violenta, escupir, morder o acciones extremadamente ofensivas, insultantes o abusivas.",
   },
 ];
+
+export const rulesQuestions: RuleQuestion[] = legacyRulesQuestions.map((question) =>
+  withQuestionDefaults(question, {
+    sport_type: "football_11",
+    question_mode: "practice",
+    season: "2026/27",
+    language: "es",
+    source_official: "https://www.theifab.com/laws-of-the-game-documents/",
+    source_version: "Laws of the Game 2026/27",
+    governing_body: "IFAB",
+  })
+);

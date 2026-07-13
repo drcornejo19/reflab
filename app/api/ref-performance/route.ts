@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { DEFAULT_SPORT_TYPE, normalizeSportType } from "@/lib/sports";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,10 @@ type CheckInInput = {
   hasMatchToday?: boolean;
   hasTrainingToday?: boolean;
   activityType?: string;
+  appointmentId?: string | null;
+  fixtureId?: string | null;
+  refereeRoleKey?: string | null;
+  sportType?: string | null;
   durationMinutes?: number | null;
   rpe?: number | null;
   fatigue?: number | null;
@@ -32,7 +37,7 @@ type PhysicalTestInput = {
   notes?: string | null;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   const userId = await getClerkUserId();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -40,7 +45,8 @@ export async function GET() {
 
   try {
     const supabase = createSupabaseAdminClient();
-    const data = await loadRefPerformanceData(supabase, userId);
+    const sportType = getRequestedSportType(request);
+    const data = await loadRefPerformanceData(supabase, userId, sportType);
     return NextResponse.json(data);
   } catch (error) {
     return migrationErrorResponse(error);
@@ -62,16 +68,22 @@ export async function POST(request: Request) {
 
   try {
     const supabase = createSupabaseAdminClient();
+    const sportType = getRequestedSportType(request);
 
     if (body.action === "save_checkin") {
-      await saveCheckIn(supabase, userId, body.payload as CheckInInput);
-      const data = await loadRefPerformanceData(supabase, userId);
+      await saveCheckIn(
+        supabase,
+        userId,
+        body.payload as CheckInInput,
+        sportType
+      );
+      const data = await loadRefPerformanceData(supabase, userId, sportType);
       return NextResponse.json({ message: "Daily Ref Check-In guardado.", ...data });
     }
 
     if (body.action === "save_test") {
       await savePhysicalTest(supabase, userId, body.payload as PhysicalTestInput);
-      const data = await loadRefPerformanceData(supabase, userId);
+      const data = await loadRefPerformanceData(supabase, userId, sportType);
       return NextResponse.json({ message: "Test fisico guardado.", ...data });
     }
 
@@ -86,14 +98,18 @@ async function getClerkUserId() {
   return session.userId;
 }
 
-async function loadRefPerformanceData(supabase: ReturnType<typeof createSupabaseAdminClient>, userId: string) {
+async function loadRefPerformanceData(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  userId: string,
+  sportType = DEFAULT_SPORT_TYPE
+) {
   const [checkinsRes, sessionsRes, testsRes, readinessRes, wellnessRes, attemptsRes] = await Promise.all([
     supabase.from("performance_checkins").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(40),
     supabase.from("performance_sessions").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(80),
     supabase.from("physical_tests").select("*").eq("user_id", userId).order("test_date", { ascending: false }).limit(40),
     supabase.from("readiness_scores").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(40),
     supabase.from("wellness_logs").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(40),
-    supabase.from("attempts").select("id,score,topic,mode,module,created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(80),
+    supabase.from("attempts").select("id,score,topic,mode,module,created_at,sport_type").eq("user_id", userId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(80),
   ]);
 
   const primaryError = checkinsRes.error || sessionsRes.error || testsRes.error || readinessRes.error || wellnessRes.error;
@@ -110,7 +126,17 @@ async function loadRefPerformanceData(supabase: ReturnType<typeof createSupabase
   };
 }
 
-async function saveCheckIn(supabase: ReturnType<typeof createSupabaseAdminClient>, userId: string, input: CheckInInput = {}) {
+function getRequestedSportType(request: Request) {
+  const { searchParams } = new URL(request.url);
+  return normalizeSportType(searchParams.get("sport"), DEFAULT_SPORT_TYPE);
+}
+
+async function saveCheckIn(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  userId: string,
+  input: CheckInInput = {},
+  requestedSportType = DEFAULT_SPORT_TYPE
+) {
   const payload = normalizeCheckIn(input);
   const readiness = calculateReadiness(payload);
   const now = new Date().toISOString();
@@ -118,6 +144,7 @@ async function saveCheckIn(supabase: ReturnType<typeof createSupabaseAdminClient
   const internalLoad = payload.checkin_type === "post" && payload.duration_minutes && payload.rpe
     ? payload.duration_minutes * payload.rpe
     : null;
+  const linkedSportType = normalizeSportType(input.sportType, requestedSportType);
 
   const { data: savedCheckIn, error: checkinError } = await supabase
     .from("performance_checkins")
@@ -129,6 +156,10 @@ async function saveCheckIn(supabase: ReturnType<typeof createSupabaseAdminClient
         has_match_today: payload.has_match_today,
         has_training_today: payload.has_training_today,
         activity_type: payload.activity_type,
+        appointment_id: input.appointmentId || null,
+        fixture_id: input.fixtureId || null,
+        sport_type: linkedSportType,
+        referee_role_key: input.refereeRoleKey || null,
         duration_minutes: payload.duration_minutes,
         rpe: payload.rpe,
         fatigue: payload.fatigue,
@@ -158,6 +189,10 @@ async function saveCheckIn(supabase: ReturnType<typeof createSupabaseAdminClient
       {
         user_id: userId,
         checkin_id: checkinId,
+        appointment_id: input.appointmentId || null,
+        fixture_id: input.fixtureId || null,
+        sport_type: linkedSportType,
+        referee_role_key: input.refereeRoleKey || null,
         score: readiness.score,
         status: readiness.status,
         factors: readiness.factors,
@@ -168,6 +203,10 @@ async function saveCheckIn(supabase: ReturnType<typeof createSupabaseAdminClient
       {
         user_id: userId,
         checkin_id: checkinId,
+        appointment_id: input.appointmentId || null,
+        fixture_id: input.fixtureId || null,
+        sport_type: linkedSportType,
+        referee_role_key: input.refereeRoleKey || null,
         date: today,
         sleep_quality: payload.sleep_quality,
         sleep_hours: payload.sleep_hours,
@@ -189,6 +228,10 @@ async function saveCheckIn(supabase: ReturnType<typeof createSupabaseAdminClient
         {
           user_id: userId,
           checkin_id: checkinId,
+          appointment_id: input.appointmentId || null,
+          fixture_id: input.fixtureId || null,
+          sport_type: linkedSportType,
+          referee_role_key: input.refereeRoleKey || null,
           session_date: today,
           session_type: payload.activity_type ?? "Actividad arbitral",
           duration_minutes: payload.duration_minutes,

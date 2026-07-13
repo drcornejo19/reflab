@@ -15,46 +15,41 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import {
+  getActiveSeasonForSport,
+  getDefaultSourceVersionForSport,
+  getGoverningBodyForSport,
+  type SportType,
+} from "@/lib/sports";
+import {
+  languageOptions,
+  libraryCategoryOptions,
+  normativeStatusOptions,
+  sportTypeOptions,
+} from "@/lib/sportFormOptions";
 import { useUserRole } from "@/lib/useUserRole";
 
 type LibraryDocument = {
   id: string;
   title: string;
+  sport_type: string;
+  governing_body: string;
   category: string;
   language: string;
+  season: string | null;
+  published_at: string | null;
   source_official: string | null;
+  source_version: string | null;
   effective_date: string | null;
   status: string;
   summary: string | null;
   file_url: string | null;
   storage_path: string | null;
   uploaded_by: string | null;
+  reviewed_at: string | null;
   created_at: string;
   updated_at: string;
 };
-
-const categories = [
-  { value: "reglas", label: "Reglas de Juego" },
-  { value: "circular", label: "Circular IFAB" },
-  { value: "resumen", label: "Resumen practico" },
-  { value: "protocolo_var", label: "Protocolo VAR" },
-  { value: "cambios_reglamentarios", label: "Cambios reglamentarios" },
-  { value: "mundial", label: "Actualizacion Mundial" },
-  { value: "material_consulta", label: "Material de consulta" },
-];
-
-const statuses = [
-  { value: "vigente", label: "Vigente" },
-  { value: "proxima_actualizacion", label: "Proxima actualizacion" },
-  { value: "archivado", label: "Archivado" },
-];
-
-const languages = [
-  { value: "es", label: "Espanol" },
-  { value: "en", label: "English" },
-  { value: "pt", label: "Portugues" },
-  { value: "multi", label: "Multilenguaje" },
-];
 
 export default function AdminLibraryPage() {
   const router = useRouter();
@@ -68,12 +63,22 @@ export default function AdminLibraryPage() {
   const [fileInputKey, setFileInputKey] = useState(0);
 
   const [title, setTitle] = useState("");
+  const [sportType, setSportType] = useState<SportType>("football_11");
   const [category, setCategory] = useState("reglas");
   const [language, setLanguage] = useState("es");
   const [status, setStatus] = useState("vigente");
+  const [season, setSeason] = useState<string>(
+    getActiveSeasonForSport("football_11")
+  );
+  const [publishedAt, setPublishedAt] = useState("");
+  const [reviewedAt, setReviewedAt] = useState("");
+  const [sourceVersion, setSourceVersion] = useState<string>(
+    getDefaultSourceVersionForSport("football_11")
+  );
   const [effectiveDate, setEffectiveDate] = useState("");
   const [sourceOfficial, setSourceOfficial] = useState("");
   const [summary, setSummary] = useState("");
+  const governingBody = getGoverningBodyForSport(sportType);
 
   useEffect(() => {
     if (isLoaded && !user) router.replace("/sign-in");
@@ -130,8 +135,12 @@ export default function AdminLibraryPage() {
       }
 
       setDocuments((current) => [data.document, ...current]);
-      setSuccess("Documento IFAB guardado correctamente.");
+      setSuccess("Documento reglamentario guardado correctamente.");
       setTitle("");
+      setSeason(getActiveSeasonForSport(sportType));
+      setPublishedAt("");
+      setReviewedAt("");
+      setSourceVersion(getDefaultSourceVersionForSport(sportType));
       setEffectiveDate("");
       setSourceOfficial("");
       setSummary("");
@@ -166,12 +175,12 @@ export default function AdminLibraryPage() {
           <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h1 className="text-3xl font-black sm:text-5xl">
-                Biblioteca IFAB
+                Biblioteca reglamentaria
               </h1>
               <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-400">
                 Carga documentos oficiales, circulares, protocolos, resumenes y
-                vigencias. La seccion 2026/2027 queda preparada sin publicar
-                contenido hasta que IFAB lo confirme.
+                vigencias para futbol 11 y futsal, manteniendo separadas las
+                fuentes de IFAB y FIFA.
               </p>
             </div>
 
@@ -203,16 +212,48 @@ export default function AdminLibraryPage() {
             </div>
 
             <div className="space-y-4">
+              <input type="hidden" name="governing_body" value={governingBody} />
+
               <Field label="Titulo">
                 <input
                   name="title"
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   required
-                  placeholder="Reglas de Juego IFAB 2025/26"
+                  placeholder="Reglas de Juego 2026/27 o Futsal Laws of the Game 2024-25"
                   className="control-input"
                 />
               </Field>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Disciplina">
+                  <select
+                    name="sport_type"
+                    value={sportType}
+                    onChange={(event) => {
+                      const nextSportType = event.target.value as SportType;
+                      setSportType(nextSportType);
+                      setSeason(getActiveSeasonForSport(nextSportType));
+                      setSourceVersion(getDefaultSourceVersionForSport(nextSportType));
+                    }}
+                    className="control-input"
+                  >
+                    {sportTypeOptions.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Organismo rector">
+                  <input
+                    value={governingBody}
+                    readOnly
+                    className="control-input opacity-80"
+                  />
+                </Field>
+              </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <Field label="Categoria">
@@ -222,7 +263,7 @@ export default function AdminLibraryPage() {
                     onChange={(event) => setCategory(event.target.value)}
                     className="control-input"
                   >
-                    {categories.map((item) => (
+                    {libraryCategoryOptions.map((item) => (
                       <option key={item.value} value={item.value}>
                         {item.label}
                       </option>
@@ -237,7 +278,7 @@ export default function AdminLibraryPage() {
                     onChange={(event) => setLanguage(event.target.value)}
                     className="control-input"
                   >
-                    {languages.map((item) => (
+                    {languageOptions.map((item) => (
                       <option key={item.value} value={item.value}>
                         {item.label}
                       </option>
@@ -254,7 +295,7 @@ export default function AdminLibraryPage() {
                     onChange={(event) => setStatus(event.target.value)}
                     className="control-input"
                   >
-                    {statuses.map((item) => (
+                    {normativeStatusOptions.map((item) => (
                       <option key={item.value} value={item.value}>
                         {item.label}
                       </option>
@@ -268,6 +309,50 @@ export default function AdminLibraryPage() {
                     type="date"
                     value={effectiveDate}
                     onChange={(event) => setEffectiveDate(event.target.value)}
+                    className="control-input"
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Temporada">
+                  <input
+                    name="season"
+                    value={season}
+                    onChange={(event) => setSeason(event.target.value)}
+                    className="control-input"
+                    placeholder="2026/27 o 2024-25"
+                  />
+                </Field>
+
+                <Field label="Version normativa">
+                  <input
+                    name="source_version"
+                    value={sourceVersion}
+                    onChange={(event) => setSourceVersion(event.target.value)}
+                    className="control-input"
+                    placeholder="Laws of the Game 2026/27"
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Fecha de publicacion">
+                  <input
+                    name="published_at"
+                    type="date"
+                    value={publishedAt}
+                    onChange={(event) => setPublishedAt(event.target.value)}
+                    className="control-input"
+                  />
+                </Field>
+
+                <Field label="Fecha de revision">
+                  <input
+                    name="reviewed_at"
+                    type="date"
+                    value={reviewedAt}
+                    onChange={(event) => setReviewedAt(event.target.value)}
                     className="control-input"
                   />
                 </Field>
@@ -322,7 +407,7 @@ export default function AdminLibraryPage() {
                 className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#82dc2a] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving ? <Loader2 className="animate-spin" size={18} /> : <FileUp size={18} />}
-                {saving ? "Guardando..." : "Guardar documento IFAB"}
+                {saving ? "Guardando..." : "Guardar documento reglamentario"}
               </button>
             </div>
           </form>
@@ -333,7 +418,7 @@ export default function AdminLibraryPage() {
                 <p className="text-xs font-black uppercase tracking-[0.28em] text-[#6fc11f]">
                   Documentos cargados
                 </p>
-                <h2 className="mt-2 text-2xl font-black">Archivo IFAB</h2>
+                <h2 className="mt-2 text-2xl font-black">Archivo reglamentario</h2>
               </div>
 
               <button
@@ -368,6 +453,8 @@ export default function AdminLibraryPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="flex flex-wrap gap-2">
+                        <Badge>{document.sport_type === "futsal" ? "Futsal" : "Futbol 11"}</Badge>
+                        <Badge>{document.governing_body}</Badge>
                         <Badge>{categoryLabel(document.category)}</Badge>
                         <Badge>{statusLabel(document.status)}</Badge>
                         <Badge>{document.language.toUpperCase()}</Badge>
@@ -387,7 +474,7 @@ export default function AdminLibraryPage() {
 
                   <div className="mt-4 flex flex-col gap-2 border-t border-white/10 pt-4 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
                     <span>
-                      Vigencia: {document.effective_date || "No definida"}
+                      {document.season || "Temporada s/d"} · Vigencia: {document.effective_date || "No definida"}
                     </span>
 
                     <div className="flex flex-wrap gap-3">
@@ -446,9 +533,9 @@ function Badge({ children }: { children: ReactNode }) {
 }
 
 function categoryLabel(value: string) {
-  return categories.find((item) => item.value === value)?.label ?? value;
+  return libraryCategoryOptions.find((item) => item.value === value)?.label ?? value;
 }
 
 function statusLabel(value: string) {
-  return statuses.find((item) => item.value === value)?.label ?? value;
+  return normativeStatusOptions.find((item) => item.value === value)?.label ?? value;
 }

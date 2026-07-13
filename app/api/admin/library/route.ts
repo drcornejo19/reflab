@@ -1,6 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { normalizeRole } from "@/lib/institutionalRoles";
+import {
+  getGoverningBodyForSport,
+  normalizeSportType,
+} from "@/lib/sports";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
@@ -29,14 +33,14 @@ export async function GET() {
   const { data, error } = await access.supabase
     .from("ifab_library_documents")
     .select(
-      "id,title,category,language,source_official,effective_date,status,summary,file_url,storage_path,uploaded_by,created_at,updated_at"
+      "id,title,category,language,source_official,effective_date,status,summary,file_url,storage_path,uploaded_by,created_at,updated_at,sport_type,governing_body,season,published_at,reviewed_at,source_version"
     )
     .order("created_at", { ascending: false })
     .limit(120);
 
   if (error) {
     return NextResponse.json(
-      { error: "No se pudo cargar la biblioteca IFAB.", technical: error.message },
+      { error: "No se pudo cargar la biblioteca reglamentaria.", technical: error.message },
       { status: 500 }
     );
   }
@@ -56,10 +60,17 @@ export async function POST(request: Request) {
   }
 
   const title = formString(formData, "title");
+  const sportType = normalizeSportType(formString(formData, "sport_type"));
+  const governingBody =
+    formString(formData, "governing_body") || getGoverningBodyForSport(sportType);
   const category = formString(formData, "category") || "material_consulta";
   const language = formString(formData, "language") || "es";
   const status = formString(formData, "status") || "vigente";
+  const season = formString(formData, "season") || null;
+  const publishedAt = formString(formData, "published_at") || null;
+  const reviewedAt = formString(formData, "reviewed_at") || null;
   const sourceOfficial = formString(formData, "source_official") || null;
+  const sourceVersion = formString(formData, "source_version") || null;
   const effectiveDate = formString(formData, "effective_date") || null;
   const summary = formString(formData, "summary") || null;
   const fileValue = formData.get("file");
@@ -80,6 +91,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Estado invalido." }, { status: 400 });
   }
 
+  if (governingBody !== getGoverningBodyForSport(sportType)) {
+    return NextResponse.json(
+      { error: "El organismo rector no coincide con la disciplina." },
+      { status: 400 }
+    );
+  }
+
+  if (status === "vigente" && !sourceOfficial) {
+    return NextResponse.json(
+      { error: "Un documento vigente requiere fuente oficial." },
+      { status: 400 }
+    );
+  }
+
   let fileUrl: string | null = null;
   let storagePath: string | null = null;
 
@@ -96,25 +121,31 @@ export async function POST(request: Request) {
     .from("ifab_library_documents")
     .insert({
       title,
+      sport_type: sportType,
+      governing_body: governingBody,
       category,
       language,
+      season,
+      published_at: publishedAt,
       source_official: sourceOfficial,
+      source_version: sourceVersion,
       effective_date: effectiveDate,
       status,
       summary,
       file_url: fileUrl,
       storage_path: storagePath,
       uploaded_by: access.userId,
+      reviewed_at: reviewedAt,
     })
     .select(
-      "id,title,category,language,source_official,effective_date,status,summary,file_url,storage_path,uploaded_by,created_at,updated_at"
+      "id,title,category,language,source_official,effective_date,status,summary,file_url,storage_path,uploaded_by,created_at,updated_at,sport_type,governing_body,season,published_at,reviewed_at,source_version"
     )
     .single();
 
   if (error) {
     return NextResponse.json(
       {
-        error: "No se pudo guardar el documento IFAB.",
+        error: "No se pudo guardar el documento reglamentario.",
         technical: error.message,
       },
       { status: 500 }
@@ -172,13 +203,13 @@ async function uploadDocument(
 
     if (createResult.error && !createResult.error.message.toLowerCase().includes("already exists")) {
       return {
-        error: "No se pudo preparar el bucket de Biblioteca IFAB.",
+        error: "No se pudo preparar el bucket de biblioteca reglamentaria.",
         technical: createResult.error.message,
       };
     }
   }
 
-  const safeName = sanitizeFileName(file.name || "documento-ifab.pdf");
+  const safeName = sanitizeFileName(file.name || "documento-reglamentario.pdf");
   const storagePath = `${category}/${Date.now()}-${safeName}`;
   const body = Buffer.from(await file.arrayBuffer());
 
@@ -189,9 +220,9 @@ async function uploadDocument(
 
   if (error) {
     return {
-      error: "No se pudo subir el PDF a Supabase Storage.",
-      technical: error.message,
-    };
+        error: "No se pudo subir el PDF a Supabase Storage.",
+        technical: error.message,
+      };
   }
 
   const { data } = supabase.storage.from(bucket).getPublicUrl(storagePath);
@@ -217,5 +248,5 @@ function sanitizeFileName(value: string) {
 
   return cleaned.toLowerCase().endsWith(".pdf")
     ? cleaned.toLowerCase()
-    : `${cleaned.toLowerCase() || "documento-ifab"}.pdf`;
+    : `${cleaned.toLowerCase() || "documento-reglamentario"}.pdf`;
 }

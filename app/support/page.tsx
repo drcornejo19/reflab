@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, useMemo, useState, type ReactNode } from "react";
 import { useUser } from "@clerk/nextjs";
 import {
   AlertCircle,
@@ -59,19 +59,18 @@ export default function SupportPage() {
     return [user?.firstName, user?.lastName].filter(Boolean).join(" ");
   }, [user]);
   const defaultEmail = user?.primaryEmailAddress?.emailAddress ?? "";
-  const [name, setName] = useState(defaultName);
-  const [email, setEmail] = useState(defaultEmail);
+  const [nameDraft, setNameDraft] = useState("");
+  const [emailDraft, setEmailDraft] = useState("");
+  const [nameEdited, setNameEdited] = useState(false);
+  const [emailEdited, setEmailEdited] = useState(false);
   const [category, setCategory] = useState(categories[0]);
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!name && defaultName) setName(defaultName);
-    if (!email && defaultEmail) setEmail(defaultEmail);
-  }, [defaultEmail, defaultName, email, name]);
+  const name = nameEdited ? nameDraft : defaultName;
+  const email = emailEdited ? emailDraft : defaultEmail;
 
   async function submitSupport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -189,7 +188,10 @@ export default function SupportPage() {
             <Field label="Nombre">
               <input
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) => {
+                  setNameEdited(true);
+                  setNameDraft(event.target.value);
+                }}
                 required
                 className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-zinc-600 focus:border-[#6fc11f]/60"
                 placeholder="Tu nombre"
@@ -200,7 +202,10 @@ export default function SupportPage() {
               <input
                 type="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmailEdited(true);
+                  setEmailDraft(event.target.value);
+                }}
                 required
                 className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-zinc-600 focus:border-[#6fc11f]/60"
                 placeholder="tu@email.com"

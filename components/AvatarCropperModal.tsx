@@ -217,6 +217,7 @@ export function AvatarCropperModal({
               }}
             >
               {sourceUrl && metrics && (
+                /* eslint-disable-next-line @next/next/no-img-element -- Crop previews use local blob/object URLs during editing, so next/image adds no value here. */
                 <img
                   src={sourceUrl}
                   alt=""

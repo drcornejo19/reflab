@@ -21,6 +21,7 @@ import {
   type TriviaMode,
 } from "@/lib/communicationContent";
 import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
+import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
 import { supabase } from "@/lib/supabase";
 import { getEnglishClips, type ClipRecord } from "@/lib/clips";
 
@@ -208,6 +209,8 @@ export function EnglishExercise() {
 
     const primaryPayload = {
       user_id: user.id,
+      sport_type: DEFAULT_SPORT_TYPE,
+      activity_type: isEnglishMode ? "english_training" : "communication_training",
       clip_id: currentClip.id,
       clip_title:
         activeMode === "spanish" && selectedSpanishExercise
@@ -217,6 +220,12 @@ export function EnglishExercise() {
       mode: isEnglishMode ? "english" : "decision_explanation_es",
       communication_mode: isEnglishMode ? "ifab_english" : "decision_explanation_es",
       topic: currentClip.topic ?? (isEnglishMode ? "Ingles Arbitral IFAB" : "Explicacion de decisiones"),
+      season: currentClip.season ?? "2026/27",
+      source_version:
+        currentClip.source_version ??
+        (isEnglishMode
+          ? "RefLab football_11 english training"
+          : "RefLab football_11 communication training"),
       answer_text: answer.trim() || (audioBlob ? "Respuesta de voz registrada" : null),
       score: globalScore,
       feedback: feedbackText,
@@ -236,13 +245,22 @@ export function EnglishExercise() {
 
     const fallbackPayload = {
       user_id: user.id,
+      sport_type: DEFAULT_SPORT_TYPE,
+      activity_type: isEnglishMode ? "english_training" : "communication_training",
       clip_title: currentClip.title ?? "Comunicacion arbitral",
       score: globalScore,
       topic: currentClip.topic ?? "Comunicacion arbitral",
+      season: currentClip.season ?? "2026/27",
+      source_version:
+        currentClip.source_version ??
+        (isEnglishMode
+          ? "RefLab football_11 english training"
+          : "RefLab football_11 communication training"),
       difficulty: isEnglishMode ? "english" : "communication",
       technical_correct: globalScore === null ? null : globalScore >= 70,
       restart_correct: null,
       discipline_correct: null,
+      disciplinary_correct: null,
       var_correct: null,
     };
 

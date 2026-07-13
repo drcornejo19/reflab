@@ -1,4 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  DEFAULT_SPORT_TYPE,
+  getGoverningBodyForSport,
+  isTopicAllowedForSport,
+  normalizeSportType,
+  type SportType,
+} from "@/lib/sports";
 import type { Clip, TrainingMode } from "@/lib/types";
 
 export type ClipRecord = Clip & {
@@ -13,6 +20,19 @@ export type ClipRecord = Clip & {
 };
 
 export type ClipDecisionPayload = {
+  sport_type?: SportType | null;
+  subtopic?: string | null;
+  rule_reference?: string | null;
+  season?: string | null;
+  source_version?: string | null;
+  source_official?: string | null;
+  governing_body?: string | null;
+  technical_resolution?: string | null;
+  disciplinary_resolution?: string | null;
+  normative_status?: string | null;
+  language?: string | null;
+  reviewed_at?: string | null;
+  analysis_answers?: Record<string, string | boolean | null> | null;
   title: string;
   description?: string | null;
   video_url: string;
@@ -63,13 +83,18 @@ export async function getClips(supabase: SupabaseLike) {
   return supabase.from("clips").select("*").order("created_at", { ascending: false });
 }
 
-export async function getTrainingClips(supabase: SupabaseLike, mode: "field" | "var" | "english") {
+export async function getTrainingClips(
+  supabase: SupabaseLike,
+  mode: "field" | "var" | "english",
+  sportType: SportType = DEFAULT_SPORT_TYPE
+) {
   const { data, error } = await getClips(supabase);
 
   if (error) return { data: null, error };
 
   const clips = ((data ?? []) as ClipRecord[]).filter((clip) => {
     if (clip.is_active === false) return false;
+    if (normalizeSportType(clip.sport_type) !== sportType) return false;
 
     if (mode === "var") {
       return clip.topic === "VAR" || clip.mode === "var";
@@ -85,13 +110,19 @@ export async function getTrainingClips(supabase: SupabaseLike, mode: "field" | "
   return { data: clips, error: null };
 }
 
-export async function getExamClips(supabase: SupabaseLike) {
+export async function getExamClips(
+  supabase: SupabaseLike,
+  sportType: SportType = DEFAULT_SPORT_TYPE
+) {
   const { data, error } = await getClips(supabase);
 
   if (error) return { data: null, error };
 
   const clips = ((data ?? []) as ClipRecord[]).filter(
-    (clip) => clip.is_active !== false && !isEnglishClip(clip)
+    (clip) =>
+      clip.is_active !== false &&
+      !isEnglishClip(clip) &&
+      normalizeSportType(clip.sport_type) === sportType
   );
 
   return { data: clips, error: null };
@@ -103,7 +134,12 @@ export async function getEnglishClips(supabase: SupabaseLike) {
   if (error) return { data: null, error };
 
   const clips = ((data ?? []) as ClipRecord[])
-    .filter((clip) => clip.is_active !== false && isEnglishClip(clip))
+    .filter(
+      (clip) =>
+        clip.is_active !== false &&
+        isEnglishClip(clip) &&
+        normalizeSportType(clip.sport_type) === DEFAULT_SPORT_TYPE
+    )
     .sort(compareByCreatedAtAsc);
 
   return { data: clips, error: null };
@@ -184,9 +220,43 @@ export async function deleteClipById(supabase: SupabaseLike, clipId: string) {
 }
 
 export function validateClipDecision(payload: ClipDecisionPayload): ClipValidationResult {
-  if (payload.mode === "english") return { valid: true, messages: [] };
-
   const messages: string[] = [];
+  const sportType = normalizeSportType(payload.sport_type);
+  const governingBody =
+    typeof payload.governing_body === "string" ? payload.governing_body.trim() : "";
+
+  if (payload.mode !== "english" && !isTopicAllowedForSport(sportType, payload.topic)) {
+    messages.push(
+      `El topico "${payload.topic}" no corresponde a la disciplina ${sportType}.`
+    );
+  }
+
+  if (governingBody && governingBody !== getGoverningBodyForSport(sportType)) {
+    messages.push("El organismo rector no coincide con la disciplina del clip.");
+  }
+
+  if (sportType === "futsal") {
+    if (!payload.rule_reference?.trim()) {
+      messages.push("Futsal requiere referencia reglamentaria explicita.");
+    }
+
+    if (!payload.source_version?.trim()) {
+      messages.push("Futsal requiere version normativa cargada.");
+    }
+
+    if (!payload.technical_resolution?.trim()) {
+      messages.push("Futsal requiere resolucion tecnica cargada.");
+    }
+
+    if (!payload.analysis_answers || Object.keys(payload.analysis_answers).length === 0) {
+      messages.push("Futsal requiere respuestas esperadas para el formulario dinamico.");
+    }
+  }
+
+  if (payload.mode === "english") {
+    return { valid: messages.length === 0, messages };
+  }
+
   const restart = payload.correct_restart ?? "";
   const discipline = payload.correct_discipline ?? "";
   const explanation = payload.explanation?.trim() ?? "";
@@ -224,13 +294,20 @@ export function validateClipDecision(payload: ClipDecisionPayload): ClipValidati
 }
 
 export function normalizeClipDecision(payload: ClipDecisionPayload): ClipDecisionPayload {
+  const sportType = normalizeSportType(payload.sport_type);
   const isNoOffside = payload.topic === "Offside" && payload.sub_type === "no_offside";
   const isNoHandball = payload.topic === "Handball" && payload.sub_type === "no_sancionable";
 
-  if (!isNoOffside && !isNoHandball) return payload;
+  const normalizedPayload: ClipDecisionPayload = {
+    ...payload,
+    sport_type: sportType,
+    subtopic: payload.subtopic ?? payload.sub_type ?? null,
+  };
+
+  if (!isNoOffside && !isNoHandball) return normalizedPayload;
 
   return {
-    ...payload,
+    ...normalizedPayload,
     correct_foul: false,
     correct_restart: "Seguir el juego",
     correct_discipline: "Sin tarjeta",

@@ -1,12 +1,42 @@
+"use client";
+
 import Link from "next/link";
-import { ArrowRight, BookOpen, CheckCircle2, TriangleAlert, type LucideIcon } from "lucide-react";
+import { Suspense, useMemo } from "react";
+import {
+  ArrowRight,
+  BookOpen,
+  CheckCircle2,
+  ExternalLink,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { useDiscipline } from "@/components/DisciplineProvider";
+import { PageShellFallback } from "@/components/PageShellFallback";
+import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { institutionalRules } from "@/lib/institutionalRules";
+import { officialLibraryDocuments } from "@/lib/officialLibrary";
+import { getLibraryTitleForSport } from "@/lib/sports";
+
+export const dynamic = "force-dynamic";
 
 export default function InstitutionRulesPage() {
   return (
+    <Suspense fallback={<PageShellFallback message="Cargando reglas institucionales..." />}>
+      <InstitutionRulesPageContent />
+    </Suspense>
+  );
+}
+
+function InstitutionRulesPageContent() {
+  const { currentDiscipline: sportType } = useDiscipline();
+  const featuredDocument = officialLibraryDocuments[sportType][0];
+
+  return (
     <AppShell>
       <div className="space-y-6">
+        <SportPageSwitch title="Disciplina reglamentaria" />
+
         <header className="rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-6 shadow-2xl sm:p-7">
           <p className="text-xs font-black uppercase tracking-[0.45em] text-[#6fc11f]">
             Escuela arbitral
@@ -14,16 +44,16 @@ export default function InstitutionRulesPage() {
           <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
             <div>
               <h1 className="break-words text-3xl font-black sm:text-5xl">
-                Biblioteca resumida IFAB
+                {sportType === "futsal" ? "Biblioteca FIFA Futsal" : "Biblioteca resumida IFAB"}
               </h1>
               <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-400">
-                Resumen pedagogico para alumnos en formacion inicial. No reemplaza
-                el texto oficial IFAB: ayuda a estudiar conceptos, puntos clave y
-                errores frecuentes.
+                {sportType === "futsal"
+                  ? "Acceso rapido a la normativa oficial de futsal y a la biblioteca separada por disciplina."
+                  : "Resumen pedagogico para alumnos en formacion inicial. No reemplaza el texto oficial IFAB: ayuda a estudiar conceptos, puntos clave y errores frecuentes."}
               </p>
             </div>
             <Link
-              href="/training/rules-exam"
+              href={sportType === "futsal" ? "/futsal/rules-exam" : "/training/rules-exam"}
               className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#82dc2a]"
             >
               Rendir examen
@@ -32,57 +62,131 @@ export default function InstitutionRulesPage() {
           </div>
         </header>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {institutionalRules.map((rule) => (
-            <article
-              key={rule.number}
-              className="rounded-[28px] border border-white/10 bg-[#0b131b] p-5 shadow-2xl"
-            >
-              <div className="flex items-start gap-4">
-                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 text-sm font-black text-[#6fc11f]">
-                  {rule.number}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-zinc-500">
-                    Regla {rule.number}
-                  </p>
-                  <h2 className="mt-2 break-words text-xl font-black">{rule.title}</h2>
-                </div>
+        <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <article className="rounded-[28px] border border-white/10 bg-[#0b131b] p-5 shadow-2xl">
+            <div className="flex items-start gap-4">
+              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]">
+                <BookOpen size={22} />
               </div>
-
-              <p className="mt-5 text-sm leading-6 text-zinc-300">
-                {rule.simpleExplanation}
-              </p>
-
-              <div className="mt-5 grid gap-4">
-                <RuleBlock
-                  icon={BookOpen}
-                  title="Conceptos principales"
-                  items={rule.mainConcepts}
-                />
-                <RuleBlock
-                  icon={CheckCircle2}
-                  title="Puntos clave"
-                  items={rule.keyPoints}
-                />
-                <RuleBlock
-                  icon={TriangleAlert}
-                  title="Errores frecuentes"
-                  items={rule.commonMistakes}
-                />
-              </div>
-
-              <div className="mt-5 rounded-2xl border border-[#6fc11f]/20 bg-[#6fc11f]/10 p-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#b7ff67]">
-                  Resumen rapido
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-zinc-500">
+                  Documento destacado
                 </p>
-                <p className="mt-2 text-sm font-semibold leading-6 text-zinc-200">
-                  {rule.quickSummary}
+                <h2 className="mt-2 break-words text-2xl font-black">
+                  {featuredDocument?.title ?? getLibraryTitleForSport(sportType)}
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-zinc-400">
+                  {featuredDocument?.subtitle ?? "Acceso directo al documento oficial de la disciplina."}
                 </p>
               </div>
-            </article>
-          ))}
+            </div>
+
+            {featuredDocument ? (
+              <div className="mt-5 flex flex-wrap gap-3">
+                <a
+                  href={featuredDocument.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-4 text-sm font-black text-black"
+                >
+                  Abrir fuente oficial
+                  <ExternalLink size={16} />
+                </a>
+                <Link
+                  href="/learning"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-white"
+                >
+                  Ver biblioteca completa
+                </Link>
+              </div>
+            ) : null}
+          </article>
+
+          <article className="rounded-[28px] border border-[#6fc11f]/20 bg-[#6fc11f]/10 p-5 shadow-2xl">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#6fc11f]">
+              Criterio de estudio
+            </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
+              <RuleBlock
+                icon={BookOpen}
+                title="Fuente correcta"
+                items={[
+                  sportType === "futsal" ? "FIFA Futsal Laws of the Game" : "Laws of the Game IFAB",
+                  "Temporada vigente visible",
+                  "Biblioteca separada por disciplina",
+                ]}
+              />
+              <RuleBlock
+                icon={CheckCircle2}
+                title="Que conviene mirar"
+                items={[
+                  "Referencia reglamentaria",
+                  "Topico tecnico",
+                  "Consecuencia disciplinaria",
+                ]}
+              />
+              <RuleBlock
+                icon={TriangleAlert}
+                title="Evitar mezclas"
+                items={[
+                  "No mezclar IFAB con FIFA Futsal",
+                  "No usar fuera de juego en futsal",
+                  "No estudiar material archivado como si fuera vigente",
+                ]}
+              />
+            </div>
+          </article>
         </section>
+
+        {sportType === "football_11" ? (
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {institutionalRules.map((rule) => (
+              <article
+                key={rule.number}
+                className="rounded-[28px] border border-white/10 bg-[#0b131b] p-5 shadow-2xl"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 text-sm font-black text-[#6fc11f]">
+                    {rule.number}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-zinc-500">
+                      Regla {rule.number}
+                    </p>
+                    <h2 className="mt-2 break-words text-xl font-black">{rule.title}</h2>
+                  </div>
+                </div>
+
+                <p className="mt-5 text-sm leading-6 text-zinc-300">
+                  {rule.simpleExplanation}
+                </p>
+
+                <div className="mt-5 grid gap-4">
+                  <RuleBlock icon={BookOpen} title="Conceptos principales" items={rule.mainConcepts} />
+                  <RuleBlock icon={CheckCircle2} title="Puntos clave" items={rule.keyPoints} />
+                  <RuleBlock icon={TriangleAlert} title="Errores frecuentes" items={rule.commonMistakes} />
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-[#6fc11f]/20 bg-[#6fc11f]/10 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#b7ff67]">
+                    Resumen rapido
+                  </p>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-zinc-200">
+                    {rule.quickSummary}
+                  </p>
+                </div>
+              </article>
+            ))}
+          </section>
+        ) : (
+          <section className="rounded-[28px] border border-white/10 bg-[#0b131b] p-6 shadow-2xl">
+            <p className="text-lg font-black text-white">Material institucional de futsal</p>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-400">
+              Para futsal, RefLab redirige el estudio institucional a la biblioteca y a los examenes
+              separados por disciplina. Asi evitamos resumir con criterio IFAB un reglamento que depende de FIFA.
+            </p>
+          </section>
+        )}
       </div>
     </AppShell>
   );

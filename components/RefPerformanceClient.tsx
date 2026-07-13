@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { useUser } from "@clerk/nextjs";
+import { useSearchParams } from "next/navigation";
 import {
   Activity,
   AlertTriangle,
@@ -16,6 +17,7 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
+import { DEFAULT_SPORT_TYPE, type SportType } from "@/lib/sports";
 
 type CheckInType = "pre" | "post" | "rest_day";
 
@@ -53,6 +55,13 @@ type CheckInForm = {
   completed: boolean;
   recoveryMobility: boolean;
   notes: string;
+};
+
+type MatchContext = {
+  appointmentId: string | null;
+  fixtureId: string | null;
+  refereeRoleKey: string | null;
+  matchLabel: string | null;
 };
 
 type DailyCheckInRecord = {
@@ -166,9 +175,13 @@ type RefPerformanceResult =
   | { ok: true; data: LoadState; message?: string }
   | { ok: false; error: string };
 
-async function fetchRefPerformance(): Promise<RefPerformanceResult> {
+async function fetchRefPerformance(
+  sportType: SportType
+): Promise<RefPerformanceResult> {
   try {
-    const response = await fetch("/api/ref-performance", { cache: "no-store" });
+    const response = await fetch(`/api/ref-performance?sport=${sportType}`, {
+      cache: "no-store",
+    });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) return { ok: false, error: formatApiError(payload) };
     return { ok: true, data: normalizeLoadState(payload) };
@@ -177,9 +190,13 @@ async function fetchRefPerformance(): Promise<RefPerformanceResult> {
   }
 }
 
-async function postRefPerformance(action: string, payload: Record<string, unknown>): Promise<RefPerformanceResult> {
+async function postRefPerformance(
+  action: string,
+  payload: Record<string, unknown>,
+  sportType: SportType
+): Promise<RefPerformanceResult> {
   try {
-    const response = await fetch("/api/ref-performance", {
+    const response = await fetch(`/api/ref-performance?sport=${sportType}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, payload }),
@@ -230,7 +247,12 @@ function validateCheckIn(form: CheckInForm) {
   return null;
 }
 
-export function RefPerformanceClient() {
+export function RefPerformanceClient({
+  sportType = DEFAULT_SPORT_TYPE,
+}: {
+  sportType?: SportType;
+}) {
+  const searchParams = useSearchParams();
   const { user, isLoaded } = useUser();
   const [form, setForm] = useState<CheckInForm>(initialForm);
   const [data, setData] = useState<LoadState>({ checkins: [], sessions: [], tests: [], attempts: [] });
@@ -238,10 +260,30 @@ export function RefPerformanceClient() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [schemaMessage, setSchemaMessage] = useState<string | null>(null);
+  const matchContext = useMemo<MatchContext>(
+    () => ({
+      appointmentId: searchParams.get("appointmentId"),
+      fixtureId: searchParams.get("fixtureId"),
+      refereeRoleKey: searchParams.get("roleKey"),
+      matchLabel: searchParams.get("matchLabel"),
+    }),
+    [searchParams]
+  );
 
   const readiness = useMemo(() => calculateReadiness(form), [form]);
   const analytics = useMemo(() => buildAnalytics(data, readiness.score), [data, readiness.score]);
   const insights = useMemo(() => buildInsights(data, readiness.score), [data, readiness.score]);
+
+  useEffect(() => {
+    if (!matchContext.appointmentId) return;
+
+    setForm((current) => ({
+      ...current,
+      hasMatchToday: true,
+      trainsToday: false,
+      trainingType: "Partido",
+    }));
+  }, [matchContext.appointmentId]);
 
   useEffect(() => {
     let active = true;
@@ -259,7 +301,7 @@ export function RefPerformanceClient() {
       setLoading(true);
       setSchemaMessage(null);
 
-      const result = await fetchRefPerformance();
+      const result = await fetchRefPerformance(sportType);
 
       if (!active) return;
 
@@ -279,7 +321,7 @@ export function RefPerformanceClient() {
     return () => {
       active = false;
     };
-  }, [isLoaded, user]);
+  }, [isLoaded, sportType, user]);
 
   async function saveCheckIn() {
     if (!user) {
@@ -313,7 +355,11 @@ export function RefPerformanceClient() {
       completed: form.checkinType === "post" ? form.completed : null,
       recoveryMobility: form.checkinType === "rest_day" ? form.recoveryMobility : null,
       notes: form.notes || null,
-    });
+      appointmentId: matchContext.appointmentId,
+      fixtureId: matchContext.fixtureId,
+      refereeRoleKey: matchContext.refereeRoleKey,
+      sportType,
+    }, sportType);
 
     if (!result.ok) {
       setSchemaMessage(result.error);
@@ -358,6 +404,15 @@ export function RefPerformanceClient() {
 
       {schemaMessage && <Notice tone="warning">{schemaMessage}</Notice>}
       {message && <Notice tone="success">{message}</Notice>}
+      {matchContext.appointmentId && (
+        <Notice tone="success">
+          Este registro queda vinculado a{" "}
+          <span className="text-white">
+            {matchContext.matchLabel ?? "tu partido asignado"}
+          </span>
+          .
+        </Notice>
+      )}
 
       <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
         <DailyCheckInPanel form={form} setForm={setForm} readiness={readiness} saving={saving} onSave={saveCheckIn} />

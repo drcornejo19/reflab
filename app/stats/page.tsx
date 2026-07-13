@@ -1,114 +1,127 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { supabase } from "@/lib/supabase";
 import { AppShell } from "@/components/AppShell";
+import { useDiscipline } from "@/components/DisciplineProvider";
+import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
+import { SportPageSwitch } from "@/components/SportPageSwitch";
+import {
+  buildSportPerformanceDataset,
+  formatPercent,
+  formatScore,
+  getSportCriterionPerformance,
+  getSportPerformanceSummary,
+  getSportTopicPerformance,
+  type SportCriterionMetric,
+} from "@/lib/performanceBySport";
+import { supabase } from "@/lib/supabase";
+import {
+  type AttemptRecord,
+  type ExamResultRecord,
+  type PerformanceClipRecord,
+  type RulesExamResultRecord,
+} from "@/lib/performance";
 import { useUserRole } from "@/lib/useUserRole";
 
-type ExamAnswer = {
-  clipId: string;
-  clipTitle: string;
-  topic: string;
-  difficulty: string;
-  score: number;
-  technicalCorrect?: boolean;
-  restartCorrect?: boolean;
-  disciplineCorrect?: boolean;
-  subtypeCorrect?: boolean | null;
+export const dynamic = "force-dynamic";
+
+type StatsData = {
+  attempts: AttemptRecord[];
+  examResults: ExamResultRecord[];
+  rulesResults: RulesExamResultRecord[];
+  clips: PerformanceClipRecord[];
 };
 
-type ExamResult = {
-  id: string;
-  user_id: string;
-  avg_score: number;
-  total_score: number;
-  total_questions: number;
-  correct_count: number;
-  details: ExamAnswer[] | null;
-  created_at: string;
+const emptyData: StatsData = {
+  attempts: [],
+  examResults: [],
+  rulesResults: [],
+  clips: [],
 };
-
-const topics = [
-  { key: "Dispute", label: "Disputas" },
-  { key: "Tactical foul", label: "Faltas tacticas" },
-  { key: "Handball", label: "Manos" },
-  { key: "Offside", label: "Fuera de juego" },
-  { key: "VAR", label: "VAR" },
-];
 
 export default function StatsPage() {
-  const { user, isLoaded } = useUser();
-  const { isPro, loadingRole } = useUserRole();
+  return (
+    <Suspense fallback={<PageShellFallback message="Cargando estadisticas..." />}>
+      <StatsPageContent />
+    </Suspense>
+  );
+}
 
-  const [examResults, setExamResults] = useState<ExamResult[]>([]);
+function StatsPageContent() {
+  const { user, isLoaded } = useUser();
+  const { currentDiscipline: sportType } = useDiscipline();
+  const { isPro, loadingRole } = useUserRole();
+  const [data, setData] = useState<StatsData>(emptyData);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadStats() {
-      if (!isLoaded || !user) return;
+      if (!isLoaded) return;
 
-      const { data, error } = await supabase
-        .from("exam_results")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error cargando estadisticas:", error);
-        setExamResults([]);
-      } else {
-        setExamResults((data ?? []) as ExamResult[]);
+      if (!user) {
+        setData(emptyData);
+        setLoading(false);
+        return;
       }
+
+      const [attemptsRes, examsRes, rulesRes, clipsRes] = await Promise.all([
+        supabase
+          .from("attempts")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("exam_results")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("rules_exam_results")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase.from("clips").select("*"),
+      ]);
+
+      setData({
+        attempts: (attemptsRes.data ?? []) as AttemptRecord[],
+        examResults: (examsRes.data ?? []) as ExamResultRecord[],
+        rulesResults: rulesRes.error ? [] : ((rulesRes.data ?? []) as RulesExamResultRecord[]),
+        clips: clipsRes.error ? [] : ((clipsRes.data ?? []) as PerformanceClipRecord[]),
+      });
 
       setLoading(false);
     }
 
-    loadStats();
+    void loadStats();
   }, [isLoaded, user]);
 
-  const examAnswers = useMemo(() => {
-    return examResults.flatMap((exam) => exam.details ?? []);
-  }, [examResults]);
-
-  const totalExams = examResults.length;
-  const totalAnswers = examAnswers.length;
-
-  const avg =
-    totalAnswers > 0
-      ? Math.round(
-          examAnswers.reduce((acc, a) => acc + (a.score ?? 0), 0) /
-            totalAnswers
-        )
-      : 0;
-
-  const best =
-    totalAnswers > 0
-      ? Math.max(...examAnswers.map((a) => a.score ?? 0))
-      : 0;
-
-  const last5 = examAnswers.slice(0, 5);
-
-  const byTopic = useMemo(() => {
-    return topics.map((topic) => {
-      const values = examAnswers.filter((a) => a.topic === topic.key);
-
-      const avgTopic =
-        values.length > 0
-          ? Math.round(
-              values.reduce((acc, v) => acc + (v.score ?? 0), 0) /
-                values.length
-            )
-          : 0;
-
-      return {
-        ...topic,
-        total: values.length,
-        avg: avgTopic,
-      };
-    });
-  }, [examAnswers]);
+  const dataset = useMemo(
+    () =>
+      buildSportPerformanceDataset({
+        attempts: data.attempts,
+        examResults: data.examResults,
+        rulesExamResults: data.rulesResults,
+        clips: data.clips,
+        sportType,
+      }),
+    [data.attempts, data.examResults, data.rulesResults, data.clips, sportType]
+  );
+  const summary = useMemo(
+    () => getSportPerformanceSummary(dataset.items, dataset.sessions, sportType),
+    [dataset.items, dataset.sessions, sportType]
+  );
+  const topics = useMemo(
+    () => getSportTopicPerformance(dataset.items, sportType).slice(0, 5),
+    [dataset.items, sportType]
+  );
+  const criteria = useMemo(
+    () => getSportCriterionPerformance(dataset.items, sportType),
+    [dataset.items, sportType]
+  );
+  const recentItems = useMemo(() => dataset.items.slice(0, 5), [dataset.items]);
 
   if (loading || loadingRole) {
     return (
@@ -123,29 +136,29 @@ export default function StatsPage() {
   if (!isPro) {
     return (
       <AppShell>
-        <div className="mx-auto w-full max-w-full space-y-5 overflow-hidden lg:max-w-[1200px] lg:space-y-6">
+        <div className="mx-auto w-full max-w-[1200px] space-y-5">
+          <SportPageSwitch title="Disciplina de estadisticas" />
+
           <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-4 sm:p-6">
-            <p className="break-words text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
               REFLAB STATS
             </p>
-            <h1 className="mt-2 break-words text-2xl font-black leading-tight md:text-3xl">
-              Estadisticas basicas
-            </h1>
+            <h1 className="mt-2 text-2xl font-black md:text-3xl">Estadisticas basicas</h1>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              El plan FREE muestra un resumen simple para probar la plataforma.
+              Vista resumida de {summary.totalAttempts} registros reales para la disciplina seleccionada.
             </p>
           </header>
 
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-            <StatCard title="Examenes" value={totalExams} />
-            <StatCard title="Respuestas" value={totalAnswers} />
-            <StatCard title="Promedio" value={`${avg}/100`} />
-            <StatCard title="Mejor score" value={best} />
-          </div>
+          <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <StatCard title="Promedio" value={formatScore(summary.avgScore)} />
+            <StatCard title="Intentos" value={summary.totalAttempts} />
+            <StatCard title="Evaluaciones" value={summary.totalEvaluations} />
+            <StatCard title="Mejor score" value={formatScore(summary.bestScore)} />
+          </section>
 
           <ProUpgradeCard
             title="Desbloquea estadisticas completas"
-            description="RefLab Pro habilita rendimiento por topico, historial completo, precision por criterio, ranking y evolucion avanzada."
+            description="RefLab Pro habilita desglose por topico, criterios, historial y comparacion mas profunda por disciplina."
             compact
           />
         </div>
@@ -155,81 +168,76 @@ export default function StatsPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-full space-y-5 overflow-hidden lg:max-w-[1200px] lg:space-y-6">
+      <div className="mx-auto w-full max-w-[1200px] space-y-5">
+        <SportPageSwitch title="Disciplina de estadisticas" />
+
         <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-4 sm:p-6">
-          <p className="break-words text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
             REFLAB STATS
           </p>
-          <h1 className="mt-2 break-words text-2xl font-black leading-tight md:text-3xl">
-            Estadisticas
-          </h1>
+          <h1 className="mt-2 text-2xl font-black md:text-3xl">Estadisticas sincronizadas</h1>
           <p className="mt-2 text-sm leading-6 text-zinc-400">
-            Estadisticas reales generadas solo con el Examen Arbitral.
+            Esta vista usa el mismo motor de metricas que Dashboard, Perfil y Ref Performance.
           </p>
         </header>
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-          <StatCard title="Examenes" value={totalExams} />
-          <StatCard title="Respuestas" value={totalAnswers} />
-          <StatCard title="Promedio" value={`${avg}/100`} />
-          <StatCard title="Mejor score" value={best} />
-        </div>
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <StatCard title="Promedio" value={formatScore(summary.avgScore)} />
+          <StatCard title="Intentos" value={summary.totalAttempts} />
+          <StatCard title="Entrenamientos" value={summary.totalTrainings} />
+          <StatCard title="Evaluaciones" value={summary.totalEvaluations} />
+        </section>
 
-        <div className="rounded-3xl border border-white/10 bg-[#0b131b] p-4 sm:p-5">
-          <h2 className="mb-4 break-words text-lg font-black sm:text-xl">
-            Ultimas respuestas
-          </h2>
+        <section className="grid gap-5 lg:grid-cols-2">
+          <Panel title="Actividad reciente">
+            {recentItems.length === 0 ? (
+              <EmptyState text="Todavia no hay registros para esta disciplina." />
+            ) : (
+              <div className="space-y-2">
+                {recentItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-3 rounded-xl bg-white/5 px-4 py-3 text-sm"
+                  >
+                    <span className="min-w-0 truncate">{item.topic}</span>
+                    <span className="shrink-0 font-black text-[#6fc11f]">
+                      {formatScore(item.score)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Panel>
 
-          {last5.length === 0 ? (
-            <p className="text-sm text-zinc-500">
-              Todavia no hay respuestas de examen.
-            </p>
+          <Panel title="Rendimiento por topico">
+            {topics.length === 0 ? (
+              <EmptyState text="Sin datos suficientes por topico." />
+            ) : (
+              <div className="space-y-4">
+                {topics.map((topic) => (
+                  <ProgressMetric
+                    key={topic.topic}
+                    label={topic.topic}
+                    value={topic.accuracy}
+                    detail={`${topic.attempts} intentos`}
+                  />
+                ))}
+              </div>
+            )}
+          </Panel>
+        </section>
+
+        <Panel title="Precision por criterio">
+          {criteria.length === 0 ? (
+            <EmptyState text="Sin criterios disponibles." />
           ) : (
-            <div className="space-y-2">
-              {last5.map((a, i) => (
-                <div
-                  key={`${a.clipId}-${i}`}
-                  className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-white/5 px-3 py-3 text-sm sm:px-4"
-                >
-                  <span className="min-w-0 break-words">{labelFromValue(a.topic)}</span>
-                  <span className="shrink-0 font-black text-[#6fc11f]">
-                    {a.score}/100
-                  </span>
-                </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {criteria.map((criterion) => (
+                <CriterionCard key={criterion.key} criterion={criterion} />
               ))}
             </div>
           )}
-        </div>
-
-        <div className="rounded-3xl border border-white/10 bg-[#0b131b] p-4 sm:p-5">
-          <h2 className="mb-4 break-words text-lg font-black sm:text-xl">
-            Rendimiento por topico
-          </h2>
-
-          <div className="space-y-4">
-            {byTopic.map((topic) => (
-              <div key={topic.key} className="min-w-0">
-                <div className="mb-1 flex min-w-0 justify-between gap-3 text-sm">
-                  <span className="min-w-0 break-words">{topic.label}</span>
-                  <span className="shrink-0">
-                    {topic.total > 0 ? `${topic.avg}/100` : "Sin datos"}
-                  </span>
-                </div>
-
-                <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full bg-[#6fc11f]"
-                    style={{ width: `${topic.avg}%` }}
-                  />
-                </div>
-
-                <p className="mt-1 text-xs text-zinc-500">
-                  {topic.total} respuesta{topic.total === 1 ? "" : "s"}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
+        </Panel>
       </div>
     </AppShell>
   );
@@ -237,23 +245,69 @@ export default function StatsPage() {
 
 function StatCard({ title, value }: { title: string; value: string | number }) {
   return (
-    <div className="min-w-0 rounded-2xl border border-white/10 bg-[#101b24] p-4 sm:p-5">
-      <p className="break-words text-xs text-zinc-500">{title}</p>
-      <p className="mt-2 break-words text-2xl font-black sm:text-3xl">{value}</p>
+    <div className="rounded-2xl border border-white/10 bg-[#101b24] p-4 sm:p-5">
+      <p className="text-xs text-zinc-500">{title}</p>
+      <p className="mt-2 text-2xl font-black sm:text-3xl">{value}</p>
     </div>
   );
 }
 
-function labelFromValue(value?: string | null) {
-  if (!value) return "Sin categoria";
+function Panel({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-3xl border border-white/10 bg-[#0b131b] p-4 sm:p-5">
+      <h2 className="mb-4 text-lg font-black sm:text-xl">{title}</h2>
+      {children}
+    </section>
+  );
+}
 
-  const dictionary: Record<string, string> = {
-    Dispute: "Disputas",
-    "Tactical foul": "Faltas tacticas",
-    Handball: "Manos",
-    Offside: "Fuera de juego",
-    VAR: "VAR",
-  };
+function ProgressMetric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: number | null;
+  detail: string;
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex justify-between gap-3 text-sm">
+        <span>{label}</span>
+        <span>{formatPercent(value)}</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-white/10">
+        <div
+          className="h-full bg-[#6fc11f]"
+          style={{ width: `${Math.max(0, Math.min(value ?? 0, 100))}%` }}
+        />
+      </div>
+      <p className="mt-1 text-xs text-zinc-500">{detail}</p>
+    </div>
+  );
+}
 
-  return dictionary[value] ?? value;
+function CriterionCard({ criterion }: { criterion: SportCriterionMetric }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+      <p className="font-black text-white">{criterion.label}</p>
+      <p className="mt-2 text-sm text-zinc-400">{criterion.description}</p>
+      <p className="mt-3 text-2xl font-black text-[#6fc11f]">
+        {formatPercent(criterion.accuracy)}
+      </p>
+      <p className="mt-1 text-xs text-zinc-500">
+        {criterion.correct}/{criterion.attempts} aciertos
+      </p>
+    </div>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <p className="text-sm text-zinc-500">{text}</p>;
 }

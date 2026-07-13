@@ -18,6 +18,10 @@ type PsychologyExerciseType = "focus_reset" | "pressure_scenario" | "self_talk" 
 type PsychologyInput = {
   moduleSlug?: unknown;
   checkinType?: PsychologyCheckInType;
+  appointmentId?: unknown;
+  fixtureId?: unknown;
+  sportType?: unknown;
+  refereeRoleKey?: unknown;
   matchContext?: unknown;
   pressureSource?: unknown;
   focusGoal?: unknown;
@@ -60,6 +64,10 @@ type WellbeingInput = {
 type ExerciseInput = {
   moduleSlug?: unknown;
   exerciseType?: PsychologyExerciseType;
+  appointmentId?: unknown;
+  fixtureId?: unknown;
+  sportType?: unknown;
+  refereeRoleKey?: unknown;
   scenarioId?: unknown;
   scenarioTitle?: unknown;
   pressureLevel?: unknown;
@@ -201,6 +209,10 @@ export async function POST(request: Request) {
         {
           user_id: userId,
           module_slug: payload.module_slug,
+          appointment_id: payload.appointment_id,
+          fixture_id: payload.fixture_id,
+          sport_type: payload.sport_type,
+          referee_role_key: payload.referee_role_key,
           exercise_type: payload.exercise_type,
           scenario_id: payload.scenario_id,
           scenario_title: payload.scenario_title,
@@ -287,6 +299,10 @@ export async function POST(request: Request) {
       {
         user_id: userId,
         module_slug: payload.module_slug,
+        appointment_id: payload.appointment_id,
+        fixture_id: payload.fixture_id,
+        sport_type: payload.sport_type,
+        referee_role_key: payload.referee_role_key,
         checkin_type: payload.checkin_type,
         match_context: payload.match_context,
         pressure_source: payload.pressure_source,
@@ -391,6 +407,10 @@ function normalizeInput(input: PsychologyInput) {
   return {
     module_slug:
       normalizePsychologyModuleSlug(input.moduleSlug) ?? defaultModuleForCheckinType(checkinType),
+    appointment_id: cleanText(input.appointmentId),
+    fixture_id: cleanText(input.fixtureId),
+    sport_type: cleanText(input.sportType),
+    referee_role_key: cleanText(input.refereeRoleKey),
     checkin_type: checkinType,
     match_context: cleanText(input.matchContext),
     pressure_source: cleanText(input.pressureSource),
@@ -440,6 +460,10 @@ function normalizeExerciseInput(input: ExerciseInput) {
   return {
     module_slug:
       normalizePsychologyModuleSlug(input.moduleSlug) ?? defaultModuleForExerciseType(exerciseType),
+    appointment_id: cleanText(input.appointmentId),
+    fixture_id: cleanText(input.fixtureId),
+    sport_type: cleanText(input.sportType),
+    referee_role_key: cleanText(input.refereeRoleKey),
     exercise_type: exerciseType,
     scenario_id: cleanText(input.scenarioId),
     scenario_title: cleanText(input.scenarioTitle),

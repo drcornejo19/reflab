@@ -74,7 +74,7 @@ const lockedModules = [
     position: "center",
   },
   {
-    title: "Biblioteca IFAB",
+    title: "Biblioteca",
     description: "Reglas de Juego, circulares, protocolos VAR y material académico.",
     icon: BookOpen,
     image: "/home-module-library.png",
