@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -34,6 +34,7 @@ import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { RefPerformanceClient } from "@/components/RefPerformanceClient";
 import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { SportRadarGraphic } from "@/components/SportRadarGraphic";
+import { getDisciplineDefinition } from "@/lib/discipline";
 import {
   buildSportPerformanceDataset,
   getSportCriterionPerformance,
@@ -147,6 +148,20 @@ function PerformancePageContent() {
   const searchParams = useSearchParams();
   const { currentDiscipline: sportType } = useDiscipline();
   const { isPro, loadingRole } = useUserRole();
+  const theme = getDisciplineDefinition(sportType).theme;
+  const themeVars = useMemo(
+    () =>
+      ({
+        "--accent": theme.accent,
+        "--accent-soft": theme.accentSoft,
+        "--accent-border": theme.border,
+        "--accent-glow": theme.glow,
+        "--accent-button": theme.button,
+        "--accent-button-hover": theme.buttonHover,
+        "--accent-on": theme.onAccent,
+      }) as CSSProperties,
+    [theme]
+  );
   const [data, setData] = useState<LoadState>(initialData);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -290,7 +305,9 @@ function PerformancePageContent() {
   if (!isLoaded || loading || loadingRole) {
     return (
       <AppShell>
-        <LoadingCard />
+        <div style={themeVars}>
+          <LoadingCard />
+        </div>
       </AppShell>
     );
   }
@@ -298,12 +315,14 @@ function PerformancePageContent() {
   if (!user) {
     return (
       <AppShell>
-        <EmptyState
-          title="Inicia sesion para ver tu rendimiento"
-          text="Las metricas de RefLab se calculan con tus intentos, examenes y actividad guardada."
-          actionHref="/sign-in"
-          actionLabel="Iniciar sesion"
-        />
+        <div style={themeVars}>
+          <EmptyState
+            title="Inicia sesion para ver tu rendimiento"
+            text="Las metricas de RefLab se calculan con tus intentos, examenes y actividad guardada."
+            actionHref="/sign-in"
+            actionLabel="Iniciar sesion"
+          />
+        </div>
       </AppShell>
     );
   }
@@ -311,7 +330,10 @@ function PerformancePageContent() {
   if (!isPro) {
     return (
       <AppShell>
-        <div className="mx-auto w-full max-w-[1180px] space-y-5 overflow-hidden">
+        <div
+          style={themeVars}
+          className="mx-auto w-full max-w-[1180px] space-y-5 overflow-hidden"
+        >
           <PerformanceHero />
           <SportPageSwitch title="Disciplina de Ref Performance" />
           {loadError && (
@@ -332,7 +354,10 @@ function PerformancePageContent() {
 
   return (
       <AppShell>
-      <div className="mx-auto w-full max-w-full space-y-5 overflow-hidden lg:max-w-[1180px] lg:space-y-6">
+      <div
+        style={themeVars}
+        className="mx-auto w-full max-w-full space-y-5 overflow-hidden lg:max-w-[1180px] lg:space-y-6"
+      >
         <SportPageSwitch title="Disciplina de Ref Performance" />
         {!activeSection && (
           <>
@@ -417,7 +442,7 @@ function FreePerformanceOverview({
     <section className="rounded-[34px] border border-white/10 bg-[#101b24] p-4 shadow-2xl sm:p-5 lg:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#6fc11f]">
+          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[var(--accent)]">
             Resumen FREE
           </p>
           <h2 className="mt-2 break-words text-2xl font-black leading-tight text-white sm:text-3xl">
@@ -430,7 +455,7 @@ function FreePerformanceOverview({
         </div>
         <Link
           href="/training"
-          className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#82dc2a]"
+          className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-[var(--accent-button)] px-5 text-sm font-black text-[var(--accent-on)] transition"
         >
           Seguir entrenando
         </Link>
@@ -527,13 +552,17 @@ function PerformanceSectionGrid({
             key={section.id}
             type="button"
             onClick={() => onSelect(section.id)}
-            className="group min-h-[320px] min-w-0 rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.12),transparent_34%),#101b24] p-5 text-left shadow-2xl transition hover:-translate-y-1 hover:border-[#6fc11f]/45 hover:bg-[#13212b] active:scale-[0.98] sm:p-7"
+            className="group min-h-[320px] min-w-0 rounded-[34px] border border-white/10 p-5 text-left shadow-2xl transition hover:-translate-y-1 hover:border-[color:var(--accent-border)] hover:bg-[#13212b] active:scale-[0.98] sm:p-7"
+            style={{
+              background:
+                "radial-gradient(circle at top left, var(--accent-soft), transparent 34%), #101b24",
+            }}
           >
             <div className="flex items-start justify-between gap-4">
-              <div className="grid h-16 w-16 shrink-0 place-items-center rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f] transition group-hover:bg-[#6fc11f] group-hover:text-black">
+              <div className="grid h-16 w-16 shrink-0 place-items-center rounded-3xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)] transition group-hover:bg-[var(--accent-button)] group-hover:text-[var(--accent-on)]">
                 <Icon size={30} />
               </div>
-              <ArrowRight className="h-6 w-6 shrink-0 text-zinc-600 transition group-hover:translate-x-1 group-hover:text-[#6fc11f]" />
+              <ArrowRight className="h-6 w-6 shrink-0 text-zinc-600 transition group-hover:translate-x-1 group-hover:text-[var(--accent)]" />
             </div>
 
             <h2 className="mt-6 break-words text-3xl font-black leading-tight text-white">
@@ -554,7 +583,7 @@ function PerformanceSectionGrid({
               ))}
             </div>
 
-            <p className="mt-6 text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f]">
+            <p className="mt-6 text-[10px] font-black uppercase tracking-[0.22em] text-[var(--accent)]">
               Abrir modulo
             </p>
           </button>
@@ -576,11 +605,11 @@ function PerformanceSectionHeader({
   onBack: () => void;
 }) {
   return (
-    <section className="rounded-[30px] border border-[#6fc11f]/25 bg-[#071019] p-4 shadow-2xl sm:p-5 lg:p-6">
+    <section className="rounded-[30px] border border-[color:var(--accent-border)] bg-[#071019] p-4 shadow-2xl sm:p-5 lg:p-6">
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-black text-zinc-200 transition hover:border-[#6fc11f]/40 hover:text-[#6fc11f]"
+        className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-black text-zinc-200 transition hover:border-[color:var(--accent-border)] hover:text-[var(--accent)]"
       >
         <ArrowLeft size={18} />
         Volver a Ref Performance
@@ -588,7 +617,7 @@ function PerformanceSectionHeader({
 
       <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:tracking-[0.35em]">
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[var(--accent)] sm:tracking-[0.35em]">
             Ref Performance
           </p>
           <h1 className="mt-2 break-words text-3xl font-black leading-tight text-white sm:text-5xl">
@@ -599,7 +628,7 @@ function PerformanceSectionHeader({
           </p>
         </div>
 
-        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/35 bg-[#6fc11f]/10 text-[#6fc11f]">
+        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]">
           <Icon size={26} />
         </div>
       </div>
@@ -630,25 +659,25 @@ function PerformanceEntryGrid({
             aria-pressed={active}
             className={`group min-h-[190px] min-w-0 rounded-[30px] border p-5 text-left shadow-2xl transition active:scale-[0.98] sm:p-6 ${
               active
-                ? "border-[#6fc11f]/70 bg-[#6fc11f]/15 shadow-[0_0_34px_rgba(111,193,31,0.18)]"
-                : "border-white/10 bg-[#101b24] hover:-translate-y-1 hover:border-[#6fc11f]/45 hover:bg-[#13212b]"
+                ? "border-[color:var(--accent-border)] bg-[var(--accent-soft)] shadow-[0_0_34px_var(--accent-glow)]"
+                : "border-white/10 bg-[#101b24] hover:-translate-y-1 hover:border-[color:var(--accent-border)] hover:bg-[#13212b]"
             }`}
           >
             <div className="flex min-w-0 items-start justify-between gap-4">
               <div
                 className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl border transition sm:h-14 sm:w-14 ${
                   active
-                    ? "border-[#6fc11f] bg-[#6fc11f] text-black"
-                    : "border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f] group-hover:bg-[#6fc11f]/15"
+                    ? "border-[var(--accent)] bg-[var(--accent-button)] text-[var(--accent-on)]"
+                    : "border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
                 }`}
               >
                 <Icon size={24} />
               </div>
-              <ArrowRight className={`h-5 w-5 shrink-0 transition ${active ? "translate-x-1 text-[#6fc11f]" : "text-zinc-600 group-hover:translate-x-1 group-hover:text-[#6fc11f]"}`} />
+              <ArrowRight className={`h-5 w-5 shrink-0 transition ${active ? "translate-x-1 text-[var(--accent)]" : "text-zinc-600 group-hover:translate-x-1 group-hover:text-[var(--accent)]"}`} />
             </div>
             <h2 className="mt-5 break-words text-2xl font-black leading-tight text-white">{entry.title}</h2>
             <p className="mt-3 text-sm leading-6 text-zinc-400">{entry.description}</p>
-            <p className="mt-5 text-[10px] font-black uppercase tracking-[0.2em] text-[#6fc11f]">
+            <p className="mt-5 text-[10px] font-black uppercase tracking-[0.2em] text-[var(--accent)]">
               {active ? "Modulo activo" : "Abrir modulo"}
             </p>
           </button>
@@ -663,22 +692,22 @@ function PerformanceModuleHeader({ activeView, onBack }: { activeView: Performan
   const Icon = meta.icon;
 
   return (
-    <section className="rounded-[30px] border border-[#6fc11f]/25 bg-[#071019] p-4 shadow-2xl sm:p-5 lg:p-6">
+    <section className="rounded-[30px] border border-[color:var(--accent-border)] bg-[#071019] p-4 shadow-2xl sm:p-5 lg:p-6">
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-black text-zinc-200 transition hover:border-[#6fc11f]/40 hover:text-[#6fc11f]"
+        className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-black text-zinc-200 transition hover:border-[color:var(--accent-border)] hover:text-[var(--accent)]"
       >
         <ArrowLeft size={18} />
         Volver a modulos
       </button>
       <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:tracking-[0.35em]">Modulo de analisis</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[var(--accent)] sm:tracking-[0.35em]">Modulo de analisis</p>
           <h2 className="mt-2 break-words text-3xl font-black leading-tight text-white sm:text-4xl">{meta.title}</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">{meta.description}</p>
         </div>
-        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/35 bg-[#6fc11f]/10 text-[#6fc11f]">
+        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]">
           <Icon size={26} />
         </div>
       </div>
@@ -722,7 +751,13 @@ function PrimaryAnalysisView({
   sportType: SportType;
 }) {
   return (
-    <section className="rounded-[34px] border border-[#6fc11f]/25 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.12),transparent_36%),#061018] p-3 shadow-2xl sm:p-4 lg:p-5">
+    <section
+      className="rounded-[34px] border border-[color:var(--accent-border)] p-3 shadow-2xl sm:p-4 lg:p-5"
+      style={{
+        background:
+          "radial-gradient(circle at top left, var(--accent-soft), transparent 36%), #061018",
+      }}
+    >
       {activeView === "evolution" && <EvolutionPanel evolution={evolution} />}
       {activeView === "plan" && <RecommendedPlanPanel plan={plan} />}
       {activeView === "topics" && <TopicsPanel topics={topics} radarAxes={radarAxes} />}
@@ -809,9 +844,15 @@ function ComplementaryAnalysisPanel({ summary }: { summary: ReturnType<typeof ge
 }
 function PerformanceHero() {
   return (
-    <header className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-4 shadow-2xl sm:rounded-[34px] lg:p-7">
+    <header
+      className="max-w-full overflow-hidden rounded-[30px] border border-white/10 p-4 shadow-2xl sm:rounded-[34px] lg:p-7"
+      style={{
+        background:
+          "radial-gradient(circle at top left, var(--accent-soft), transparent 38%), #0d1720",
+      }}
+    >
       <div>
-        <p className="break-words text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.45em]">REFLAB PERFORMANCE</p>
+        <p className="break-words text-[10px] font-black uppercase tracking-[0.22em] text-[var(--accent)] sm:text-xs sm:tracking-[0.45em]">REFLAB PERFORMANCE</p>
         <h1 className="mt-3 break-words text-3xl font-black leading-tight md:mt-4 md:text-5xl">Ref Performance</h1>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 md:text-base">
           Un centro para registrar como esta el arbitro hoy y revisar como viene evolucionando con datos reales de actividad.
@@ -834,7 +875,7 @@ function BasicSummaryCard({
 }) {
   const style =
     tone === "green"
-      ? "border-[#6fc11f]/30 bg-[#6fc11f]/10"
+      ? "border-[color:var(--accent-border)] bg-[var(--accent-soft)]"
       : tone === "danger"
         ? "border-red-500/25 bg-red-500/10"
         : "border-white/10 bg-black/25";
@@ -852,7 +893,7 @@ function BasicSummaryCard({
 
 function SummaryCard({ metric }: { metric: SummaryMetric }) {
   const tone = {
-    success: "border-[#6fc11f]/30 bg-[#6fc11f]/10",
+    success: "border-[color:var(--accent-border)] bg-[var(--accent-soft)]",
     warning: "border-yellow-400/25 bg-yellow-400/10",
     danger: "border-red-500/25 bg-red-500/10",
     neutral: "border-white/10 bg-[#101b24]",
@@ -905,7 +946,7 @@ function EvolutionBars({ series }: { series: ReturnType<typeof getEvolutionData>
         <div key={item.id} className="flex min-w-0 flex-1 flex-col items-center gap-2">
           <div className="flex h-32 w-full items-end rounded-full bg-white/5 p-1">
             <div
-              className="w-full rounded-full bg-[#6fc11f] shadow-[0_0_18px_rgba(111,193,31,0.35)]"
+              className="w-full rounded-full bg-[var(--accent)] shadow-[0_0_18px_var(--accent-glow)]"
               style={{ height: `${Math.max(item.score ?? 0, 4)}%` }}
             />
           </div>
@@ -932,7 +973,7 @@ function RecommendedPlanPanel({ plan }: { plan: ReturnType<typeof getSportRecomm
         <PlanLine label="Motivo tecnico" value={plan.reason} />
       </div>
 
-      <Link href={plan.href} className="mt-5 flex min-h-14 w-full min-w-0 items-center justify-between gap-3 rounded-2xl bg-[#6fc11f] px-4 font-black text-black transition hover:bg-[#82dc2a] sm:px-5">
+      <Link href={plan.href} className="mt-5 flex min-h-14 w-full min-w-0 items-center justify-between gap-3 rounded-2xl bg-[var(--accent-button)] px-4 font-black text-[var(--accent-on)] transition sm:px-5">
         <span>{plan.nextStep}</span>
         <ArrowRight size={20} />
       </Link>
@@ -970,12 +1011,13 @@ function TopicsPanel({
 }
 
 function TopicTechnicalMap({ axes }: { axes: RadarMetric[] }) {
+  const { currentDiscipline } = useDiscipline();
   const hasData = axes.some((axis) => axis.accuracy !== null);
   return (
-    <section className="mb-5 rounded-[30px] border border-[#6fc11f]/25 bg-[linear-gradient(145deg,#071019,#0b151d_58%,#101820)] p-4 sm:p-5">
+    <section className="mb-5 rounded-[30px] border border-[color:var(--accent-border)] bg-[linear-gradient(145deg,#071019,#0b151d_58%,#101820)] p-4 sm:p-5">
       <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#6fc11f] sm:text-xs sm:tracking-[0.32em]">
+          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[var(--accent)] sm:text-xs sm:tracking-[0.32em]">
             Dashboard tecnico
           </p>
           <h3 className="mt-2 break-words text-2xl font-black leading-tight text-white">
@@ -994,14 +1036,14 @@ function TopicTechnicalMap({ axes }: { axes: RadarMetric[] }) {
                   <p className="text-[11px] font-black uppercase tracking-[0.12em] text-zinc-400">
                     {axis.label}
                   </p>
-                  <span className="text-xs font-black text-[#6fc11f]">{axis.attempts} int.</span>
+                  <span className="text-xs font-black text-[var(--accent)]">{axis.attempts} int.</span>
                 </div>
                 <p className="mt-2 text-2xl font-black text-white">
                   {axis.accuracy === null ? "Sin datos" : `${axis.accuracy}%`}
                 </p>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
                   <div
-                    className="h-full rounded-full bg-[#6fc11f] shadow-[0_0_18px_rgba(111,193,31,0.35)]"
+                    className="h-full rounded-full bg-[var(--accent)] shadow-[0_0_18px_var(--accent-glow)]"
                     style={{ width: `${Math.max(0, Math.min(axis.accuracy ?? 0, 100))}%` }}
                   />
                 </div>
@@ -1017,6 +1059,7 @@ function TopicTechnicalMap({ axes }: { axes: RadarMetric[] }) {
             axes={axes}
             glowId="performance-radar-glow"
             overlayText={hasData ? null : "Sin datos suficientes"}
+            theme={getDisciplineDefinition(currentDiscipline).theme}
           />
         </div>
       </div>
@@ -1033,7 +1076,7 @@ function TopicRow({ topic }: { topic: TopicMetric }) {
             {topic.attempts} intentos - {topic.correct} aciertos - {topic.errors} errores
           </p>
         </div>
-        <span className="rounded-full border border-[#6fc11f]/25 bg-[#6fc11f]/10 px-3 py-1 text-xs font-black text-[#6fc11f]">
+        <span className="rounded-full border border-[color:var(--accent-border)] bg-[var(--accent-soft)] px-3 py-1 text-xs font-black text-[var(--accent)]">
           {topic.status}
         </span>
       </div>
@@ -1076,7 +1119,7 @@ function CriterionRow({ criterion }: { criterion: SportCriterionMetric }) {
           <p className="font-black text-white">{criterion.label}</p>
           <p className="mt-1 text-xs leading-5 text-zinc-500">{criterion.description}</p>
         </div>
-        <span className={`rounded-full border px-3 py-1 text-xs font-black ${hasData ? "border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]" : "border-yellow-400/20 bg-yellow-400/10 text-yellow-200"}`}>
+        <span className={`rounded-full border px-3 py-1 text-xs font-black ${hasData ? "border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]" : "border-yellow-400/20 bg-yellow-400/10 text-yellow-200"}`}>
           {criterion.status}
         </span>
       </div>
@@ -1097,10 +1140,10 @@ function ModulesPanel({ modules }: { modules: SportModulePerformance[] }) {
     <section className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[#071019] p-4 shadow-2xl sm:rounded-[34px] sm:p-5 lg:p-7">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">Por modulo</p>
+          <p className="text-xs font-black uppercase tracking-[0.35em] text-[var(--accent)]">Por modulo</p>
           <h2 className="mt-3 break-words text-2xl font-black leading-tight sm:text-3xl">Cada modulo mide algo distinto</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">
-            Cada modulo mide una dimension distinta: decision arbitral, lectura de video, protocolo VAR, comunicacion en ingles y preparacion integral.
+            Cada modulo mide una dimension distinta: entrenamiento con clips, lectura de video, protocolo VAR, comunicacion en ingles y preparacion integral.
           </p>
         </div>
       </div>
@@ -1121,10 +1164,10 @@ function ModuleCard({ module }: { module: SportModulePerformance }) {
   return (
     <article className="min-w-0 rounded-[24px] border border-white/10 bg-[#101b24] p-4 sm:rounded-[28px] sm:p-5">
       <div className="flex min-w-0 items-start justify-between gap-3 sm:gap-4">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
+        <div className="grid h-12 w-12 place-items-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]">
           <Icon size={25} />
         </div>
-        <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${construction ? "border-yellow-400/25 bg-yellow-400/10 text-yellow-200" : "border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]"}`}>
+        <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${construction ? "border-yellow-400/25 bg-yellow-400/10 text-yellow-200" : "border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"}`}>
           {module.status}
         </span>
       </div>
@@ -1195,7 +1238,7 @@ function HistoryItem({ item }: { item: SportPerformanceItem }) {
           <p className="mt-1 text-xs text-zinc-500">{formatDate(item.date)} - {item.modeLabel} - {item.topic}</p>
         </div>
         <div className="text-left sm:text-right">
-          <p className="text-2xl font-black text-[#6fc11f]">{item.score ?? "-"}</p>
+          <p className="text-2xl font-black text-[var(--accent)]">{item.score ?? "-"}</p>
           <p className="text-xs font-bold text-zinc-500">{item.result}</p>
         </div>
       </div>
@@ -1232,8 +1275,8 @@ function RankingPanel({
         <InlineEmpty text="Ranking disponible cuando existan mas usuarios con actividad registrada." />
       ) : (
         <>
-          <div className="rounded-3xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4">
-            <p className="text-xs font-black uppercase tracking-[0.25em] text-[#6fc11f]">Tu posicion</p>
+          <div className="rounded-3xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] p-4">
+            <p className="text-xs font-black uppercase tracking-[0.25em] text-[var(--accent)]">Tu posicion</p>
             <p className="mt-2 text-4xl font-black">{currentRanking ? `#${currentRanking.position}` : "Sin datos"}</p>
             <p className="mt-2 text-sm text-zinc-300">
               {currentRanking ? `${currentRanking.avgScore}/100 promedio - RefCard ${currentRanking.refCardId}` : "Completa entrenamientos para aparecer en el ranking."}
@@ -1243,7 +1286,7 @@ function RankingPanel({
           <div className="mt-4 space-y-2">
             {ranking.slice(0, 6).map((row) => (
               <div key={row.userId} className="grid min-w-0 grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:gap-3">
-                <p className="font-black text-[#6fc11f]">#{row.position}</p>
+                <p className="font-black text-[var(--accent)]">#{row.position}</p>
                 <div>
                   <p className="font-black text-white">{row.name}</p>
                   <p className="text-xs text-zinc-500">RefCard {row.refCardId} - Ultima actividad: {formatDate(row.lastAttempt)}</p>
@@ -1258,7 +1301,7 @@ function RankingPanel({
 
           <Link
             href={`/ranking?sport=${sportType}`}
-            className="mt-4 flex min-h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-white transition hover:border-[#6fc11f]/40 hover:text-[#6fc11f]"
+            className="mt-4 flex min-h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-white transition hover:border-[color:var(--accent-border)] hover:text-[var(--accent)]"
           >
             Abrir ranking completo
           </Link>
@@ -1272,9 +1315,9 @@ function Panel({ eyebrow, title, description, icon: Icon, children }: { eyebrow:
   return (
     <section className="max-w-full overflow-hidden rounded-[28px] border border-white/10 bg-[#071019] p-4 shadow-2xl sm:rounded-[32px] sm:p-5 lg:p-6">
       <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f] sm:h-12 sm:w-12"><Icon size={25} /></div>
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)] sm:h-12 sm:w-12"><Icon size={25} /></div>
         <div>
-          <p className="break-words text-[10px] font-black uppercase tracking-[0.18em] text-[#6fc11f] sm:text-xs sm:tracking-[0.3em]">{eyebrow}</p>
+          <p className="break-words text-[10px] font-black uppercase tracking-[0.18em] text-[var(--accent)] sm:text-xs sm:tracking-[0.3em]">{eyebrow}</p>
           <h2 className="mt-2 break-words text-xl font-black leading-tight sm:text-2xl">{title}</h2>
           <p className="mt-2 text-sm leading-6 text-zinc-400">{description}</p>
         </div>
@@ -1289,11 +1332,11 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
 }
 
 function PlanLine({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#6fc11f]">{label}</p><p className="mt-2 text-sm leading-6 text-zinc-300">{value}</p></div>;
+  return <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[var(--accent)]">{label}</p><p className="mt-2 text-sm leading-6 text-zinc-300">{value}</p></div>;
 }
 
 function ProgressBar({ value, label }: { value: number; label: string }) {
-  return <div className="mt-3"><div className="mb-1 flex justify-between text-xs text-zinc-500"><span>{label}</span><span>{Math.min(Math.max(value, 0), 100)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[#6fc11f]" style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }} /></div></div>;
+  return <div className="mt-3"><div className="mb-1 flex justify-between text-xs text-zinc-500"><span>{label}</span><span>{Math.min(Math.max(value, 0), 100)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }} /></div></div>;
 }
 
 function InlineEmpty({ text, compact = false }: { text: string; compact?: boolean }) {
@@ -1301,11 +1344,11 @@ function InlineEmpty({ text, compact = false }: { text: string; compact?: boolea
 }
 
 function EmptyState({ title, text, actionHref, actionLabel }: { title: string; text: string; actionHref: string; actionLabel: string }) {
-  return <div className="mx-auto w-full max-w-[720px] rounded-[30px] border border-white/10 bg-[#071019] p-5 text-center shadow-2xl sm:rounded-[34px] sm:p-8"><AlertTriangle className="mx-auto h-12 w-12 text-[#6fc11f]" /><h1 className="mt-4 text-3xl font-black">{title}</h1><p className="mt-3 text-sm leading-6 text-zinc-400">{text}</p><Link href={actionHref} className="mt-6 inline-flex min-h-12 items-center rounded-2xl bg-[#6fc11f] px-6 font-black text-black">{actionLabel}</Link></div>;
+  return <div className="mx-auto w-full max-w-[720px] rounded-[30px] border border-white/10 bg-[#071019] p-5 text-center shadow-2xl sm:rounded-[34px] sm:p-8"><AlertTriangle className="mx-auto h-12 w-12 text-[var(--accent)]" /><h1 className="mt-4 text-3xl font-black">{title}</h1><p className="mt-3 text-sm leading-6 text-zinc-400">{text}</p><Link href={actionHref} className="mt-6 inline-flex min-h-12 items-center rounded-2xl bg-[var(--accent-button)] px-6 font-black text-[var(--accent-on)]">{actionLabel}</Link></div>;
 }
 
 function LoadingCard() {
-  return <div className="rounded-[32px] border border-white/10 bg-[#071019] p-8 text-zinc-400"><div className="flex items-center gap-3"><RefreshCw className="h-5 w-5 animate-spin text-[#6fc11f]" /><span>Cargando centro de rendimiento...</span></div></div>;
+  return <div className="rounded-[32px] border border-white/10 bg-[#071019] p-8 text-zinc-400"><div className="flex items-center gap-3"><RefreshCw className="h-5 w-5 animate-spin text-[var(--accent)]" /><span>Cargando centro de rendimiento...</span></div></div>;
 }
 
 function InfoChip({ label, value }: { label: string; value: string }) {

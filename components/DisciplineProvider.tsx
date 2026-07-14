@@ -14,6 +14,7 @@ import { DEFAULT_SPORT_TYPE, type SportType } from "@/lib/sports";
 import {
   DISCIPLINE_COOKIE_KEY,
   DISCIPLINE_STORAGE_KEY,
+  getDisciplineFromPathname,
   getDisciplineFromSearch,
   normalizeDisciplineValue,
 } from "@/lib/discipline";
@@ -30,6 +31,7 @@ const DisciplineContext = createContext<DisciplineContextValue | null>(null);
 
 export function DisciplineProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const routeDiscipline = getDisciplineFromPathname(pathname);
   const [selectedDiscipline, setSelectedDiscipline] = useState<SportType | null>(
     null
   );
@@ -46,13 +48,18 @@ export function DisciplineProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    const pathDiscipline = getDisciplineFromPathname(window.location.pathname);
     const queryDiscipline = getDisciplineFromSearch(window.location.search);
     const cookieDiscipline = readDisciplineFromCookie(document.cookie);
     const localDiscipline = normalizeDisciplineValue(
       window.localStorage.getItem(DISCIPLINE_STORAGE_KEY)
     );
     const initialDiscipline =
-      queryDiscipline ?? cookieDiscipline ?? localDiscipline ?? null;
+      pathDiscipline ??
+      queryDiscipline ??
+      cookieDiscipline ??
+      localDiscipline ??
+      null;
 
     if (initialDiscipline) {
       persistDiscipline(initialDiscipline);
@@ -65,11 +72,13 @@ export function DisciplineProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isHydrated || typeof window === "undefined") return;
 
+    const pathDiscipline = getDisciplineFromPathname(window.location.pathname);
     const queryDiscipline = getDisciplineFromSearch(window.location.search);
-    if (!queryDiscipline || queryDiscipline === selectedDiscipline) return;
+    const nextDiscipline = pathDiscipline ?? queryDiscipline;
+    if (!nextDiscipline || nextDiscipline === selectedDiscipline) return;
 
-    persistDiscipline(queryDiscipline);
-    setSelectedDiscipline(queryDiscipline);
+    persistDiscipline(nextDiscipline);
+    setSelectedDiscipline(nextDiscipline);
   }, [isHydrated, pathname, persistDiscipline, selectedDiscipline]);
 
   const setDiscipline = useCallback(
@@ -83,12 +92,13 @@ export function DisciplineProvider({ children }: { children: ReactNode }) {
   const value = useMemo<DisciplineContextValue>(
     () => ({
       selectedDiscipline,
-      currentDiscipline: selectedDiscipline ?? DEFAULT_SPORT_TYPE,
-      hasSelectedDiscipline: Boolean(selectedDiscipline),
+      currentDiscipline:
+        selectedDiscipline ?? routeDiscipline ?? DEFAULT_SPORT_TYPE,
+      hasSelectedDiscipline: Boolean(selectedDiscipline ?? routeDiscipline),
       isHydrated,
       setDiscipline,
     }),
-    [isHydrated, selectedDiscipline, setDiscipline]
+    [isHydrated, routeDiscipline, selectedDiscipline, setDiscipline]
   );
 
   return (

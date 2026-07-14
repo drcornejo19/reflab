@@ -1,4 +1,4 @@
-import { AppShell } from "@/components/AppShell";
+﻿import { AppShell } from "@/components/AppShell";
 import { FutsalVideoAnalysisClient } from "@/components/FutsalVideoAnalysisClient";
 import { SportDisciplineSwitch } from "@/components/SportDisciplineSwitch";
 
@@ -28,8 +28,8 @@ export default function FutsalVideoAnalysisPage() {
         />
 
         <header className="rounded-[24px] border border-white/10 bg-[#0b131b] p-5 shadow-2xl">
-          <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-            FUTSAL VIDEO ANALYSIS
+          <p className="text-xs font-black uppercase tracking-[0.35em] text-[#16b8ff]">
+            VIDEOANALISIS FUTSAL
           </p>
 
           <h1 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">
@@ -48,3 +48,5 @@ export default function FutsalVideoAnalysisPage() {
     </AppShell>
   );
 }
+
+

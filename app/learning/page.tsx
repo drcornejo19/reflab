@@ -15,6 +15,7 @@ import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { SportPageSwitch } from "@/components/SportPageSwitch";
+import { getDisciplineDefinition } from "@/lib/discipline";
 import {
   officialLibraryDocuments,
   type OfficialLibraryDocument,
@@ -76,6 +77,7 @@ function LearningPageContent() {
   const { currentDiscipline: sportType } = useDiscipline();
   const { isSuperAdmin } = useUserRole();
   const sportDefinition = getSportDefinition(sportType);
+  const theme = getDisciplineDefinition(sportType).theme;
   const [documents, setDocuments] = useState<LibraryRecord[]>(emptyDocuments);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -157,8 +159,16 @@ function LearningPageContent() {
   return (
     <AppShell>
       <div className="mx-auto max-w-[1200px] space-y-6">
-        <header className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_36%),#0b131b] p-6 shadow-2xl">
-          <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
+        <header
+          className="rounded-3xl border border-white/10 p-6 shadow-2xl"
+          style={{
+            background: `radial-gradient(circle at top left, ${theme.accentSoft}, transparent 36%), #0b131b`,
+          }}
+        >
+          <p
+            className="text-xs font-black uppercase tracking-[0.35em]"
+            style={{ color: theme.accent }}
+          >
             REFLAB LIBRARY
           </p>
 
@@ -174,8 +184,17 @@ function LearningPageContent() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 px-4 py-3">
-                <p className="text-xs font-black uppercase tracking-[0.25em] text-[#6fc11f]">
+              <div
+                className="rounded-2xl border px-4 py-3"
+                style={{
+                  borderColor: theme.border,
+                  backgroundColor: theme.accentSoft,
+                }}
+              >
+                <p
+                  className="text-xs font-black uppercase tracking-[0.25em]"
+                  style={{ color: theme.accent }}
+                >
                   Temporada visible
                 </p>
                 <p className="mt-1 text-xl font-black">
@@ -186,7 +205,11 @@ function LearningPageContent() {
               {isSuperAdmin ? (
                 <Link
                   href="/admin/library"
-                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-4 text-sm font-black text-black transition hover:bg-[#82dc2a]"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-black transition"
+                  style={{
+                    backgroundColor: theme.button,
+                    color: theme.onAccent,
+                  }}
                 >
                   <Upload size={18} />
                   Cargar material
@@ -201,11 +224,21 @@ function LearningPageContent() {
         <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-3xl border border-white/10 bg-[#071019] p-5 shadow-2xl">
             <div className="flex items-center gap-3">
-              <div className="grid h-12 w-12 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
+              <div
+                className="grid h-12 w-12 place-items-center rounded-2xl border"
+                style={{
+                  borderColor: theme.border,
+                  backgroundColor: theme.accentSoft,
+                  color: theme.accent,
+                }}
+              >
                 <BookOpen size={24} />
               </div>
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.24em] text-[#6fc11f]">
+                <p
+                  className="text-xs font-black uppercase tracking-[0.24em]"
+                  style={{ color: theme.accent }}
+                >
                   Documentos oficiales
                 </p>
                 <h2 className="text-2xl font-black">
@@ -285,7 +318,10 @@ function LearningPageContent() {
         <section className="rounded-3xl border border-white/10 bg-[#071019] p-5 shadow-2xl">
           <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
+              <p
+                className="text-xs font-black uppercase tracking-[0.35em]"
+                style={{ color: theme.accent }}
+              >
                 Biblioteca
               </p>
               <h2 className="mt-2 text-2xl font-black">
@@ -309,7 +345,10 @@ function LearningPageContent() {
               Cargando biblioteca...
             </div>
           ) : filteredCards.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[#6fc11f]/25 bg-[#6fc11f]/5 p-6 text-center">
+            <div
+              className="rounded-2xl border border-dashed p-6 text-center"
+              style={{ borderColor: theme.border, backgroundColor: theme.accentSoft }}
+            >
               <p className="text-lg font-black text-white">Sin documentos para esos filtros</p>
               <p className="mt-2 text-sm text-zinc-400">
                 Ajusta la busqueda o cambia la disciplina para ver otra biblioteca.
@@ -318,7 +357,7 @@ function LearningPageContent() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredCards.map((document) => (
-                <DocumentCard key={document.id} document={document} />
+                <DocumentCard key={document.id} document={document} theme={theme} />
               ))}
             </div>
           )}
@@ -427,18 +466,39 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function DocumentCard({ document }: { document: LibraryCard }) {
+function DocumentCard({
+  document,
+  theme,
+}: {
+  document: LibraryCard;
+  theme: ReturnType<typeof getDisciplineDefinition>["theme"];
+}) {
   const statusTone =
     document.status === "vigente"
-      ? "border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#b7ff8a]"
+      ? ""
       : document.status === "archivado"
         ? "border-white/10 bg-black/30 text-zinc-400"
         : "border-yellow-400/20 bg-yellow-400/10 text-yellow-200";
 
   return (
-    <article className="rounded-3xl border border-white/10 bg-[#0f1a23] p-5 transition hover:border-[#6fc11f]/50 hover:bg-[#12202b]">
+    <article
+      className="rounded-3xl border border-white/10 bg-[#0f1a23] p-5 transition hover:bg-[#12202b]"
+      onMouseEnter={(event) => {
+        event.currentTarget.style.borderColor = theme.border;
+      }}
+      onMouseLeave={(event) => {
+        event.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+      }}
+    >
       <div className="flex items-start justify-between gap-4">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
+        <div
+          className="grid h-12 w-12 place-items-center rounded-2xl border"
+          style={{
+            borderColor: theme.border,
+            backgroundColor: theme.accentSoft,
+            color: theme.accent,
+          }}
+        >
           {document.language.toLowerCase().includes("english") ? (
             <Languages className="h-6 w-6" />
           ) : (
@@ -446,7 +506,18 @@ function DocumentCard({ document }: { document: LibraryCard }) {
           )}
         </div>
 
-        <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${statusTone}`}>
+        <span
+          className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${statusTone}`}
+          style={
+            document.status === "vigente"
+              ? {
+                  border: `1px solid ${theme.border}`,
+                  backgroundColor: theme.accentSoft,
+                  color: theme.accent,
+                }
+              : undefined
+          }
+        >
           {document.status}
         </span>
       </div>
@@ -470,7 +541,8 @@ function DocumentCard({ document }: { document: LibraryCard }) {
             href={document.href}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.15em] text-[#6fc11f]"
+            className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.15em]"
+            style={{ color: theme.accent }}
           >
             Abrir
             <ExternalLink className="h-3.5 w-3.5" />
@@ -483,7 +555,14 @@ function DocumentCard({ document }: { document: LibraryCard }) {
       </div>
 
       {document.origin === "official" ? (
-        <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#6fc11f]/20 bg-[#6fc11f]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.15em] text-[#b7ff8a]">
+        <div
+          className="mt-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.15em]"
+          style={{
+            borderColor: theme.border,
+            backgroundColor: theme.accentSoft,
+            color: theme.accent,
+          }}
+        >
           <ShieldCheck className="h-3.5 w-3.5" />
           Fuente oficial
         </div>

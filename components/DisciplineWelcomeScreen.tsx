@@ -59,18 +59,18 @@ export function DisciplineWelcomeScreen({
           </div>
 
           <p className="mt-6 text-[11px] font-black uppercase tracking-[0.42em] text-zinc-400 sm:text-xs">
-            PLATAFORMA DE CAPACITACIÓN ARBITRAL
+            PLATAFORMA DE CAPACITACION ARBITRAL
           </p>
 
           <h1 className="mt-5 text-balance text-4xl font-black leading-[0.98] sm:text-5xl lg:text-6xl">
-            Seleccioná tu{" "}
+            Selecciona tu{" "}
             <span className="text-[#6fc11f] drop-shadow-[0_0_22px_rgba(111,193,31,0.18)]">
               disciplina
             </span>
           </h1>
 
           <p className="mx-auto mt-5 max-w-2xl text-balance text-base leading-7 text-zinc-300 sm:text-lg">
-            Elegí la disciplina con la que vas a trabajar hoy.
+            Elige la disciplina con la que vas a trabajar hoy.
           </p>
         </header>
 
@@ -92,7 +92,7 @@ export function DisciplineWelcomeScreen({
               <Info size={20} />
             </div>
             <p className="text-sm leading-6 text-zinc-300 sm:text-base">
-              Podrás cambiar de disciplina cuando quieras desde tu{" "}
+              Podras cambiar de disciplina cuando quieras desde tu{" "}
               <span className="font-black text-[#6fc11f]">perfil</span>.
             </p>
           </div>

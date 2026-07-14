@@ -505,7 +505,7 @@ export function getModulePerformance(items: PerformanceItem[]): ModulePerformanc
   return [
     {
       key: "decision",
-      title: "Decision arbitral",
+      title: "Entrenamiento con clips",
       description: "Evalua si cobraste bien, la reanudacion y la sancion disciplinaria.",
       status: moduleStatus(items, "decision"),
       metrics: [
@@ -603,15 +603,15 @@ export function getRecentHistory(items: PerformanceItem[], limit = 12) {
 }
 
 export function getRecommendedPlan(summary: PerformanceSummary): RecommendedPlan {
-  if (!summary.hasData) return { diagnosis: "Todavia no hay intentos guardados para generar diagnostico.", priority1: "Comenzar con Decision arbitral.", priority2: "Completar una evaluacion formal para activar metricas.", nextStep: "Realizar el primer entrenamiento con clips.", reason: "RefLab necesita datos reales para detectar patrones.", href: "/training/decision" };
-  if (summary.totalAttempts < 5) return { diagnosis: "Hay actividad inicial, pero la muestra todavia es pequena.", priority1: "Completar al menos 5 ejercicios.", priority2: "Incluir topicos distintos: manos, disputas, offside, faltas y VAR.", nextStep: "Seguir entrenando Decision arbitral.", reason: "Con mas intentos el diagnostico tecnico sera mas confiable.", href: "/training/decision" };
+  if (!summary.hasData) return { diagnosis: "Todavia no hay intentos guardados para generar diagnostico.", priority1: "Comenzar con entrenamiento con clips.", priority2: "Completar una evaluacion formal para activar metricas.", nextStep: "Realizar el primer entrenamiento con clips.", reason: "RefLab necesita datos reales para detectar patrones.", href: "/training/decision" };
+  if (summary.totalAttempts < 5) return { diagnosis: "Hay actividad inicial, pero la muestra todavia es pequena.", priority1: "Completar al menos 5 ejercicios.", priority2: "Incluir topicos distintos: manos, disputas, offside, faltas y VAR.", nextStep: "Seguir entrenando con clips.", reason: "Con mas intentos el diagnostico tecnico sera mas confiable.", href: "/training/decision" };
   const weakCriterion = summary.weakestCriterion;
   const weakTopic = summary.weakestTopic;
   if (weakCriterion?.key === "discipline") return { diagnosis: "El rendimiento general muestra una debilidad en criterio disciplinario.", priority1: "Trabajar intensidad, punto de contacto y consecuencia tactica.", priority2: weakTopic ? `Entrenar ${weakTopic.topic}.` : "Entrenar faltas tacticas y disputas.", nextStep: "Realizar 5 clips de disputas o faltas tacticas.", reason: "Aciertos tecnicos pueden perder valor si la sancion disciplinaria falla.", href: "/training/field" };
   if (weakCriterion?.key === "restart") return { diagnosis: "La decision puede ser correcta, pero la reanudacion necesita refuerzo.", priority1: "Revisar reanudaciones y aplicacion reglamentaria.", priority2: weakTopic ? `Aplicarlo en ${weakTopic.topic}.` : "Practicar offside, manos y faltas.", nextStep: "Entrenar clips con foco exclusivo en reanudacion.", reason: "La reanudacion es parte central de la decision arbitral final.", href: "/training/decision" };
   if (weakCriterion?.key === "var" || weakTopic?.topic === "VAR") return { diagnosis: "El patron mas debil aparece relacionado con criterio VAR.", priority1: "Practicar protocolo VAR, APP y error claro y obvio.", priority2: "Separar factual vs interpretativo.", nextStep: "Abrir VAR Lab.", reason: "El VAR exige una capa de decision distinta a la lectura de campo.", href: "/training/var" };
   if ((summary.avgScore ?? 0) >= 85) return { diagnosis: "El rendimiento general es alto con los datos disponibles.", priority1: "Subir dificultad.", priority2: "Usar simulaciones cronometradas o examenes formales.", nextStep: "Rendir una evaluacion completa.", reason: "Cuando el promedio es alto, el crecimiento viene por presion, volumen y dificultad.", href: "/evaluations" };
-  return { diagnosis: weakTopic ? `El topico que mas conviene reforzar es ${weakTopic.topic}.` : "El sistema detecta una oportunidad general de mejora.", priority1: weakTopic ? `Entrenar ${weakTopic.topic}.` : "Entrenar Decision arbitral.", priority2: weakCriterion ? `Cuidar especialmente ${weakCriterion.label.toLowerCase()}.` : "Completar ejercicios de distintos topicos.", nextStep: "Completar una serie corta de 5 clips.", reason: "El plan se basa en la debilidad real mas marcada de tu actividad.", href: "/training/decision" };
+  return { diagnosis: weakTopic ? `El topico que mas conviene reforzar es ${weakTopic.topic}.` : "El sistema detecta una oportunidad general de mejora.", priority1: weakTopic ? `Entrenar ${weakTopic.topic}.` : "Entrenar con clips.", priority2: weakCriterion ? `Cuidar especialmente ${weakCriterion.label.toLowerCase()}.` : "Completar ejercicios de distintos topicos.", nextStep: "Completar una serie corta de 5 clips.", reason: "El plan se basa en la debilidad real mas marcada de tu actividad.", href: "/training/decision" };
 }
 
 export function getRankingRows(
@@ -920,8 +920,8 @@ function getGeneralStatus(avg: number | null, attempts: number) {
 }
 function inferRecommendedModule(topic?: TopicMetric, criterion?: CriterionMetric) {
   if (criterion?.key === "var" || topic?.topic === "VAR") return "VAR Lab";
-  if (criterion?.key === "justification") return "Video analisis";
-  if (criterion || topic) return "Decision arbitral";
+  if (criterion?.key === "justification") return "Videoanalisis";
+  if (criterion || topic) return "Entrenamiento con clips";
   return "Sin datos suficientes";
 }
 function getTrendLabel(total: number, variation: number | null) {

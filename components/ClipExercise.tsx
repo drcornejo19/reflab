@@ -62,7 +62,7 @@ function createInitialClipDecisionState(clip: ClipWithDetails): ClipDecisionStat
     return {
       foul: false,
       restart: "Seguir el juego",
-      discipline: "Sin sanciÃ³n",
+      discipline: "Sin sancion",
     };
   }
 
@@ -575,7 +575,7 @@ export function ClipExercise({
                   setFoul(true);
                   setRestart(isOffside ? "Tiro libre indirecto" : "Tiro libre directo");
                   if (isOffside) {
-                    setDiscipline("Sin sanciÃ³n");
+                    setDiscipline("Sin sancion");
                   }
                 }}
               >

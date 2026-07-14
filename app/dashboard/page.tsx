@@ -9,6 +9,7 @@ import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { SportRadarGraphic } from "@/components/SportRadarGraphic";
+import { getDisciplineAction, getDisciplineDefinition } from "@/lib/discipline";
 import {
   buildSportPerformanceDataset,
   getSportCriterionPerformance,
@@ -61,6 +62,7 @@ function DashboardPageContent() {
   const { user, isLoaded } = useUser();
   const { currentDiscipline: sportType } = useDiscipline();
   const { isPro, loadingRole } = useUserRole();
+  const theme = getDisciplineDefinition(sportType).theme;
   const [data, setData] = useState<DashboardData>(emptyData);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -184,7 +186,10 @@ function DashboardPageContent() {
       <AppShell>
         <div className="mx-auto w-full max-w-[1080px] space-y-5 overflow-hidden">
           <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-5 shadow-2xl sm:p-6">
-            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#6fc11f]">
+            <p
+              className="text-xs font-black uppercase tracking-[0.28em]"
+              style={{ color: theme.accent }}
+            >
               Dashboard basico
             </p>
             <h1 className="mt-3 break-words text-3xl font-black leading-tight md:text-4xl">
@@ -224,7 +229,10 @@ function DashboardPageContent() {
       <div className="w-full max-w-full space-y-5 overflow-hidden rounded-[24px] border border-white/10 bg-[#101820] p-3 shadow-2xl sm:p-5 lg:mx-auto lg:max-w-[1080px]">
         <header className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-[#0b131b] p-4 sm:p-6 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
+            <p
+              className="text-[10px] font-black uppercase tracking-[0.22em] sm:text-xs sm:tracking-[0.35em]"
+              style={{ color: theme.accent }}
+            >
               Dashboard tecnico
             </p>
             <h1 className="mt-2 break-words text-2xl font-black md:text-3xl">Analisis arbitral</h1>
@@ -235,8 +243,12 @@ function DashboardPageContent() {
           </div>
 
           <Link
-            href={sportType === "futsal" ? "/futsal/rules-exam" : "/training/exam"}
-            className="flex min-h-12 w-full items-center justify-center rounded-2xl bg-[#6fc11f] px-5 py-3 text-center font-black text-black transition hover:bg-[#82dc2a] sm:w-auto sm:px-6 sm:py-4"
+            href={getDisciplineAction(sportType, "primaryEvaluation")}
+            className="flex min-h-12 w-full items-center justify-center rounded-2xl px-5 py-3 text-center font-black transition sm:w-auto sm:px-6 sm:py-4"
+            style={{
+              backgroundColor: theme.button,
+              color: theme.onAccent,
+            }}
           >
             Rendir examen
           </Link>
@@ -265,7 +277,10 @@ function DashboardPageContent() {
         <TechnicalProfileCard axes={radarAxes} hasData={playerTopicHasData} />
 
         {!playerTopicHasData && (
-          <section className="rounded-3xl border border-dashed border-[#6fc11f]/25 bg-[#6fc11f]/5 p-6 text-center">
+          <section
+            className="rounded-3xl border border-dashed p-6 text-center"
+            style={{ borderColor: theme.border, backgroundColor: theme.accentSoft }}
+          >
             <p className="text-lg font-black text-white">Sin actividad registrada</p>
             <p className="mt-2 text-sm text-zinc-400">
               El mapa tecnico solo usa intentos y examenes reales con topico valido.
@@ -346,7 +361,12 @@ function DashboardPageContent() {
             </div>
             <Link
               href="/performance"
-              className="rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-5 py-3 text-center text-sm font-black text-[#6fc11f] transition hover:bg-[#6fc11f]/20"
+              className="rounded-2xl border px-5 py-3 text-center text-sm font-black transition"
+              style={{
+                borderColor: theme.border,
+                backgroundColor: theme.accentSoft,
+                color: theme.accent,
+              }}
             >
               Ver rendimiento completo
             </Link>
@@ -432,11 +452,17 @@ function TechnicalProfileCard({
   axes: RadarMetric[];
   hasData: boolean;
 }) {
+  const { currentDiscipline } = useDiscipline();
+  const theme = getDisciplineDefinition(currentDiscipline).theme;
+
   return (
     <section className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(145deg,#071019,#0b151d_58%,#101820)] p-4 shadow-2xl sm:rounded-[34px] lg:p-6">
       <div className="grid min-w-0 gap-5 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.26em] text-[#6fc11f] sm:text-xs sm:tracking-[0.34em]">
+          <p
+            className="text-[10px] font-black uppercase tracking-[0.26em] sm:text-xs sm:tracking-[0.34em]"
+            style={{ color: theme.accent }}
+          >
             Mapa tecnico
           </p>
           <h2 className="mt-3 break-words text-2xl font-black leading-tight text-white md:text-3xl lg:text-4xl">
@@ -450,7 +476,7 @@ function TechnicalProfileCard({
               <div key={axis.key} className="min-w-0 rounded-2xl border border-white/10 bg-black/25 p-3">
                 <p className="break-words text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500 sm:tracking-[0.16em]">{axis.label}</p>
                 <p className="mt-2 text-2xl font-black text-white">{axis.accuracy === null ? "Sin datos" : `${axis.accuracy}%`}</p>
-                <p className="mt-1 text-xs text-[#6fc11f]">
+                <p className="mt-1 text-xs" style={{ color: theme.accent }}>
                   {axis.attempts > 0 ? `${axis.attempts} intentos` : axis.emptyStateLabel}
                 </p>
               </div>
@@ -469,12 +495,18 @@ function TechnicalProfileCard({
 }
 
 function TopMetric({ title, value, detail, featured = false }: { title: string; value: string | number; detail?: string; featured?: boolean }) {
+  const { currentDiscipline } = useDiscipline();
+  const theme = getDisciplineDefinition(currentDiscipline).theme;
+
   return (
     <div className="min-w-0 border-r border-b border-white/10 p-3 last:border-r-0 sm:p-4 md:border-b-0">
       <p className="text-[11px] text-zinc-400">{title}</p>
       <p className="mt-2 break-words text-xl font-black sm:mt-3 sm:text-3xl">{value}</p>
       {detail && (
-        <p className={featured ? "mt-1 text-xs font-bold text-[#6fc11f]" : "mt-1 text-xs text-zinc-500"}>
+        <p
+          className={featured ? "mt-1 text-xs font-bold" : "mt-1 text-xs text-zinc-500"}
+          style={featured ? { color: theme.accent } : undefined}
+        >
           {detail}
         </p>
       )}
@@ -483,19 +515,28 @@ function TopMetric({ title, value, detail, featured = false }: { title: string; 
 }
 
 function AnalysisCard({ title, items, tone }: { title: string; items: string[]; tone: "success" | "danger" | "warning" }) {
+  const { currentDiscipline } = useDiscipline();
+  const theme = getDisciplineDefinition(currentDiscipline).theme;
   const style = {
-    success: "border-[#6fc11f]/30 bg-[#6fc11f]/10",
+    success: "",
     danger: "border-red-500/25 bg-red-500/10",
     warning: "border-yellow-400/25 bg-yellow-400/10",
   }[tone];
 
   return (
-    <div className={`min-w-0 rounded-3xl border p-4 sm:p-5 ${style}`}>
+    <div
+      className={`min-w-0 rounded-3xl border p-4 sm:p-5 ${style}`}
+      style={
+        tone === "success"
+          ? { borderColor: theme.border, backgroundColor: theme.accentSoft }
+          : undefined
+      }
+    >
       <h2 className="text-lg font-black">{title}</h2>
       <ul className="mt-4 space-y-2 text-sm leading-6 text-zinc-300">
         {items.map((item, index) => (
           <li key={`${title}-${index}`} className="flex gap-2">
-            <span className="text-[#6fc11f]">-</span>
+            <span style={{ color: theme.accent }}>-</span>
             <span>{item}</span>
           </li>
         ))}
@@ -505,11 +546,14 @@ function AnalysisCard({ title, items, tone }: { title: string; items: string[]; 
 }
 
 function Panel({ title, href, children }: { title: string; href: string; children: React.ReactNode }) {
+  const { currentDiscipline } = useDiscipline();
+  const theme = getDisciplineDefinition(currentDiscipline).theme;
+
   return (
     <section className="min-w-0 rounded-3xl border border-white/10 bg-[#0b131b] p-4 sm:p-5">
       <div className="mb-5 flex min-w-0 items-center justify-between gap-3">
         <h2 className="break-words text-lg font-black sm:text-xl">{title}</h2>
-        <Link href={href} className="text-xs font-black text-[#6fc11f]">
+        <Link href={href} className="text-xs font-black" style={{ color: theme.accent }}>
           Abrir
         </Link>
       </div>
@@ -519,6 +563,9 @@ function Panel({ title, href, children }: { title: string; href: string; childre
 }
 
 function ProgressRow({ label, value, suffix }: { label: string; value: number; suffix: string }) {
+  const { currentDiscipline } = useDiscipline();
+  const theme = getDisciplineDefinition(currentDiscipline).theme;
+
   return (
     <div>
       <div className="mb-1 flex justify-between gap-3 text-sm">
@@ -526,7 +573,10 @@ function ProgressRow({ label, value, suffix }: { label: string; value: number; s
         <span>{value}{suffix}</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-white/10">
-        <div className="h-full rounded-full bg-[#6fc11f]" style={{ width: `${Math.min(value, 100)}%` }} />
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${Math.min(value, 100)}%`, backgroundColor: theme.accent }}
+        />
       </div>
     </div>
   );
@@ -541,9 +591,14 @@ function CriterionRow({ item }: { item: SportCriterionMetric }) {
 }
 
 function InsightBlock({ title, text }: { title: string; text: string }) {
+  const { currentDiscipline } = useDiscipline();
+  const theme = getDisciplineDefinition(currentDiscipline).theme;
+
   return (
     <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-      <p className="text-sm font-black text-[#6fc11f]">{title}</p>
+      <p className="text-sm font-black" style={{ color: theme.accent }}>
+        {title}
+      </p>
       <p className="mt-2 text-sm leading-6 text-zinc-300">{text}</p>
     </div>
   );

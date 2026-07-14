@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -26,6 +26,8 @@ import {
   appointmentStatusLabels,
   preparationStageDefinitions,
 } from "@/lib/matches/config";
+import { useDiscipline } from "@/components/DisciplineProvider";
+import { getDisciplineDefinition } from "@/lib/discipline";
 
 type StageKey = keyof typeof preparationStageDefinitions;
 
@@ -132,6 +134,7 @@ export function MatchAppointmentDetailClient({
 }: {
   appointmentId: string;
 }) {
+  const { currentDiscipline } = useDiscipline();
   const [data, setData] = useState<MatchAppointmentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -145,6 +148,19 @@ export function MatchAppointmentDetailClient({
     matchday: emptyPreparationForm(),
   });
   const [reviewForm, setReviewForm] = useState<ReviewFormState>(emptyReviewForm());
+  const activeDiscipline = data?.appointment.sport_type ?? currentDiscipline;
+  const theme = getDisciplineDefinition(activeDiscipline).theme;
+  const themeVars = useMemo(
+    () =>
+      ({
+        "--accent": theme.accent,
+        "--accent-soft": theme.accentSoft,
+        "--accent-border": theme.border,
+        "--accent-glow": theme.glow,
+        "--accent-on": theme.onAccent,
+      }) as CSSProperties,
+    [theme.accent, theme.accentSoft, theme.border, theme.glow, theme.onAccent]
+  );
 
   useEffect(() => {
     void loadDetail();
@@ -331,9 +347,12 @@ export function MatchAppointmentDetailClient({
 
   if (loading) {
     return (
-      <div className="rounded-[32px] border border-white/10 bg-[#071019] p-6 text-zinc-300">
+      <div
+        className="rounded-[32px] border border-white/10 bg-[#071019] p-6 text-zinc-300"
+        style={themeVars}
+      >
         <div className="flex items-center gap-3">
-          <RefreshCw className="h-5 w-5 animate-spin text-[#6fc11f]" />
+          <RefreshCw className="h-5 w-5 animate-spin text-[var(--accent)]" />
           Cargando ficha del partido...
         </div>
       </div>
@@ -349,16 +368,16 @@ export function MatchAppointmentDetailClient({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" style={themeVars}>
       <div className="flex flex-wrap items-center gap-3">
         <Link
           href="/matches"
-          className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-zinc-200 transition hover:border-[#6fc11f]/40"
+          className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-zinc-200 transition hover:border-[var(--accent-border)]"
         >
           <ArrowLeft size={18} />
           Volver a Mis partidos
         </Link>
-        <Badge label={appointmentStatusLabels[data.appointment.status ?? "draft"]} tone="green" />
+        <Badge label={appointmentStatusLabels[data.appointment.status ?? "draft"]} tone="accent" />
         <Badge label={data.role?.label ?? "Rol"} tone="dark" />
         <Badge
           label={data.appointment.sport_type === "futsal" ? "Futsal" : "Futbol 11"}
@@ -369,10 +388,16 @@ export function MatchAppointmentDetailClient({
       {error && <Notice tone="error">{error}</Notice>}
       {message && <Notice tone="success">{message}</Notice>}
 
-      <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_38%),#0d1720] p-6 shadow-2xl sm:p-8">
+      <section
+        className="overflow-hidden rounded-[34px] border border-white/10 p-6 shadow-2xl sm:p-8"
+        style={{
+          backgroundImage: `radial-gradient(circle_at_top_left, ${theme.accentSoft}, transparent 38%)`,
+          backgroundColor: "#0d1720",
+        }}
+      >
         <div className="grid gap-6 lg:grid-cols-[1.04fr_0.96fr]">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.38em] text-[#6fc11f]">
+            <p className="text-xs font-black uppercase tracking-[0.38em] text-[var(--accent)]">
               FICHA DEL PARTIDO
             </p>
             <h1 className="mt-4 text-4xl font-black leading-tight sm:text-5xl">
@@ -380,8 +405,8 @@ export function MatchAppointmentDetailClient({
             </h1>
             <p className="mt-4 text-sm leading-7 text-zinc-300">
               {data.competition?.name ?? "Competicion manual"}
-              {data.category?.name ? ` · ${data.category.name}` : ""}
-              {data.season?.label ? ` · ${data.season.label}` : ""}
+              {data.category?.name ? ` - ${data.category.name}` : ""}
+              {data.season?.label ? ` - ${data.season.label}` : ""}
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
               <Badge label={`Funcion: ${data.role?.label ?? "Sin rol"}`} tone="dark" />
@@ -479,7 +504,7 @@ export function MatchAppointmentDetailClient({
           </div>
 
           <div className="mt-6 rounded-[28px] border border-white/10 bg-black/20 p-5">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#6fc11f]">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[var(--accent)]">
               Equipo arbitral
             </p>
             <div className="mt-4 space-y-3">
@@ -611,7 +636,7 @@ export function MatchAppointmentDetailClient({
                 className="rounded-[26px] border border-white/10 bg-black/20 p-4"
               >
                 <div className="flex flex-wrap gap-2">
-                  <Badge label={snapshot.snapshot_type} tone="green" />
+                  <Badge label={snapshot.snapshot_type} tone="accent" />
                   {snapshot.period_label && <Badge label={snapshot.period_label} tone="dark" />}
                   {snapshot.provider && <Badge label={snapshot.provider} tone="dark" />}
                 </div>
@@ -795,7 +820,7 @@ export function MatchAppointmentDetailClient({
             type="button"
             onClick={() => void saveReview()}
             disabled={savingKey === "review"}
-            className="inline-flex min-h-14 items-center gap-2 rounded-2xl bg-[#6fc11f] px-6 font-black text-black transition hover:bg-[#82dc2a] disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex min-h-14 items-center gap-2 rounded-2xl bg-[var(--accent)] px-6 font-black text-[var(--accent-on)] transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
           >
             <Save size={20} />
             {savingKey === "review" ? "Guardando..." : "Guardar cierre post partido"}
@@ -806,7 +831,7 @@ export function MatchAppointmentDetailClient({
               type="button"
               onClick={() => void updateStatus("confirmed")}
               disabled={savingKey === "status-confirmed"}
-              className="inline-flex min-h-14 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 font-black text-zinc-200 transition hover:border-[#6fc11f]/40"
+              className="inline-flex min-h-14 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 font-black text-zinc-200 transition hover:border-[var(--accent-border)]"
             >
               Confirmar designacion
             </button>
@@ -817,7 +842,7 @@ export function MatchAppointmentDetailClient({
               type="button"
               onClick={() => void updateStatus("completed")}
               disabled={savingKey === "status-completed"}
-              className="inline-flex min-h-14 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 font-black text-zinc-200 transition hover:border-[#6fc11f]/40"
+              className="inline-flex min-h-14 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 font-black text-zinc-200 transition hover:border-[var(--accent-border)]"
             >
               Marcar completado
             </button>
@@ -849,7 +874,7 @@ function PreparationCard({
 
   return (
     <article className="rounded-[28px] border border-white/10 bg-black/20 p-4">
-      <p className="text-xs font-black uppercase tracking-[0.22em] text-[#6fc11f]">
+      <p className="text-xs font-black uppercase tracking-[0.22em] text-[var(--accent)]">
         {definition.label}
       </p>
       <p className="mt-2 text-sm leading-6 text-zinc-400">{definition.description}</p>
@@ -907,7 +932,7 @@ function PreparationCard({
           type="button"
           onClick={onSave}
           disabled={saving}
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-4 font-black text-black transition hover:bg-[#82dc2a] disabled:cursor-wait disabled:opacity-60"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 font-black text-[var(--accent-on)] transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
         >
           <Save size={18} />
           {saving ? "Guardando..." : "Guardar etapa"}
@@ -933,12 +958,12 @@ function QuickLinkCard({
   return (
     <Link
       href={href}
-      className="group rounded-[28px] border border-white/10 bg-black/20 p-5 transition hover:border-[#6fc11f]/40 hover:bg-[#101820]"
+      className="group rounded-[28px] border border-white/10 bg-black/20 p-5 transition hover:border-[var(--accent-border)] hover:bg-[#101820]"
     >
-      <Icon className="h-6 w-6 text-[#6fc11f]" />
+      <Icon className="h-6 w-6 text-[var(--accent)]" />
       <h3 className="mt-4 text-xl font-black text-white">{title}</h3>
       <p className="mt-3 text-sm leading-6 text-zinc-400">{description}</p>
-      <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-[#b7ff8a]">
+      <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-[var(--accent)]">
         {cta}
         <ArrowRight size={18} className="transition group-hover:translate-x-1" />
       </span>
@@ -958,12 +983,12 @@ function SectionHeader({
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <p className="text-xs font-black uppercase tracking-[0.24em] text-[#6fc11f]">
+        <p className="text-xs font-black uppercase tracking-[0.24em] text-[var(--accent)]">
           {eyebrow}
         </p>
         <h2 className="mt-3 text-2xl font-black">{title}</h2>
       </div>
-      <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
+      <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]">
         <Icon size={22} />
       </div>
     </div>
@@ -983,7 +1008,7 @@ function MetricCard({
 }) {
   return (
     <div className="rounded-[26px] border border-white/10 bg-black/25 p-4">
-      <Icon className="h-5 w-5 text-[#6fc11f]" />
+      <Icon className="h-5 w-5 text-[var(--accent)]" />
       <p className="mt-3 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">
         {label}
       </p>
@@ -998,11 +1023,11 @@ function Badge({
   tone,
 }: {
   label: string;
-  tone: "green" | "dark";
+  tone: "accent" | "dark";
 }) {
   const classes =
-    tone === "green"
-      ? "border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#b7ff8a]"
+    tone === "accent"
+      ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
       : "border-white/10 bg-white/[0.04] text-zinc-300";
 
   return (
@@ -1050,7 +1075,7 @@ function ListBlock({
 
   return (
     <div className="rounded-[26px] border border-white/10 bg-black/20 p-4">
-      <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6fc11f]">
+      <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--accent)]">
         {title}
       </p>
       <div className="mt-4 space-y-2">
@@ -1090,7 +1115,7 @@ function Field({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="mt-2 min-h-12 w-full rounded-2xl border border-white/10 bg-[#101b24] px-4 text-sm font-bold text-white outline-none placeholder:text-zinc-600"
+        className="mt-2 min-h-12 w-full rounded-2xl border border-white/10 bg-[#101b24] px-4 text-sm font-bold text-white outline-none placeholder:text-zinc-600 focus:border-[var(--accent-border)]"
       />
     </label>
   );
@@ -1117,7 +1142,7 @@ function TextArea({
         onChange={(event) => onChange(event.target.value)}
         rows={4}
         placeholder={placeholder}
-        className="mt-2 min-h-28 w-full rounded-2xl border border-white/10 bg-[#101b24] px-4 py-3 text-sm font-bold text-white outline-none placeholder:text-zinc-600"
+        className="mt-2 min-h-28 w-full rounded-2xl border border-white/10 bg-[#101b24] px-4 py-3 text-sm font-bold text-white outline-none placeholder:text-zinc-600 focus:border-[var(--accent-border)]"
       />
     </label>
   );
@@ -1147,7 +1172,7 @@ function Notice({
 }) {
   const classes =
     tone === "success"
-      ? "border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#b7ff8a]"
+      ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-white"
       : "border-red-500/25 bg-red-500/10 text-red-200";
 
   return (

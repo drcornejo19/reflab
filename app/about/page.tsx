@@ -11,7 +11,7 @@ type StoryBlock = {
 };
 
 const trainingAreas = [
-  "Decision arbitral",
+  "Entrenamiento con clips",
   "Evaluaciones por video",
   "VAR Lab",
   "Comunicacion arbitral",

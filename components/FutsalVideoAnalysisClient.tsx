@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
@@ -107,8 +107,8 @@ export function FutsalVideoAnalysisClient() {
   if (!selectedTopic) {
     return (
       <div className="space-y-5">
-        <section className="rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-5 sm:p-6">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
+        <section className="rounded-3xl border border-[#16b8ff]/30 bg-[#16b8ff]/10 p-5 sm:p-6">
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#16b8ff] sm:text-xs sm:tracking-[0.35em]">
             FUTSAL VIDEOANALISIS
           </p>
           <h2 className="mt-3 text-2xl font-black sm:text-3xl">
@@ -135,7 +135,7 @@ export function FutsalVideoAnalysisClient() {
                   setSelectedTopic(topic.key);
                   setCurrentIndex(0);
                 }}
-                className="rounded-[30px] border border-white/10 bg-[#101b24] p-5 text-left shadow-2xl transition hover:border-[#6fc11f]/40 hover:bg-[#13212b]"
+                className="rounded-[30px] border border-white/10 bg-[#101b24] p-5 text-left shadow-2xl transition hover:border-[#16b8ff]/40 hover:bg-[#13212b]"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -145,7 +145,7 @@ export function FutsalVideoAnalysisClient() {
                         "Analisis especifico de futsal."}
                     </p>
                   </div>
-                  <span className="rounded-full border border-[#6fc11f]/30 px-3 py-1 text-xs font-black text-[#6fc11f]">
+                  <span className="rounded-full border border-[#16b8ff]/30 px-3 py-1 text-xs font-black text-[#16b8ff]">
                     {topic.count}
                   </span>
                 </div>
@@ -175,10 +175,10 @@ export function FutsalVideoAnalysisClient() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-5 sm:p-6">
+      <section className="rounded-3xl border border-[#16b8ff]/30 bg-[#16b8ff]/10 p-5 sm:p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#16b8ff] sm:text-xs sm:tracking-[0.35em]">
               FUTSAL VIDEOANALISIS
             </p>
             <h2 className="mt-2 text-2xl font-black sm:text-3xl">
@@ -294,11 +294,11 @@ function FutsalVideoExercise({
   if (result) {
     return (
       <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-        <section className="rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-6">
-          <p className="text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">
+        <section className="rounded-3xl border border-[#16b8ff]/30 bg-[#16b8ff]/10 p-6">
+          <p className="text-xs font-black uppercase tracking-[0.3em] text-[#16b8ff]">
             Resultado
           </p>
-          <h3 className="mt-4 text-6xl font-black text-[#6fc11f]">
+          <h3 className="mt-4 text-6xl font-black text-[#16b8ff]">
             {result.score}
             <span className="text-2xl text-zinc-400">/100</span>
           </h3>
@@ -315,7 +315,7 @@ function FutsalVideoExercise({
                   key={field.key}
                   className={`rounded-2xl border p-4 ${
                     field.correct
-                      ? "border-[#6fc11f]/25 bg-[#6fc11f]/8"
+                      ? "border-[#16b8ff]/25 bg-[#16b8ff]/8"
                       : "border-red-400/20 bg-red-500/5"
                   }`}
                 >
@@ -333,7 +333,7 @@ function FutsalVideoExercise({
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <button
               onClick={onNext}
-              className="rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black hover:bg-[#82dc2a]"
+              className="rounded-2xl bg-[#16b8ff] px-5 py-4 font-black text-black hover:bg-[#31b8ff]"
             >
               SIGUIENTE CLIP
             </button>
@@ -419,7 +419,7 @@ function FutsalVideoExercise({
       <section className="space-y-4 rounded-3xl border border-white/10 bg-[#0b131b] p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.3em] text-[#6fc11f]">
+            <p className="text-xs font-black uppercase tracking-[0.3em] text-[#16b8ff]">
               {labelFromValue(clip.topic)}
             </p>
             <h3 className="mt-2 text-2xl font-black">{clip.title}</h3>
@@ -429,8 +429,8 @@ function FutsalVideoExercise({
             </p>
           </div>
 
-          <div className="rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 px-4 py-3 text-right text-sm font-black">
-            <p className="text-[#6fc11f]">
+          <div className="rounded-2xl border border-[#16b8ff]/25 bg-[#16b8ff]/10 px-4 py-3 text-right text-sm font-black">
+            <p className="text-[#16b8ff]">
               {remainingPlays}/{MAX_VIDEO_PLAYS}
             </p>
             <p className="mt-1 text-xs text-zinc-400">reproducciones</p>
@@ -471,7 +471,7 @@ function FutsalVideoExercise({
           )}
         </div>
 
-        <div className="rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4 text-sm leading-6 text-zinc-300">
+        <div className="rounded-2xl border border-[#16b8ff]/25 bg-[#16b8ff]/10 p-4 text-sm leading-6 text-zinc-300">
           Formulario dinamico: {schema.title}. Las preguntas cambian segun el
           topico cargado para este clip.
         </div>
@@ -638,7 +638,7 @@ function FutsalVideoExercise({
             setSaving(false);
             setResult(evaluation);
           }}
-          className="w-full rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black transition hover:bg-[#82dc2a] disabled:cursor-not-allowed disabled:opacity-40"
+          className="w-full rounded-2xl bg-[#16b8ff] px-5 py-4 font-black text-black transition hover:bg-[#31b8ff] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {saving ? "GUARDANDO..." : "ENVIAR RESPUESTA"}
         </button>
@@ -665,7 +665,7 @@ function DynamicField({
           {index + 1}. {field.label}
         </p>
         {field.required && (
-          <span className="rounded-full border border-[#6fc11f]/30 px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#6fc11f]">
+          <span className="rounded-full border border-[#16b8ff]/30 px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#16b8ff]">
             Obligatorio
           </span>
         )}
@@ -694,7 +694,7 @@ function DynamicField({
                 onClick={() => onChange(optionValue)}
                 className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${
                   active
-                    ? "border-[#6fc11f] bg-[#6fc11f]/15 text-white"
+                    ? "border-[#16b8ff] bg-[#16b8ff]/15 text-white"
                     : "border-white/10 bg-[#0b111b] text-zinc-300 hover:bg-white/[0.04]"
                 }`}
               >
@@ -804,3 +804,4 @@ function labelFromValue(value?: string | null) {
 function shuffleClips(clips: FutsalClip[]) {
   return [...clips].sort(() => Math.random() - 0.5);
 }
+

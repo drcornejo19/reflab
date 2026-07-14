@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { SignOutButton, useUser } from "@clerk/nextjs";
 import QRCode from "qrcode";
 import {
@@ -31,6 +31,7 @@ import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { SportRadarGraphic } from "@/components/SportRadarGraphic";
+import { getDisciplineDefinition } from "@/lib/discipline";
 import {
   buildSportPerformanceDataset,
   getSportPerformanceSummary,
@@ -96,6 +97,20 @@ function ProfilePageContent() {
   const { currentDiscipline: sportType } = useDiscipline();
   const { t } = useI18n();
   const { isPro, subscriptionPlan, loadingRole } = useUserRole();
+  const theme = getDisciplineDefinition(sportType).theme;
+  const themeVars = useMemo(
+    () =>
+      ({
+        "--accent": theme.accent,
+        "--accent-soft": theme.accentSoft,
+        "--accent-border": theme.border,
+        "--accent-glow": theme.glow,
+        "--accent-button": theme.button,
+        "--accent-button-hover": theme.buttonHover,
+        "--accent-on": theme.onAccent,
+      }) as CSSProperties,
+    [theme]
+  );
 
   const [avatarUrl, setAvatarUrl] = useState("");
   const [avatarCropFile, setAvatarCropFile] = useState<File | null>(null);
@@ -415,7 +430,7 @@ function ProfilePageContent() {
   if (!isLoaded || loading || loadingRole) {
     return (
       <AppShell>
-        <div className="rounded-3xl border border-white/10 bg-[#101b24] p-6 text-zinc-400">
+        <div style={themeVars} className="rounded-3xl border border-white/10 bg-[#101b24] p-6 text-zinc-400">
           {t("profile.loading")}
         </div>
       </AppShell>
@@ -457,6 +472,7 @@ function ProfilePageContent() {
       topics: refCardTopics,
       discipline: disciplineLabel,
       lastTest: formatShortDate(lastTestDate),
+      theme,
     });
     const url = await svgToPngObjectUrl(svg, 2);
     const link = document.createElement("a");
@@ -480,7 +496,10 @@ function ProfilePageContent() {
           onSave={saveCroppedAvatar}
         />
       )}
-      <div className="mx-auto w-full max-w-[1240px] space-y-5 overflow-hidden">
+      <div
+        style={themeVars}
+        className="mx-auto w-full max-w-[1240px] space-y-5 overflow-hidden"
+      >
         <SportPageSwitch title="Disciplina del perfil" />
         {isPro ? (
           <PlayerCard
@@ -537,7 +556,7 @@ function ProfilePageContent() {
         )}
 
         {profileMessage && (
-          <div className="rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-4 text-sm font-bold text-[#b7ff8a]">
+          <div className="rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] p-4 text-sm font-bold text-[var(--accent)]">
             {profileMessage}
           </div>
         )}
@@ -550,7 +569,7 @@ function ProfilePageContent() {
 
         <section className="space-y-4 rounded-[34px] border border-white/10 bg-[#071019] p-5 shadow-2xl lg:p-6">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
+            <p className="text-xs font-black uppercase tracking-[0.35em] text-[var(--accent)]">
               {t("profile.technicalSheet")}
             </p>
             <h1 className="mt-3 text-3xl font-black lg:text-5xl">
@@ -569,7 +588,7 @@ function ProfilePageContent() {
           </div>
 
           {!stats.hasData && (
-            <div className="rounded-3xl border border-dashed border-[#6fc11f]/25 bg-[#6fc11f]/5 p-5 text-center">
+            <div className="rounded-3xl border border-dashed border-[color:var(--accent-border)] bg-[var(--accent-soft)] p-5 text-center">
               <p className="font-black text-white">Todavia no hay actividad real.</p>
               <p className="mt-2 text-sm text-zinc-400">
                 Cuando completes ejercicios o examenes, tus estadisticas apareceran aca.
@@ -612,8 +631,8 @@ function ProfilePageContent() {
           <ProfileInput label={t("profile.country")} value={country} onChange={setCountry} placeholder="Ej: Argentina" />
           <ProfileInput label={t("profile.city")} value={city} onChange={setCity} placeholder="Ej: Buenos Aires" />
 
-          <section className="rounded-[26px] border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-5 md:col-span-2">
-            <p className="text-sm font-black uppercase tracking-[0.2em] text-[#6fc11f]">{t("profile.rankingPrivacy")}</p>
+          <section className="rounded-[26px] border border-[color:var(--accent-border)] bg-[var(--accent-soft)] p-5 md:col-span-2">
+            <p className="text-sm font-black uppercase tracking-[0.2em] text-[var(--accent)]">{t("profile.rankingPrivacy")}</p>
             <p className="mt-2 text-sm leading-6 text-zinc-300">
               {t("profile.rankingPrivacyHelp")}
             </p>
@@ -622,7 +641,7 @@ function ProfilePageContent() {
                 type="checkbox"
                 checked={showRealNameInRanking}
                 onChange={(event) => setShowRealNameInRanking(event.target.checked)}
-                className="h-5 w-5 accent-[#6fc11f]"
+                className="h-5 w-5 accent-[var(--accent)]"
               />
               <span className="font-black text-white">{t("profile.showRealName")}</span>
             </label>
@@ -631,7 +650,7 @@ function ProfilePageContent() {
                 type="checkbox"
                 checked={publicProfile}
                 onChange={(event) => setPublicProfile(event.target.checked)}
-                className="h-5 w-5 accent-[#6fc11f]"
+                className="h-5 w-5 accent-[var(--accent)]"
               />
               <span className="font-black text-white">Perfil publico</span>
             </label>
@@ -644,7 +663,7 @@ function ProfilePageContent() {
         <button
           onClick={saveProfile}
           disabled={savingProfile}
-          className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black transition hover:bg-[#82dc2a] disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[var(--accent-button)] px-5 py-4 font-black text-[var(--accent-on)] transition disabled:opacity-50"
         >
           <Save size={22} />
           {savingProfile ? t("profile.savingProfile").toUpperCase() : t("profile.saveProfile").toUpperCase()}
@@ -670,7 +689,7 @@ function ProfilePageContent() {
             <InfoRow label="Privacidad ranking" value={showRealNameInRanking ? "Nombre visible" : `Solo RefCard ${effectiveRefCardId || t("common.pending")}`} />
             <a
               href="/notifications"
-              className="mt-4 flex min-h-12 items-center justify-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 text-sm font-black text-[#b7ff8a] transition hover:bg-[#6fc11f]/20"
+              className="mt-4 flex min-h-12 items-center justify-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] px-4 text-sm font-black text-[var(--accent)] transition"
             >
               Configurar notificaciones
             </a>
@@ -712,20 +731,26 @@ function BasicProfileCard({
   onUpload: (file: File) => void;
 }) {
   return (
-    <section className="relative overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.16),transparent_34%),#071019] p-5 shadow-2xl sm:p-6">
+    <section
+      className="relative overflow-hidden rounded-[34px] border border-white/10 p-5 shadow-2xl sm:p-6"
+      style={{
+        background:
+          "radial-gradient(circle at top left, var(--accent-soft), transparent 34%), #071019",
+      }}
+    >
       <div className="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)] md:items-center">
         <div className="min-w-0">
-          <div className="relative mx-auto h-56 w-full max-w-[220px] overflow-hidden rounded-[28px] border border-[#6fc11f]/30 bg-black/35 shadow-[0_0_38px_rgba(111,193,31,0.12)]">
+          <div className="relative mx-auto h-56 w-full max-w-[220px] overflow-hidden rounded-[28px] border border-[color:var(--accent-border)] bg-black/35 shadow-[0_0_38px_var(--accent-glow)]">
             {photo ? (
               /* eslint-disable-next-line @next/next/no-img-element -- Dynamic profile photos come from Clerk/Supabase URLs that are not restricted to a fixed host list. */
               <img src={photo} alt={name} className="h-full w-full object-cover object-center" />
             ) : (
-              <div className="grid h-full place-items-center text-[#6fc11f]">
+              <div className="grid h-full place-items-center text-[var(--accent)]">
                 <UserRound size={58} />
               </div>
             )}
           </div>
-          <label className="mt-3 flex min-h-11 cursor-pointer items-center justify-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 text-sm font-black text-[#b7ff8a] transition hover:bg-[#6fc11f]/20">
+          <label className="mt-3 flex min-h-11 cursor-pointer items-center justify-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] px-4 text-sm font-black text-[var(--accent)] transition">
             {uploadingAvatar ? "Subiendo foto..." : "Cambiar foto"}
             <input
               type="file"
@@ -741,7 +766,7 @@ function BasicProfileCard({
         </div>
 
         <div className="min-w-0">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#b7ff8a]">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--accent-border)] bg-[var(--accent-soft)] px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[var(--accent)]">
             <IdCard size={14} />
             Plan {plan}
           </div>
@@ -829,22 +854,28 @@ function PlayerCard({
   const visibleRefCard = refCardId || "Pendiente";
 
   return (
-    <article className="relative w-full max-w-full overflow-hidden rounded-[34px] border border-[#6fc11f]/35 bg-[radial-gradient(circle_at_14%_8%,rgba(111,193,31,0.34),transparent_30%),radial-gradient(circle_at_90%_0%,rgba(111,193,31,0.14),transparent_28%),linear-gradient(145deg,#05070d,#071019_48%,#0e1416)] p-3 shadow-[0_32px_110px_rgba(0,0,0,0.62)] sm:rounded-[42px] sm:p-5 lg:p-6">
+    <article
+      className="relative w-full max-w-full overflow-hidden rounded-[34px] border border-[color:var(--accent-border)] p-3 shadow-[0_32px_110px_rgba(0,0,0,0.62)] sm:rounded-[42px] sm:p-5 lg:p-6"
+      style={{
+        background:
+          "radial-gradient(circle at 14% 8%, var(--accent-soft), transparent 30%), radial-gradient(circle at 90% 0%, var(--accent-soft), transparent 28%), linear-gradient(145deg,#05070d,#071019 48%,#0e1416)",
+      }}
+    >
       <div className="pointer-events-none absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:34px_34px]" />
-      <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[#b7ff8a] to-transparent" />
-      <div className="pointer-events-none absolute left-5 top-5 hidden max-w-[260px] rounded-2xl border border-[#6fc11f]/25 bg-black/45 px-4 py-2 shadow-[0_0_26px_rgba(111,193,31,0.12)] lg:block">
+      <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent" />
+      <div className="pointer-events-none absolute left-5 top-5 hidden max-w-[260px] rounded-2xl border border-[color:var(--accent-border)] bg-black/45 px-4 py-2 shadow-[0_0_26px_var(--accent-glow)] lg:block">
         <p className="text-[10px] font-black uppercase tracking-[0.24em] text-zinc-400">
           RefCard
         </p>
-        <p className="mt-1 max-w-full truncate text-xs font-black tracking-[0.12em] text-[#b7ff8a]">
+        <p className="mt-1 max-w-full truncate text-xs font-black tracking-[0.12em] text-[var(--accent)]">
           {visibleRefCard}
         </p>
       </div>
 
       <div className="relative grid gap-4 lg:grid-cols-[minmax(230px,0.58fr)_minmax(0,1fr)] lg:pt-14">
-        <div className="relative min-w-0 overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(145deg,rgba(111,193,31,0.16),rgba(0,0,0,0.42))] p-3 sm:p-4">
-          <div className="absolute -left-16 top-12 h-56 w-32 rotate-12 rounded-[32px] bg-[#6fc11f]/25 blur-sm" />
-          <label className="group relative block cursor-pointer overflow-hidden rounded-[26px] border border-[#6fc11f]/35 bg-[#04080d] shadow-[0_0_55px_rgba(111,193,31,0.16)]" title="Cambiar foto">
+        <div className="relative min-w-0 overflow-hidden rounded-[30px] border border-white/10 p-3 sm:p-4" style={{ background: "linear-gradient(145deg, var(--accent-soft), rgba(0,0,0,0.42))" }}>
+          <div className="absolute -left-16 top-12 h-56 w-32 rotate-12 rounded-[32px] bg-[var(--accent-soft)] blur-sm" />
+          <label className="group relative block cursor-pointer overflow-hidden rounded-[26px] border border-[color:var(--accent-border)] bg-[#04080d] shadow-[0_0_55px_var(--accent-glow)]" title="Cambiar foto">
             {photo ? (
               /* eslint-disable-next-line @next/next/no-img-element -- Dynamic profile photos come from Clerk/Supabase URLs that are not restricted to a fixed host list. */
               <img
@@ -853,12 +884,12 @@ function PlayerCard({
                 className="aspect-[3/4] w-full object-cover object-center opacity-95 transition duration-300 group-hover:scale-[1.02]"
               />
             ) : (
-              <div className="grid aspect-[3/4] w-full place-items-center bg-[radial-gradient(circle_at_center,rgba(111,193,31,0.18),transparent_58%),#101b24]">
-                <UserRound className="text-[#6fc11f]" size={86} />
+              <div className="grid aspect-[3/4] w-full place-items-center bg-[radial-gradient(circle_at_center,var(--accent-soft),transparent_58%),#101b24]">
+                <UserRound className="text-[var(--accent)]" size={86} />
               </div>
             )}
             <span className="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-transparent" />
-            <span className="absolute inset-x-4 bottom-4 flex min-h-11 items-center justify-center rounded-2xl border border-[#6fc11f]/30 bg-black/55 text-xs font-black uppercase tracking-[0.18em] text-[#b7ff8a] opacity-100 backdrop-blur transition group-hover:bg-[#6fc11f] group-hover:text-black">
+            <span className="absolute inset-x-4 bottom-4 flex min-h-11 items-center justify-center rounded-2xl border border-[color:var(--accent-border)] bg-black/55 text-xs font-black uppercase tracking-[0.18em] text-[var(--accent)] opacity-100 backdrop-blur transition group-hover:bg-[var(--accent-button)] group-hover:text-[var(--accent-on)]">
               {uploadingAvatar ? t("profile.uploadingPhoto") : t("profile.changePhoto")}
             </span>
             <input
@@ -883,11 +914,11 @@ function PlayerCard({
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
             <section className="min-w-0 rounded-[30px] border border-white/10 bg-black/25 p-4 backdrop-blur sm:p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-[0.34em] text-[#6fc11f]">REFLAB</p>
+              <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.34em] text-[var(--accent)]">REFLAB</p>
                   <p className="mt-1 text-xs tracking-[0.34em] text-zinc-400">Referee Decision Lab</p>
                 </div>
-                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-[#b7ff8a]">
+                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[color:var(--accent-border)] bg-[var(--accent-soft)] px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-[var(--accent)]">
                   <CheckCircle2 size={16} />
                   Verificado RefLab
                 </div>
@@ -897,7 +928,7 @@ function PlayerCard({
                 <h2 className="break-words text-4xl font-black leading-none text-white sm:text-5xl xl:text-6xl">
                   {name}
                 </h2>
-                <p className="mt-3 break-words text-base font-black uppercase tracking-[0.18em] text-[#6fc11f] sm:text-lg">
+                <p className="mt-3 break-words text-base font-black uppercase tracking-[0.18em] text-[var(--accent)] sm:text-lg">
                   {mainRole}
                 </p>
                 <p className="mt-3 break-words text-sm leading-6 text-zinc-400">{email}</p>
@@ -929,12 +960,12 @@ function PlayerCard({
           <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
             <RefRadar axes={radarAxes} />
             <div className="grid gap-4">
-              <div className="rounded-[26px] border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4">
+              <div className="rounded-[26px] border border-[color:var(--accent-border)] bg-[var(--accent-soft)] p-4">
                 <div className="flex items-center gap-3">
-                  <BadgeCheck className="text-[#6fc11f]" size={30} />
+                  <BadgeCheck className="text-[var(--accent)]" size={30} />
                   <div>
                     <p className="text-xs uppercase tracking-[0.2em] text-zinc-400">{t("profile.verified")}</p>
-                    <p className="font-black text-[#b7ff8a]">REFLAB</p>
+                    <p className="font-black text-[var(--accent)]">REFLAB</p>
                   </div>
                 </div>
               </div>
@@ -942,7 +973,7 @@ function PlayerCard({
               <div className="rounded-[26px] border border-white/10 bg-black/25 p-4">
                 <div className="flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-end min-[420px]:justify-between">
                   <div className="min-w-0">
-                    <p className="text-xs font-black uppercase tracking-[0.22em] text-[#6fc11f]">REFLAB.APP</p>
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-[var(--accent)]">REFLAB.APP</p>
                     <p className="mt-2 max-w-[13rem] break-all text-xs leading-5 text-zinc-500">RefCard {visibleRefCard}</p>
                   </div>
                   <RefCardQr value={refCardUrl} qrDataUrl={qrDataUrl} />
@@ -952,7 +983,7 @@ function PlayerCard({
           </section>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex min-h-12 cursor-pointer items-center justify-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 text-xs font-black text-[#b7ff8a] transition hover:bg-[#6fc11f]/20">
+            <label className="flex min-h-12 cursor-pointer items-center justify-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] px-4 text-xs font-black text-[var(--accent)] transition">
               {uploadingAvatar ? t("profile.uploadingPhoto").toUpperCase() : t("profile.changePhoto").toUpperCase()}
               <input
                 type="file"
@@ -969,7 +1000,7 @@ function PlayerCard({
             <button
               type="button"
               onClick={onDownload}
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-4 text-xs font-black text-black transition hover:bg-[#82dc2a]"
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent-button)] px-4 text-xs font-black text-[var(--accent-on)] transition"
             >
               <Download size={17} />
               {t("profile.downloadRefCard")}
@@ -1006,7 +1037,7 @@ function AssociationCard({
   return (
     <div className="min-w-0 rounded-2xl border border-white/10 bg-black/25 p-3 sm:col-span-2">
       <div className="flex min-w-0 items-center gap-3">
-        <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10">
+        <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)]">
           {associationLogo ? (
             /* eslint-disable-next-line @next/next/no-img-element -- Association logos are institution-provided external assets with variable origins. */
             <img
@@ -1015,13 +1046,13 @@ function AssociationCard({
               className="h-full w-full object-contain p-2"
             />
           ) : (
-            <span className="text-lg font-black text-[#b7ff8a]">{initials}</span>
+            <span className="text-lg font-black text-[var(--accent)]">{initials}</span>
           )}
         </div>
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Asociacion</p>
           <p className="mt-1 break-words text-lg font-black text-white">{fallback}</p>
-          <p className="mt-1 text-sm font-bold text-[#b7ff8a]">{levelLabel}</p>
+          <p className="mt-1 text-sm font-bold text-[var(--accent)]">{levelLabel}</p>
         </div>
       </div>
     </div>
@@ -1030,8 +1061,8 @@ function AssociationCard({
 
 function RefCardInfo({ icon, label, value, tone = "neutral" }: { icon: React.ReactNode; label: string; value: string; tone?: "neutral" | "green" }) {
   return (
-    <div className={`min-w-0 rounded-2xl border p-3 ${tone === "green" ? "border-[#6fc11f]/25 bg-[#6fc11f]/10" : "border-white/10 bg-black/25"}`}>
-      <div className="flex items-center gap-2 text-[#6fc11f]">{icon}</div>
+    <div className={`min-w-0 rounded-2xl border p-3 ${tone === "green" ? "border-[color:var(--accent-border)] bg-[var(--accent-soft)]" : "border-white/10 bg-black/25"}`}>
+      <div className="flex items-center gap-2 text-[var(--accent)]">{icon}</div>
       <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">{label}</p>
       <p className="mt-1 break-words text-sm font-black text-white">{value || "No registrado"}</p>
     </div>
@@ -1041,7 +1072,7 @@ function RefCardInfo({ icon, label, value, tone = "neutral" }: { icon: React.Rea
 function SideMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="flex min-w-0 items-center gap-3 border-b border-white/10 pb-3 last:border-b-0 last:pb-0">
-      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]">
+      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]">
         {icon}
       </div>
       <div className="min-w-0">
@@ -1054,11 +1085,11 @@ function SideMetric({ icon, label, value }: { icon: React.ReactNode; label: stri
 
 function RefStatCard({ icon, label, value, detail, featured = false }: { icon: React.ReactNode; label: string; value: string; detail: string; featured?: boolean }) {
   return (
-    <div className={`flex min-h-[168px] min-w-0 flex-col rounded-[24px] border p-4 ${featured ? "border-[#6fc11f]/35 bg-[#6fc11f]/10" : "border-white/10 bg-[#071019]"}`}>
-      <div className="text-[#6fc11f]">{icon}</div>
+    <div className={`flex min-h-[168px] min-w-0 flex-col rounded-[24px] border p-4 ${featured ? "border-[color:var(--accent-border)] bg-[var(--accent-soft)]" : "border-white/10 bg-[#071019]"}`}>
+      <div className="text-[var(--accent)]">{icon}</div>
       <p className="mt-3 text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">{label}</p>
       <p className="mt-1 break-words text-4xl font-black leading-none text-white sm:text-5xl">{value}</p>
-      <p className={`mt-2 inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${featured ? "border-[#6fc11f]/45 text-[#b7ff8a]" : "border-white/10 text-zinc-400"}`}>
+      <p className={`mt-2 inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${featured ? "border-[color:var(--accent-border)] text-[var(--accent)]" : "border-white/10 text-zinc-400"}`}>
         {detail}
       </p>
     </div>
@@ -1068,10 +1099,10 @@ function RefStatCard({ icon, label, value, detail, featured = false }: { icon: R
 function RefTrendCard({ scores, label }: { scores: number[]; label: string }) {
   return (
     <div className="flex min-h-[168px] min-w-0 flex-col rounded-[24px] border border-white/10 bg-[#071019] p-4">
-      <div className="text-[#6fc11f]"><LineChart size={25} /></div>
+      <div className="text-[var(--accent)]"><LineChart size={25} /></div>
       <p className="mt-3 text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">Rating trend</p>
       <TrendSparkline scores={scores} />
-      <p className="mt-2 inline-flex rounded-full border border-[#6fc11f]/35 bg-[#6fc11f]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[#b7ff8a]">
+      <p className="mt-2 inline-flex rounded-full border border-[color:var(--accent-border)] bg-[var(--accent-soft)] px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--accent)]">
         {label}
       </p>
     </div>
@@ -1100,27 +1131,28 @@ function TrendSparkline({ scores }: { scores: number[] }) {
     <svg viewBox="0 0 150 64" className="mt-2 h-16 w-full overflow-visible">
       <defs>
         <linearGradient id="trendFill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0" stopColor="#6fc11f" stopOpacity="0.4" />
-          <stop offset="1" stopColor="#6fc11f" stopOpacity="0" />
+          <stop offset="0" stopColor="var(--accent)" stopOpacity="0.4" />
+          <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
         </linearGradient>
       </defs>
       <polyline points={`0,62 ${points} 150,62`} fill="url(#trendFill)" stroke="none" />
-      <polyline points={points} fill="none" stroke="#6fc11f" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points={points} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
       {points.split(" ").map((point) => {
         const [x, y] = point.split(",");
-        return <circle key={point} cx={x} cy={y} r="3" fill="#b7ff8a" />;
+        return <circle key={point} cx={x} cy={y} r="3" fill="var(--accent)" />;
       })}
     </svg>
   );
 }
 
 function RefRadar({ axes }: { axes: RadarMetric[] }) {
+  const { currentDiscipline } = useDiscipline();
   const hasAnyData = axes.some((axis) => axis.accuracy !== null);
   return (
-    <div className="min-w-0 overflow-hidden rounded-[30px] border border-white/10 bg-[#050b12] p-4 shadow-[inset_0_0_60px_rgba(111,193,31,0.08)] sm:p-5">
+    <div className="min-w-0 overflow-hidden rounded-[30px] border border-white/10 bg-[#050b12] p-4 shadow-[inset_0_0_60px_var(--accent-soft)] sm:p-5">
       <div className="mb-4 flex items-center gap-2">
-        <BarChart3 className="text-[#6fc11f]" size={22} />
-        <p className="text-sm font-black uppercase tracking-[0.22em] text-[#b7ff8a]">Radar arbitral</p>
+        <BarChart3 className="text-[var(--accent)]" size={22} />
+        <p className="text-sm font-black uppercase tracking-[0.22em] text-[var(--accent)]">Radar arbitral</p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[0.78fr_1fr] lg:items-center">
@@ -1128,7 +1160,7 @@ function RefRadar({ axes }: { axes: RadarMetric[] }) {
           {axes.map((axis) => (
             <div key={axis.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
               <p className="break-words text-sm font-black uppercase tracking-[0.08em] text-zinc-200">{axis.shortLabel}</p>
-              <p className="text-lg font-black text-[#6fc11f]">
+              <p className="text-lg font-black text-[var(--accent)]">
                 {axis.accuracy === null ? "Sin datos" : `${axis.accuracy}%`}
               </p>
               <div className="col-span-2 h-px bg-gradient-to-r from-white/15 to-transparent" />
@@ -1140,6 +1172,7 @@ function RefRadar({ axes }: { axes: RadarMetric[] }) {
           axes={axes}
           glowId="profile-radar-glow"
           overlayText={hasAnyData ? null : "Sin datos suficientes"}
+          theme={getDisciplineDefinition(currentDiscipline).theme}
         />
       </div>
     </div>
@@ -1155,13 +1188,13 @@ function RefCardQr({ value, qrDataUrl }: { value: string; qrDataUrl: string }) {
       <img
         src={qrDataUrl}
         alt="QR unico de RefCard"
-        className="h-20 w-20 shrink-0 rounded-2xl border border-[#6fc11f]/45 bg-[#d9e5d2] p-1 shadow-[0_0_22px_rgba(111,193,31,0.2)]"
+        className="h-20 w-20 shrink-0 rounded-2xl border border-[color:var(--accent-border)] bg-[#d9e5d2] p-1 shadow-[0_0_22px_var(--accent-glow)]"
       />
     );
   }
 
   return (
-    <div className="grid h-20 w-20 shrink-0 grid-cols-7 gap-1 rounded-2xl border border-[#6fc11f]/45 bg-[#d9e5d2] p-2 shadow-[0_0_22px_rgba(111,193,31,0.2)]">
+    <div className="grid h-20 w-20 shrink-0 grid-cols-7 gap-1 rounded-2xl border border-[color:var(--accent-border)] bg-[#d9e5d2] p-2 shadow-[0_0_22px_var(--accent-glow)]">
       {Array.from({ length: 49 }).map((_, index) => (
         <span key={index} className={active.has(index) ? "rounded-[2px] bg-black" : "rounded-[2px] bg-transparent"} />
       ))}
@@ -1184,7 +1217,7 @@ function ProfileSelect({
 }) {
   return (
     <div className="rounded-[26px] border border-white/10 bg-[#101b24] p-5">
-      <div className="mb-3 flex items-center gap-3 text-[#6fc11f]">
+      <div className="mb-3 flex items-center gap-3 text-[var(--accent)]">
         {icon}
         <p className="text-sm font-black uppercase tracking-[0.2em]">{label}</p>
       </div>
@@ -1198,7 +1231,7 @@ function ProfileSelect({
 function ProfileInput({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
   return (
     <div className="rounded-[26px] border border-white/10 bg-[#101b24] p-5">
-      <p className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-[#6fc11f]">{label}</p>
+      <p className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-[var(--accent)]">{label}</p>
       <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="w-full rounded-xl border border-white/10 bg-[#0b111b] px-4 py-3 text-white outline-none placeholder:text-zinc-600" />
     </div>
   );
@@ -1207,7 +1240,7 @@ function ProfileInput({ label, value, onChange, placeholder }: { label: string; 
 function ProfileDateInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <div className="rounded-[26px] border border-white/10 bg-[#101b24] p-5">
-      <p className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-[#6fc11f]">{label}</p>
+      <p className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-[var(--accent)]">{label}</p>
       <input
         type="date"
         value={value}
@@ -1221,10 +1254,10 @@ function ProfileDateInput({ label, value, onChange }: { label: string; value: st
 function MetricCard({ icon, title, value, detail }: { icon: React.ReactNode; title: string; value: string; detail: string }) {
   return (
     <div className="rounded-[24px] border border-white/10 bg-[#101b24] p-4">
-      <div className="text-[#6fc11f]">{icon}</div>
+      <div className="text-[var(--accent)]">{icon}</div>
       <p className="mt-3 text-xs text-zinc-500">{title}</p>
       <p className="mt-2 text-2xl font-black">{value}</p>
-      <p className="mt-2 text-xs text-[#6fc11f]">{detail}</p>
+      <p className="mt-2 text-xs text-[var(--accent)]">{detail}</p>
     </div>
   );
 }
@@ -1310,6 +1343,7 @@ function createRefCardSvg({
   topics,
   discipline,
   lastTest,
+  theme,
 }: {
   name: string;
   rating: number;
@@ -1329,6 +1363,7 @@ function createRefCardSvg({
   topics: RefCardTopic[];
   discipline: string;
   lastTest: string;
+  theme: ReturnType<typeof getDisciplineDefinition>["theme"];
 }) {
   const initials = name
     .split(" ")
@@ -1347,10 +1382,10 @@ function createRefCardSvg({
     .join("") || "RF";
   const associationMark = associationLogo
     ? `<image href="${escapeXml(associationLogo)}" x="458" y="500" width="82" height="82" preserveAspectRatio="xMidYMid meet" />`
-    : `<rect x="458" y="500" width="82" height="82" rx="20" fill="#0a1308" stroke="#6fc11f" stroke-opacity="0.7"/><text x="499" y="551" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="900" fill="#b7ff8a">${escapeXml(associationInitials)}</text>`;
+    : `<rect x="458" y="500" width="82" height="82" rx="20" fill="#0a1308" stroke="${theme.accent}" stroke-opacity="0.7"/><text x="499" y="551" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="900" fill="${theme.accent}">${escapeXml(associationInitials)}</text>`;
   const safePhoto = photo
     ? `<image href="${escapeXml(photo)}" x="60" y="132" width="322" height="492" clip-path="url(#photoClip)" preserveAspectRatio="xMidYMid slice" />`
-    : `<rect x="60" y="132" width="322" height="492" rx="34" fill="#0d1821"/><text x="221" y="386" text-anchor="middle" font-size="94" font-weight="900" fill="#6fc11f">${escapeXml(initials)}</text>`;
+    : `<rect x="60" y="132" width="322" height="492" rx="34" fill="#0d1821"/><text x="221" y="386" text-anchor="middle" font-size="94" font-weight="900" fill="${theme.accent}">${escapeXml(initials)}</text>`;
   const qr = qrDataUrl
     ? `<image href="${escapeXml(qrDataUrl)}" x="734" y="1176" width="104" height="104" preserveAspectRatio="xMidYMid meet" />`
     : svgQrFallback(refCardUrl || refCardId, 734, 1176, 104);
@@ -1363,12 +1398,12 @@ function createRefCardSvg({
       <stop offset="1" stop-color="#02060b"/>
     </linearGradient>
     <radialGradient id="glow" cx="18%" cy="10%" r="66%">
-      <stop offset="0" stop-color="#6fc11f" stop-opacity="0.46"/>
-      <stop offset="1" stop-color="#6fc11f" stop-opacity="0"/>
+      <stop offset="0" stop-color="${theme.accent}" stop-opacity="0.46"/>
+      <stop offset="1" stop-color="${theme.accent}" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="radarGlow" cx="50%" cy="50%" r="56%">
-      <stop offset="0" stop-color="#6fc11f" stop-opacity="0.35"/>
-      <stop offset="1" stop-color="#6fc11f" stop-opacity="0"/>
+      <stop offset="0" stop-color="${theme.accent}" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="${theme.accent}" stop-opacity="0"/>
     </radialGradient>
     <clipPath id="photoClip"><rect x="60" y="132" width="322" height="492" rx="34"/></clipPath>
     <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
@@ -1378,22 +1413,22 @@ function createRefCardSvg({
   </defs>
   <rect width="900" height="1340" rx="54" fill="url(#cardBg)"/>
   <rect width="900" height="1340" rx="54" fill="url(#glow)"/>
-  <path d="M58 60 H842 Q862 60 862 80 V1260 Q862 1280 842 1280 H58 Q38 1280 38 1260 V80 Q38 60 58 60Z" fill="none" stroke="#6fc11f" stroke-width="2.6" stroke-opacity="0.88"/>
+  <path d="M58 60 H842 Q862 60 862 80 V1260 Q862 1280 842 1280 H58 Q38 1280 38 1260 V80 Q38 60 58 60Z" fill="none" stroke="${theme.accent}" stroke-width="2.6" stroke-opacity="0.88"/>
   <path d="M76 78 H824 Q844 78 844 98 V1242 Q844 1262 824 1262 H76 Q56 1262 56 1242 V98 Q56 78 76 78Z" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.18"/>
-  <path d="M78 80 L170 80 L54 238 L54 164 Q54 112 78 80Z" fill="#6fc11f" fill-opacity="0.16"/>
-  <path d="M74 322 L170 178 L252 80 H174 L54 238 V426 Z" fill="#6fc11f" fill-opacity="0.34"/>
-  <rect x="60" y="132" width="322" height="492" rx="34" fill="#081018" stroke="#6fc11f" stroke-opacity="0.34"/>
+  <path d="M78 80 L170 80 L54 238 L54 164 Q54 112 78 80Z" fill="${theme.accent}" fill-opacity="0.16"/>
+  <path d="M74 322 L170 178 L252 80 H174 L54 238 V426 Z" fill="${theme.accent}" fill-opacity="0.34"/>
+  <rect x="60" y="132" width="322" height="492" rx="34" fill="#081018" stroke="${theme.accent}" stroke-opacity="0.34"/>
   ${safePhoto}
   <rect x="76" y="150" width="48" height="384" rx="24" fill="#050b12" fill-opacity="0.78" stroke="#ffffff" stroke-opacity="0.15"/>
   <text transform="translate(100 332) rotate(-90)" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="900" letter-spacing="6" fill="#a7b2bd">REFCARD</text>
-  <text transform="translate(100 496) rotate(-90)" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="900" letter-spacing="3" fill="#b7ff8a">${escapeXml(refCardId)}</text>
+  <text transform="translate(100 496) rotate(-90)" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="900" letter-spacing="3" fill="${theme.accent}">${escapeXml(refCardId)}</text>
 
-  <text x="430" y="150" font-family="Arial, sans-serif" font-size="54" font-weight="900" fill="#ffffff">REF<tspan fill="#6fc11f">LAB</tspan></text>
+  <text x="430" y="150" font-family="Arial, sans-serif" font-size="54" font-weight="900" fill="#ffffff">REF<tspan fill="${theme.accent}">LAB</tspan></text>
   <text x="432" y="183" font-family="Arial, sans-serif" font-size="21" letter-spacing="7" fill="#d6dde5">Referee Decision Lab</text>
   <text x="430" y="278" font-family="Arial, sans-serif" font-size="70" font-weight="900" fill="#ffffff">${escapeXml(firstLine(name))}</text>
-  <text x="430" y="350" font-family="Arial, sans-serif" font-size="70" font-weight="900" fill="#6fc11f">${escapeXml(secondLine(name))}</text>
-  <line x1="434" y1="380" x2="484" y2="380" stroke="#6fc11f" stroke-width="4"/>
-  <text x="430" y="428" font-family="Arial, sans-serif" font-size="24" font-weight="900" letter-spacing="5" fill="#b7ff8a">${escapeXml(mainRole.toUpperCase())}</text>
+  <text x="430" y="350" font-family="Arial, sans-serif" font-size="70" font-weight="900" fill="${theme.accent}">${escapeXml(secondLine(name))}</text>
+  <line x1="434" y1="380" x2="484" y2="380" stroke="${theme.accent}" stroke-width="4"/>
+  <text x="430" y="428" font-family="Arial, sans-serif" font-size="24" font-weight="900" letter-spacing="5" fill="${theme.accent}">${escapeXml(mainRole.toUpperCase())}</text>
 
   <rect x="430" y="470" width="410" height="162" rx="24" fill="#071019" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.14"/>
   ${associationMark}
@@ -1401,35 +1436,35 @@ function createRefCardSvg({
   <text x="560" y="552" font-family="Arial, sans-serif" font-size="34" font-weight="900" fill="#ffffff">${escapeXml(compactText(association, 15))}</text>
   <line x1="560" y1="580" x2="812" y2="580" stroke="#ffffff" stroke-opacity="0.14"/>
   <text x="560" y="610" font-family="Arial, sans-serif" font-size="17" letter-spacing="4" fill="#9aa4af">NIVEL</text>
-  <text x="560" y="646" font-family="Arial, sans-serif" font-size="26" font-weight="900" fill="#b7ff8a">${escapeXml(compactText(level, 20))}</text>
+  <text x="560" y="646" font-family="Arial, sans-serif" font-size="26" font-weight="900" fill="${theme.accent}">${escapeXml(compactText(level, 20))}</text>
 
   <rect x="54" y="680" width="792" height="170" rx="28" fill="#071019" fill-opacity="0.9" stroke="#ffffff" stroke-opacity="0.18"/>
-  ${svgMetricBox(84, 714, 160, "SCORE", scoreLabel, status, "#6fc11f")}
+  ${svgMetricBox(84, 714, 160, "SCORE", scoreLabel, status, theme.accent)}
   ${svgMetricBox(270, 714, 160, "TESTS", testsLabel, "COMPLETADOS", "#ffffff")}
-  ${svgMetricBox(456, 714, 160, "BEST", bestLabel, "PUNTAJE MAXIMO", "#6fc11f")}
-  ${svgTrendSparkline(trendScoresFromTopics(topics), 666, 734, 130, 64)}
+  ${svgMetricBox(456, 714, 160, "BEST", bestLabel, "PUNTAJE MAXIMO", theme.accent)}
+  ${svgTrendSparkline(trendScoresFromTopics(topics), 666, 734, 130, 64, theme.accent)}
   <text x="664" y="726" font-family="Arial, sans-serif" font-size="16" font-weight="900" fill="#a7b2bd">RATING TREND</text>
-  <rect x="664" y="802" width="138" height="30" rx="15" fill="#0a1308" stroke="#6fc11f" stroke-opacity="0.7"/>
-  <text x="733" y="823" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="900" letter-spacing="3" fill="#b7ff8a">${escapeXml(compactText(status, 10).toUpperCase())}</text>
+  <rect x="664" y="802" width="138" height="30" rx="15" fill="#0a1308" stroke="${theme.accent}" stroke-opacity="0.7"/>
+  <text x="733" y="823" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="900" letter-spacing="3" fill="${theme.accent}">${escapeXml(compactText(status, 10).toUpperCase())}</text>
 
   <rect x="54" y="866" width="610" height="258" rx="28" fill="#071019" fill-opacity="0.86" stroke="#ffffff" stroke-opacity="0.14"/>
-  <text x="88" y="910" font-family="Arial, sans-serif" font-size="20" font-weight="900" letter-spacing="5" fill="#b7ff8a">RADAR</text>
-  ${svgRadarLegend(topics, 92, 948)}
-  ${svgExportRadar(topics, 470, 992, 78, 100)}
+  <text x="88" y="910" font-family="Arial, sans-serif" font-size="20" font-weight="900" letter-spacing="5" fill="${theme.accent}">RADAR</text>
+  ${svgRadarLegend(topics, 92, 948, theme.accent)}
+  ${svgExportRadar(topics, 470, 992, 78, 100, theme.accent)}
   <rect x="686" y="866" width="160" height="258" rx="28" fill="#071019" fill-opacity="0.86" stroke="#ffffff" stroke-opacity="0.14"/>
   ${svgSideInfo(714, 918, "DISCIPLINA", discipline)}
   ${svgSideInfo(714, 996, "UBICACION", location)}
   ${svgSideInfo(714, 1074, "ULTIMO TEST", lastTest)}
 
   <rect x="54" y="1150" width="792" height="150" rx="26" fill="#071019" fill-opacity="0.78" stroke="#ffffff" stroke-opacity="0.12"/>
-  <circle cx="104" cy="1204" r="28" fill="#6fc11f" fill-opacity="0.14" stroke="#6fc11f" stroke-width="3"/>
-  <path d="M92 1205 L101 1214 L117 1191" fill="none" stroke="#b7ff8a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="104" cy="1204" r="28" fill="${theme.accent}" fill-opacity="0.14" stroke="${theme.accent}" stroke-width="3"/>
+  <path d="M92 1205 L101 1214 L117 1191" fill="none" stroke="${theme.accent}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
   <text x="154" y="1196" font-family="Arial, sans-serif" font-size="17" letter-spacing="4" fill="#a7b2bd">VERIFICADO</text>
-  <text x="154" y="1228" font-family="Arial, sans-serif" font-size="20" font-weight="900" letter-spacing="4" fill="#b7ff8a">REFLAB</text>
+  <text x="154" y="1228" font-family="Arial, sans-serif" font-size="20" font-weight="900" letter-spacing="4" fill="${theme.accent}">REFLAB</text>
   <text x="154" y="1268" font-family="Arial, sans-serif" font-size="15" font-weight="900" letter-spacing="2" fill="#8d98a5">${escapeXml(refCardId)}</text>
-  <text x="505" y="1220" font-family="Arial, sans-serif" font-size="18" font-weight="900" letter-spacing="4" fill="#b7ff8a">REFLAB.APP</text>
+  <text x="505" y="1220" font-family="Arial, sans-serif" font-size="18" font-weight="900" letter-spacing="4" fill="${theme.accent}">REFLAB.APP</text>
   <text x="505" y="1252" font-family="Arial, sans-serif" font-size="13" letter-spacing="2" fill="#8d98a5">CREDENCIAL DIGITAL</text>
-  <rect x="720" y="1164" width="126" height="126" rx="20" fill="#d9e5d2" stroke="#6fc11f" stroke-width="4"/>
+  <rect x="720" y="1164" width="126" height="126" rx="20" fill="#d9e5d2" stroke="${theme.accent}" stroke-width="4"/>
   ${qr}
 </svg>`;
 }
@@ -1441,7 +1476,7 @@ function svgMetricBox(x: number, y: number, width: number, label: string, value:
   <text x="${x}" y="${y + 126}" font-family="Arial, sans-serif" font-size="15" font-weight="900" letter-spacing="2" fill="#8d98a5">${escapeXml(compactText(detail, 18).toUpperCase())}</text>`;
 }
 
-function svgTrendSparkline(scores: number[], x: number, y: number, width: number, height: number) {
+function svgTrendSparkline(scores: number[], x: number, y: number, width: number, height: number, accent: string) {
   if (scores.length < 2) {
     return `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="12" fill="#050b12" stroke="#ffffff" stroke-opacity="0.12" stroke-dasharray="4 4"/>
   <text x="${x + width / 2}" y="${y + height / 2 + 5}" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="900" letter-spacing="2" fill="#8d98a5">SIN DATOS</text>`;
@@ -1454,21 +1489,21 @@ function svgTrendSparkline(scores: number[], x: number, y: number, width: number
     return `${Math.round(px)},${Math.round(py)}`;
   }).join(" ");
 
-  return `<polyline points="${x},${y + height + 4} ${points} ${x + width},${y + height + 4}" fill="#6fc11f" fill-opacity="0.16"/>
-  <polyline points="${points}" fill="none" stroke="#6fc11f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow)"/>
+  return `<polyline points="${x},${y + height + 4} ${points} ${x + width},${y + height + 4}" fill="${accent}" fill-opacity="0.16"/>
+  <polyline points="${points}" fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow)"/>
   ${points.split(" ").map((point) => {
     const [px, py] = point.split(",");
-    return `<circle cx="${px}" cy="${py}" r="4" fill="#b7ff8a"/>`;
+    return `<circle cx="${px}" cy="${py}" r="4" fill="${accent}"/>`;
   }).join("")}`;
 }
 
-function svgRadarLegend(topics: RefCardTopic[], x: number, y: number) {
+function svgRadarLegend(topics: RefCardTopic[], x: number, y: number, accent: string) {
   return topics.map((topic, index) => {
     const rowY = y + index * 36;
     const value = topic.value === null ? "--" : String(topic.value);
     return `<text x="${x}" y="${rowY}" font-family="Arial, sans-serif" font-size="18" font-weight="900" fill="#ffffff">${escapeXml(topic.shortLabel)}</text>
     <line x1="${x}" y1="${rowY + 12}" x2="${x + 170}" y2="${rowY + 12}" stroke="#ffffff" stroke-opacity="0.12" stroke-dasharray="5 5"/>
-    <text x="${x + 188}" y="${rowY}" text-anchor="end" font-family="Arial, sans-serif" font-size="20" font-weight="900" fill="#b7ff8a">${value}</text>`;
+    <text x="${x + 188}" y="${rowY}" text-anchor="end" font-family="Arial, sans-serif" font-size="20" font-weight="900" fill="${accent}">${value}</text>`;
   }).join("");
 }
 
@@ -1477,7 +1512,8 @@ function svgExportRadar(
   cx: number,
   cy: number,
   radius = 96,
-  labelRadius = 122
+  labelRadius = 122,
+  accent = getDisciplineDefinition("football_11").theme.accent
 ) {
   const values = topics.map((topic) => topic.value ?? 0);
   const polygon = exportRadarPoints(values, radius, cx, cy);
@@ -1498,15 +1534,15 @@ function svgExportRadar(
 
   if (!hasData) {
     return `${base}
-  <rect x="${cx - 104}" y="${cy - 22}" width="208" height="44" rx="18" fill="#050b12" fill-opacity="0.92" stroke="#6fc11f" stroke-opacity="0.35" stroke-dasharray="5 5"/>
+  <rect x="${cx - 104}" y="${cy - 22}" width="208" height="44" rx="18" fill="#050b12" fill-opacity="0.92" stroke="${accent}" stroke-opacity="0.35" stroke-dasharray="5 5"/>
   <text x="${cx}" y="${cy + 5}" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="900" letter-spacing="1.8" fill="#d6dde5">SIN DATOS SUFICIENTES</text>`;
   }
 
   return `${base}
-  <polygon points="${polygon}" fill="#6fc11f" fill-opacity="0.36" stroke="#6fc11f" stroke-width="5" filter="url(#softGlow)"/>
+  <polygon points="${polygon}" fill="${accent}" fill-opacity="0.36" stroke="${accent}" stroke-width="5" filter="url(#softGlow)"/>
   ${polygon.split(" ").map((point) => {
     const [x, y] = point.split(",");
-    return `<circle cx="${x}" cy="${y}" r="7" fill="#b7ff8a"/>`;
+    return `<circle cx="${x}" cy="${y}" r="7" fill="${accent}"/>`;
   }).join("")}`;
 }
 

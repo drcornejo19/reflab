@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useUser } from "@clerk/nextjs";
 import {
   AlertCircle,
@@ -12,6 +12,8 @@ import {
   Send,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { useDiscipline } from "@/components/DisciplineProvider";
+import { getDisciplineDefinition } from "@/lib/discipline";
 
 const categories = [
   "Error tecnico",
@@ -53,6 +55,12 @@ const faqs = [
 
 export default function SupportPage() {
   const { user } = useUser();
+  const { currentDiscipline: sportType } = useDiscipline();
+  const theme = getDisciplineDefinition(sportType).theme;
+  const themeVars = {
+    "--accent": theme.accent,
+    "--accent-soft": theme.accentSoft,
+  } as CSSProperties;
   const defaultName = useMemo(() => {
     const fullName = user?.fullName?.trim();
     if (fullName) return fullName;
@@ -106,11 +114,14 @@ export default function SupportPage() {
 
   return (
     <AppShell>
-      <div className="space-y-5">
-        <section className="rounded-[32px] border border-[#6fc11f]/20 bg-[#071019] p-5 shadow-[0_0_42px_rgba(111,193,31,0.08)] md:p-7">
+      <div className="space-y-5" style={themeVars}>
+        <section
+          className="rounded-[32px] border bg-[#071019] p-5 shadow-[0_0_42px_var(--accent-soft)] md:p-7"
+          style={{ borderColor: theme.border }}
+        >
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div className="max-w-2xl">
-              <p className="text-[11px] font-black uppercase tracking-[0.32em] text-[#6fc11f]">
+              <p className="text-[11px] font-black uppercase tracking-[0.32em]" style={{ color: theme.accent }}>
                 Soporte
               </p>
               <h1 className="mt-3 text-3xl font-black tracking-tight text-white md:text-5xl">
@@ -122,7 +133,14 @@ export default function SupportPage() {
               </p>
             </div>
 
-            <div className="grid h-20 w-20 place-items-center rounded-[28px] border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
+            <div
+              className="grid h-20 w-20 place-items-center rounded-[28px] border"
+              style={{
+                borderColor: theme.border,
+                backgroundColor: theme.accentSoft,
+                color: theme.accent,
+              }}
+            >
               <LifeBuoy size={34} />
             </div>
           </div>
@@ -130,7 +148,10 @@ export default function SupportPage() {
 
         <section className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 md:p-6">
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[#6fc11f] text-black">
+            <div
+              className="grid h-11 w-11 place-items-center rounded-2xl"
+              style={{ backgroundColor: theme.button, color: theme.onAccent }}
+            >
               <HelpCircle size={20} />
             </div>
             <div>
@@ -157,8 +178,17 @@ export default function SupportPage() {
             className={`flex items-start gap-3 rounded-[22px] border p-4 text-sm ${
               error
                 ? "border-red-500/25 bg-red-500/10 text-red-100"
-                : "border-[#6fc11f]/25 bg-[#6fc11f]/10 text-lime-100"
+                : ""
             }`}
+            style={
+              error
+                ? undefined
+                : {
+                    borderColor: theme.border,
+                    backgroundColor: theme.accentSoft,
+                    color: theme.accent,
+                  }
+            }
           >
             {error ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
             <div>
@@ -173,7 +203,14 @@ export default function SupportPage() {
           className="rounded-[30px] border border-white/10 bg-[#071019] p-5 md:p-6"
         >
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
+            <div
+              className="grid h-11 w-11 place-items-center rounded-2xl border"
+              style={{
+                borderColor: theme.border,
+                backgroundColor: theme.accentSoft,
+                color: theme.accent,
+              }}
+            >
               <Mail size={20} />
             </div>
             <div>
@@ -193,7 +230,7 @@ export default function SupportPage() {
                   setNameDraft(event.target.value);
                 }}
                 required
-                className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-zinc-600 focus:border-[#6fc11f]/60"
+                className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-zinc-600 focus:border-[var(--accent)]"
                 placeholder="Tu nombre"
               />
             </Field>
@@ -207,7 +244,7 @@ export default function SupportPage() {
                   setEmailDraft(event.target.value);
                 }}
                 required
-                className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-zinc-600 focus:border-[#6fc11f]/60"
+                className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-zinc-600 focus:border-[var(--accent)]"
                 placeholder="tu@email.com"
               />
             </Field>
@@ -216,7 +253,7 @@ export default function SupportPage() {
               <select
                 value={category}
                 onChange={(event) => setCategory(event.target.value)}
-                className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none transition focus:border-[#6fc11f]/60"
+                className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none transition focus:border-[var(--accent)]"
               >
                 {categories.map((item) => (
                   <option key={item} value={item} className="bg-[#071019]">
@@ -231,7 +268,7 @@ export default function SupportPage() {
                 value={subject}
                 onChange={(event) => setSubject(event.target.value)}
                 required
-                className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-zinc-600 focus:border-[#6fc11f]/60"
+                className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-zinc-600 focus:border-[var(--accent)]"
                 placeholder="Resumen de la consulta"
               />
             </Field>
@@ -243,7 +280,7 @@ export default function SupportPage() {
               onChange={(event) => setMessage(event.target.value)}
               required
               rows={7}
-              className="w-full resize-none rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-zinc-600 focus:border-[#6fc11f]/60"
+              className="w-full resize-none rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-zinc-600 focus:border-[var(--accent)]"
               placeholder="Contanos que paso o que necesitas resolver."
             />
           </Field>
@@ -251,7 +288,8 @@ export default function SupportPage() {
           <button
             type="submit"
             disabled={sending}
-            className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-5 text-sm font-black text-black transition hover:bg-[#7de026] disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+            className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+            style={{ backgroundColor: theme.button, color: theme.onAccent }}
           >
             {sending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
             {sending ? "Enviando..." : "Enviar consulta"}

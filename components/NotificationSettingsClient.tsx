@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import {
   AlertCircle,
   BellRing,
@@ -26,8 +26,19 @@ import {
   type ForegroundNotificationPayload,
   type PushEnvironment,
 } from "@/lib/firebaseClient";
+import { useDiscipline } from "@/components/DisciplineProvider";
+import { getDisciplineDefinition } from "@/lib/discipline";
 
 export function NotificationSettingsClient() {
+  const { currentDiscipline: sportType } = useDiscipline();
+  const theme = getDisciplineDefinition(sportType).theme;
+  const themeVars = {
+    "--accent": theme.accent,
+    "--accent-soft": theme.accentSoft,
+    "--accent-border": theme.border,
+    "--accent-glow": theme.glow,
+    "--accent-on": theme.onAccent,
+  } as CSSProperties;
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -283,9 +294,12 @@ export function NotificationSettingsClient() {
 
   if (loading) {
     return (
-      <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
+      <section
+        className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6"
+        style={themeVars}
+      >
         <div className="flex items-center gap-3 text-zinc-300">
-          <Loader2 className="animate-spin text-[#6fc11f]" size={20} />
+          <Loader2 className="animate-spin text-[var(--accent)]" size={20} />
           Cargando preferencias de notificaciones...
         </div>
       </section>
@@ -293,11 +307,17 @@ export function NotificationSettingsClient() {
   }
 
   return (
-    <div className="space-y-5">
-      <section className="overflow-hidden rounded-[32px] border border-[#6fc11f]/20 bg-[#071019] p-5 shadow-[0_0_42px_rgba(111,193,31,0.08)] md:p-7">
+    <div className="space-y-5" style={themeVars}>
+      <section
+        className="overflow-hidden rounded-[32px] border border-white/10 bg-[#071019] p-5 md:p-7"
+        style={{
+          borderColor: theme.border,
+          boxShadow: `0 0 42px ${theme.glow}`,
+        }}
+      >
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div className="max-w-2xl">
-            <p className="text-[11px] font-black uppercase tracking-[0.32em] text-[#6fc11f]">
+            <p className="text-[11px] font-black uppercase tracking-[0.32em] text-[var(--accent)]">
               Centro de notificaciones
             </p>
             <h1 className="mt-3 text-3xl font-black tracking-tight text-white md:text-5xl">
@@ -311,7 +331,10 @@ export function NotificationSettingsClient() {
 
           <div className="rounded-[26px] border border-white/10 bg-black/25 p-4">
             <div className="flex items-center gap-3">
-              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#6fc11f] text-black">
+              <div
+                className="grid h-12 w-12 place-items-center rounded-2xl"
+                style={{ backgroundColor: theme.button, color: theme.onAccent }}
+              >
                 <BellRing size={22} />
               </div>
               <div>
@@ -341,7 +364,7 @@ export function NotificationSettingsClient() {
                 currentDeviceRegistered ||
                 !firebaseConfigured
               }
-              className="mt-4 min-h-12 w-full rounded-2xl bg-[#6fc11f] px-4 text-sm font-black text-black transition hover:bg-[#7de026] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-4 min-h-12 w-full rounded-2xl bg-[var(--accent)] px-4 text-sm font-black text-[var(--accent-on)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {checkingDevice
                 ? "Verificando dispositivo..."
@@ -360,7 +383,7 @@ export function NotificationSettingsClient() {
           className={`flex items-start gap-3 rounded-[22px] border p-4 text-sm ${
             error
               ? "border-red-500/25 bg-red-500/10 text-red-100"
-              : "border-[#6fc11f]/25 bg-[#6fc11f]/10 text-lime-100"
+              : "border-[var(--accent-border)] bg-[var(--accent-soft)] text-white"
           }`}
         >
           {error ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
@@ -371,7 +394,7 @@ export function NotificationSettingsClient() {
       {pushEnvironment && (
         <section className="rounded-[24px] border border-white/10 bg-white/[0.035] p-4 sm:p-5">
           <div className="flex items-start gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]">
               {pushEnvironment.isIos && !pushEnvironment.isStandalone ? <Download size={20} /> : <Smartphone size={20} />}
             </div>
             <div className="min-w-0">
@@ -380,8 +403,8 @@ export function NotificationSettingsClient() {
               </p>
               <p className="mt-1 text-sm leading-6 text-zinc-400">{pushEnvironment.message}</p>
               {pushEnvironment.isIos && !pushEnvironment.isStandalone && (
-                <p className="mt-2 text-xs font-bold leading-5 text-[#b7ff8a]">
-                  Abrí Compartir, elegí “Agregar a pantalla de inicio” y activá push dentro de la app instalada.
+                <p className="mt-2 text-xs font-bold leading-5 text-[var(--accent)]">
+                  Abri Compartir, elegi "Agregar a pantalla de inicio" y activa push dentro de la app instalada.
                 </p>
               )}
             </div>
@@ -395,17 +418,20 @@ export function NotificationSettingsClient() {
           onClick={() => {
             window.location.href = foregroundNotification.actionUrl;
           }}
-          className="flex w-full items-start gap-3 rounded-[22px] border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-4 text-left text-sm text-lime-100 transition hover:bg-[#6fc11f]/15"
+          className="flex w-full items-start gap-3 rounded-[22px] border border-[var(--accent-border)] bg-[var(--accent-soft)] p-4 text-left text-sm text-white transition hover:brightness-110"
         >
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#6fc11f] text-black">
+          <div
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl"
+            style={{ backgroundColor: theme.button, color: theme.onAccent }}
+          >
             <BellRing size={18} />
           </div>
           <div className="min-w-0">
             <p className="font-black text-white">{foregroundNotification.title}</p>
-            <p className="mt-1 leading-6 text-lime-100/80">
+            <p className="mt-1 leading-6 text-zinc-200">
               {foregroundNotification.body || "Notificacion recibida en este dispositivo."}
             </p>
-            <p className="mt-2 text-xs font-black uppercase tracking-[0.2em] text-[#6fc11f]">
+            <p className="mt-2 text-xs font-black uppercase tracking-[0.2em] text-[var(--accent)]">
               {foregroundNotification.actionLabel}
             </p>
           </div>
@@ -415,7 +441,7 @@ export function NotificationSettingsClient() {
       <section className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 md:p-6">
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl border border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]">
               <BellRing size={21} />
             </div>
             <div>
@@ -443,7 +469,7 @@ export function NotificationSettingsClient() {
             disabled={activating || saving || (!firebaseConfigured && !preferences?.pushEnabled)}
             className={`relative flex h-12 w-24 shrink-0 items-center rounded-full border p-1 transition ${
               preferences?.pushEnabled
-                ? "justify-end border-[#6fc11f]/40 bg-[#6fc11f]"
+                ? "justify-end border-[var(--accent-border)] bg-[var(--accent)]"
                 : "justify-start border-white/10 bg-white/10"
             } disabled:cursor-not-allowed disabled:opacity-50`}
             aria-pressed={Boolean(preferences?.pushEnabled)}
@@ -454,7 +480,7 @@ export function NotificationSettingsClient() {
           </button>
         </div>
 
-        <div className="mt-5 rounded-[24px] border border-[#6fc11f]/20 bg-[#6fc11f]/8 p-4">
+        <div className="mt-5 rounded-[24px] border border-[var(--accent-border)] bg-[var(--accent-soft)] p-4">
           <p className="text-sm font-black text-white">
             {preferences?.pushEnabled
               ? "Notificaciones activas"
@@ -470,7 +496,7 @@ export function NotificationSettingsClient() {
             type="button"
             onClick={() => sendTest("training_pending")}
             disabled={testingType !== null || saving || !preferences?.pushEnabled}
-            className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-2xl border border-white/10 px-4 text-xs font-black text-white transition hover:border-[#6fc11f]/50 hover:text-[#6fc11f] disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-2xl border border-white/10 px-4 text-xs font-black text-white transition hover:border-[var(--accent-border)] hover:text-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {testingType ? (
               <Loader2 className="animate-spin" size={15} />

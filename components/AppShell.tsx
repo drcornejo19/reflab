@@ -19,7 +19,6 @@ import {
   Landmark,
   Languages,
   Menu,
-  MonitorCheck,
   NotebookTabs,
   ShieldCheck,
   LifeBuoy,
@@ -38,7 +37,7 @@ import {
   type TranslationKey,
 } from "@/lib/languagePreference";
 import { useDiscipline } from "@/components/DisciplineProvider";
-import { getDisciplineRoute } from "@/lib/discipline";
+import { getDisciplineDefinition, getDisciplineRoute } from "@/lib/discipline";
 import { useUserRole } from "@/lib/useUserRole";
 
 type NavItem = {
@@ -84,7 +83,6 @@ const evaluationsActivePrefixes = [
   "/futsal/video-analysis",
   "/futsal/rules-exam",
 ];
-const futsalActivePaths = ["/futsal"];
 const matchesActivePaths = ["/matches"];
 const matchesActivePrefixes = ["/matches"];
 
@@ -128,13 +126,6 @@ function getDesktopNavItems(trainingHref: string, evaluationsHref: string) {
       icon: ShieldCheck,
       activePaths: evaluationsActivePaths,
       activePrefixes: evaluationsActivePrefixes,
-    },
-    {
-      label: "Futsal",
-      href: "/futsal",
-      icon: MonitorCheck,
-      activePaths: futsalActivePaths,
-      individualOnly: true,
     },
     {
       label: "Mis partidos",
@@ -243,13 +234,6 @@ function getPrimaryMobileItems(trainingHref: string, evaluationsHref: string) {
       activePrefixes: evaluationsActivePrefixes,
     },
     {
-      label: "Futsal",
-      href: "/futsal",
-      icon: MonitorCheck,
-      activePaths: futsalActivePaths,
-      individualOnly: true,
-    },
-    {
       label: "Ref Perf.",
       labelKey: "nav.performance",
       href: "/performance",
@@ -335,6 +319,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { currentDiscipline, hasSelectedDiscipline, isHydrated } =
     useDiscipline();
   const roleState = useUserRole();
+  const theme = getDisciplineDefinition(currentDiscipline).theme;
   const trainingHref = getDisciplineRoute(currentDiscipline, "trainingHub");
   const evaluationsHref = getDisciplineRoute(
     currentDiscipline,
@@ -385,12 +370,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen overflow-hidden bg-[#050b12] text-white">
         <div className="flex min-h-screen items-center justify-center px-6">
           <div className="w-full max-w-[420px] rounded-[30px] border border-white/10 bg-[#0b131b] p-7 text-center shadow-2xl">
-            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-white/10 border-t-[#6fc11f]" />
-            <p className="mt-5 text-sm font-black uppercase tracking-[0.26em] text-[#6fc11f]">
+            <div
+              className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-white/10"
+              style={{ borderTopColor: theme.accent }}
+            />
+            <p
+              className="mt-5 text-sm font-black uppercase tracking-[0.26em]"
+              style={{ color: theme.accent }}
+            >
               RefLab
             </p>
             <p className="mt-3 text-lg font-black">
-              Preparando tu entorno de trabajo
+              Preparando tu disciplina activa
             </p>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
               Cargando la disciplina activa para mantener Dashboard, Biblioteca,
@@ -406,7 +397,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen overflow-x-hidden bg-[#050b12] text-white">
       <PushDeviceSync />
       <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[260px] border-r border-white/10 bg-[#050b12] p-5 lg:block">
-        <Logo />
+        <Logo theme={theme} />
 
         <nav className="mt-10 space-y-2" aria-label="Navegacion principal">
           {visibleNavItems.map((item) => (
@@ -415,13 +406,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               item={item}
               language={language}
               active={isItemActive(pathname, item)}
+              theme={theme}
             />
           ))}
         </nav>
       </aside>
 
       <header className="fixed left-0 top-0 z-50 flex h-[76px] w-full max-w-full items-center justify-between overflow-hidden border-b border-white/10 bg-[#050b12]/95 px-3 backdrop-blur-xl sm:px-4 lg:hidden">
-        <Logo compact />
+        <Logo compact theme={theme} />
 
         <button
           type="button"
@@ -437,7 +429,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-40 bg-black/45 backdrop-blur-sm lg:hidden">
           <div className="mx-3 mt-[86px] max-h-[calc(100dvh-108px)] overflow-y-auto rounded-[28px] border border-white/10 bg-[#0b131b] p-3 shadow-2xl sm:mx-4">
-            <p className="px-3 py-2 text-[10px] font-black uppercase tracking-[0.28em] text-[#6fc11f]">
+            <p
+              className="px-3 py-2 text-[10px] font-black uppercase tracking-[0.28em]"
+              style={{ color: theme.accent }}
+            >
               {translate(language, "nav.moreAccess")}
             </p>
 
@@ -449,11 +444,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   language={language}
                   active={isItemActive(pathname, item)}
                   onClick={() => setMobileMenuOpen(false)}
+                  theme={theme}
                 />
               ))}
             </div>
 
-            <LanguageSettings language={language} onChange={setLanguage} />
+            <LanguageSettings language={language} onChange={setLanguage} theme={theme} />
           </div>
         </div>
       )}
@@ -476,9 +472,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               key={`${item.label}-${item.href}`}
               href={item.href}
+              style={
+                active
+                  ? {
+                      backgroundColor: theme.button,
+                      color: theme.onAccent,
+                      boxShadow: `0 0 24px ${theme.glow}`,
+                    }
+                  : undefined
+              }
               className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-[20px] px-0.5 text-[9px] font-black leading-none transition active:scale-95 sm:px-1 sm:text-[10px] ${
                 active
-                  ? "bg-[#6fc11f] text-black shadow-[0_0_24px_rgba(111,193,31,0.28)]"
+                  ? ""
                   : "text-zinc-500 hover:text-white"
               }`}
             >
@@ -492,7 +497,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Logo({ compact = false }: { compact?: boolean }) {
+function Logo({
+  compact = false,
+  theme,
+}: {
+  compact?: boolean;
+  theme: ReturnType<typeof getDisciplineDefinition>["theme"];
+}) {
   return (
     <Link
       href="/about"
@@ -506,14 +517,15 @@ function Logo({ compact = false }: { compact?: boolean }) {
         height={RF_LOGO_SIZE}
         sizes={compact ? "42px" : "46px"}
         priority
-        className={`${compact ? "h-[42px] w-[42px]" : "h-[46px] w-[46px]"} shrink-0 object-contain drop-shadow-[0_0_10px_rgba(111,193,31,0.2)]`}
+        style={{ filter: `drop-shadow(0 0 10px ${theme.glow})` }}
+        className={`${compact ? "h-[42px] w-[42px]" : "h-[46px] w-[46px]"} shrink-0 object-contain`}
       />
 
       <div className="min-w-0">
         <p
           className={`${compact ? "text-sm" : "text-lg"} truncate font-black tracking-wide`}
         >
-          REF<span className="text-[#6fc11f]">LAB</span>
+          REF<span style={{ color: theme.accent }}>LAB</span>
         </p>
         <p className={`${compact ? "text-[9px]" : "text-[10px]"} truncate text-zinc-500`}>
           Referee Decision Lab
@@ -527,10 +539,12 @@ function NavLink({
   item,
   active,
   language,
+  theme,
 }: {
   item: NavItem;
   active: boolean;
   language: AppLanguage;
+  theme: ReturnType<typeof getDisciplineDefinition>["theme"];
 }) {
   const Icon = item.icon;
   const label = item.labelKey ? translate(language, item.labelKey) : item.label;
@@ -538,9 +552,18 @@ function NavLink({
   return (
     <Link
       href={item.href}
+      style={
+        active
+          ? {
+              backgroundColor: theme.button,
+              color: theme.onAccent,
+              boxShadow: `0 0 28px ${theme.glow}`,
+            }
+          : undefined
+      }
       className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-black transition ${
         active
-          ? "bg-[#6fc11f] text-black shadow-[0_0_28px_rgba(111,193,31,0.25)]"
+          ? ""
           : "text-zinc-400 hover:bg-white/10 hover:text-white"
       }`}
     >
@@ -555,11 +578,13 @@ function MobileMenuLink({
   active,
   language,
   onClick,
+  theme,
 }: {
   item: NavItem;
   active: boolean;
   language: AppLanguage;
   onClick: () => void;
+  theme: ReturnType<typeof getDisciplineDefinition>["theme"];
 }) {
   const Icon = item.icon;
   const label = item.labelKey ? translate(language, item.labelKey) : item.label;
@@ -568,9 +593,17 @@ function MobileMenuLink({
     <Link
       href={item.href}
       onClick={onClick}
+      style={
+        active
+          ? {
+              backgroundColor: theme.button,
+              color: theme.onAccent,
+            }
+          : undefined
+      }
       className={`flex min-h-14 items-center gap-3 rounded-2xl px-4 text-sm font-black transition active:scale-[0.98] ${
         active
-          ? "bg-[#6fc11f] text-black"
+          ? ""
           : "bg-white/[0.04] text-zinc-300 hover:bg-white/10 hover:text-white"
       }`}
     >
@@ -619,9 +652,11 @@ function isDisciplineExemptPath(pathname: string) {
 function LanguageSettings({
   language,
   onChange,
+  theme,
 }: {
   language: AppLanguage;
   onChange: (language: AppLanguage) => void;
+  theme: ReturnType<typeof getDisciplineDefinition>["theme"];
 }) {
   function changeLanguage(nextLanguage: AppLanguage) {
     setStoredLanguage(nextLanguage);
@@ -631,7 +666,14 @@ function LanguageSettings({
   return (
     <div className="mt-3 rounded-[24px] border border-white/10 bg-white/[0.04] p-3">
       <div className="flex items-center gap-3 px-1 pb-3">
-        <div className="grid h-10 w-10 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
+        <div
+          className="grid h-10 w-10 place-items-center rounded-2xl border"
+          style={{
+            borderColor: theme.border,
+            backgroundColor: theme.accentSoft,
+            color: theme.accent,
+          }}
+        >
           <Settings size={18} />
         </div>
         <div>
@@ -646,9 +688,18 @@ function LanguageSettings({
             key={option.value}
             type="button"
             onClick={() => changeLanguage(option.value)}
+            style={
+              language === option.value
+                ? {
+                    borderColor: theme.accent,
+                    backgroundColor: theme.button,
+                    color: theme.onAccent,
+                  }
+                : undefined
+            }
             className={`min-h-12 rounded-2xl border px-2 text-xs font-black transition active:scale-95 ${
               language === option.value
-                ? "border-[#6fc11f] bg-[#6fc11f] text-black"
+                ? ""
                 : "border-white/10 bg-black/20 text-zinc-300"
             }`}
           >

@@ -7,6 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { SportPageSwitch } from "@/components/SportPageSwitch";
+import { getDisciplineAction, getDisciplineDefinition } from "@/lib/discipline";
 import {
   buildSportPerformanceDataset,
   formatPercent,
@@ -59,6 +60,7 @@ export default function MobileDashboardPage() {
 function MobileDashboardPageContent() {
   const { user, isLoaded } = useUser();
   const { currentDiscipline: sportType } = useDiscipline();
+  const theme = getDisciplineDefinition(sportType).theme;
   const [data, setData] = useState<DashboardData>(emptyData);
   const [loading, setLoading] = useState(true);
 
@@ -154,8 +156,16 @@ function MobileDashboardPageContent() {
       <div className="min-h-screen w-full max-w-full space-y-5 overflow-hidden pb-2">
         <SportPageSwitch title="Disciplina mobile" />
 
-        <section className="rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.24),transparent_38%),#0d1720] p-4 shadow-2xl">
-          <p className="text-xs font-black uppercase tracking-[0.28em] text-[#6fc11f]">
+        <section
+          className="rounded-[30px] border border-white/10 p-4 shadow-2xl"
+          style={{
+            background: `radial-gradient(circle at top left, ${theme.accentSoft}, transparent 38%), #0d1720`,
+          }}
+        >
+          <p
+            className="text-xs font-black uppercase tracking-[0.28em]"
+            style={{ color: theme.accent }}
+          >
             RefLab Mobile
           </p>
           <h1 className="mt-2 text-xl font-black leading-tight">
@@ -166,11 +176,14 @@ function MobileDashboardPageContent() {
           </p>
 
           <div className="mt-5 grid grid-cols-[0.9fr_1.1fr] gap-3">
-            <div className="rounded-[24px] border border-[#6fc11f]/25 bg-black/30 p-4">
+            <div
+              className="rounded-[24px] border bg-black/30 p-4"
+              style={{ borderColor: theme.border }}
+            >
               <p className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500">
                 OVR
               </p>
-              <p className="mt-2 text-5xl font-black text-[#6fc11f]">
+              <p className="mt-2 text-5xl font-black" style={{ color: theme.accent }}>
                 {summary.avgScore ?? "--"}
               </p>
               <p className="mt-1 text-xs font-bold text-zinc-400">
@@ -189,8 +202,13 @@ function MobileDashboardPageContent() {
           </div>
 
           <Link
-            href={sportType === "futsal" ? "/futsal/video-analysis" : "/training/exam"}
-            className="mt-5 flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl bg-[#6fc11f] px-4 text-sm font-black text-black shadow-[0_0_35px_rgba(111,193,31,0.3)] transition active:scale-[0.98]"
+            href={getDisciplineAction(sportType, "primaryTraining")}
+            className="mt-5 flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl px-4 text-sm font-black transition active:scale-[0.98]"
+            style={{
+              backgroundColor: theme.button,
+              color: theme.onAccent,
+              boxShadow: `0 0 35px ${theme.glow}`,
+            }}
           >
             <Megaphone size={24} />
             ENTRENAR
@@ -198,7 +216,10 @@ function MobileDashboardPageContent() {
         </section>
 
         {!summary.hasData ? (
-          <section className="rounded-[28px] border border-dashed border-[#6fc11f]/25 bg-[#6fc11f]/5 p-5 text-center">
+          <section
+            className="rounded-[28px] border border-dashed p-5 text-center"
+            style={{ borderColor: theme.border, backgroundColor: theme.accentSoft }}
+          >
             <p className="text-lg font-black text-white">Sin actividad todavia</p>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
               Cuando completes ejercicios o evaluaciones de esta disciplina, tus metricas reales apareceran aca.
@@ -209,7 +230,7 @@ function MobileDashboardPageContent() {
         <section>
           <div className="mb-3 flex items-end justify-between">
             <h2 className="text-xl font-black">Tu progreso</h2>
-            <span className="text-xs font-black text-[#6fc11f]">
+            <span className="text-xs font-black" style={{ color: theme.accent }}>
               {summary.totalAttempts} registros
             </span>
           </div>
@@ -247,7 +268,8 @@ function MobileDashboardPageContent() {
             <h2 className="text-lg font-black">Precision por criterio</h2>
             <Link
               href={`/performance?sport=${sportType}`}
-              className="inline-flex items-center gap-1 text-xs font-black text-[#6fc11f]"
+              className="inline-flex items-center gap-1 text-xs font-black"
+              style={{ color: theme.accent }}
             >
               Ver mas
               <ChevronRight size={14} />
@@ -296,10 +318,13 @@ function MetricCard({
   value: string | number;
   sub: string;
 }) {
+  const { currentDiscipline } = useDiscipline();
+  const theme = getDisciplineDefinition(currentDiscipline).theme;
+
   return (
     <div className="rounded-[24px] border border-white/10 bg-[#101820] p-4">
       <div className="flex items-center gap-2 text-zinc-400">
-        <Icon size={18} className="text-[#6fc11f]" />
+        <Icon size={18} style={{ color: theme.accent }} />
         <p className="text-[10px] font-black uppercase tracking-[0.25em]">
           {title}
         </p>
@@ -317,6 +342,9 @@ function ProgressRow({
   label: string;
   value: number | null;
 }) {
+  const { currentDiscipline } = useDiscipline();
+  const theme = getDisciplineDefinition(currentDiscipline).theme;
+
   return (
     <div>
       <div className="mb-1 flex justify-between gap-3 text-sm">
@@ -325,8 +353,11 @@ function ProgressRow({
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-white/10">
         <div
-          className="h-full bg-[#6fc11f]"
-          style={{ width: `${Math.max(0, Math.min(value ?? 0, 100))}%` }}
+          className="h-full"
+          style={{
+            width: `${Math.max(0, Math.min(value ?? 0, 100))}%`,
+            backgroundColor: theme.accent,
+          }}
         />
       </div>
     </div>

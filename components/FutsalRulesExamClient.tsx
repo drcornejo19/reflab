@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
@@ -287,9 +287,9 @@ export function FutsalRulesExamClient() {
           />
         )}
 
-        <section className="rounded-3xl border border-[#6fc11f]/30 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.18),transparent_42%),#101820] p-8 shadow-2xl">
-          <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-            FUTSAL RULES EXAM
+        <section className="rounded-3xl border border-[#16b8ff]/30 bg-[radial-gradient(circle_at_top_left,rgba(22,184,255,0.18),transparent_42%),#101820] p-8 shadow-2xl">
+          <p className="text-xs font-black uppercase tracking-[0.35em] text-[#16b8ff]">
+            EXAMEN FIFA FUTSAL
           </p>
 
           <h2 className="mt-4 text-5xl font-black">
@@ -313,17 +313,17 @@ export function FutsalRulesExamClient() {
             Condiciones del examen
           </h3>
           <div className="mt-4 space-y-2 text-sm leading-7 text-zinc-300">
-            <p>• El examen dura 12 minutos.</p>
-            <p>• Si cambias de pestana o sales de la app, el examen finaliza.</p>
-            <p>• Las preguntas no respondidas cuentan como incorrectas.</p>
-            <p>• El analisis aparece al final y se guarda por disciplina.</p>
+            <p>â€¢ El examen dura 12 minutos.</p>
+            <p>â€¢ Si cambias de pestana o sales de la app, el examen finaliza.</p>
+            <p>â€¢ Las preguntas no respondidas cuentan como incorrectas.</p>
+            <p>â€¢ El analisis aparece al final y se guarda por disciplina.</p>
           </div>
         </section>
 
         <button
           onClick={startExam}
           disabled={freeExamLimitReached}
-          className="w-full rounded-2xl bg-[#6fc11f] px-5 py-5 text-lg font-black text-black transition hover:bg-[#82dc2a]"
+          className="w-full rounded-2xl bg-[#16b8ff] px-5 py-5 text-lg font-black text-black transition hover:bg-[#31b8ff]"
         >
           COMENZAR EXAMEN
         </button>
@@ -336,13 +336,13 @@ export function FutsalRulesExamClient() {
 
     return (
       <div className="space-y-5">
-        <section className="rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-8">
-          <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-            FUTSAL RULES EXAM
+        <section className="rounded-3xl border border-[#16b8ff]/30 bg-[#16b8ff]/10 p-8">
+          <p className="text-xs font-black uppercase tracking-[0.35em] text-[#16b8ff]">
+            EXAMEN FIFA FUTSAL
           </p>
 
           <h2 className="mt-4 text-5xl font-black">Examen finalizado</h2>
-          <p className="mt-6 text-7xl font-black text-[#6fc11f]">
+          <p className="mt-6 text-7xl font-black text-[#16b8ff]">
             {result.percentage}%
           </p>
           <p className="mt-3 text-xl font-bold">
@@ -379,13 +379,13 @@ export function FutsalRulesExamClient() {
               <div key={item.topic}>
                 <div className="mb-2 flex items-center justify-between">
                   <span className="font-bold">{item.topic}</span>
-                  <span className="font-black text-[#6fc11f]">
-                    {item.percentage}% · {item.correct}/{item.total}
+                  <span className="font-black text-[#16b8ff]">
+                    {item.percentage}% - {item.correct}/{item.total}
                   </span>
                 </div>
                 <div className="h-3 rounded-full bg-white/10">
                   <div
-                    className="h-3 rounded-full bg-[#6fc11f]"
+                    className="h-3 rounded-full bg-[#16b8ff]"
                     style={{ width: `${item.percentage}%` }}
                   />
                 </div>
@@ -406,7 +406,7 @@ export function FutsalRulesExamClient() {
                   key={question.id}
                   className={`rounded-2xl border p-4 ${
                     answeredCorrectly
-                      ? "border-[#6fc11f]/25 bg-[#6fc11f]/5"
+                      ? "border-[#16b8ff]/25 bg-[#16b8ff]/5"
                       : "border-red-400/20 bg-red-500/5"
                   }`}
                 >
@@ -426,7 +426,7 @@ export function FutsalRulesExamClient() {
                       Tu respuesta:{" "}
                       <strong
                         className={
-                          answeredCorrectly ? "text-[#6fc11f]" : "text-red-300"
+                          answeredCorrectly ? "text-[#16b8ff]" : "text-red-300"
                         }
                       >
                         {selectedAnswer === undefined
@@ -457,7 +457,7 @@ export function FutsalRulesExamClient() {
           <button
             onClick={saveExam}
             disabled={saving || saved}
-            className="w-full rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-2xl bg-[#16b8ff] px-5 py-4 font-black text-black disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving
               ? "GUARDANDO..."
@@ -482,8 +482,8 @@ export function FutsalRulesExamClient() {
       <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-6">
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-              FUTSAL RULES EXAM
+            <p className="text-xs font-black uppercase tracking-[0.35em] text-[#16b8ff]">
+              EXAMEN FIFA FUTSAL
             </p>
             <h2 className="mt-3 text-4xl font-black">Examen de Reglas</h2>
             <p className="mt-2 text-sm text-zinc-400">
@@ -504,7 +504,7 @@ export function FutsalRulesExamClient() {
 
       <section className="rounded-3xl border border-white/10 bg-[#101820] p-6">
         <div className="mb-4 flex flex-wrap gap-2">
-          <span className="inline-flex rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-xs font-black text-[#6fc11f]">
+          <span className="inline-flex rounded-full border border-[#16b8ff]/30 bg-[#16b8ff]/10 px-4 py-2 text-xs font-black text-[#16b8ff]">
             {currentQuestion.lawReference}
           </span>
           <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-black text-zinc-300">
@@ -524,7 +524,7 @@ export function FutsalRulesExamClient() {
                 onClick={() => setSelected(optionIndex)}
                 className={`w-full rounded-2xl border px-5 py-4 text-left transition ${
                   active
-                    ? "border-[#6fc11f] bg-[#6fc11f]/10"
+                    ? "border-[#16b8ff] bg-[#16b8ff]/10"
                     : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
                 }`}
               >
@@ -540,7 +540,7 @@ export function FutsalRulesExamClient() {
         <button
           disabled={selected === null}
           onClick={nextQuestion}
-          className="mt-6 w-full rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black disabled:opacity-40"
+          className="mt-6 w-full rounded-2xl bg-[#16b8ff] px-5 py-4 font-black text-black disabled:opacity-40"
         >
           {currentIndex >= questions.length - 1 ? "FINALIZAR EXAMEN" : "SIGUIENTE"}
         </button>
@@ -564,3 +564,5 @@ function getLevel(avg: number) {
   if (avg >= 70) return "Intermedio";
   return "Inicial";
 }
+
+

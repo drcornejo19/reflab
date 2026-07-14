@@ -1,10 +1,15 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import type { ManualAppointmentPayload } from "@/lib/matches/api";
+import type {
+  FixtureAppointmentPayload,
+  ManualAppointmentPayload,
+} from "@/lib/matches/api";
 import {
   createAppointment,
+  createAppointmentFromFixture,
   getMatchActorContext,
   getMatchesSetupIssue,
+  isMatchesConflictError,
   listAppointmentsForActor,
 } from "@/lib/matches/server";
 import { sendSmartNotificationToUser } from "@/lib/notificationServer";
@@ -58,9 +63,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: ManualAppointmentPayload;
+  let body: ManualAppointmentPayload | FixtureAppointmentPayload;
   try {
-    body = (await request.json()) as ManualAppointmentPayload;
+    body = (await request.json()) as ManualAppointmentPayload | FixtureAppointmentPayload;
   } catch {
     return NextResponse.json({ error: "Body invalido." }, { status: 400 });
   }
@@ -68,7 +73,10 @@ export async function POST(request: Request) {
   try {
     const supabase = createSupabaseAdminClient();
     const actor = await getMatchActorContext(supabase, userId);
-    const appointment = await createAppointment(supabase, actor, body);
+    const appointment =
+      "fixtureId" in body && typeof body.fixtureId === "string"
+        ? await createAppointmentFromFixture(supabase, actor, body)
+        : await createAppointment(supabase, actor, body as ManualAppointmentPayload);
     await sendSmartNotificationToUser(
       supabase,
       appointment.user_id,
@@ -90,6 +98,17 @@ export async function POST(request: Request) {
     );
     return NextResponse.json({ success: true, appointment });
   } catch (error) {
+    if (isMatchesConflictError(error)) {
+      return NextResponse.json(
+        {
+          error: "Ya tienes una designacion activa para esa fecha.",
+          technical: error.message,
+          conflict: error.conflict,
+        },
+        { status: 409 }
+      );
+    }
+
     const setupIssue = getMatchesSetupIssue(error);
 
     return NextResponse.json(

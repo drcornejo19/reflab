@@ -4,6 +4,7 @@ import { type SystemRole, normalizeRole } from "@/lib/institutionalRoles";
 import {
   appointmentSourceLabels,
   appointmentStatusLabels,
+  fixtureStatusLabels,
 } from "@/lib/matches/config";
 import type {
   AppointmentRecord,
@@ -26,11 +27,13 @@ import type {
 } from "@/lib/matches/types";
 import type {
   AppointmentUpdatePayload,
+  FixtureAppointmentPayload,
   InstitutionMemberOption,
   ManualAppointmentPayload,
   MatchActorContext,
   MatchAppointmentDetail,
   MatchAppointmentListItem,
+  MatchFixtureListItem,
   MatchPreparationPayload,
   MatchRecommendedPlan,
   MatchesCatalogResponse,
@@ -79,6 +82,43 @@ type PsychologyMiniRow = {
   mental_score?: number | null;
   created_at?: string | null;
 };
+
+type MatchesCatalogFilters = {
+  sportType?: SportType | null;
+  countryId?: string | null;
+  associationId?: string | null;
+  competitionId?: string | null;
+  categoryId?: string | null;
+  seasonId?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+};
+
+export class MatchesConflictError extends Error {
+  constructor(
+    message: string,
+    public readonly conflict: {
+      appointmentId: string;
+      matchLabel: string;
+      kickoffAt: string;
+      roleLabel: string;
+    }
+  ) {
+    super(message);
+    this.name = "MatchesConflictError";
+  }
+}
+
+export function isMatchesConflictError(error: unknown): error is MatchesConflictError {
+  return error instanceof MatchesConflictError;
+}
+
+const activeAppointmentStatusesForConflicts: AppointmentStatus[] = [
+  "draft",
+  "pending_confirmation",
+  "confirmed",
+  "modified",
+];
 
 const institutionAllowedRoles: SystemRole[] = [
   "super_admin",
@@ -190,7 +230,8 @@ export async function getMatchActorContext(
 
 export async function loadMatchesCatalog(
   supabase: SupabaseAnyClient,
-  actor: MatchActorContext
+  actor: MatchActorContext,
+  filters: MatchesCatalogFilters = {}
 ): Promise<MatchesCatalogResponse> {
   const [
     countriesRes,
@@ -201,6 +242,7 @@ export async function loadMatchesCatalog(
     rolesRes,
     eligibilitiesRes,
     institutionMembers,
+    fixtures,
   ] = await Promise.all([
     supabase.from("countries").select("*").order("name"),
     supabase.from("associations").select("*").order("name"),
@@ -216,6 +258,7 @@ export async function loadMatchesCatalog(
     actor.canManageInstitution && actor.institutionId
       ? loadInstitutionMembers(supabase, actor.institutionId)
       : Promise.resolve([] as InstitutionMemberOption[]),
+    listSelectableFixtures(supabase, filters),
   ]);
 
   throwIfError(countriesRes.error, "No se pudieron cargar los paises.");
@@ -241,9 +284,144 @@ export async function loadMatchesCatalog(
     roles: (rolesRes.data ?? []) as RefereeRoleRecord[],
     eligibilities,
     institutionMembers,
+    fixtures,
     supportsInstitutionAssignments: actor.canManageInstitution,
     fallbackMode: eligibilities.length > 0 ? "eligibility_matrix" : "manual_assisted",
   };
+}
+
+async function listSelectableFixtures(
+  supabase: SupabaseAnyClient,
+  filters: MatchesCatalogFilters
+): Promise<MatchFixtureListItem[]> {
+  let query = supabase
+    .from("fixtures")
+    .select("*")
+    .order("kickoff_at", { ascending: true })
+    .limit(240);
+
+  if (filters.sportType) {
+    query = query.eq("sport_type", filters.sportType);
+  }
+  if (filters.countryId) {
+    query = query.eq("country_id", filters.countryId);
+  }
+  if (filters.associationId) {
+    query = query.eq("association_id", filters.associationId);
+  }
+  if (filters.competitionId) {
+    query = query.eq("competition_id", filters.competitionId);
+  }
+  if (filters.categoryId) {
+    query = query.eq("category_id", filters.categoryId);
+  }
+  if (filters.seasonId) {
+    query = query.eq("season_id", filters.seasonId);
+  }
+  if (filters.dateFrom) {
+    query = query.gte("kickoff_at", filters.dateFrom);
+  }
+  if (filters.dateTo) {
+    query = query.lt("kickoff_at", filters.dateTo);
+  }
+
+  const fixturesRes = await query;
+  throwIfError(fixturesRes.error, "No se pudieron cargar los partidos disponibles.");
+
+  const fixtures = (fixturesRes.data ?? []) as FixtureRecord[];
+  if (!fixtures.length) return [];
+
+  const competitionIds = uniqueIds(fixtures.map((item) => item.competition_id));
+  const seasonIds = uniqueIds(fixtures.map((item) => item.season_id));
+  const categoryIds = uniqueIds(fixtures.map((item) => item.category_id));
+  const associationIds = uniqueIds(fixtures.map((item) => item.association_id));
+  const countryIds = uniqueIds(fixtures.map((item) => item.country_id));
+  const teamIds = uniqueIds(
+    fixtures.flatMap((item) => [item.home_team_id, item.away_team_id])
+  );
+  const venueIds = uniqueIds(fixtures.map((item) => item.venue_id));
+
+  const [
+    competitions,
+    seasons,
+    categories,
+    associations,
+    countries,
+    teams,
+    venues,
+  ] = await Promise.all([
+    getCompetitionsByIds(supabase, competitionIds),
+    getSeasonsByIds(supabase, seasonIds),
+    getCategoriesByIds(supabase, categoryIds),
+    getAssociationsByIds(supabase, associationIds),
+    getCountriesByIds(supabase, countryIds),
+    getTeamsByIds(supabase, teamIds),
+    getVenuesByIds(supabase, venueIds),
+  ]);
+
+  const competitionMap = indexById(competitions);
+  const seasonMap = indexById(seasons);
+  const categoryMap = indexById(categories);
+  const associationMap = indexById(associations);
+  const countryMap = indexById(countries);
+  const teamMap = indexById(teams);
+  const venueMap = indexById(venues);
+
+  return fixtures.map((fixture) => {
+    const status = fixture.status ?? "scheduled";
+    const competition = fixture.competition_id
+      ? competitionMap.get(fixture.competition_id) ?? null
+      : null;
+    const season = fixture.season_id ? seasonMap.get(fixture.season_id) ?? null : null;
+    const category = fixture.category_id
+      ? categoryMap.get(fixture.category_id) ?? null
+      : null;
+    const association = fixture.association_id
+      ? associationMap.get(fixture.association_id) ?? null
+      : null;
+    const country = fixture.country_id
+      ? countryMap.get(fixture.country_id) ?? null
+      : null;
+    const homeTeam = fixture.home_team_id
+      ? teamMap.get(fixture.home_team_id) ?? null
+      : null;
+    const awayTeam = fixture.away_team_id
+      ? teamMap.get(fixture.away_team_id) ?? null
+      : null;
+    const venue = fixture.venue_id ? venueMap.get(fixture.venue_id) ?? null : null;
+
+    return {
+      fixtureId: fixture.id,
+      sportType: fixture.sport_type,
+      status,
+      statusLabel: fixtureStatusLabels[status],
+      kickoffAt: fixture.kickoff_at,
+      roundLabel:
+        textOrNull(fixture.round_label) ??
+        (fixture.matchday_number ? `Fecha ${fixture.matchday_number}` : null),
+      matchdayNumber: fixture.matchday_number ?? null,
+      refereeSystem: textOrNull(fixture.referee_system),
+      varEnabled: Boolean(fixture.var_enabled),
+      dataSource: fixture.data_source ?? null,
+      competitionId: competition?.id ?? null,
+      competitionName: competition?.name ?? null,
+      seasonId: season?.id ?? null,
+      seasonLabel: season?.label ?? null,
+      categoryId: category?.id ?? null,
+      categoryName: category?.name ?? null,
+      associationId: association?.id ?? null,
+      associationName: association?.name ?? null,
+      countryId: country?.id ?? null,
+      countryName: country?.name ?? null,
+      homeTeamId: homeTeam?.id ?? null,
+      homeTeamName: homeTeam?.name ?? "Local",
+      awayTeamId: awayTeam?.id ?? null,
+      awayTeamName: awayTeam?.name ?? "Visitante",
+      venueId: venue?.id ?? null,
+      venueName: venue?.name ?? null,
+      venueCity: venue?.city ?? null,
+    };
+  });
 }
 
 export async function listAppointmentsForActor(
@@ -372,6 +550,7 @@ export async function listAppointmentsForActor(
 
     return {
       appointmentId: appointment.id,
+      fixtureId: appointment.fixture_id,
       userId: appointment.user_id,
       userDisplayName: profile?.displayName ?? actor.profile.displayName,
       refCardId: profile?.refCardId ?? null,
@@ -384,10 +563,15 @@ export async function listAppointmentsForActor(
       roleLabel: role?.label ?? "Rol sin definir",
       kickoffAt: fixture?.kickoff_at ?? appointment.created_at ?? new Date().toISOString(),
       matchLabel: buildMatchLabel(homeTeam?.name, awayTeam?.name),
+      competitionId: competition?.id ?? fixture?.competition_id ?? null,
       competitionName: competition?.name ?? null,
+      categoryId: category?.id ?? fixture?.category_id ?? null,
       categoryName: category?.name ?? null,
+      seasonId: season?.id ?? fixture?.season_id ?? null,
       seasonLabel: season?.label ?? null,
+      associationId: association?.id ?? fixture?.association_id ?? null,
       associationName: association?.name ?? institutionName?.name ?? null,
+      countryId: country?.id ?? fixture?.country_id ?? null,
       countryName: country?.name ?? null,
       venueName: venue?.name ?? null,
       venueCity: venue?.city ?? null,
@@ -460,6 +644,11 @@ export async function createAppointment(
     payload.refereeSystem ?? null,
     Boolean(payload.varEnabled)
   );
+
+  await ensureNoActiveAppointmentOnSameDate(supabase, {
+    userId: targetUserId,
+    kickoffAt,
+  });
 
   await validateEligibilityIfNeeded(
     supabase,
@@ -578,6 +767,141 @@ export async function createAppointment(
       competition: competition.name,
       category: category.name,
       role: role.label,
+    },
+    created_at: now,
+  });
+
+  const officialWrite = supabase.from("match_officials").insert({
+    fixture_id: fixture.id,
+    role_id: role.id,
+    appointment_id: appointment.id,
+    user_id: targetUserId,
+    official_name:
+      targetUserId === actor.userId ? actor.profile.displayName : null,
+    source_type: sourceType,
+    status: status === "confirmed" ? "confirmed" : "assigned",
+    is_primary_assignment: true,
+    created_at: now,
+    updated_at: now,
+  });
+
+  const [historyResult, officialResult] = await Promise.all([
+    historyWrite,
+    officialWrite,
+  ]);
+
+  throwIfError(historyResult.error, "No se pudo registrar el historial de la designacion.");
+  throwIfError(officialResult.error, "No se pudo registrar el equipo arbitral.");
+
+  return appointment;
+}
+
+export async function createAppointmentFromFixture(
+  supabase: SupabaseAnyClient,
+  actor: MatchActorContext,
+  payload: FixtureAppointmentPayload
+) {
+  const sourceType = payload.sourceType === "institutional" ? "institutional" : "manual";
+  const targetUserId =
+    sourceType === "institutional" && actor.canManageInstitution
+      ? textOrNull(payload.targetUserId) ?? actor.userId
+      : actor.userId;
+  const status = payload.status ?? "confirmed";
+
+  if (sourceType === "institutional" && !actor.canManageInstitution) {
+    throw new Error("Tu perfil no puede generar designaciones institucionales.");
+  }
+
+  const fixtureId = requiredText(payload.fixtureId, "Selecciona un partido.");
+  const fixture = await getFixtureById(supabase, fixtureId);
+  if (!fixture) {
+    throw new Error("El partido seleccionado no existe o ya no esta disponible.");
+  }
+
+  const role = await getRoleBySportAndKey(supabase, fixture.sport_type, payload.roleKey);
+  if (!role) {
+    throw new Error("La funcion arbitral seleccionada no existe para esa disciplina.");
+  }
+
+  if (role.requires_var && !fixture.var_enabled) {
+    throw new Error("Ese partido no tiene VAR habilitado para la funcion elegida.");
+  }
+
+  await ensureNoActiveAppointmentOnSameDate(supabase, {
+    userId: targetUserId,
+    kickoffAt: fixture.kickoff_at,
+    allowSameDateOverride: Boolean(payload.allowSameDateOverride),
+  });
+
+  await validateEligibilityIfNeeded(
+    supabase,
+    targetUserId,
+    fixture.sport_type,
+    role.id,
+    fixture.competition_id ?? null,
+    fixture.category_id ?? null
+  );
+
+  const now = new Date().toISOString();
+  const homeTeam = fixture.home_team_id
+    ? await getTeamById(supabase, fixture.home_team_id)
+    : null;
+  const awayTeam = fixture.away_team_id
+    ? await getTeamById(supabase, fixture.away_team_id)
+    : null;
+  const competition = fixture.competition_id
+    ? await getCompetitionById(supabase, fixture.competition_id)
+    : null;
+  const category = fixture.category_id
+    ? await getCategoryById(supabase, fixture.category_id)
+    : null;
+
+  const { data: appointmentData, error: appointmentError } = await supabase
+    .from("appointments")
+    .insert({
+      user_id: targetUserId,
+      fixture_id: fixture.id,
+      role_id: role.id,
+      sport_type: fixture.sport_type,
+      competition_id: fixture.competition_id ?? null,
+      association_id: fixture.association_id ?? null,
+      institution_id: actor.institutionId,
+      source_type: sourceType,
+      status,
+      created_by_user_id: actor.userId,
+      confirmed_at: status === "confirmed" ? now : null,
+      observations: textOrNull(payload.observations),
+      metadata: {
+        registration_mode:
+          sourceType === "institutional" ? "institution_fixture" : "fixture_selection",
+        actor_role: actor.role,
+      },
+      created_at: now,
+      updated_at: now,
+    })
+    .select("*")
+    .single();
+
+  throwIfError(appointmentError, "No se pudo crear la designacion.");
+
+  const appointment = appointmentData as AppointmentRecord;
+
+  const historyWrite = supabase.from("appointment_history").insert({
+    appointment_id: appointment.id,
+    user_id: targetUserId,
+    changed_by_user_id: actor.userId,
+    change_type: "created",
+    to_status: status,
+    reason:
+      sourceType === "institutional"
+        ? "Designacion confirmada por la institucion."
+        : "Designacion registrada por el usuario.",
+    snapshot: {
+      match_label: buildMatchLabel(homeTeam?.name, awayTeam?.name),
+      competition: competition?.name ?? null,
+      category: category?.name ?? null,
+      role: role.label,
+      fixture_id: fixture.id,
     },
     created_at: now,
   });
@@ -797,6 +1121,8 @@ export async function updateAppointment(
     return appointment;
   }
 
+  patch.updated_at = new Date().toISOString();
+
   const { data, error } = await supabase
     .from("appointments")
     .update(patch)
@@ -807,6 +1133,39 @@ export async function updateAppointment(
   throwIfError(error, "No se pudo actualizar la designacion.");
 
   const updatedAppointment = data as AppointmentRecord;
+  if (payload.roleKey || payload.status) {
+    const officialPatch: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (roleId) {
+      officialPatch.role_id = roleId.id;
+    }
+
+    if (payload.status) {
+      officialPatch.status =
+        payload.status === "confirmed"
+          ? "confirmed"
+          : payload.status === "replaced"
+            ? "replaced"
+            : payload.status === "cancelled" ||
+                payload.status === "suspended" ||
+                payload.status === "postponed"
+              ? "removed"
+              : "assigned";
+    }
+
+    const { error: officialUpdateError } = await supabase
+      .from("match_officials")
+      .update(officialPatch)
+      .eq("appointment_id", appointmentId);
+
+    throwIfError(
+      officialUpdateError,
+      "No se pudo sincronizar el equipo arbitral de la designacion."
+    );
+  }
+
   await registerAppointmentHistory(supabase, {
     appointmentId,
     userId: appointment.user_id,
@@ -989,8 +1348,8 @@ async function validateEligibilityIfNeeded(
   userId: string,
   sportType: SportType,
   roleId: string,
-  competitionId: string,
-  categoryId: string
+  competitionId: string | null,
+  categoryId: string | null
 ) {
   const eligibilityRes = await supabase
     .from("referee_eligibility")
@@ -1313,6 +1672,85 @@ function getSuggestedContentForRole(
   }
 
   return `Volver a entrenar situaciones de ${topic} antes del partido.`;
+}
+
+async function ensureNoActiveAppointmentOnSameDate(
+  supabase: SupabaseAnyClient,
+  input: {
+    userId: string;
+    kickoffAt: string;
+    allowSameDateOverride?: boolean;
+    excludeAppointmentId?: string | null;
+  }
+) {
+  if (input.allowSameDateOverride) return;
+
+  let query = supabase
+    .from("appointments")
+    .select("*")
+    .eq("user_id", input.userId)
+    .in("status", activeAppointmentStatusesForConflicts);
+
+  if (input.excludeAppointmentId) {
+    query = query.neq("id", input.excludeAppointmentId);
+  }
+
+  const appointmentsRes = await query;
+  throwIfError(
+    appointmentsRes.error,
+    "No se pudo validar si ya existe una designacion en esa fecha."
+  );
+
+  const appointments = (appointmentsRes.data ?? []) as AppointmentRecord[];
+  if (!appointments.length) return;
+
+  const fixtures = await getFixturesByIds(
+    supabase,
+    uniqueIds(appointments.map((item) => item.fixture_id))
+  );
+  const roles = await getRolesByIds(
+    supabase,
+    uniqueIds(appointments.map((item) => item.role_id))
+  );
+  const teams = await getTeamsByIds(
+    supabase,
+    uniqueIds(fixtures.flatMap((item) => [item.home_team_id, item.away_team_id]))
+  );
+
+  const fixtureMap = indexById(fixtures);
+  const roleMap = indexById(roles);
+  const teamMap = indexById(teams);
+  const targetDate = toCalendarDateKey(input.kickoffAt);
+
+  const conflictingAppointment = appointments.find((appointment) => {
+    const fixture = fixtureMap.get(appointment.fixture_id);
+    if (!fixture?.kickoff_at) return false;
+    return toCalendarDateKey(fixture.kickoff_at) === targetDate;
+  });
+
+  if (!conflictingAppointment) return;
+
+  const conflictingFixture = fixtureMap.get(conflictingAppointment.fixture_id) ?? null;
+  const homeTeam = conflictingFixture?.home_team_id
+    ? teamMap.get(conflictingFixture.home_team_id) ?? null
+    : null;
+  const awayTeam = conflictingFixture?.away_team_id
+    ? teamMap.get(conflictingFixture.away_team_id) ?? null
+    : null;
+  const conflictingRole = roleMap.get(conflictingAppointment.role_id) ?? null;
+
+  throw new MatchesConflictError(
+    "Ya existe una designacion activa para esa misma fecha.",
+    {
+      appointmentId: conflictingAppointment.id,
+      matchLabel: buildMatchLabel(homeTeam?.name, awayTeam?.name),
+      kickoffAt:
+        conflictingFixture?.kickoff_at ??
+        conflictingAppointment.created_at ??
+        input.kickoffAt,
+      roleLabel: conflictingRole?.label ?? "Rol sin definir",
+    }
+  );
 }
 
 async function registerAppointmentHistory(
@@ -2034,6 +2472,10 @@ function normalizeDateTime(value: string) {
   }
 
   return timestamp.toISOString();
+}
+
+function toCalendarDateKey(value: string) {
+  return normalizeDateTime(value).slice(0, 10);
 }
 
 function requiredText(value: string, errorMessage: string) {

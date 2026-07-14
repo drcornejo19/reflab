@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useMemo } from "react";
+import { Suspense } from "react";
 import { ChartNoAxesCombined, Trophy } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { SportPageSwitch } from "@/components/SportPageSwitch";
+import { getDisciplineDefinition } from "@/lib/discipline";
 import { getSportLabel } from "@/lib/sports";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ export default function MobileStatsPage() {
 
 function MobileStatsPageContent() {
   const { currentDiscipline: sportType } = useDiscipline();
+  const theme = getDisciplineDefinition(sportType).theme;
 
   return (
     <AppShell>
@@ -37,9 +39,13 @@ function MobileStatsPageContent() {
         <div className="grid gap-3">
           <Link
             href="/stats"
-            className="min-w-0 rounded-3xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 p-4"
+            className="min-w-0 rounded-3xl border p-4"
+            style={{
+              borderColor: theme.border,
+              backgroundColor: theme.accentSoft,
+            }}
           >
-            <ChartNoAxesCombined className="text-[#6fc11f]" size={34} />
+            <ChartNoAxesCombined size={34} style={{ color: theme.accent }} />
             <h2 className="mt-4 break-words text-xl font-black">Estadisticas</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
               Rendimiento por topico, precision y evolucion sin mezclar disciplinas.
@@ -48,9 +54,10 @@ function MobileStatsPageContent() {
 
           <Link
             href="/ranking"
-            className="min-w-0 rounded-3xl border border-white/10 bg-[#101b24] p-4"
+            className="min-w-0 rounded-3xl border p-4"
+            style={{ borderColor: theme.border, backgroundColor: "#101b24" }}
           >
-            <Trophy className="text-[#6fc11f]" size={34} />
+            <Trophy size={34} style={{ color: theme.accent }} />
             <h2 className="mt-4 break-words text-xl font-black">Ranking</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
               Compara rendimiento entre arbitros dentro de la misma disciplina.

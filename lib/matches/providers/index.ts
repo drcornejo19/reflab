@@ -28,6 +28,10 @@ export function getProvidersForCapability(
 }
 
 export function getMatchProviderReadiness(): MatchProviderReadiness[] {
+  const selectedProvider = process.env.SPORTS_API_PROVIDER?.trim() || "api_football";
+  const hasSportsToken = Boolean(process.env.SPORTS_API_TOKEN?.trim());
+  const hasSportsBaseUrl = Boolean(process.env.SPORTS_API_BASE_URL?.trim());
+
   return matchProviderDescriptors.map((descriptor) => {
     if (descriptor.id === "manual_assisted") {
       return {
@@ -47,20 +51,18 @@ export function getMatchProviderReadiness(): MatchProviderReadiness[] {
       };
     }
 
-    const hasKey =
-      descriptor.id === "football_data"
-        ? Boolean(process.env.FOOTBALL_DATA_API_KEY)
-        : descriptor.id === "sportmonks"
-          ? Boolean(process.env.SPORTMONKS_API_KEY)
-          : Boolean(process.env.API_FOOTBALL_API_KEY);
+    const enabledForEnvironment =
+      descriptor.id === selectedProvider && hasSportsToken && hasSportsBaseUrl;
 
     return {
       ...descriptor,
-      enabled: hasKey,
-      readinessLabel: hasKey ? "Listo" : "Configuracion pendiente",
-      reason: hasKey
-        ? "El proveedor tiene credenciales configuradas."
-        : "Falta aprobacion o credencial para activar este proveedor.",
+      enabled: enabledForEnvironment,
+      readinessLabel: enabledForEnvironment ? "Listo" : "Configuracion pendiente",
+      reason: enabledForEnvironment
+        ? "El proveedor deportivo esta listo para sincronizar datos desde servidor."
+        : descriptor.id === selectedProvider
+          ? "Faltan SPORTS_API_TOKEN o SPORTS_API_BASE_URL para activar el proveedor seleccionado."
+          : "El proveedor no esta seleccionado actualmente en SPORTS_API_PROVIDER.",
     };
   });
 }

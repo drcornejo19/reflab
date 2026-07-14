@@ -7,6 +7,7 @@ import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { SportPageSwitch } from "@/components/SportPageSwitch";
+import { getDisciplineDefinition } from "@/lib/discipline";
 import {
   getRankingRows,
   type AttemptRecord,
@@ -31,6 +32,7 @@ function RankingPageContent() {
   const { user } = useUser();
   const { currentDiscipline: sportType } = useDiscipline();
   const { isPro, loadingRole } = useUserRole();
+  const theme = getDisciplineDefinition(sportType).theme;
   const [attempts, setAttempts] = useState<AttemptRecord[]>([]);
   const [profiles, setProfiles] = useState<RankingProfileRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +80,7 @@ function RankingPageContent() {
       <AppShell>
         <div className="mx-auto w-full max-w-[980px] space-y-5 overflow-hidden">
           <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-5 shadow-2xl sm:p-6">
-            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#6fc11f]">
+            <p className="text-xs font-black uppercase tracking-[0.28em]" style={{ color: theme.accent }}>
               RefLab Ranking
             </p>
             <h1 className="mt-3 break-words text-3xl font-black tracking-tight md:text-4xl">
@@ -104,7 +106,10 @@ function RankingPageContent() {
     <AppShell>
       <div className="mx-auto w-full max-w-[1200px] space-y-6 overflow-hidden">
         <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-5 shadow-2xl sm:p-6">
-          <p className="text-xs font-black uppercase tracking-[0.28em] text-[#6fc11f] sm:tracking-[0.35em]">
+          <p
+            className="text-xs font-black uppercase tracking-[0.28em] sm:tracking-[0.35em]"
+            style={{ color: theme.accent }}
+          >
             RefLab Ranking
           </p>
 
@@ -134,7 +139,10 @@ function RankingPageContent() {
             <section className="rounded-3xl border border-white/10 bg-[#071019] p-4 shadow-2xl sm:p-5">
               <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.28em] text-[#6fc11f] sm:tracking-[0.35em]">
+                  <p
+                    className="text-xs font-black uppercase tracking-[0.28em] sm:tracking-[0.35em]"
+                    style={{ color: theme.accent }}
+                  >
                     Tabla general
                   </p>
                   <h2 className="mt-2 text-2xl font-black">
@@ -142,7 +150,10 @@ function RankingPageContent() {
                   </h2>
                 </div>
 
-                <div className="w-fit rounded-2xl bg-[#6fc11f]/10 px-4 py-3 text-sm font-black text-[#6fc11f]">
+                <div
+                  className="w-fit rounded-2xl px-4 py-3 text-sm font-black"
+                  style={{ backgroundColor: theme.accentSoft, color: theme.accent }}
+                >
                   {ranking.length} arbitros
                 </div>
               </div>
@@ -161,20 +172,29 @@ function RankingPageContent() {
 }
 
 function PodiumCard({ row }: { row: RankingRow }) {
+  const { currentDiscipline } = useDiscipline();
+  const theme = getDisciplineDefinition(currentDiscipline).theme;
+
   return (
     <div
       className={`rounded-3xl border p-5 shadow-2xl sm:p-6 ${
-        row.position === 1
-          ? "border-[#6fc11f]/50 bg-[#6fc11f]/15"
-          : "border-white/10 bg-[#0b131b]"
+        row.position === 1 ? "bg-[#0b131b]" : "border-white/10 bg-[#0b131b]"
       }`}
+      style={
+        row.position === 1
+          ? { borderColor: theme.border, backgroundColor: theme.accentSoft }
+          : undefined
+      }
     >
       <div className="flex items-center justify-between">
-        <span className="grid h-12 w-12 place-items-center rounded-2xl border border-[#6fc11f]/35 bg-black/35 text-2xl font-black text-[#b7ff8a]">
+        <span
+          className="grid h-12 w-12 place-items-center rounded-2xl border bg-black/35 text-2xl font-black"
+          style={{ borderColor: theme.border, color: theme.accent }}
+        >
           {row.position}
         </span>
 
-        <span className="rounded-full bg-black/35 px-3 py-1 text-xs font-black text-[#6fc11f]">
+        <span className="rounded-full bg-black/35 px-3 py-1 text-xs font-black" style={{ color: theme.accent }}>
           #{row.position}
         </span>
       </div>
@@ -196,9 +216,12 @@ function PodiumCard({ row }: { row: RankingRow }) {
 }
 
 function RankingItem({ row }: { row: RankingRow }) {
+  const { currentDiscipline } = useDiscipline();
+  const theme = getDisciplineDefinition(currentDiscipline).theme;
+
   return (
     <div className="grid gap-3 rounded-2xl border border-white/10 bg-[#0f1a23] px-4 py-4 text-sm sm:grid-cols-[58px_minmax(0,1fr)_80px_80px_80px_80px] sm:items-center">
-      <div className="text-xl font-black text-[#6fc11f]">#{row.position}</div>
+      <div className="text-xl font-black" style={{ color: theme.accent }}>#{row.position}</div>
 
       <div className="min-w-0">
         <p className="break-words font-black">{row.name}</p>
@@ -216,10 +239,18 @@ function RankingItem({ row }: { row: RankingRow }) {
 }
 
 function RankingStat({ label, value, green = false }: { label: string; value: string; green?: boolean }) {
+  const { currentDiscipline } = useDiscipline();
+  const theme = getDisciplineDefinition(currentDiscipline).theme;
+
   return (
     <div className="rounded-2xl bg-black/25 p-3 text-left sm:bg-transparent sm:p-0 sm:text-center">
       <p className="text-xs text-zinc-500">{label}</p>
-      <p className={`font-black ${green ? "text-[#6fc11f]" : "text-white"}`}>{value}</p>
+      <p
+        className="font-black"
+        style={green ? { color: theme.accent } : undefined}
+      >
+        {value}
+      </p>
     </div>
   );
 }

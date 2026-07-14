@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
@@ -112,12 +112,12 @@ export function FutsalRulesPracticeClient() {
 
     return (
       <div className="rounded-3xl border border-white/10 bg-[#0b131b] p-8">
-        <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-          FUTSAL RULES PRACTICE
+        <p className="text-xs font-black uppercase tracking-[0.35em] text-[#16b8ff]">
+          TRIVIA FIFA FUTSAL
         </p>
 
         <h2 className="mt-4 text-4xl font-black">Practica finalizada</h2>
-        <p className="mt-6 text-5xl font-black text-[#6fc11f]">
+        <p className="mt-6 text-5xl font-black text-[#16b8ff]">
           {percentage}%
         </p>
         <p className="mt-2 text-zinc-400">
@@ -126,7 +126,7 @@ export function FutsalRulesPracticeClient() {
 
         <button
           onClick={() => window.location.reload()}
-          className="mt-6 rounded-2xl bg-[#6fc11f] px-6 py-4 font-black text-black"
+          className="mt-6 rounded-2xl bg-[#16b8ff] px-6 py-4 font-black text-black"
         >
           PRACTICAR DE NUEVO
         </button>
@@ -137,8 +137,8 @@ export function FutsalRulesPracticeClient() {
   return (
     <div className="space-y-5">
       <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-6">
-        <p className="text-xs font-black uppercase tracking-[0.35em] text-[#6fc11f]">
-          FUTSAL RULES PRACTICE
+        <p className="text-xs font-black uppercase tracking-[0.35em] text-[#16b8ff]">
+          TRIVIA FIFA FUTSAL
         </p>
 
         <h2 className="mt-3 text-4xl font-black">
@@ -146,13 +146,13 @@ export function FutsalRulesPracticeClient() {
         </h2>
 
         <p className="mt-2 text-sm text-zinc-400">
-          Pregunta {currentIndex + 1} de {questions.length} · feedback inmediato
+          Pregunta {currentIndex + 1} de {questions.length} - feedback inmediato
         </p>
       </header>
 
       <section className="rounded-3xl border border-white/10 bg-[#101820] p-6">
         <div className="mb-4 flex flex-wrap gap-2">
-          <span className="inline-flex rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-4 py-2 text-xs font-black text-[#6fc11f]">
+          <span className="inline-flex rounded-full border border-[#16b8ff]/30 bg-[#16b8ff]/10 px-4 py-2 text-xs font-black text-[#16b8ff]">
             {currentQuestion.lawReference}
           </span>
           <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-black text-zinc-300">
@@ -179,11 +179,11 @@ export function FutsalRulesPracticeClient() {
                 onClick={() => setSelected(index)}
                 className={`w-full rounded-2xl border px-5 py-4 text-left transition ${
                   isCorrect
-                    ? "border-[#6fc11f] bg-[#6fc11f]/20"
+                    ? "border-[#16b8ff] bg-[#16b8ff]/20"
                     : isWrong
                       ? "border-red-500 bg-red-500/15"
                       : active
-                        ? "border-[#6fc11f] bg-[#6fc11f]/10"
+                        ? "border-[#16b8ff] bg-[#16b8ff]/10"
                         : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
                 }`}
               >
@@ -197,14 +197,14 @@ export function FutsalRulesPracticeClient() {
         </div>
 
         {answered && (
-          <div className="mt-6 rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-5">
-            <p className="font-black text-[#6fc11f]">
+          <div className="mt-6 rounded-2xl border border-[#16b8ff]/25 bg-[#16b8ff]/10 p-5">
+            <p className="font-black text-[#16b8ff]">
               {selected === currentQuestion.correct ? "Correcto" : "Incorrecto"}
             </p>
             <p className="mt-2 text-sm leading-6 text-zinc-300">
               {currentQuestion.explanation}
             </p>
-            <p className="mt-3 border-t border-[#6fc11f]/20 pt-3 text-sm leading-6 text-zinc-400">
+            <p className="mt-3 border-t border-[#16b8ff]/20 pt-3 text-sm leading-6 text-zinc-400">
               <strong className="text-white">Fundamento FIFA:</strong>{" "}
               {currentQuestion.officialExplanation ?? currentQuestion.ifabExplanation}
             </p>
@@ -218,7 +218,7 @@ export function FutsalRulesPracticeClient() {
           <button
             disabled={selected === null || saving}
             onClick={submitAnswer}
-            className="mt-6 w-full rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black disabled:opacity-40"
+            className="mt-6 w-full rounded-2xl bg-[#16b8ff] px-5 py-4 font-black text-black disabled:opacity-40"
           >
             {saving ? "GUARDANDO..." : "RESPONDER"}
           </button>
@@ -234,3 +234,5 @@ export function FutsalRulesPracticeClient() {
     </div>
   );
 }
+
+

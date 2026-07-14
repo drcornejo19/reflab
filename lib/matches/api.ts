@@ -1,5 +1,6 @@
 import type { SystemRole } from "@/lib/institutionalRoles";
 import type { SportType } from "@/lib/sports";
+import type { SportsAutomationStatus } from "@/lib/sports-data/types";
 import type {
   AppointmentRecord,
   AppointmentStatus,
@@ -8,6 +9,7 @@ import type {
   CompetitionSeasonRecord,
   CountryRecord,
   FixtureRecord,
+  FixtureStatus,
   MatchContextSnapshotRecord,
   MatchPreparationRecord,
   PostMatchReviewRecord,
@@ -50,6 +52,7 @@ export type InstitutionMemberOption = {
 
 export type MatchesCatalogResponse = {
   actor: MatchActorContext;
+  automationStatus?: SportsAutomationStatus;
   countries: CountryRecord[];
   associations: AssociationRecord[];
   competitions: CompetitionRecord[];
@@ -58,12 +61,44 @@ export type MatchesCatalogResponse = {
   roles: RefereeRoleRecord[];
   eligibilities: RefereeEligibilityRecord[];
   institutionMembers: InstitutionMemberOption[];
+  fixtures: MatchFixtureListItem[];
   supportsInstitutionAssignments: boolean;
   fallbackMode: "eligibility_matrix" | "manual_assisted";
 };
 
+export type MatchFixtureListItem = {
+  fixtureId: string;
+  sportType: SportType;
+  status: FixtureStatus;
+  statusLabel: string;
+  kickoffAt: string;
+  roundLabel: string | null;
+  matchdayNumber: number | null;
+  refereeSystem: string | null;
+  varEnabled: boolean;
+  dataSource: FixtureRecord["data_source"] | null;
+  competitionId: string | null;
+  competitionName: string | null;
+  seasonId: string | null;
+  seasonLabel: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  associationId: string | null;
+  associationName: string | null;
+  countryId: string | null;
+  countryName: string | null;
+  homeTeamId: string | null;
+  homeTeamName: string;
+  awayTeamId: string | null;
+  awayTeamName: string;
+  venueId: string | null;
+  venueName: string | null;
+  venueCity: string | null;
+};
+
 export type MatchAppointmentListItem = {
   appointmentId: string;
+  fixtureId: string;
   userId: string;
   userDisplayName: string;
   refCardId: string | null;
@@ -76,10 +111,15 @@ export type MatchAppointmentListItem = {
   roleLabel: string;
   kickoffAt: string;
   matchLabel: string;
+  competitionId: string | null;
   competitionName: string | null;
+  categoryId: string | null;
   categoryName: string | null;
+  seasonId: string | null;
   seasonLabel: string | null;
+  associationId: string | null;
   associationName: string | null;
+  countryId: string | null;
   countryName: string | null;
   venueName: string | null;
   venueCity: string | null;
@@ -172,6 +212,16 @@ export type ManualAppointmentPayload = {
   observations?: string | null;
   sourceType?: "manual" | "institutional";
   targetUserId?: string | null;
+};
+
+export type FixtureAppointmentPayload = {
+  fixtureId: string;
+  roleKey: RefereeRoleKey;
+  status?: AppointmentStatus;
+  observations?: string | null;
+  sourceType?: "manual" | "institutional";
+  targetUserId?: string | null;
+  allowSameDateOverride?: boolean;
 };
 
 export type MatchPreparationPayload = {

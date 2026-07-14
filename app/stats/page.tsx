@@ -7,6 +7,7 @@ import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { SportPageSwitch } from "@/components/SportPageSwitch";
+import { getDisciplineDefinition } from "@/lib/discipline";
 import {
   buildSportPerformanceDataset,
   formatPercent,
@@ -53,6 +54,7 @@ function StatsPageContent() {
   const { user, isLoaded } = useUser();
   const { currentDiscipline: sportType } = useDiscipline();
   const { isPro, loadingRole } = useUserRole();
+  const theme = getDisciplineDefinition(sportType).theme;
   const [data, setData] = useState<StatsData>(emptyData);
   const [loading, setLoading] = useState(true);
 
@@ -140,7 +142,10 @@ function StatsPageContent() {
           <SportPageSwitch title="Disciplina de estadisticas" />
 
           <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-4 sm:p-6">
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
+            <p
+              className="text-[10px] font-black uppercase tracking-[0.22em] sm:text-xs sm:tracking-[0.35em]"
+              style={{ color: theme.accent }}
+            >
               REFLAB STATS
             </p>
             <h1 className="mt-2 text-2xl font-black md:text-3xl">Estadisticas basicas</h1>
@@ -172,7 +177,10 @@ function StatsPageContent() {
         <SportPageSwitch title="Disciplina de estadisticas" />
 
         <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-4 sm:p-6">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#6fc11f] sm:text-xs sm:tracking-[0.35em]">
+          <p
+            className="text-[10px] font-black uppercase tracking-[0.22em] sm:text-xs sm:tracking-[0.35em]"
+            style={{ color: theme.accent }}
+          >
             REFLAB STATS
           </p>
           <h1 className="mt-2 text-2xl font-black md:text-3xl">Estadisticas sincronizadas</h1>
@@ -200,7 +208,7 @@ function StatsPageContent() {
                     className="flex items-center justify-between gap-3 rounded-xl bg-white/5 px-4 py-3 text-sm"
                   >
                     <span className="min-w-0 truncate">{item.topic}</span>
-                    <span className="shrink-0 font-black text-[#6fc11f]">
+                    <span className="shrink-0 font-black" style={{ color: theme.accent }}>
                       {formatScore(item.score)}
                     </span>
                   </div>
@@ -276,6 +284,9 @@ function ProgressMetric({
   value: number | null;
   detail: string;
 }) {
+  const { currentDiscipline } = useDiscipline();
+  const theme = getDisciplineDefinition(currentDiscipline).theme;
+
   return (
     <div>
       <div className="mb-1 flex justify-between gap-3 text-sm">
@@ -284,8 +295,11 @@ function ProgressMetric({
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-white/10">
         <div
-          className="h-full bg-[#6fc11f]"
-          style={{ width: `${Math.max(0, Math.min(value ?? 0, 100))}%` }}
+          className="h-full"
+          style={{
+            width: `${Math.max(0, Math.min(value ?? 0, 100))}%`,
+            backgroundColor: theme.accent,
+          }}
         />
       </div>
       <p className="mt-1 text-xs text-zinc-500">{detail}</p>
@@ -294,11 +308,14 @@ function ProgressMetric({
 }
 
 function CriterionCard({ criterion }: { criterion: SportCriterionMetric }) {
+  const { currentDiscipline } = useDiscipline();
+  const theme = getDisciplineDefinition(currentDiscipline).theme;
+
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
       <p className="font-black text-white">{criterion.label}</p>
       <p className="mt-2 text-sm text-zinc-400">{criterion.description}</p>
-      <p className="mt-3 text-2xl font-black text-[#6fc11f]">
+      <p className="mt-3 text-2xl font-black" style={{ color: theme.accent }}>
         {formatPercent(criterion.accuracy)}
       </p>
       <p className="mt-1 text-xs text-zinc-500">

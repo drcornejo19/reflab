@@ -9,6 +9,7 @@ import {
   type SummaryMetric,
   type TopicMetric,
 } from "@/lib/performance";
+import { getDisciplineAction, getDisciplineRoute } from "@/lib/discipline";
 import { getRadarAxesForSport, type MetricFieldKey } from "@/lib/sportMetrics";
 import {
   DEFAULT_SPORT_TYPE,
@@ -678,10 +679,8 @@ export function getSportRecommendedPlan(
   summary: SportPerformanceSummary,
   sportType: SportType
 ) {
-  const trainingHref =
-    sportType === "futsal" ? "/futsal/video-analysis" : "/training/decision";
-  const evaluationHref =
-    sportType === "futsal" ? "/futsal/rules-exam" : "/evaluations";
+  const trainingHref = getDisciplineAction(sportType, "primaryTraining");
+  const evaluationHref = getDisciplineRoute(sportType, "rulesExam");
 
   if (!summary.hasData) {
     return {
@@ -689,7 +688,7 @@ export function getSportRecommendedPlan(
       priority1:
         sportType === "futsal"
           ? "Comenzar con videoanalisis de futsal."
-          : "Comenzar con Decision arbitral.",
+          : "Comenzar con entrenamiento con clips.",
       priority2: "Completar una evaluacion formal para activar metricas.",
       nextStep: "Realizar el primer entrenamiento con casos reales.",
       reason: "RefLab necesita datos reales para detectar patrones.",
@@ -803,7 +802,10 @@ export function getSportModulePerformance(
   const modules: SportModulePerformance[] = [
     {
       key: "decision",
-      title: "Decision arbitral",
+      title:
+        sportType === "futsal"
+          ? "Videoanalisis de futsal"
+          : "Entrenamiento con clips",
       description:
         sportType === "futsal"
           ? "Evalua lectura tecnica, reanudaciones, disciplina y criterios propios de futsal."

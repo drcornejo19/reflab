@@ -19,7 +19,7 @@ export default async function MatchesPage() {
           </p>
           <Link
             href="/sign-in"
-            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-[#6fc11f] px-6 font-black text-black"
+            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-gradient-to-r from-lime-300 to-sky-300 px-6 font-black text-[#04110a]"
           >
             Iniciar sesion
           </Link>

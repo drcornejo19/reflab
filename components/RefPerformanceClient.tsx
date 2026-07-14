@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
+import { getDisciplineDefinition } from "@/lib/discipline";
 import { DEFAULT_SPORT_TYPE, type SportType } from "@/lib/sports";
 
 type CheckInType = "pre" | "post" | "rest_day";
@@ -260,6 +261,20 @@ export function RefPerformanceClient({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [schemaMessage, setSchemaMessage] = useState<string | null>(null);
+  const theme = getDisciplineDefinition(sportType).theme;
+  const themeVars = useMemo(
+    () =>
+      ({
+        "--accent": theme.accent,
+        "--accent-soft": theme.accentSoft,
+        "--accent-border": theme.border,
+        "--accent-glow": theme.glow,
+        "--accent-button": theme.button,
+        "--accent-button-hover": theme.buttonHover,
+        "--accent-on": theme.onAccent,
+      }) as CSSProperties,
+    [theme]
+  );
   const matchContext = useMemo<MatchContext>(
     () => ({
       appointmentId: searchParams.get("appointmentId"),
@@ -374,9 +389,9 @@ export function RefPerformanceClient({
 
   if (!isLoaded || loading) {
     return (
-      <div className="rounded-[32px] border border-white/10 bg-[#071019] p-6 text-zinc-400">
+      <div style={themeVars} className="rounded-[32px] border border-white/10 bg-[#071019] p-6 text-zinc-400">
         <div className="flex items-center gap-3">
-          <RefreshCw className="h-5 w-5 animate-spin text-[#6fc11f]" />
+          <RefreshCw className="h-5 w-5 animate-spin text-[var(--accent)]" />
           Cargando Ref Performance...
         </div>
       </div>
@@ -385,13 +400,13 @@ export function RefPerformanceClient({
 
   if (!user) {
     return (
-      <div className="rounded-[32px] border border-white/10 bg-[#071019] p-6 text-center shadow-2xl">
-        <ShieldCheck className="mx-auto h-12 w-12 text-[#6fc11f]" />
+      <div style={themeVars} className="rounded-[32px] border border-white/10 bg-[#071019] p-6 text-center shadow-2xl">
+        <ShieldCheck className="mx-auto h-12 w-12 text-[var(--accent)]" />
         <h1 className="mt-4 text-3xl font-black">Ref Performance</h1>
         <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-400">
           Inicia sesion para registrar wellness, carga, fatiga, sueno y readiness arbitral.
         </p>
-        <Link href="/sign-in" className="mt-6 inline-flex min-h-12 items-center rounded-2xl bg-[#6fc11f] px-6 font-black text-black">
+        <Link href="/sign-in" className="mt-6 inline-flex min-h-12 items-center rounded-2xl bg-[var(--accent-button)] px-6 font-black text-[var(--accent-on)]">
           Iniciar sesion
         </Link>
       </div>
@@ -399,7 +414,10 @@ export function RefPerformanceClient({
   }
 
   return (
-    <div className="mx-auto w-full max-w-full space-y-5 overflow-hidden lg:max-w-[1180px] lg:space-y-6">
+    <div
+      style={themeVars}
+      className="mx-auto w-full max-w-full space-y-5 overflow-hidden lg:max-w-[1180px] lg:space-y-6"
+    >
       <Hero readiness={readiness} />
 
       {schemaMessage && <Notice tone="warning">{schemaMessage}</Notice>}
@@ -426,27 +444,33 @@ export function RefPerformanceClient({
 
 function Hero({ readiness }: { readiness: ReturnType<typeof calculateReadiness> }) {
   return (
-    <header className="overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(111,193,31,0.2),transparent_36%),linear-gradient(145deg,#071019,#0b151f_62%,#111827)] p-4 shadow-2xl sm:p-6 lg:p-8">
+    <header
+      className="overflow-hidden rounded-[34px] border border-white/10 p-4 shadow-2xl sm:p-6 lg:p-8"
+      style={{
+        background:
+          "radial-gradient(circle at top left, var(--accent-soft), transparent 36%), linear-gradient(145deg,#071019,#0b151f 62%,#111827)",
+      }}
+    >
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#6fc11f] sm:text-xs sm:tracking-[0.45em]">Registro fisico</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[var(--accent)] sm:text-xs sm:tracking-[0.45em]">Registro fisico</p>
           <h1 className="mt-3 break-words text-4xl font-black leading-tight text-white sm:text-5xl">Wellness, readiness y carga diaria</h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 sm:text-base">
             Registro diario de estado fisico, disponibilidad, fatiga, sueno, dolor muscular, carga percibida, RPE y comentarios pre o post actividad.
           </p>
         </div>
 
-        <div className="rounded-[30px] border border-[#6fc11f]/30 bg-black/30 p-4 shadow-[0_0_36px_rgba(111,193,31,0.12)]">
+        <div className="rounded-[30px] border border-[color:var(--accent-border)] bg-black/30 p-4 shadow-[0_0_36px_var(--accent-glow)]">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6fc11f]">Readiness today</p>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--accent)]">Readiness today</p>
               <p className="mt-2 text-5xl font-black text-white">{readiness.score}%</p>
               <p className="mt-1 text-sm font-bold text-zinc-400">{readiness.status}</p>
             </div>
-            <Gauge className="h-16 w-16 text-[#6fc11f]" />
+            <Gauge className="h-16 w-16 text-[var(--accent)]" />
           </div>
           <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/10">
-            <div className="h-full rounded-full bg-[#6fc11f] shadow-[0_0_24px_rgba(111,193,31,0.45)]" style={{ width: `${readiness.score}%` }} />
+            <div className="h-full rounded-full bg-[var(--accent)] shadow-[0_0_24px_var(--accent-glow)]" style={{ width: `${readiness.score}%` }} />
           </div>
         </div>
       </div>
@@ -495,8 +519,8 @@ function DailyCheckInPanel({
               }
               className={`min-h-12 rounded-2xl border px-3 text-sm font-black transition ${
                 form.checkinType === item.value
-                  ? "border-[#6fc11f] bg-[#6fc11f] text-black"
-                  : "border-white/10 bg-white/[0.04] text-zinc-300 hover:border-[#6fc11f]/40"
+                  ? "border-[var(--accent)] bg-[var(--accent-button)] text-[var(--accent-on)]"
+                  : "border-white/10 bg-white/[0.04] text-zinc-300 hover:border-[color:var(--accent-border)]"
               }`}
             >
               {item.label}
@@ -521,7 +545,7 @@ function DailyCheckInPanel({
                   key={minutes}
                   type="button"
                   onClick={() => setForm((current) => ({ ...current, durationMinutes: minutes, customDuration: "" }))}
-                  className={`min-h-11 rounded-2xl border text-sm font-black transition ${duration === minutes && form.customDuration === "" ? "border-[#6fc11f] bg-[#6fc11f] text-black" : "border-white/10 bg-white/[0.04] text-zinc-300"}`}
+                  className={`min-h-11 rounded-2xl border text-sm font-black transition ${duration === minutes && form.customDuration === "" ? "border-[var(--accent)] bg-[var(--accent-button)] text-[var(--accent-on)]" : "border-white/10 bg-white/[0.04] text-zinc-300"}`}
                 >
                   {minutes} min
                 </button>
@@ -561,19 +585,19 @@ function DailyCheckInPanel({
         </label>
 
         {isPost && (
-          <div className="rounded-[24px] border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4">
+          <div className="rounded-[24px] border border-[color:var(--accent-border)] bg-[var(--accent-soft)] p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6fc11f]">Carga interna</p>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--accent)]">Carga interna</p>
               <p className="mt-1 text-2xl font-black">{duration * form.rpe} AU</p>
             </div>
-            <Activity className="h-9 w-9 text-[#6fc11f]" />
+            <Activity className="h-9 w-9 text-[var(--accent)]" />
           </div>
             <p className="mt-2 text-xs leading-5 text-zinc-400">Duracion x RPE. Se guarda como carga interna de la actividad.</p>
           </div>
         )}
 
-        <button type="button" onClick={onSave} disabled={saving} className="min-h-14 rounded-2xl bg-[#6fc11f] px-5 font-black text-black transition hover:bg-[#82dc2a] disabled:opacity-50">
+        <button type="button" onClick={onSave} disabled={saving} className="min-h-14 rounded-2xl bg-[var(--accent-button)] px-5 font-black text-[var(--accent-on)] transition disabled:opacity-50">
           {saving ? "Guardando..." : isPost ? "Guardar post actividad" : isRest ? `Guardar descanso (${readiness.score}%)` : `Guardar pre actividad (${readiness.score}%)`}
         </button>
       </div>
@@ -585,12 +609,18 @@ function ReadinessPanel({ readiness, analytics, insights }: { readiness: ReturnT
   return (
     <Panel eyebrow="Ref Readiness Score" title="Preparacion arbitral para hoy" icon={Gauge}>
       <div className="grid gap-4 md:grid-cols-[0.8fr_1.2fr]">
-        <div className="rounded-[28px] border border-[#6fc11f]/30 bg-black/30 p-5 text-center">
-          <div className="mx-auto grid h-44 w-44 place-items-center rounded-full border border-[#6fc11f]/30 bg-[conic-gradient(#6fc11f_var(--score),rgba(255,255,255,0.08)_0)] p-3 shadow-[0_0_36px_rgba(111,193,31,0.18)]" style={{ "--score": `${readiness.score}%` } as CSSProperties}>
+        <div className="rounded-[28px] border border-[color:var(--accent-border)] bg-black/30 p-5 text-center">
+          <div
+            className="mx-auto grid h-44 w-44 place-items-center rounded-full border border-[color:var(--accent-border)] p-3 shadow-[0_0_36px_var(--accent-glow)]"
+            style={{
+              "--score": `${readiness.score}%`,
+              background: `conic-gradient(var(--accent) ${readiness.score}%, rgba(255,255,255,0.08) 0)`,
+            } as CSSProperties}
+          >
             <div className="grid h-full w-full place-items-center rounded-full bg-[#071019]">
               <div>
                 <p className="text-5xl font-black text-white">{readiness.score}</p>
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6fc11f]">{readiness.status}</p>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--accent)]">{readiness.status}</p>
               </div>
             </div>
           </div>
@@ -638,11 +668,11 @@ function Panel({ eyebrow, title, icon: Icon, children }: { eyebrow: string; titl
   return (
     <section className="max-w-full overflow-hidden rounded-[32px] border border-white/10 bg-[#071019] p-4 shadow-2xl sm:p-5 lg:p-6">
       <div className="flex min-w-0 items-start gap-3">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]">
           <Icon size={22} />
         </div>
         <div className="min-w-0">
-          <p className="break-words text-[10px] font-black uppercase tracking-[0.2em] text-[#6fc11f] sm:text-xs sm:tracking-[0.32em]">{eyebrow}</p>
+          <p className="break-words text-[10px] font-black uppercase tracking-[0.2em] text-[var(--accent)] sm:text-xs sm:tracking-[0.32em]">{eyebrow}</p>
           <h2 className="mt-2 break-words text-2xl font-black leading-tight text-white">{title}</h2>
         </div>
       </div>
@@ -657,7 +687,7 @@ function ToggleRow({ label, value, onChange }: { label: string; value: boolean; 
       <p className="text-sm font-black text-white">{label}</p>
       <div className="grid grid-cols-2 rounded-2xl border border-white/10 bg-[#101b24] p-1">
         {[{ label: "No", value: false }, { label: "Si", value: true }].map((item) => (
-          <button key={item.label} type="button" onClick={() => onChange(item.value)} className={`min-h-9 rounded-xl px-4 text-xs font-black transition ${value === item.value ? "bg-[#6fc11f] text-black" : "text-zinc-400"}`}>
+          <button key={item.label} type="button" onClick={() => onChange(item.value)} className={`min-h-9 rounded-xl px-4 text-xs font-black transition ${value === item.value ? "bg-[var(--accent-button)] text-[var(--accent-on)]" : "text-zinc-400"}`}>
             {item.label}
           </button>
         ))}
@@ -671,9 +701,9 @@ function RangeField({ label, value, onChange }: { label: string; value: number; 
     <div>
       <div className="mb-2 flex items-center justify-between gap-3">
         <Label>{label}</Label>
-        <span className="rounded-full border border-[#6fc11f]/25 bg-[#6fc11f]/10 px-3 py-1 text-xs font-black text-[#6fc11f]">{value}/10</span>
+        <span className="rounded-full border border-[color:var(--accent-border)] bg-[var(--accent-soft)] px-3 py-1 text-xs font-black text-[var(--accent)]">{value}/10</span>
       </div>
-      <input type="range" min={1} max={10} value={value} onChange={(event) => onChange(Number(event.target.value))} className="w-full accent-[#6fc11f]" />
+      <input type="range" min={1} max={10} value={value} onChange={(event) => onChange(Number(event.target.value))} className="w-full accent-[var(--accent)]" />
     </div>
   );
 }
@@ -703,14 +733,14 @@ function Label({ children }: { children: ReactNode }) {
 }
 
 function Notice({ tone, children }: { tone: "success" | "warning"; children: ReactNode }) {
-  const style = tone === "success" ? "border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#b7ff8a]" : "border-yellow-400/25 bg-yellow-400/10 text-yellow-100";
+  const style = tone === "success" ? "border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]" : "border-yellow-400/25 bg-yellow-400/10 text-yellow-100";
   return <div className={`rounded-3xl border p-4 text-sm font-bold leading-6 ${style}`}>{children}</div>;
 }
 
 function MiniMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div className="rounded-[24px] border border-white/10 bg-black/20 p-4">
-      <Icon className="h-5 w-5 text-[#6fc11f]" />
+      <Icon className="h-5 w-5 text-[var(--accent)]" />
       <p className="mt-3 text-xs font-bold uppercase tracking-[0.14em] text-zinc-500">{label}</p>
       <p className="mt-1 break-words text-2xl font-black text-white">{value}</p>
     </div>
@@ -720,7 +750,7 @@ function MiniMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: str
 function MetricCard({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
     <div className="rounded-[24px] border border-white/10 bg-[#101b24] p-4">
-      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#6fc11f]">{label}</p>
+      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--accent)]">{label}</p>
       <p className="mt-2 text-xl font-black text-white">{value}</p>
       <p className="mt-2 text-xs leading-5 text-zinc-500">{detail}</p>
     </div>
@@ -742,7 +772,7 @@ function BarSeries({ values }: { values: number[] }) {
       {values.map((value, index) => (
         <div key={`${value}-${index}`} className="flex min-w-0 flex-1 flex-col items-center gap-2">
           <div className="flex h-32 w-full items-end rounded-full bg-white/5 p-1">
-            <div className="w-full rounded-full bg-[#6fc11f] shadow-[0_0_18px_rgba(111,193,31,0.35)]" style={{ height: `${Math.max(4, Math.min(value, 100))}%` }} />
+            <div className="w-full rounded-full bg-[var(--accent)] shadow-[0_0_18px_var(--accent-glow)]" style={{ height: `${Math.max(4, Math.min(value, 100))}%` }} />
           </div>
           <span className="text-[10px] font-bold text-zinc-500">{value}</span>
         </div>
