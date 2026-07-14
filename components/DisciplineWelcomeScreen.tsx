@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Info, MonitorCheck, ShieldCheck } from "lucide-react";
+import { ArrowRight, MonitorCheck, ShieldCheck } from "lucide-react";
 import { RF_LOGO_SIZE, RF_LOGO_SRC } from "@/lib/brand";
 import {
   getAllDisciplines,
@@ -68,10 +68,6 @@ export function DisciplineWelcomeScreen({
               disciplina
             </span>
           </h1>
-
-          <p className="mx-auto mt-5 max-w-2xl text-balance text-base leading-7 text-zinc-300 sm:text-lg">
-            Elige la disciplina con la que vas a trabajar hoy.
-          </p>
         </header>
 
         <section className="mt-10 grid gap-5 lg:mt-12 lg:grid-cols-2">
@@ -85,18 +81,6 @@ export function DisciplineWelcomeScreen({
             />
           ))}
         </section>
-
-        <div className="mx-auto mt-6 w-full max-w-[760px] rounded-[28px] border border-white/10 bg-white/[0.03] px-5 py-4 shadow-[0_16px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:px-6">
-          <div className="flex items-center gap-4">
-            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[#6fc11f]/30 bg-[#6fc11f]/10 text-[#6fc11f]">
-              <Info size={20} />
-            </div>
-            <p className="text-sm leading-6 text-zinc-300 sm:text-base">
-              Podras cambiar de disciplina cuando quieras desde tu{" "}
-              <span className="font-black text-[#6fc11f]">perfil</span>.
-            </p>
-          </div>
-        </div>
       </div>
     </main>
   );
