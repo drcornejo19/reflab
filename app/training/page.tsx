@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
-import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import {
   getDisciplineDefinition,
@@ -47,7 +46,6 @@ export default function TrainingPage() {
   return (
     <AppShell>
       <div className="w-full max-w-full space-y-5 overflow-hidden lg:space-y-6">
-        <SportPageSwitch title="Disciplina de entrenamiento" />
 
         <section
           className="rounded-[30px] border border-white/10 p-4 shadow-2xl sm:rounded-[34px] sm:p-6 lg:p-7"

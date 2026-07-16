@@ -276,7 +276,7 @@ export const disciplineDefinitions: Record<SportType, DisciplineExperience> = {
         title: "Videoanalisis de futsal",
         category: "Tecnica",
         description:
-          "Analiza jugadas con faltas acumuladas, control de cuatro segundos, guardameta y criterios propios de futsal.",
+          "Analiza jugadas de manos, disputas y faltas tacticas con criterios propios de futsal.",
         href: "/futsal/video-analysis",
         status: "Disponible",
         iconKey: "video",

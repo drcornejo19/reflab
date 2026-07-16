@@ -124,14 +124,24 @@ const historyStatuses = new Set([
 ]);
 
 export function MatchesHubClient() {
+  const { currentDiscipline } = useDiscipline();
+
+  return (
+    <MatchesHubExperience
+      key={currentDiscipline}
+      currentDiscipline={currentDiscipline}
+    />
+  );
+}
+
+function MatchesHubExperience({
+  currentDiscipline,
+}: {
+  currentDiscipline: SportType;
+}) {
   const selectionRef = useRef<HTMLElement | null>(null);
   const bootstrappedSportsRef = useRef<Set<SportType>>(new Set());
   const requestIdRef = useRef(0);
-  const {
-    currentDiscipline,
-    selectedDiscipline,
-    setDiscipline,
-  } = useDiscipline();
   const [filters, setFilters] = useState<FiltersState>(() =>
     buildInitialFilters(currentDiscipline)
   );
@@ -158,22 +168,6 @@ export function MatchesHubClient() {
 
   const deferredTeamSearch = useDeferredValue(filters.teamSearch);
   const theme = getDisciplineDefinition(filters.sportType).theme;
-
-  useEffect(() => {
-    if (!selectedDiscipline) return;
-    if (filters.sportType === currentDiscipline) return;
-
-    setFilters((current) => ({
-      ...current,
-      sportType: currentDiscipline,
-      countryId: "",
-      associationId: "",
-      competitionId: "",
-      categoryId: "",
-      teamSearch: "",
-    }));
-    setManualForm(buildInitialManualForm(currentDiscipline, filters.selectedDate));
-  }, [currentDiscipline, filters.selectedDate, filters.sportType, selectedDiscipline]);
 
   useEffect(() => {
     void loadData(filters);
@@ -340,26 +334,6 @@ export function MatchesHubClient() {
     setAppointments(result.appointments);
     setRefreshing(false);
     setLoading(false);
-  }
-
-  function handleSportChange(nextSport: SportType) {
-    setDiscipline(nextSport);
-    setSelectedFixture(null);
-    setSelectedRoleKey("");
-    setRoleObservations("");
-    setEditingAppointmentId(null);
-    setError(null);
-    setMessage(null);
-    setFilters((current) => ({
-      ...current,
-      sportType: nextSport,
-      countryId: "",
-      associationId: "",
-      competitionId: "",
-      categoryId: "",
-      teamSearch: "",
-    }));
-    setManualForm(buildInitialManualForm(nextSport, filters.selectedDate));
   }
 
   function handleSelectFixture(fixture: MatchFixtureListItem) {
@@ -553,10 +527,6 @@ export function MatchesHubClient() {
     setSelectedRoleKey("");
     setRoleObservations(appointment.observations ?? "");
 
-    if (appointment.sportType !== filters.sportType) {
-      setDiscipline(appointment.sportType);
-    }
-
     setFilters((current) => ({
       ...current,
       sportType: appointment.sportType,
@@ -615,7 +585,7 @@ export function MatchesHubClient() {
               Selecciona tu designacion en segundos
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 sm:text-base">
-              Filtra por disciplina, pais, asociacion, competicion y fecha. Elige tu
+              Filtra por pais, asociacion, competicion y fecha. Elige tu
               partido, confirma tu funcion arbitral y deja conectado el resto del
               flujo con Ref Performance, Psicologia y ficha operativa.
             </p>
@@ -725,7 +695,7 @@ export function MatchesHubClient() {
             </p>
             <h2 className="mt-3 text-2xl font-black">Filtra y elige tu partido</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              Empieza por la disciplina y la fecha. Luego ajusta pais, asociacion,
+              La disciplina activa se toma del header. Ajusta la fecha, pais, asociacion,
               competicion y categoria hasta ver el listado correcto.
             </p>
           </div>
@@ -748,29 +718,7 @@ export function MatchesHubClient() {
           </div>
         </div>
 
-        <div className="mt-6 grid gap-4 xl:grid-cols-[1.2fr_1fr]">
-          <div className="rounded-[28px] border border-white/10 bg-black/20 p-4">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">
-              Disciplina
-            </p>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <DisciplineOption
-                label="Futbol 11"
-                description="Ver partidos de futbol 11, funciones de campo, asistentes y VAR."
-                active={filters.sportType === "football_11"}
-                onClick={() => handleSportChange("football_11")}
-                theme={getDisciplineDefinition("football_11").theme}
-              />
-              <DisciplineOption
-                label="Futsal"
-                description="Ver partidos de futsal y funciones especificas de cancha y mesa."
-                active={filters.sportType === "futsal"}
-                onClick={() => handleSportChange("futsal")}
-                theme={getDisciplineDefinition("futsal").theme}
-              />
-            </div>
-          </div>
-
+        <div className="mt-6 grid gap-4">
           <div className="rounded-[28px] border border-white/10 bg-black/20 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -1876,36 +1824,6 @@ function AutomationStatusNotice({
         </div>
       </div>
     </div>
-  );
-}
-
-function DisciplineOption({
-  label,
-  description,
-  active,
-  onClick,
-  theme,
-}: {
-  label: string;
-  description: string;
-  active: boolean;
-  onClick: () => void;
-  theme: ReturnType<typeof getDisciplineDefinition>["theme"];
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-[24px] border p-4 text-left transition ${
-        active
-          ? "text-black"
-          : "border-white/10 bg-white/[0.04] text-zinc-200 hover:border-white/20 hover:text-white"
-      }`}
-      style={active ? buildAccentButtonStyle(theme) : undefined}
-    >
-      <p className="text-sm font-black uppercase tracking-[0.18em]">{label}</p>
-      <p className="mt-2 text-sm leading-6 opacity-80">{description}</p>
-    </button>
   );
 }
 

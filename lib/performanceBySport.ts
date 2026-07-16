@@ -476,25 +476,20 @@ export function getSportCriterionPerformance(
   items: SportPerformanceItem[],
   sportType: SportType
 ): SportCriterionMetric[] {
+  const metricItems = getMetricEligibleItems(items, sportType);
   const criterionKeys: SportCriterionKey[] =
     sportType === "futsal"
-      ? [
-          "technical",
-          "restart",
-          "discipline",
-          "accumulated_fouls",
-          "four_seconds",
-          "goalkeeper",
-        ]
+      ? ["technical", "restart", "discipline", "subtype", "accumulated_fouls"]
       : ["technical", "restart", "discipline", "subtype"];
 
-  const optionalCriterionKeys: SportCriterionKey[] = ["justification", "var"];
+  const optionalCriterionKeys: SportCriterionKey[] =
+    sportType === "futsal" ? ["justification"] : ["justification", "var"];
   const optionalKeys = optionalCriterionKeys.filter((key) =>
-    items.some((item) => typeof item.criteria[key] === "boolean")
+    metricItems.some((item) => typeof item.criteria[key] === "boolean")
   );
 
   return [...criterionKeys, ...optionalKeys].map((key) => {
-    const values = items
+    const values = metricItems
       .map((item) => item.criteria[key])
       .filter((value): value is boolean => typeof value === "boolean");
     const correct = values.filter(Boolean).length;
@@ -556,31 +551,41 @@ export function getSportPerformanceSummary(
   sessions: PerformanceSession[],
   sportType: SportType
 ) {
-  const scores = items.map((item) => item.score).filter(isNumber);
+  const metricItems = getMetricEligibleItems(items, sportType);
+  const scores = metricItems.map((item) => item.score).filter(isNumber);
   const avgScore = average(scores);
-  const topics = getSportTopicPerformance(items, sportType);
-  const criteria = getSportCriterionPerformance(items, sportType);
+  const topics = getSportTopicPerformance(metricItems, sportType);
+  const criteria = getSportCriterionPerformance(metricItems, sportType);
   const strongestTopic = topMetric(topics);
   const weakestTopic = bottomMetric(topics);
   const strongestCriterion = topCriterion(criteria);
   const weakestCriterion = bottomCriterion(criteria);
-  const totalTrainings = sessions.filter((session) => session.source === "training").length;
-  const totalEvaluations = sessions.filter((session) => session.source !== "training").length;
+  const totalTrainings =
+    sportType === "futsal"
+      ? metricItems.filter((item) => item.source === "training").length
+      : sessions.filter((session) => session.source === "training").length;
+  const totalEvaluations =
+    sportType === "futsal"
+      ? metricItems.filter((item) => item.source !== "training").length
+      : sessions.filter((session) => session.source !== "training").length;
   const bestScore = scores.length ? Math.max(...scores) : null;
-  const lastScore = sessions.find((session) => isNumber(session.score))?.score ?? null;
-  const status = getGeneralStatus(avgScore, items.length);
+  const lastScore =
+    sportType === "futsal"
+      ? sortByDateDesc(metricItems).find((item) => isNumber(item.score))?.score ?? null
+      : sessions.find((session) => isNumber(session.score))?.score ?? null;
+  const status = getGeneralStatus(avgScore, metricItems.length);
   const recommendedModule = inferRecommendedModule(sportType, weakestTopic, weakestCriterion);
   const sampleNote =
-    items.length === 0
+    metricItems.length === 0
       ? "Todavia no hay datos registrados."
-      : items.length < 5
+      : metricItems.length < 5
         ? "Muestra inicial: completa mas ejercicios para un diagnostico mas preciso."
         : "Diagnostico calculado con actividad real registrada.";
 
   return {
-    hasData: items.length > 0,
+    hasData: metricItems.length > 0,
     avgScore,
-    totalAttempts: items.length,
+    totalAttempts: metricItems.length,
     totalTrainings,
     totalEvaluations,
     bestScore,
@@ -608,7 +613,7 @@ export function getSportPerformanceSummary(
       },
       {
         label: "Intentos analizados",
-        value: String(items.length),
+        value: String(metricItems.length),
         detail: `Actividad real de ${getSportLabel(sportType)}.`,
       },
       {
@@ -713,15 +718,14 @@ export function getSportRecommendedPlan(
 
   if (
     weakCriterion?.key === "discipline" ||
-    weakCriterion?.key === "accumulated_fouls" ||
-    weakCriterion?.key === "goalkeeper"
+    weakCriterion?.key === "accumulated_fouls"
   ) {
     return {
       diagnosis:
         "El rendimiento general muestra una debilidad en criterio disciplinario o especifico de la disciplina.",
       priority1:
         sportType === "futsal"
-          ? "Trabajar faltas acumuladas, guardameta y consecuencia disciplinaria."
+          ? "Trabajar disputas, faltas tacticas y consecuencia disciplinaria."
           : "Trabajar intensidad, punto de contacto y consecuencia tactica.",
       priority2: weakTopic ? `Entrenar ${weakTopic.topic}.` : "Profundizar el topico mas debil.",
       nextStep: "Realizar 5 casos enfocados en la debilidad detectada.",
@@ -733,7 +737,6 @@ export function getSportRecommendedPlan(
 
   if (
     weakCriterion?.key === "restart" ||
-    weakCriterion?.key === "four_seconds" ||
     weakCriterion?.key === "subtype"
   ) {
     return {
@@ -741,7 +744,7 @@ export function getSportRecommendedPlan(
         "La decision principal puede ser correcta, pero la aplicacion reglamentaria necesita refuerzo.",
       priority1:
         sportType === "futsal"
-          ? "Revisar reanudaciones, procedimiento y control de cuatro segundos."
+          ? "Revisar reanudaciones y clasificacion en los tres topicos tecnicos."
           : "Revisar reanudaciones, subtipo y aplicacion reglamentaria.",
       priority2: weakTopic ? `Aplicarlo en ${weakTopic.topic}.` : "Practicar topicos con reanudacion.",
       nextStep: "Entrenar clips con foco exclusivo en la aplicacion final.",
@@ -791,8 +794,9 @@ export function getSportModulePerformance(
   items: SportPerformanceItem[],
   sportType: SportType
 ) {
-  const topics = getSportTopicPerformance(items, sportType);
-  const criteria = getSportCriterionPerformance(items, sportType);
+  const metricItems = getMetricEligibleItems(items, sportType);
+  const topics = getSportTopicPerformance(metricItems, sportType);
+  const criteria = getSportCriterionPerformance(metricItems, sportType);
   const preparationItems = items.filter((item) => item.module === "preparation");
   const preparationSeconds = preparationItems
     .map((item) => item.timeSpentSeconds)
@@ -810,18 +814,18 @@ export function getSportModulePerformance(
         sportType === "futsal"
           ? "Evalua lectura tecnica, reanudaciones, disciplina y criterios propios de futsal."
           : "Evalua si cobraste bien, la reanudacion y la sancion disciplinaria.",
-      status: moduleStatus(items, "decision"),
+      status: moduleStatus(metricItems, "decision"),
       metrics: [
-        metricFromItems("Intentos realizados", items.filter((item) => item.module === "decision")),
-        metricFromAverage("Promedio del modulo", moduleAverage(items, "decision")),
+        metricFromItems("Intentos realizados", metricItems.filter((item) => item.module === "decision")),
+        metricFromAverage("Promedio del modulo", moduleAverage(metricItems, "decision")),
         metricFromCriterion("Precision tecnica", criteria.find((item) => item.key === "technical")),
         metricFromCriterion("Precision disciplinaria", criteria.find((item) => item.key === "discipline")),
         metricFromCriterion("Precision en reanudacion", criteria.find((item) => item.key === "restart")),
         metricFromTopic(
-          sportType === "futsal" ? "Rendimiento en faltas y contactos" : "Aciertos en manos",
+          sportType === "futsal" ? "Rendimiento en disputas" : "Aciertos en manos",
           topics.find((item) =>
             item.topic ===
-            (sportType === "futsal" ? "Faltas y contactos" : "Manos")
+            (sportType === "futsal" ? "Disputas" : "Manos")
           )
         ),
       ],
@@ -831,10 +835,10 @@ export function getSportModulePerformance(
       title: "Videoanalisis",
       description:
         "Evalua lectura tecnica, comprension de la jugada y observacion aplicada.",
-      status: moduleStatus(items, "video"),
+      status: moduleStatus(metricItems, "video"),
       metrics: [
-        metricFromItems("Clips analizados", items.filter((item) => item.module === "video")),
-        metricFromAverage("Promedio de analisis", moduleAverage(items, "video")),
+        metricFromItems("Clips analizados", metricItems.filter((item) => item.module === "video")),
+        metricFromAverage("Promedio de analisis", moduleAverage(metricItems, "video")),
         metricFromCriterion(
           "Deteccion correcta de infraccion",
           criteria.find((item) => item.key === "technical")
@@ -850,15 +854,15 @@ export function getSportModulePerformance(
       title: "Comunicacion arbitral",
       description:
         "Evalua explicacion de decisiones, claridad y precision tecnica.",
-      status: moduleStatus(items, "communication"),
+      status: moduleStatus(metricItems, "communication"),
       metrics: [
         metricFromItems(
           "Explicaciones guardadas",
-          items.filter((item) => item.module === "communication")
+          metricItems.filter((item) => item.module === "communication")
         ),
         metricFromAverage(
           "Comunicacion global",
-          moduleAverage(items, "communication")
+          moduleAverage(metricItems, "communication")
         ),
         metricFromCriterion(
           "Precision tecnica",
@@ -965,11 +969,23 @@ function isRadarTopicValid(
   sportType: SportType
 ) {
   const radarTopics = new Set(getSportTopicLabels(sportType));
-  if (!radarTopics.has(topic)) return true;
+  if (!radarTopics.has(topic)) return sportType === "football_11";
   if (!hasClipIndex) return false;
   if (!clip || !isActiveClip(clip)) return false;
   if (storedTopic && storedTopic !== "Sin topico" && storedTopic !== topic) return false;
   return true;
+}
+
+function getMetricEligibleItems(
+  items: SportPerformanceItem[],
+  sportType: SportType
+) {
+  if (sportType === "football_11") return items;
+
+  const allowedTopics = new Set(getSportTopicLabels(sportType));
+  return items.filter(
+    (item) => allowedTopics.has(item.topic) && item.topicValid !== false
+  );
 }
 
 function isActiveClip(clip: PerformanceClipRecord) {

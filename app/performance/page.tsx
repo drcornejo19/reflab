@@ -32,7 +32,6 @@ import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { RefPerformanceClient } from "@/components/RefPerformanceClient";
-import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { SportRadarGraphic } from "@/components/SportRadarGraphic";
 import { getDisciplineDefinition } from "@/lib/discipline";
 import {
@@ -335,7 +334,6 @@ function PerformancePageContent() {
           className="mx-auto w-full max-w-[1180px] space-y-5 overflow-hidden"
         >
           <PerformanceHero />
-          <SportPageSwitch title="Disciplina de Ref Performance" />
           {loadError && (
             <div className="rounded-3xl border border-yellow-400/25 bg-yellow-400/10 p-4 text-sm font-bold leading-6 text-yellow-100">
               {loadError}
@@ -358,7 +356,6 @@ function PerformancePageContent() {
         style={themeVars}
         className="mx-auto w-full max-w-full space-y-5 overflow-hidden lg:max-w-[1180px] lg:space-y-6"
       >
-        <SportPageSwitch title="Disciplina de Ref Performance" />
         {!activeSection && (
           <>
             <PerformanceHero />
@@ -762,7 +759,9 @@ function PrimaryAnalysisView({
       {activeView === "plan" && <RecommendedPlanPanel plan={plan} />}
       {activeView === "topics" && <TopicsPanel topics={topics} radarAxes={radarAxes} />}
       {activeView === "criteria" && <CriteriaPanel criteria={criteria} />}
-      {activeView === "modules" && <ModulesPanel modules={modules} />}
+      {activeView === "modules" && (
+        <ModulesPanel modules={modules} sportType={sportType} />
+      )}
       {activeView === "history" && (
         <HistoryPanel
           history={history}
@@ -1135,7 +1134,13 @@ function CriterionRow({ criterion }: { criterion: SportCriterionMetric }) {
   );
 }
 
-function ModulesPanel({ modules }: { modules: SportModulePerformance[] }) {
+function ModulesPanel({
+  modules,
+  sportType,
+}: {
+  modules: SportModulePerformance[];
+  sportType: SportType;
+}) {
   return (
     <section className="max-w-full overflow-hidden rounded-[30px] border border-white/10 bg-[#071019] p-4 shadow-2xl sm:rounded-[34px] sm:p-5 lg:p-7">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
@@ -1143,7 +1148,9 @@ function ModulesPanel({ modules }: { modules: SportModulePerformance[] }) {
           <p className="text-xs font-black uppercase tracking-[0.35em] text-[var(--accent)]">Por modulo</p>
           <h2 className="mt-3 break-words text-2xl font-black leading-tight sm:text-3xl">Cada modulo mide algo distinto</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">
-            Cada modulo mide una dimension distinta: entrenamiento con clips, lectura de video, protocolo VAR, comunicacion en ingles y preparacion integral.
+            {sportType === "futsal"
+              ? "Cada modulo mide una dimension de futsal: videoanalisis de manos, disputas, faltas tacticas, comunicacion y preparacion integral."
+              : "Cada modulo mide una dimension distinta: entrenamiento con clips, lectura de video, protocolo VAR, comunicacion en ingles y preparacion integral."}
           </p>
         </div>
       </div>

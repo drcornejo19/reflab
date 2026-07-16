@@ -6,7 +6,6 @@ import { useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
-import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { getDisciplineAction, getDisciplineDefinition } from "@/lib/discipline";
 import {
   buildSportPerformanceDataset,
@@ -154,7 +153,6 @@ function MobileDashboardPageContent() {
   return (
     <AppShell>
       <div className="min-h-screen w-full max-w-full space-y-5 overflow-hidden pb-2">
-        <SportPageSwitch title="Disciplina mobile" />
 
         <section
           className="rounded-[30px] border border-white/10 p-4 shadow-2xl"

@@ -6,7 +6,6 @@ import { ChartNoAxesCombined, Trophy } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
-import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { getDisciplineDefinition } from "@/lib/discipline";
 import { getSportLabel } from "@/lib/sports";
 
@@ -34,7 +33,6 @@ function MobileStatsPageContent() {
           </p>
         </header>
 
-        <SportPageSwitch title="Disciplina mobile" />
 
         <div className="grid gap-3">
           <Link

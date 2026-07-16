@@ -6,7 +6,6 @@ import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
-import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { getDisciplineDefinition } from "@/lib/discipline";
 import {
   buildSportPerformanceDataset,
@@ -139,7 +138,6 @@ function StatsPageContent() {
     return (
       <AppShell>
         <div className="mx-auto w-full max-w-[1200px] space-y-5">
-          <SportPageSwitch title="Disciplina de estadisticas" />
 
           <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-4 sm:p-6">
             <p
@@ -174,7 +172,6 @@ function StatsPageContent() {
   return (
     <AppShell>
       <div className="mx-auto w-full max-w-[1200px] space-y-5">
-        <SportPageSwitch title="Disciplina de estadisticas" />
 
         <header className="rounded-3xl border border-white/10 bg-[#0b131b] p-4 sm:p-6">
           <p

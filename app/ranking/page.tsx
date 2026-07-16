@@ -6,7 +6,6 @@ import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
-import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { getDisciplineDefinition } from "@/lib/discipline";
 import {
   getRankingRows,
@@ -91,7 +90,6 @@ function RankingPageContent() {
               tiene datos suficientes para competir con sentido.
             </p>
           </header>
-          <SportPageSwitch title="Disciplina de ranking" />
           <ProUpgradeCard
             title="Ranking exclusivo de RefLab Pro"
             description="Desbloquea posicion, promedio, mejor score, cantidad de examenes, entrenamientos y actividad comparada con otros arbitros."
@@ -122,7 +120,6 @@ function RankingPageContent() {
           </p>
         </header>
 
-        <SportPageSwitch title="Disciplina de ranking" />
 
         {ranking.length === 0 ? (
           <div className="rounded-3xl border border-white/10 bg-[#0b131b] p-8 text-center text-zinc-400">

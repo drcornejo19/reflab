@@ -1,4 +1,4 @@
-import type { SportType } from "@/lib/sports";
+import { normalizeSportTopicKey, type SportType } from "@/lib/sports";
 
 export type VideoFieldKey =
   | "technical_decision"
@@ -91,34 +91,6 @@ const futsalInfringementOptions = [
   { value: "uso_fuerza_excesiva", label: "Uso de fuerza excesiva" },
   { value: "mano_sancionable", label: "Mano sancionable" },
   { value: "sin_infraccion", label: "Sin infraccion" },
-];
-
-const goalkeeperDecisionOptions = [
-  { value: "control_legal", label: "Control legal del guardameta" },
-  { value: "cuatro_segundos", label: "Infraccion de cuatro segundos" },
-  { value: "segunda_recepcion", label: "Segunda recepcion en propia mitad" },
-  { value: "cesion_prohibida", label: "Cesion prohibida con el pie" },
-  { value: "portero_jugador_legal", label: "Portero-jugador permitido" },
-];
-
-const substitutionProcedureOptions = [
-  { value: "procedimiento_correcto", label: "Procedimiento correcto" },
-  { value: "ingreso_anticipado", label: "El sustituto ingreso antes de tiempo" },
-  { value: "ingreso_fuera_zona", label: "Ingreso fuera de zona de sustitucion" },
-  { value: "salida_fuera_zona", label: "Salida fuera de zona de sustitucion" },
-];
-
-const positioningOptions = [
-  { value: "mecanica_correcta", label: "Mecanica correcta" },
-  { value: "angulo_insuficiente", label: "Angulo insuficiente" },
-  { value: "segundo_arbitro_debia_apoyar", label: "Debio intervenir el segundo arbitro" },
-  { value: "tercer_arbitro_debia_intervenir", label: "Debio intervenir tercer arbitro / cronometrador" },
-];
-
-const supportOfficialOptions = [
-  { value: "intervencion_correcta", label: "Intervencion correcta" },
-  { value: "debio_intervenir", label: "Debio intervenir" },
-  { value: "no_debia_intervenir", label: "No debia intervenir" },
 ];
 
 function createSharedDecisionFields(
@@ -256,19 +228,45 @@ const football11Schemas: VideoTopicSchema[] = [
 const futsalSchemas: VideoTopicSchema[] = [
   {
     sportType: "futsal",
-    topic: "Fouls and contact",
-    title: "Faltas y contactos",
-    description: "Evalua infraccion, reanudacion, disciplina, acumulada y ventaja.",
+    topic: "Handball",
+    title: "Manos",
+    description: "Evalua mano sancionable, reanudacion y consecuencia disciplinaria.",
+    fields: [
+      ...createSharedDecisionFields(futsalRestartOptions),
+      {
+        key: "subtype",
+        label: "Tipo de mano",
+        kind: "single_select",
+        required: false,
+        persistenceKey: "subtype_correct",
+        options: handballSubtypeOptions,
+      },
+    ],
+  },
+  {
+    sportType: "futsal",
+    topic: "Dispute",
+    title: "Disputas",
+    description: "Evalua contacto, intensidad, reanudacion y sancion disciplinaria.",
     fields: [
       ...createSharedDecisionFields(futsalRestartOptions),
       {
         key: "infringement_type",
-        label: "Tipo de infraccion",
+        label: "Tipo de contacto",
         kind: "single_select",
         required: false,
         persistenceKey: "subtype_correct",
         options: futsalInfringementOptions,
       },
+    ],
+  },
+  {
+    sportType: "futsal",
+    topic: "Tactical foul",
+    title: "Faltas tacticas",
+    description: "Evalua SPA, DOGSO, reanudacion, disciplina y falta acumulada.",
+    fields: [
+      ...createSharedDecisionFields(futsalRestartOptions),
       {
         key: "accumulated_foul",
         label: "Cuenta como falta acumulada",
@@ -276,146 +274,6 @@ const futsalSchemas: VideoTopicSchema[] = [
         required: false,
         persistenceKey: "accumulated_foul_correct",
         options: yesNoOptions,
-      },
-      {
-        key: "advantage",
-        label: "Aplicacion de ventaja",
-        kind: "single_select",
-        required: false,
-        options: yesNoOptions,
-      },
-    ],
-  },
-  {
-    sportType: "futsal",
-    topic: "Accumulated fouls",
-    title: "Faltas acumuladas",
-    description: "Decision sobre acumulada, sexto foul y segundo punto penal.",
-    fields: [
-      ...createSharedDecisionFields(futsalRestartOptions),
-      {
-        key: "accumulated_foul",
-        label: "Cuenta como falta acumulada",
-        kind: "single_select",
-        required: true,
-        persistenceKey: "accumulated_foul_correct",
-        options: yesNoOptions,
-      },
-      {
-        key: "procedure",
-        label: "Procedimiento correcto",
-        kind: "single_select",
-        required: false,
-        options: [
-          { value: "dfksaf_desde_10m", label: "Se ejecuta como sexto foul desde 10 m" },
-          { value: "dfksaf_desde_punto_falta", label: "Puede ejecutarse desde el punto de la falta" },
-          { value: "penal_por_area", label: "Corresponde penal por falta dentro del area" },
-        ],
-      },
-    ],
-  },
-  {
-    sportType: "futsal",
-    topic: "Four-second count",
-    title: "Cuatro segundos",
-    description: "Control del tiempo reglamentario en reinicios y posesion del guardameta.",
-    fields: [
-      ...createSharedDecisionFields(futsalRestartOptions),
-      {
-        key: "four_second",
-        label: "Aplicacion correcta de los cuatro segundos",
-        kind: "single_select",
-        required: true,
-        persistenceKey: "four_second_correct",
-        options: yesNoOptions,
-      },
-    ],
-  },
-  {
-    sportType: "futsal",
-    topic: "Goalkeeper",
-    title: "Guardameta y portero-jugador",
-    description: "Evalua cesion, control en propia mitad y decisiones del portero-jugador.",
-    fields: [
-      ...createSharedDecisionFields(futsalRestartOptions),
-      {
-        key: "goalkeeper_decision",
-        label: "Decision sobre guardameta",
-        kind: "single_select",
-        required: true,
-        persistenceKey: "goalkeeper_correct",
-        options: goalkeeperDecisionOptions,
-      },
-      {
-        key: "four_second",
-        label: "Cuenta de cuatro segundos",
-        kind: "single_select",
-        required: false,
-        persistenceKey: "four_second_correct",
-        options: yesNoOptions,
-      },
-    ],
-  },
-  {
-    sportType: "futsal",
-    topic: "Substitution procedure",
-    title: "Procedimiento de sustitucion",
-    description: "Control del ingreso, egreso y responsabilidades del tercer arbitro.",
-    fields: [
-      {
-        key: "procedure",
-        label: "Procedimiento correcto",
-        kind: "single_select",
-        required: true,
-        options: substitutionProcedureOptions,
-      },
-      {
-        key: "third_referee_timekeeper",
-        label: "Intervencion de tercer arbitro / cronometrador",
-        kind: "single_select",
-        required: false,
-        options: supportOfficialOptions,
-      },
-      {
-        key: "justification",
-        label: "Fundamento reglamentario",
-        kind: "text",
-        required: false,
-      },
-    ],
-  },
-  {
-    sportType: "futsal",
-    topic: "Referee positioning",
-    title: "Posicionamiento y trabajo arbitral",
-    description: "Evalua mecanica, posicionamiento y apoyo del segundo arbitro.",
-    fields: [
-      {
-        key: "positioning",
-        label: "Ubicacion / mecanica arbitral",
-        kind: "single_select",
-        required: true,
-        options: positioningOptions,
-      },
-      {
-        key: "second_referee",
-        label: "Intervencion del segundo arbitro",
-        kind: "single_select",
-        required: false,
-        options: supportOfficialOptions,
-      },
-      {
-        key: "third_referee_timekeeper",
-        label: "Intervencion de tercer arbitro / cronometrador",
-        kind: "single_select",
-        required: false,
-        options: supportOfficialOptions,
-      },
-      {
-        key: "justification",
-        label: "Justificacion de la mecanica",
-        kind: "text",
-        required: false,
       },
     ],
   },
@@ -431,5 +289,10 @@ export function getVideoAnalysisSchemas(sportType: SportType) {
 }
 
 export function getVideoTopicSchema(sportType: SportType, topic: string) {
-  return getVideoAnalysisSchemas(sportType).find((schema) => schema.topic === topic);
+  const normalizedTopic = normalizeSportTopicKey(topic, sportType);
+  if (!normalizedTopic) return undefined;
+
+  return getVideoAnalysisSchemas(sportType).find(
+    (schema) => schema.topic === normalizedTopic
+  );
 }

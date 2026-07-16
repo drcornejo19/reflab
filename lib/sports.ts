@@ -1,145 +1,28 @@
-export type SportType = "football_11" | "futsal";
-export type GoverningBody = "IFAB" | "FIFA";
+import {
+  sportContentRegistry,
+  type SportType,
+} from "@/lib/sports-content";
+import type {
+  GoverningBody,
+  SportContentDefinition,
+  SportLibraryDefinition,
+  SportTopicDefinition,
+} from "@/lib/sports-content/types";
 
-export type SportTopicDefinition = {
-  key: string;
-  label: string;
-  group: "video" | "rules" | "library" | "institutional";
-  aliases?: string[];
+export type {
+  GoverningBody,
+  SportLibraryDefinition,
+  SportTopicDefinition,
+  SportType,
 };
-
-export type SportLibraryDefinition = {
-  title: string;
-  governingBody: GoverningBody;
-  officialSourceBase: string;
-  activeSeasonLabel: string;
-  sourceVersionLabel: string;
-};
-
-export type SportDefinition = {
-  key: SportType;
-  label: string;
-  shortLabel: string;
-  heroDescription: string;
-  governingBody: GoverningBody;
-  library: SportLibraryDefinition;
-  topics: SportTopicDefinition[];
-  disallowedTopics: string[];
-  defaultActivityTypes: string[];
-};
+export type SportDefinition = SportContentDefinition;
 
 export const DEFAULT_SPORT_TYPE: SportType = "football_11";
-export const SPORT_TYPES: SportType[] = ["football_11", "futsal"];
-
-function defineTopic(
-  key: string,
-  label: string,
-  group: SportTopicDefinition["group"],
-  aliases: string[] = []
-): SportTopicDefinition {
-  return { key, label, group, aliases };
-}
-
-const football11Topics: SportTopicDefinition[] = [
-  defineTopic("Dispute", "Disputas", "video", ["Challenge"]),
-  defineTopic("Tactical foul", "Faltas tacticas", "video"),
-  defineTopic("Offside", "Fuera de juego", "video"),
-  defineTopic("Handball", "Manos", "video", ["Mano"]),
-  defineTopic("VAR", "VAR", "video"),
-];
-
-const futsalTopics: SportTopicDefinition[] = [
-  defineTopic("Fouls and contact", "Faltas y contactos", "video"),
-  defineTopic("Accumulated fouls", "Faltas acumuladas", "video"),
-  defineTopic("Direct free kick", "Tiro libre directo", "video"),
-  defineTopic("Indirect free kick", "Tiro libre indirecto", "video"),
-  defineTopic("Penalty kick", "Penal", "video"),
-  defineTopic("Second penalty mark", "Segundo punto penal", "video"),
-  defineTopic("Four-second count", "Control de cuatro segundos", "video"),
-  defineTopic("Substitutions", "Sustituciones", "video"),
-  defineTopic("Substitution procedure", "Procedimiento de sustitucion", "video"),
-  defineTopic("Goalkeeper", "Juego del guardameta", "video"),
-  defineTopic("Back-pass to goalkeeper", "Cesion al guardameta", "video"),
-  defineTopic("Flying goalkeeper", "Portero-jugador", "video"),
-  defineTopic("Kick-in", "Saque de banda", "video"),
-  defineTopic("Goal clearance", "Saque de meta", "video"),
-  defineTopic("Corner kick", "Saque de esquina", "video"),
-  defineTopic("Dropped ball", "Balon a tierra", "video"),
-  defineTopic("Double touch", "Doble toque", "video"),
-  defineTopic("Required distance", "Distancia reglamentaria", "video"),
-  defineTopic("Unsporting behaviour", "Conducta antideportiva", "video"),
-  defineTopic("DOGSO", "Impedir una ocasion manifiesta de gol", "video"),
-  defineTopic("SPA", "Detener un ataque prometedor", "video"),
-  defineTopic("Reckless challenge", "Entradas temerarias", "video"),
-  defineTopic("Serious foul play", "Juego brusco grave", "video"),
-  defineTopic("Violent conduct", "Conducta violenta", "video"),
-  defineTopic("Simulation", "Simulacion", "video"),
-  defineTopic("Dissent", "Protestas", "video"),
-  defineTopic("Advantage", "Ventaja", "video"),
-  defineTopic("Referee positioning", "Posicionamiento arbitral", "video"),
-  defineTopic("Second referee teamwork", "Trabajo del segundo arbitro", "video"),
-  defineTopic("Third referee and timekeeper", "Tercer arbitro y cronometrador", "video"),
-];
-
-export const sportDefinitions = {
-  football_11: {
-    key: "football_11",
-    label: "Futbol 11",
-    shortLabel: "F11",
-    heroDescription:
-      "Entrenamiento tecnico, reglamentario y audiovisual orientado a arbitraje de futbol 11.",
-    governingBody: "IFAB",
-    library: {
-      title: "Biblioteca IFAB",
-      governingBody: "IFAB",
-      officialSourceBase: "https://www.theifab.com/laws-of-the-game-documents/",
-      activeSeasonLabel: "2026/27",
-      sourceVersionLabel: "Laws of the Game 2026/27",
-    },
-    topics: football11Topics,
-    disallowedTopics: [],
-    defaultActivityTypes: [
-      "video_training",
-      "video_exam",
-      "rules_practice",
-      "rules_exam",
-      "var_training",
-      "english_training",
-      "communication_training",
-      "physical_training",
-    ],
-  },
-  futsal: {
-    key: "futsal",
-    label: "Futsal",
-    shortLabel: "Futsal",
-    heroDescription:
-      "Entrenamiento tecnico, reglamentario y audiovisual especifico para futsal.",
-    governingBody: "FIFA",
-    library: {
-      title: "Biblioteca FIFA Futsal",
-      governingBody: "FIFA",
-      officialSourceBase:
-        "https://digitalhub.fifa.com/m/7b1da24ec7a25f67/original/Futsal-Laws-of-the-Game-2024-2025.pdf",
-      activeSeasonLabel: "2024-25",
-      sourceVersionLabel: "Futsal Laws of the Game 2024-25",
-    },
-    topics: futsalTopics,
-    disallowedTopics: ["Offside", "Fuera de juego", "VAR"],
-    defaultActivityTypes: [
-      "video_training",
-      "video_exam",
-      "rules_practice",
-      "rules_exam",
-      "communication_training",
-      "physical_training",
-      "institutional_video",
-    ],
-  },
-} as const satisfies Record<SportType, SportDefinition>;
+export const SPORT_TYPES = Object.keys(sportContentRegistry) as SportType[];
+export const sportDefinitions = sportContentRegistry;
 
 export function isSportType(value: unknown): value is SportType {
-  return value === "football_11" || value === "futsal";
+  return typeof value === "string" && value in sportDefinitions;
 }
 
 export function normalizeSportType(
@@ -204,15 +87,17 @@ export function normalizeSportTopic(
 ) {
   if (!value) return fallback;
 
-  const normalizedTopic = normalizeTopicToken(value);
-  const matched = sportDefinitions[sportType].topics.find((item) => {
-    const candidates = [item.key, item.label, ...(item.aliases ?? [])];
-    return candidates.some(
-      (candidate) => normalizeTopicToken(candidate) === normalizedTopic
-    );
-  });
+  const matched = findSportTopic(value, sportType);
 
   return matched?.label ?? value;
+}
+
+export function normalizeSportTopicKey(
+  value: string | null | undefined,
+  sportType: SportType
+) {
+  if (!value) return null;
+  return findSportTopic(value, sportType)?.key ?? null;
 }
 
 export function isTopicAllowedForSport(
@@ -232,9 +117,7 @@ export function isTopicAllowedForSport(
 
   if (allowed) return true;
 
-  return !definition.disallowedTopics.some(
-    (item) => normalizeTopicToken(item) === normalizedTopic
-  );
+  return false;
 }
 
 function normalizeTopicToken(value: string) {
@@ -243,4 +126,15 @@ function normalizeTopicToken(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toLowerCase();
+}
+
+function findSportTopic(value: string, sportType: SportType) {
+  const normalizedTopic = normalizeTopicToken(value);
+
+  return sportDefinitions[sportType].topics.find((item) => {
+    const candidates = [item.key, item.label, ...(item.aliases ?? [])];
+    return candidates.some(
+      (candidate) => normalizeTopicToken(candidate) === normalizedTopic
+    );
+  });
 }

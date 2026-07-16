@@ -7,7 +7,6 @@ import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
-import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { SportRadarGraphic } from "@/components/SportRadarGraphic";
 import { getDisciplineAction, getDisciplineDefinition } from "@/lib/discipline";
 import {
@@ -207,7 +206,6 @@ function DashboardPageContent() {
             </div>
           )}
 
-          <SportPageSwitch title="Disciplina del dashboard" />
 
           <FreeDashboardSummary
             summary={technicalSummary}
@@ -216,7 +214,11 @@ function DashboardPageContent() {
 
           <ProUpgradeCard
             title="Ver analisis completo"
-            description="RefLab Pro desbloquea radar arbitral, evolucion historica, precision por criterio, historial completo, ranking, VAR Lab y entrenamiento sin limites."
+            description={
+              sportType === "futsal"
+                ? "RefLab Pro desbloquea radar arbitral, evolucion historica, precision por criterio, historial completo, ranking y entrenamiento de futsal sin limites."
+                : "RefLab Pro desbloquea radar arbitral, evolucion historica, precision por criterio, historial completo, ranking, VAR Lab y entrenamiento sin limites."
+            }
             reason="El plan FREE mantiene el foco en un resumen basico para que pruebes la plataforma sin paywall inicial."
           />
         </div>
@@ -260,7 +262,6 @@ function DashboardPageContent() {
           </div>
         )}
 
-        <SportPageSwitch title="Disciplina del dashboard" />
 
         <section className="grid grid-cols-2 overflow-hidden rounded-2xl border border-white/10 bg-[#17212a] md:grid-cols-4">
           <TopMetric

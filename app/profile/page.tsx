@@ -29,7 +29,6 @@ import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
-import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { SportRadarGraphic } from "@/components/SportRadarGraphic";
 import { getDisciplineDefinition } from "@/lib/discipline";
 import {
@@ -500,7 +499,6 @@ function ProfilePageContent() {
         style={themeVars}
         className="mx-auto w-full max-w-[1240px] space-y-5 overflow-hidden"
       >
-        <SportPageSwitch title="Disciplina del perfil" />
         {isPro ? (
           <PlayerCard
             name={displayName}
@@ -613,7 +611,11 @@ function ProfilePageContent() {
             label={t("profile.refereeType")}
             value={refereeType}
             onChange={setRefereeType}
-            options={["AFA", "Amateur", "Liga regional", "Instructor", "VAR"]}
+            options={
+              sportType === "futsal"
+                ? ["Futsal", "AFA", "Amateur", "Liga regional", "Instructor"]
+                : ["AFA", "Amateur", "Liga regional", "Instructor", "VAR"]
+            }
           />
 
           <ProfileSelect
@@ -621,7 +623,25 @@ function ProfilePageContent() {
             label={t("profile.mainRole")}
             value={mainRole}
             onChange={setMainRole}
-            options={["Arbitro principal", "Arbitro asistente", "Cuarto arbitro", "VAR", "AVAR", "Instructor"]}
+            options={
+              sportType === "futsal"
+                ? [
+                    "Primer arbitro",
+                    "Segundo arbitro",
+                    "Tercer arbitro",
+                    "Cronometrador",
+                    "Arbitro asistente de reserva",
+                    "Instructor",
+                  ]
+                : [
+                    "Arbitro principal",
+                    "Arbitro asistente",
+                    "Cuarto arbitro",
+                    "VAR",
+                    "AVAR",
+                    "Instructor",
+                  ]
+            }
           />
 
           <ProfileInput label={t("profile.association")} value={association} onChange={setAssociation} placeholder="Ej: AFA, Liga regional, FAFI" />

@@ -13,7 +13,6 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
-import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { getDisciplineDefinition, getDisciplineRoute } from "@/lib/discipline";
 import { institutionalRules } from "@/lib/institutionalRules";
 import { officialLibraryDocuments } from "@/lib/officialLibrary";
@@ -37,7 +36,6 @@ function InstitutionRulesPageContent() {
   return (
     <AppShell>
       <div className="space-y-6">
-        <SportPageSwitch title="Disciplina reglamentaria" />
 
         <header
           className="rounded-[34px] border border-white/10 p-6 shadow-2xl sm:p-7"

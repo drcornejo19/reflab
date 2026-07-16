@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { RF_LOGO_SIZE, RF_LOGO_SRC } from "@/lib/brand";
 import { PushDeviceSync } from "@/components/PushDeviceSync";
+import { DisciplineHeaderSwitch } from "@/components/DisciplineHeaderSwitch";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { usePathname, useRouter } from "next/navigation";
@@ -412,18 +413,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
 
-      <header className="fixed left-0 top-0 z-50 flex h-[76px] w-full max-w-full items-center justify-between overflow-hidden border-b border-white/10 bg-[#050b12]/95 px-3 backdrop-blur-xl sm:px-4 lg:hidden">
-        <Logo compact theme={theme} />
+      <header className="fixed left-[260px] right-0 top-0 z-40 hidden h-[76px] items-center justify-end border-b border-white/10 bg-[#050b12]/95 px-8 backdrop-blur-xl lg:flex">
+        <DisciplineHeaderSwitch />
+      </header>
 
-        <button
-          type="button"
-          onClick={() => setMobileMenuOpen((open) => !open)}
-          aria-expanded={mobileMenuOpen}
-          aria-label={mobileMenuOpen ? translate(language, "nav.closeMenu") : translate(language, "nav.openMenu")}
-          className="grid h-12 w-12 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] text-white shadow-lg transition active:scale-95"
-        >
-          {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
-        </button>
+      <header className="fixed left-0 top-0 z-50 flex h-[76px] w-full max-w-full items-center justify-between border-b border-white/10 bg-[#050b12]/95 px-3 backdrop-blur-xl sm:px-4 lg:hidden">
+        <Logo compact theme={theme} />
+        <div className="flex items-center gap-2">
+          <DisciplineHeaderSwitch compact />
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+            aria-expanded={mobileMenuOpen}
+            aria-label={mobileMenuOpen ? translate(language, "nav.closeMenu") : translate(language, "nav.openMenu")}
+            className="grid h-11 w-11 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] text-white shadow-lg transition active:scale-95"
+          >
+            {mobileMenuOpen ? <X size={21} /> : <Menu size={21} />}
+          </button>
+        </div>
       </header>
 
       {mobileMenuOpen && (
@@ -454,7 +461,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <main className="min-h-screen w-full max-w-full overflow-x-hidden px-3 pb-[calc(150px+env(safe-area-inset-bottom))] pt-[88px] sm:px-5 lg:ml-[260px] lg:px-8 lg:pb-8 lg:pt-8">
+      <main className="min-h-screen w-full max-w-full overflow-x-hidden px-3 pb-[calc(150px+env(safe-area-inset-bottom))] pt-[88px] sm:px-5 lg:ml-[260px] lg:px-8 lg:pb-8 lg:pt-[96px]">
         <div className="mx-auto w-full max-w-full sm:max-w-[560px] lg:max-w-[1180px]">
           {children}
         </div>
@@ -521,7 +528,7 @@ function Logo({
         className={`${compact ? "h-[42px] w-[42px]" : "h-[46px] w-[46px]"} shrink-0 object-contain`}
       />
 
-      <div className="min-w-0">
+      <div className={`${compact ? "hidden min-[390px]:block" : ""} min-w-0`}>
         <p
           className={`${compact ? "text-sm" : "text-lg"} truncate font-black tracking-wide`}
         >

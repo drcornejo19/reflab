@@ -5,7 +5,7 @@ import { useUser } from "@clerk/nextjs";
 import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { getTrainingClips, type ClipRecord } from "@/lib/clips";
 import { resolveRefCardId } from "@/lib/refCard";
-import { getSportTopics } from "@/lib/sports";
+import { getSportTopics, normalizeSportTopicKey } from "@/lib/sports";
 import { supabase } from "@/lib/supabase";
 import { FREE_WEEKLY_CLIP_LIMIT, getCurrentWeekStart } from "@/lib/subscription";
 import {
@@ -72,7 +72,9 @@ export function FutsalVideoAnalysisClient() {
 
     return definitions
       .map((topic) => {
-        const clips = allClips.filter((clip) => clip.topic === topic.key);
+        const clips = allClips.filter(
+          (clip) => normalizeSportTopicKey(clip.topic, "futsal") === topic.key
+        );
         return {
           ...topic,
           count: clips.length,
@@ -84,7 +86,9 @@ export function FutsalVideoAnalysisClient() {
   const visibleClips = useMemo(() => {
     if (!selectedTopic) return [];
 
-    return allClips.filter((clip) => clip.topic === selectedTopic);
+    return allClips.filter(
+      (clip) => normalizeSportTopicKey(clip.topic, "futsal") === selectedTopic
+    );
   }, [allClips, selectedTopic]);
 
   const currentClip = visibleClips[currentIndex];
@@ -115,8 +119,8 @@ export function FutsalVideoAnalysisClient() {
             Elegi un topico tecnico de futsal
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-300">
-            Cada clip usa un formulario dinamico segun el topico y la resolucion
-            reglamentaria cargada para futsal.
+            Los clips se organizan exclusivamente en Manos, Disputas y Faltas
+            tacticas, con formularios dinamicos propios de futsal.
           </p>
         </section>
 
@@ -182,7 +186,8 @@ export function FutsalVideoAnalysisClient() {
               FUTSAL VIDEOANALISIS
             </p>
             <h2 className="mt-2 text-2xl font-black sm:text-3xl">
-              {labelFromValue(currentClip.topic)}
+              {getVideoTopicSchema("futsal", currentClip.topic)?.title ??
+                labelFromValue(currentClip.topic)}
             </h2>
             <p className="mt-2 text-sm leading-6 text-zinc-300">
               Clip {currentIndex + 1} de {visibleClips.length} en este topico.
@@ -740,6 +745,9 @@ function labelFromValue(value?: string | null) {
 
   const dictionary: Record<string, string> = {
     "Fouls and contact": "Faltas y contactos",
+    Handball: "Manos",
+    Dispute: "Disputas",
+    "Tactical foul": "Faltas tacticas",
     "Accumulated fouls": "Faltas acumuladas",
     "Direct free kick": "Tiro libre directo",
     "Indirect free kick": "Tiro libre indirecto",

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import {
   getDisciplineDefinition,
@@ -43,7 +42,6 @@ export default function EvaluationsPage() {
   return (
     <AppShell>
       <div className="space-y-6">
-        <SportPageSwitch title="Disciplina de evaluaciones" />
 
         <header
           className="rounded-[34px] border border-white/10 p-7 shadow-2xl"

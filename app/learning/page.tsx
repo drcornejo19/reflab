@@ -14,7 +14,6 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
-import { SportPageSwitch } from "@/components/SportPageSwitch";
 import { getDisciplineDefinition } from "@/lib/discipline";
 import {
   officialLibraryDocuments,
@@ -219,7 +218,6 @@ function LearningPageContent() {
           </div>
         </header>
 
-        <SportPageSwitch title="Disciplina de biblioteca" />
 
         <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-3xl border border-white/10 bg-[#071019] p-5 shadow-2xl">
