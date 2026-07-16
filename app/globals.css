@@ -3,6 +3,16 @@
 :root {
   --background: #02070d;
   --foreground: #ededed;
+  --reflab-accent: #6fc11f;
+  --reflab-accent-rgb: 111, 193, 31;
+  --reflab-accent-soft: rgba(111, 193, 31, 0.18);
+  --reflab-accent-border: rgba(111, 193, 31, 0.55);
+  --reflab-accent-glow: rgba(111, 193, 31, 0.36);
+  --reflab-accent-hover: #83da2b;
+  --reflab-on-accent: #04110a;
+  --reflab-shell: #050b12;
+  --reflab-chrome: rgba(5, 11, 18, 0.95);
+  --reflab-nav: rgba(7, 16, 25, 0.96);
   --font-geist-sans:
     "Segoe UI Variable",
     "Segoe UI",
@@ -17,6 +27,19 @@
     "Liberation Mono",
     Menlo,
     monospace;
+}
+
+html[data-discipline="futsal"] {
+  --reflab-accent: #2abaff;
+  --reflab-accent-rgb: 42, 186, 255;
+  --reflab-accent-soft: rgba(42, 186, 255, 0.18);
+  --reflab-accent-border: rgba(75, 202, 255, 0.56);
+  --reflab-accent-glow: rgba(42, 186, 255, 0.42);
+  --reflab-accent-hover: #4ac7ff;
+  --reflab-on-accent: #03111d;
+  --reflab-shell: #030b14;
+  --reflab-chrome: rgba(3, 11, 20, 0.96);
+  --reflab-nav: rgba(4, 16, 28, 0.96);
 }
 
 @theme inline {
@@ -72,8 +95,8 @@ textarea {
 }
 
 .control-input:focus {
-  border-color: rgba(111, 193, 31, 0.65);
-  box-shadow: 0 0 0 3px rgba(111, 193, 31, 0.12);
+  border-color: var(--reflab-accent-border);
+  box-shadow: 0 0 0 3px var(--reflab-accent-soft);
 }
 
 .control-input::placeholder {
@@ -123,4 +146,101 @@ body {
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+.reflab-app-shell {
+  background:
+    radial-gradient(circle at 92% 0%, rgba(var(--reflab-accent-rgb), 0.08), transparent 32rem),
+    var(--reflab-shell);
+}
+
+.reflab-app-chrome {
+  background: var(--reflab-chrome);
+}
+
+.reflab-app-nav {
+  background: var(--reflab-nav);
+}
+
+/* Compatibility layer for legacy brand utilities while screens migrate to tokens. */
+html[data-discipline="futsal"] [class~="text-[#6fc11f]"],
+html[data-discipline="futsal"] [class~="text-[#b7ff67]"] {
+  color: var(--reflab-accent) !important;
+}
+
+html[data-discipline="futsal"] [class~="bg-[#6fc11f]"] {
+  background-color: var(--reflab-accent) !important;
+}
+
+html[data-discipline="futsal"] [class~="bg-[#6fc11f]/5"] {
+  background-color: rgba(var(--reflab-accent-rgb), 0.05) !important;
+}
+
+html[data-discipline="futsal"] [class~="bg-[#6fc11f]/8"] {
+  background-color: rgba(var(--reflab-accent-rgb), 0.08) !important;
+}
+
+html[data-discipline="futsal"] [class~="bg-[#6fc11f]/10"] {
+  background-color: rgba(var(--reflab-accent-rgb), 0.1) !important;
+}
+
+html[data-discipline="futsal"] [class~="bg-[#6fc11f]/20"] {
+  background-color: rgba(var(--reflab-accent-rgb), 0.2) !important;
+}
+
+html[data-discipline="futsal"] [class~="border-[#6fc11f]"] {
+  border-color: var(--reflab-accent) !important;
+}
+
+html[data-discipline="futsal"] [class*="border-[#6fc11f]/"] {
+  border-color: var(--reflab-accent-border) !important;
+}
+
+html[data-discipline="futsal"] [class~="accent-[#6fc11f]"] {
+  accent-color: var(--reflab-accent) !important;
+}
+
+html[data-discipline="futsal"] [class~="hover:bg-[#82dc2a]"]:hover,
+html[data-discipline="futsal"] [class~="hover:bg-[#83da2b]"]:hover,
+html[data-discipline="futsal"] [class~="hover:bg-[#6fc11f]"]:hover {
+  background-color: var(--reflab-accent-hover) !important;
+}
+
+html[data-discipline="futsal"] [class*="hover:border-[#6fc11f]"]:hover,
+html[data-discipline="futsal"] [class*="focus:border-[#6fc11f]"]:focus {
+  border-color: var(--reflab-accent) !important;
+}
+
+html[data-discipline="futsal"] [class*="hover:text-[#6fc11f]"]:hover {
+  color: var(--reflab-accent) !important;
+}
+
+html[data-discipline="futsal"] [class*="shadow-"][class*="rgba(111,193,31"] {
+  box-shadow: 0 0 30px var(--reflab-accent-glow) !important;
+}
+
+html[data-discipline="futsal"] [class*="drop-shadow"][class*="rgba(111,193,31"] {
+  filter: drop-shadow(0 0 18px var(--reflab-accent-glow)) !important;
+}
+
+html[data-discipline="futsal"] [class*="bg-[radial-gradient"][class*="rgba(111,193,31"] {
+  background-image: radial-gradient(
+    circle at top left,
+    rgba(var(--reflab-accent-rgb), 0.18),
+    transparent 46%
+  ) !important;
+}
+
+html[data-discipline="futsal"] [class~="from-lime-300"] {
+  --tw-gradient-from: var(--reflab-accent) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgba(var(--reflab-accent-rgb), 0) var(--tw-gradient-to-position) !important;
+}
+
+html[data-discipline="futsal"] [class~="to-sky-300"] {
+  --tw-gradient-to: #78d8ff var(--tw-gradient-to-position) !important;
+}
+
+html[data-discipline="futsal"] ::selection {
+  background: rgba(var(--reflab-accent-rgb), 0.32);
+  color: #ffffff;
 }

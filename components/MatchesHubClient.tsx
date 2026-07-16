@@ -171,6 +171,8 @@ function MatchesHubExperience({
 
   useEffect(() => {
     void loadData(filters);
+    // Requests are keyed by the individual filter fields below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     filters.associationId,
     filters.categoryId,

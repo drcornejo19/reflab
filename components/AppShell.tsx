@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Image from "next/image";
-import { RF_LOGO_SIZE, RF_LOGO_SRC } from "@/lib/brand";
+import { RF_LOGO_SIZE } from "@/lib/brand";
 import { PushDeviceSync } from "@/components/PushDeviceSync";
 import { DisciplineHeaderSwitch } from "@/components/DisciplineHeaderSwitch";
 import Link from "next/link";
@@ -320,7 +320,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { currentDiscipline, hasSelectedDiscipline, isHydrated } =
     useDiscipline();
   const roleState = useUserRole();
-  const theme = getDisciplineDefinition(currentDiscipline).theme;
+  const discipline = getDisciplineDefinition(currentDiscipline);
+  const theme = discipline.theme;
   const trainingHref = getDisciplineRoute(currentDiscipline, "trainingHub");
   const evaluationsHref = getDisciplineRoute(
     currentDiscipline,
@@ -395,10 +396,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#050b12] text-white">
+    <div className="reflab-app-shell min-h-screen overflow-x-hidden text-white">
       <PushDeviceSync />
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[260px] border-r border-white/10 bg-[#050b12] p-5 lg:block">
-        <Logo theme={theme} />
+      <aside className="reflab-app-chrome fixed left-0 top-0 z-40 hidden h-screen w-[260px] border-r border-white/10 p-5 lg:block">
+        <Logo
+          theme={theme}
+          logoSrc={discipline.logoSrc}
+          isFutsal={currentDiscipline === "futsal"}
+        />
 
         <nav className="mt-10 space-y-2" aria-label="Navegacion principal">
           {visibleNavItems.map((item) => (
@@ -413,12 +418,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
 
-      <header className="fixed left-[260px] right-0 top-0 z-40 hidden h-[76px] items-center justify-end border-b border-white/10 bg-[#050b12]/95 px-8 backdrop-blur-xl lg:flex">
+      <header className="reflab-app-chrome fixed left-[260px] right-0 top-0 z-40 hidden h-[76px] items-center justify-end border-b border-white/10 px-8 backdrop-blur-xl lg:flex">
         <DisciplineHeaderSwitch />
       </header>
 
-      <header className="fixed left-0 top-0 z-50 flex h-[76px] w-full max-w-full items-center justify-between border-b border-white/10 bg-[#050b12]/95 px-3 backdrop-blur-xl sm:px-4 lg:hidden">
-        <Logo compact theme={theme} />
+      <header className="reflab-app-chrome fixed left-0 top-0 z-50 flex h-[76px] w-full max-w-full items-center justify-between border-b border-white/10 px-3 backdrop-blur-xl sm:px-4 lg:hidden">
+        <Logo
+          compact
+          theme={theme}
+          logoSrc={discipline.logoSrc}
+          isFutsal={currentDiscipline === "futsal"}
+        />
         <div className="flex items-center gap-2">
           <DisciplineHeaderSwitch compact />
           <button
@@ -468,7 +478,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
 
       <nav
-        className={`fixed bottom-[calc(10px+env(safe-area-inset-bottom))] left-2 right-2 z-50 grid h-[74px] ${mobileNavGrid} rounded-[26px] border border-white/10 bg-[#071019]/96 p-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:left-3 sm:right-3 lg:hidden`}
+        className={`reflab-app-nav fixed bottom-[calc(10px+env(safe-area-inset-bottom))] left-2 right-2 z-50 grid h-[74px] ${mobileNavGrid} rounded-[26px] border border-white/10 p-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:left-3 sm:right-3 lg:hidden`}
       >
         {visibleMobileItems.map((item) => {
           const Icon = item.icon;
@@ -507,26 +517,36 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 function Logo({
   compact = false,
   theme,
+  logoSrc,
+  isFutsal,
 }: {
   compact?: boolean;
   theme: ReturnType<typeof getDisciplineDefinition>["theme"];
+  logoSrc: string;
+  isFutsal: boolean;
 }) {
+  const logoSizeClass = compact ? "h-[42px] w-[42px]" : "h-[46px] w-[46px]";
+
   return (
     <Link
       href="/about"
       aria-label="Abrir pagina institucional de RefLab"
       className="flex min-w-0 items-center gap-3"
     >
-      <Image
-        src={RF_LOGO_SRC}
-        alt="RefLab"
-        width={RF_LOGO_SIZE}
-        height={RF_LOGO_SIZE}
-        sizes={compact ? "42px" : "46px"}
-        priority
+      <span
+        className={`${logoSizeClass} grid shrink-0 place-items-center overflow-hidden rounded-full`}
         style={{ filter: `drop-shadow(0 0 10px ${theme.glow})` }}
-        className={`${compact ? "h-[42px] w-[42px]" : "h-[46px] w-[46px]"} shrink-0 object-contain`}
-      />
+      >
+        <Image
+          src={logoSrc}
+          alt={isFutsal ? "RefLab Futsal" : "RefLab Futbol 11"}
+          width={RF_LOGO_SIZE}
+          height={RF_LOGO_SIZE}
+          sizes={compact ? "42px" : "46px"}
+          priority
+          className={`h-full w-full object-cover ${isFutsal ? "scale-[1.42]" : ""}`}
+        />
+      </span>
 
       <div className={`${compact ? "hidden min-[390px]:block" : ""} min-w-0`}>
         <p

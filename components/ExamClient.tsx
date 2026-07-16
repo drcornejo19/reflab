@@ -183,7 +183,6 @@ const videoLocked = remainingVideoPlays <= 0;
   }, [index, finished]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- The formal exam resets playback limits whenever the clip changes.
     setVideoPlays(0);
   }, [currentClip?.id]);
 
@@ -198,7 +197,6 @@ const videoLocked = remainingVideoPlays <= 0;
       currentClip.sub_type === "no_sancionable";
 
     if (isNoOffside || isNoHandball) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Some formal clips start from a predefined "no offense" baseline.
       setFoul(false);
       setRestart("Seguir el juego");
       setDiscipline("Sin sancion");
@@ -211,7 +209,6 @@ const videoLocked = remainingVideoPlays <= 0;
     if (!currentClip) return;
 
     if (foul === true && !foulRestartOptions.includes(restart)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Restart defaults are corrected after the foul toggle to keep the answer valid.
       setRestart(
         currentClip.topic === "Offside"
           ? "Tiro libre indirecto"

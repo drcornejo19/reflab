@@ -164,6 +164,8 @@ export function MatchAppointmentDetailClient({
 
   useEffect(() => {
     void loadDetail();
+    // loadDetail is intentionally keyed by appointment identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appointmentId]);
 
   useEffect(() => {

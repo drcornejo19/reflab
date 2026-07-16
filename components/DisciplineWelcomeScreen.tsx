@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, MonitorCheck, ShieldCheck } from "lucide-react";
+import { ArrowRight, ShieldCheck } from "lucide-react";
 import { RF_LOGO_SIZE, RF_LOGO_SRC } from "@/lib/brand";
 import {
   getAllDisciplines,
@@ -99,7 +99,7 @@ function DisciplineCard({
 }) {
   const definition = getDisciplineDefinition(discipline);
   const isFutsal = discipline === "futsal";
-  const Icon = isFutsal ? MonitorCheck : ShieldCheck;
+  const Icon = ShieldCheck;
   const accentStyle = {
     "--accent": definition.theme.accent,
     "--accent-soft": definition.theme.accentSoft,
@@ -146,8 +146,19 @@ function DisciplineCard({
 
       <div className="relative z-10 flex h-full flex-col justify-between p-6 sm:p-7">
         <div className="flex items-start justify-between gap-4">
-          <div className="grid h-24 w-24 place-items-center rounded-full border border-[color:var(--accent-border)] bg-black/35 text-[color:var(--accent)] shadow-[0_0_24px_var(--accent-soft)] backdrop-blur-md">
-            <Icon size={42} />
+          <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-full border border-[color:var(--accent-border)] bg-black/35 text-[color:var(--accent)] shadow-[0_0_24px_var(--accent-soft)] backdrop-blur-md">
+            {isFutsal ? (
+              <Image
+                src={definition.logoSrc}
+                alt="RefLab Futsal"
+                width={RF_LOGO_SIZE}
+                height={RF_LOGO_SIZE}
+                sizes="96px"
+                className="h-full w-full scale-[1.42] object-cover"
+              />
+            ) : (
+              <Icon size={42} />
+            )}
           </div>
 
           {isCurrent ? (

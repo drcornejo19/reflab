@@ -404,7 +404,7 @@ export function NotificationSettingsClient() {
               <p className="mt-1 text-sm leading-6 text-zinc-400">{pushEnvironment.message}</p>
               {pushEnvironment.isIos && !pushEnvironment.isStandalone && (
                 <p className="mt-2 text-xs font-bold leading-5 text-[var(--accent)]">
-                  Abri Compartir, elegi "Agregar a pantalla de inicio" y activa push dentro de la app instalada.
+                  Abri Compartir, elegi &quot;Agregar a pantalla de inicio&quot; y activa push dentro de la app instalada.
                 </p>
               )}
             </div>

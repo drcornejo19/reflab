@@ -4,6 +4,7 @@ import {
   isSportType,
   type SportType,
 } from "@/lib/sports";
+import { FUTSAL_RF_LOGO_SRC, RF_LOGO_SRC } from "@/lib/brand";
 
 export const DISCIPLINE_STORAGE_KEY = "reflab.selectedDiscipline";
 export const DISCIPLINE_COOKIE_KEY = "reflab_selected_discipline";
@@ -77,6 +78,7 @@ type DisciplineExperience = {
   label: string;
   sessionLabel: string;
   heroDescription: string;
+  logoSrc: string;
   theme: DisciplineTheme;
   routes: Record<DisciplineRouteKey, string>;
   actions: Record<DisciplineActionKey, string>;
@@ -92,6 +94,7 @@ export const disciplineDefinitions: Record<SportType, DisciplineExperience> = {
     sessionLabel: "Futbol 11",
     heroDescription:
       "Entrenamiento, analisis y evaluacion para arbitros de Futbol 11.",
+    logoSrc: RF_LOGO_SRC,
     theme: {
       accent: "#6fc11f",
       accentSoft: "rgba(111,193,31,0.18)",
@@ -234,13 +237,14 @@ export const disciplineDefinitions: Record<SportType, DisciplineExperience> = {
     sessionLabel: "Futsal",
     heroDescription:
       "Entrenamiento, analisis y evaluacion para arbitros de Futsal.",
+    logoSrc: FUTSAL_RF_LOGO_SRC,
     theme: {
-      accent: "#16b8ff",
-      accentSoft: "rgba(22,184,255,0.18)",
-      border: "rgba(34,195,255,0.52)",
-      glow: "rgba(24,189,255,0.34)",
-      button: "#1498ff",
-      buttonHover: "#31b8ff",
+      accent: "#2abaff",
+      accentSoft: "rgba(42,186,255,0.18)",
+      border: "rgba(75,202,255,0.56)",
+      glow: "rgba(42,186,255,0.42)",
+      button: "#159fff",
+      buttonHover: "#4ac7ff",
       onAccent: "#03111d",
     },
     routes: {

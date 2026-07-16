@@ -152,7 +152,6 @@ export function ClipExercise({
       localStorage.getItem(`clip-plays-${typedClip.id}`) ?? "0"
     );
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Legacy clip flow resets local playback counters when the active clip changes.
     setPlayCount(savedCount);
     reset(false);
 
@@ -165,7 +164,6 @@ export function ClipExercise({
 
   useEffect(() => {
     if (typedClip.topic === "Offside" && typedClip.sub_type === "no_offside") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- No-offside clips boot with a fixed answer state to preserve the existing training flow.
       setFoul(false);
       setRestart("Seguir el juego");
       setDiscipline("Sin sanción");
@@ -174,7 +172,6 @@ export function ClipExercise({
 
   useEffect(() => {
     if (foul === true && !foulRestartOptions.includes(restart)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Restart defaults are corrected after the foul toggle to keep the answer valid.
       setRestart("Tiro libre directo");
     }
 
