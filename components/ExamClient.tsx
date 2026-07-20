@@ -241,10 +241,13 @@ const videoLocked = remainingVideoPlays <= 0;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        avgScore: examStats.avgScore,
-        correctCount: examStats.correctCount,
-        totalQuestions: answers.length,
-        answers,
+        sportType: DEFAULT_SPORT_TYPE,
+        answers: answers.map((answer) => ({
+          clipId: answer.clipId,
+          foul: answer.foul,
+          restart: answer.restart,
+          discipline: answer.discipline,
+        })),
       }),
     });
 

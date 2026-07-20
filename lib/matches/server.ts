@@ -1015,13 +1015,24 @@ export async function getAppointmentDetail(
     uniqueIds(officials.map((item) => item.user_id))
   );
   const officialProfileMap = new Map(officialProfiles.map((item) => [item.userId, item]));
-
-  const recommendedPlan = await buildRecommendedPlan(
-    supabase,
-    appointment.user_id,
-    appointment.sport_type,
-    (role?.role_key ?? "other") as RefereeRoleKey
-  );
+  const isAppointmentOwner = actor.userId === appointment.user_id;
+  const privacyAccess = isAppointmentOwner
+    ? fullAppointmentPrivacyAccess()
+    : await getInstitutionAppointmentPrivacyAccess(
+        supabase,
+        appointment.institution_id ?? null,
+        appointment.user_id
+      );
+  const recommendedPlan = isAppointmentOwner
+    ? await buildRecommendedPlan(
+        supabase,
+        appointment.user_id,
+        appointment.sport_type,
+        (role?.role_key ?? "other") as RefereeRoleKey
+      )
+    : emptyPlan(
+        "El plan personalizado es privado y solo esta disponible para el arbitro."
+      );
 
   return {
     actor,
@@ -1057,13 +1068,26 @@ export async function getAppointmentDetail(
     preparations,
     postMatchReview: review,
     relatedActivity: {
-      performanceCheckins: performanceCheckins.length,
-      performanceSessions: performanceSessions.length,
-      psychologyCheckins: psychologyCheckins.length,
-      psychologyExercises: psychologyExercises.length,
+      performanceCheckins: privacyAccess.readinessSummary
+        ? performanceCheckins.length
+        : 0,
+      performanceSessions: privacyAccess.physicalLoad
+        ? performanceSessions.length
+        : 0,
+      psychologyCheckins: privacyAccess.psychologyCompliance
+        ? psychologyCheckins.length
+        : 0,
+      psychologyExercises: privacyAccess.psychologyCompliance
+        ? psychologyExercises.length
+        : 0,
       latestReadinessScore:
-        performanceCheckins[0]?.readiness_score ?? null,
-      latestMentalScore: psychologyCheckins[0]?.mental_score ?? null,
+        privacyAccess.readinessSummary
+          ? performanceCheckins[0]?.readiness_score ?? null
+          : null,
+      latestMentalScore:
+        privacyAccess.psychologyDetail
+          ? psychologyCheckins[0]?.mental_score ?? null
+          : null,
     },
     recommendedPlan,
     canManageInstitutionally:
@@ -1400,6 +1424,7 @@ async function buildRecommendedPlan(
       .from("performance_checkins")
       .select("readiness_score,fatigue,sleep_hours,created_at,sport_type")
       .eq("user_id", userId)
+      .eq("sport_type", sportType)
       .order("created_at", { ascending: false })
       .limit(8),
     supabase
@@ -1408,6 +1433,7 @@ async function buildRecommendedPlan(
         "mental_score,confidence_score,pressure_score,concentration_score,created_at,sport_type"
       )
       .eq("user_id", userId)
+      .eq("sport_type", sportType)
       .order("created_at", { ascending: false })
       .limit(8),
   ]);
@@ -1573,6 +1599,78 @@ function emptyPlan(message: string): MatchRecommendedPlan {
     reminders: [],
     objectives: [],
     evidence: [],
+  };
+}
+
+type AppointmentPrivacyAccess = {
+  readinessSummary: boolean;
+  physicalLoad: boolean;
+  psychologyCompliance: boolean;
+  psychologyDetail: boolean;
+};
+
+function fullAppointmentPrivacyAccess(): AppointmentPrivacyAccess {
+  return {
+    readinessSummary: true,
+    physicalLoad: true,
+    psychologyCompliance: true,
+    psychologyDetail: true,
+  };
+}
+
+async function getInstitutionAppointmentPrivacyAccess(
+  supabase: SupabaseAnyClient,
+  institutionId: string | null,
+  userId: string
+): Promise<AppointmentPrivacyAccess> {
+  const privateByDefault: AppointmentPrivacyAccess = {
+    readinessSummary: false,
+    physicalLoad: false,
+    psychologyCompliance: false,
+    psychologyDetail: false,
+  };
+  if (!institutionId) return privateByDefault;
+
+  const { data, error } = await supabase
+    .from("institution_data_consents")
+    .select(
+      "data_category,share_summary,share_detail,granted_at,revoked_at,expires_at"
+    )
+    .eq("institution_id", institutionId)
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("MATCH_PRIVACY_CONSENT_LOOKUP_ERROR", {
+      institutionId,
+      userId,
+      message: error.message,
+    });
+    return privateByDefault;
+  }
+
+  const now = Date.now();
+  const activeRows = ((data ?? []) as Array<{
+    data_category?: string | null;
+    share_summary?: boolean | null;
+    share_detail?: boolean | null;
+    granted_at?: string | null;
+    revoked_at?: string | null;
+    expires_at?: string | null;
+  }>).filter((row) => {
+    if (!row.granted_at || row.revoked_at) return false;
+    if (!row.expires_at) return true;
+    const expiresAt = new Date(row.expires_at).getTime();
+    return Number.isFinite(expiresAt) && expiresAt > now;
+  });
+  const consent = (category: string) =>
+    activeRows.find((row) => row.data_category === category);
+
+  return {
+    readinessSummary: consent("readiness_summary")?.share_summary === true,
+    physicalLoad: consent("physical_load")?.share_summary === true,
+    psychologyCompliance:
+      consent("psychology_compliance")?.share_summary === true,
+    psychologyDetail: consent("psychology_detail")?.share_detail === true,
   };
 }
 

@@ -104,11 +104,11 @@ async function loadRefPerformanceData(
   sportType = DEFAULT_SPORT_TYPE
 ) {
   const [checkinsRes, sessionsRes, testsRes, readinessRes, wellnessRes, attemptsRes] = await Promise.all([
-    supabase.from("performance_checkins").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(40),
-    supabase.from("performance_sessions").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(80),
+    supabase.from("performance_checkins").select("*").eq("user_id", userId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(40),
+    supabase.from("performance_sessions").select("*").eq("user_id", userId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(80),
     supabase.from("physical_tests").select("*").eq("user_id", userId).order("test_date", { ascending: false }).limit(40),
-    supabase.from("readiness_scores").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(40),
-    supabase.from("wellness_logs").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(40),
+    supabase.from("readiness_scores").select("*").eq("user_id", userId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(40),
+    supabase.from("wellness_logs").select("*").eq("user_id", userId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(40),
     supabase.from("attempts").select("id,score,topic,mode,module,created_at,sport_type").eq("user_id", userId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(80),
   ]);
 
@@ -123,6 +123,8 @@ async function loadRefPerformanceData(
     wellnessLogs: wellnessRes.data ?? [],
     attempts: attemptsRes.error ? [] : attemptsRes.data ?? [],
     attemptsWarning: attemptsRes.error?.message ?? null,
+    sportType,
+    physicalTestsScope: "global_profile",
   };
 }
 

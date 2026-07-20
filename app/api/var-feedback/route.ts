@@ -1,83 +1,106 @@
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { calculateCoachConfidence } from "@/lib/coach/confidence";
+import { coachErrorResponse, CoachEvidenceError } from "@/lib/coach/errors";
+import {
+  loadCoachClipEvidence,
+  serializeEvidenceForPrompt,
+} from "@/lib/coach/evidence";
+import { runCoachModel } from "@/lib/coach/gateway";
+import { asRecord, asString } from "@/lib/coach/input";
+import {
+  coachNarrativeSchema,
+  formatCoachNarrative,
+} from "@/lib/coach/schemas";
+import {
+  prepareCoachRequest,
+  readCoachJson,
+} from "@/lib/coach/security";
 import { feedbackLanguageInstruction } from "@/lib/feedbackLanguage";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-export async function POST(req: Request) {
+const FEATURE = "var_feedback" as const;
+const PROMPT_VERSION = "var-feedback-v1";
+
+export async function POST(request: Request) {
+  let requestId: string | undefined;
+
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: "Falta OPENAI_API_KEY en .env.local" },
-        { status: 500 }
-      );
+    const context = await prepareCoachRequest(request, FEATURE);
+    requestId = context.requestId;
+    const body = asRecord(await readCoachJson(request));
+    const clipId = asString(body.clipId, "clipId", {
+      required: true,
+      maxLength: 100,
+    }) as string;
+    const evidence = await loadCoachClipEvidence(
+      context.supabase,
+      [clipId],
+      "football_11"
+    );
+    if (evidence.length === 0) {
+      throw new CoachEvidenceError(`VAR clip ${clipId} was not found.`);
     }
 
-    const body = await req.json();
-    const languageInstruction = feedbackLanguageInstruction(body.feedbackLanguage);
-
-    const response = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
+    const userDecision = {
+      incidentType: asString(body.incidentType, "incidentType", {
+        maxLength: 120,
+      }),
+      appStatus: asString(body.appStatus, "appStatus", { maxLength: 120 }),
+      clearError: asString(body.clearError, "clearError", { maxLength: 120 }),
+      varDecision: asString(body.varDecision, "varDecision", {
+        maxLength: 120,
+      }),
+      finalDecision: asString(body.finalDecision, "finalDecision", {
+        maxLength: 300,
+      }),
+      justification: asString(body.justification, "justification", {
+        maxLength: 2_000,
+      }),
+    };
+    const feedbackLanguage = asString(
+      body.feedbackLanguage,
+      "feedbackLanguage",
+      { maxLength: 10 }
+    );
+    const confidence = calculateCoachConfidence({
+      evidence: evidence.map((item) => item.reference),
+    });
+    const languageInstruction = feedbackLanguageInstruction(feedbackLanguage);
+    const result = await runCoachModel(context.supabase, {
+      userId: context.userId,
+      feature: FEATURE,
+      sportType: "football_11",
+      promptVersion: PROMPT_VERSION,
+      confidence,
+      evidence,
+      outputSchema: coachNarrativeSchema,
+      instructions: `Sos RefLab Coach especializado en protocolo VAR.
+Ayuda al arbitro a comprender check, APP, error claro y manifiesto, OFR y decisiones factuales.
+No juzgues ni castigues. Reconoce aciertos, explica el por que y propone una practica concreta.
+Usa exclusivamente verifiedEvidence para validar la decision.
+No inventes criterios ni contradigas la evidencia oficial.
+${languageInstruction}`,
+      input: JSON.stringify(
         {
-          role: "system",
-          content: `Sos instructor VAR profesional con criterio IFAB/FIFA. Evaluas de forma tecnica, estricta y concreta. ${languageInstruction}`,
+          task: "Analizar la aplicacion del protocolo VAR.",
+          userDecision,
+          verifiedEvidence: serializeEvidenceForPrompt(evidence),
+          confidence,
         },
-        {
-          role: "user",
-          content: `
-Analiza esta decision VAR.
-
-DATOS DEL CLIP:
-Titulo: ${body.clipTitle}
-Incidente elegido por usuario: ${body.incidentType}
-Incidente correcto: ${body.correctIncident}
-
-DECISION VAR:
-Decision VAR usuario: ${body.varDecision}
-Decision VAR correcta: ${body.correctDecision}
-Decision final usuario: ${body.finalDecision}
-
-JUSTIFICACION DEL USUARIO:
-${body.justification || "Sin justificacion"}
-
-FUNDAMENTO OFICIAL:
-${body.explanation || "Sin fundamento cargado"}
-
-INSTRUCCIONES:
-- Evalua si el usuario aplico bien el protocolo VAR.
-- Determina si correspondia intervenir o hacer check completo.
-- Evalua si hay error claro y manifiesto.
-- Si eligio review/OFR cuando no correspondia, explicalo.
-- Si eligio check complete cuando debia intervenir, explicalo.
-- No contradigas la respuesta correcta cargada.
-- No seas generico.
-- Respeta el idioma de feedback indicado por el sistema.
-
-FORMATO:
-1. Veredicto VAR
-2. Hay error claro y manifiesto?
-3. Evaluacion de la intervencion
-4. Error principal
-5. Recomendacion tecnica
-`,
-        },
-      ],
+        null,
+        2
+      ),
     });
 
-    const feedback =
-      response.choices?.[0]?.message?.content ??
-      "No se pudo generar feedback VAR.";
-
-    return NextResponse.json({ feedback });
-  } catch (error: unknown) {
-    console.error("VAR FEEDBACK ERROR:", error);
-
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Error generando feedback VAR." },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      feedback: formatCoachNarrative(result.value),
+      confidence: result.confidence,
+      evidence: result.evidence,
+      coachRunId: result.runId,
+    });
+  } catch (error) {
+    return coachErrorResponse(error, requestId);
   }
 }

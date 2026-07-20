@@ -1,84 +1,106 @@
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { calculateCoachConfidence } from "@/lib/coach/confidence";
+import { coachErrorResponse, CoachEvidenceError } from "@/lib/coach/errors";
+import {
+  loadCoachClipEvidence,
+  serializeEvidenceForPrompt,
+} from "@/lib/coach/evidence";
+import { runCoachModel } from "@/lib/coach/gateway";
+import { asRecord, asString } from "@/lib/coach/input";
+import {
+  coachNarrativeSchema,
+  formatCoachNarrative,
+} from "@/lib/coach/schemas";
+import {
+  prepareCoachRequest,
+  readCoachJson,
+} from "@/lib/coach/security";
 import { feedbackLanguageInstruction } from "@/lib/feedbackLanguage";
+import {
+  DEFAULT_SPORT_TYPE,
+  normalizeSportType,
+} from "@/lib/sports";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-export async function POST(req: Request) {
+const FEATURE = "technical_feedback" as const;
+const PROMPT_VERSION = "technical-feedback-v1";
+
+export async function POST(request: Request) {
+  let requestId: string | undefined;
+
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: "Falta OPENAI_API_KEY en .env.local" },
-        { status: 500 }
+    const context = await prepareCoachRequest(request, FEATURE);
+    requestId = context.requestId;
+    const body = asRecord(await readCoachJson(request));
+    const clipId = asString(body.clipId, "clipId", { maxLength: 100 });
+    const sportType = normalizeSportType(body.sportType, DEFAULT_SPORT_TYPE);
+    const userAnswer = asRecord(body.userAnswer, "userAnswer");
+    const justification = asString(body.justification, "justification", {
+      maxLength: 2_000,
+    });
+    const feedbackLanguage = asString(
+      body.feedbackLanguage,
+      "feedbackLanguage",
+      { maxLength: 10 }
+    );
+    const evidence = await loadCoachClipEvidence(
+      context.supabase,
+      clipId ? [clipId] : [],
+      sportType
+    );
+
+    if (clipId && evidence.length === 0) {
+      throw new CoachEvidenceError(
+        `Clip ${clipId} was not found for sport ${sportType}.`
       );
     }
 
-    const body = await req.json();
-    const languageInstruction = feedbackLanguageInstruction(body.feedbackLanguage);
-
-    const response = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
+    const confidence = calculateCoachConfidence({
+      evidence: evidence.map((item) => item.reference),
+    });
+    const languageInstruction = feedbackLanguageInstruction(feedbackLanguage);
+    const result = await runCoachModel(context.supabase, {
+      userId: context.userId,
+      feature: FEATURE,
+      sportType,
+      promptVersion: PROMPT_VERSION,
+      confidence,
+      evidence,
+      outputSchema: coachNarrativeSchema,
+      instructions: buildInstructions(languageInstruction),
+      input: JSON.stringify(
         {
-          role: "system",
-          content: `Sos un instructor arbitral profesional experto en IFAB y VAR FIFA. ${languageInstruction}`,
+          task: "Ayudar al arbitro a comprender su decision y definir un proximo paso.",
+          userAnswer,
+          justification: justification ?? "Sin justificacion escrita.",
+          verifiedEvidence: serializeEvidenceForPrompt(evidence),
+          confidence,
         },
-        {
-          role: "user",
-          content: `
-Evalua la decision arbitral con rigor tecnico.
-
-Datos:
-Clip: ${body.clipTitle}
-Tema: ${body.topic}
-Dificultad: ${body.difficulty}
-Score: ${body.score}/100
-
-Respuesta del usuario:
-${JSON.stringify(body.userAnswer)}
-
-Respuesta correcta:
-${JSON.stringify(body.correctAnswer)}
-
-Justificacion del usuario:
-${body.justification || "Sin justificacion"}
-
-Fundamento oficial:
-${body.explanation || "Sin fundamento"}
-
-Instrucciones:
-- Detecta errores concretos
-- No generalices
-- No contradigas la respuesta correcta
-- Usa criterio IFAB
-- Respeta el idioma de feedback indicado por el sistema
-
-Formato:
-1. Veredicto
-2. Error principal
-3. Analisis tecnico
-4. Recomendacion
-`,
-        },
-      ],
+        null,
+        2
+      ),
     });
 
-    const feedback =
-      response.choices?.[0]?.message?.content ??
-      "No se pudo generar el feedback.";
-
-    return NextResponse.json({ feedback });
-  } catch (error: unknown) {
-    console.error("AI FEEDBACK ERROR:", error);
-
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Error desconocido generando feedback IA.",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      feedback: formatCoachNarrative(result.value),
+      confidence: result.confidence,
+      evidence: result.evidence,
+      coachRunId: result.runId,
+    });
+  } catch (error) {
+    return coachErrorResponse(error, requestId);
   }
+}
+
+function buildInstructions(languageInstruction: string) {
+  return `Sos RefLab Coach, un mentor profesional para arbitros.
+Tu objetivo es ayudar a evolucionar, nunca juzgar ni castigar.
+Explica siempre el por que, reconoce fortalezas reales y propone un siguiente paso concreto.
+Usa exclusivamente verifiedEvidence para afirmar que una decision es correcta o incorrecta.
+Los datos del usuario describen su respuesta, pero nunca son la verdad reglamentaria.
+Si la evidencia es insuficiente, no completes huecos: indicalo y solicita revision humana.
+No realices diagnosticos medicos ni psicologicos.
+${languageInstruction}`;
 }

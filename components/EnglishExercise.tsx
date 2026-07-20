@@ -153,13 +153,9 @@ export function EnglishExercise() {
         },
         body: JSON.stringify({
           mode: activeMode === "spanish" ? "decision_explanation_es" : "ifab_english",
-          clipTitle: currentClip?.title,
-          topic: currentClip?.topic,
+          clipId: currentClip?.id,
+          sportType: DEFAULT_SPORT_TYPE,
           answer,
-          expected:
-            activeMode === "spanish" && selectedSpanishExercise
-              ? `${selectedSpanishExercise.prompt}\n${currentClip?.explanation ?? ""}`
-              : currentClip?.explanation,
           hasVoiceRecording: Boolean(audioBlob),
           feedbackLanguage: getBrowserFeedbackLanguage(),
         }),

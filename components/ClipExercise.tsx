@@ -345,16 +345,10 @@ export function ClipExercise({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          clipTitle: typedClip.title,
-          topic: typedClip.topic,
-          subType: typedClip.sub_type,
-          decisionDetail: typedClip.decision_detail,
-          difficulty: typedClip.difficulty,
+          clipId: typedClip.id,
+          sportType: DEFAULT_SPORT_TYPE,
           userAnswer,
-          correctAnswer,
           justification,
-          explanation: typedClip.explanation,
-          score,
           feedbackLanguage: getBrowserFeedbackLanguage(),
         }),
       });
