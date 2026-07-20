@@ -4,6 +4,8 @@ import Image from "next/image";
 import { RF_LOGO_SIZE } from "@/lib/brand";
 import { PushDeviceSync } from "@/components/PushDeviceSync";
 import { DisciplineHeaderSwitch } from "@/components/DisciplineHeaderSwitch";
+import { InstitutionHeaderSwitch } from "@/components/institutional/InstitutionHeaderSwitch";
+import { InstitutionDemoBanner } from "@/components/institutional/InstitutionDemoBanner";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { usePathname, useRouter } from "next/navigation";
@@ -91,9 +93,10 @@ function getDesktopNavItems(trainingHref: string, evaluationsHref: string) {
   return [
     {
       label: "Mi Programa",
-      href: "/demo/student",
+      href: "/institution/learning",
       icon: GraduationCap,
-      activePaths: ["/demo/student"],
+      activePaths: ["/institution/learning"],
+      activePrefixes: ["/institution/learning"],
       institutionalStudentOnly: true,
     },
     {
@@ -155,9 +158,10 @@ function getDesktopNavItems(trainingHref: string, evaluationsHref: string) {
     {
       label: "Instituciones",
       labelKey: "nav.institutions",
-      href: "/institutional",
+      href: "/institution",
       icon: Landmark,
-      activePaths: ["/institutional"],
+      activePaths: ["/institution"],
+      activePrefixes: ["/institution"],
     },
     {
       label: "Perfil",
@@ -196,9 +200,10 @@ function getPrimaryMobileItems(trainingHref: string, evaluationsHref: string) {
   return [
     {
       label: "Programa",
-      href: "/demo/student",
+      href: "/institution/learning",
       icon: GraduationCap,
-      activePaths: ["/demo/student"],
+      activePaths: ["/institution/learning"],
+      activePrefixes: ["/institution/learning"],
       institutionalStudentOnly: true,
     },
     {
@@ -281,9 +286,10 @@ function getSecondaryMobileItems() {
     {
       label: "Instituciones",
       labelKey: "nav.institutions",
-      href: "/institutional",
+      href: "/institution",
       icon: Landmark,
-      activePaths: ["/institutional"],
+      activePaths: ["/institution"],
+      activePrefixes: ["/institution"],
     },
     {
       label: "Notificaciones",
@@ -398,7 +404,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="reflab-app-shell min-h-screen overflow-x-hidden text-white">
       <PushDeviceSync />
-      <aside className="reflab-app-chrome fixed left-0 top-0 z-40 hidden h-screen w-[260px] border-r border-white/10 p-5 lg:block">
+      <aside className="reflab-app-chrome fixed left-0 top-0 z-40 hidden h-screen w-[260px] border-r border-white/10 p-5 lg:block print:hidden">
         <Logo
           theme={theme}
           logoSrc={discipline.logoSrc}
@@ -418,11 +424,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
 
-      <header className="reflab-app-chrome fixed left-[260px] right-0 top-0 z-40 hidden h-[76px] items-center justify-end border-b border-white/10 px-8 backdrop-blur-xl lg:flex">
+      <header className="reflab-app-chrome fixed left-[260px] right-0 top-0 z-40 hidden h-[76px] items-center justify-end gap-3 border-b border-white/10 px-8 backdrop-blur-xl lg:flex print:hidden">
+        <InstitutionHeaderSwitch />
         <DisciplineHeaderSwitch />
       </header>
 
-      <header className="reflab-app-chrome fixed left-0 top-0 z-50 flex h-[76px] w-full max-w-full items-center justify-between border-b border-white/10 px-3 backdrop-blur-xl sm:px-4 lg:hidden">
+      <header className="reflab-app-chrome fixed left-0 top-0 z-50 flex h-[76px] w-full max-w-full items-center justify-between border-b border-white/10 px-3 backdrop-blur-xl sm:px-4 lg:hidden print:hidden">
         <Logo
           compact
           theme={theme}
@@ -430,6 +437,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           isFutsal={currentDiscipline === "futsal"}
         />
         <div className="flex items-center gap-2">
+          <InstitutionHeaderSwitch compact />
           <DisciplineHeaderSwitch compact />
           <button
             type="button"
@@ -471,14 +479,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <main className="min-h-screen w-full max-w-full overflow-x-hidden px-3 pb-[calc(150px+env(safe-area-inset-bottom))] pt-[88px] sm:px-5 lg:ml-[260px] lg:px-8 lg:pb-8 lg:pt-[96px]">
+      <main className="min-h-screen w-full max-w-full overflow-x-hidden px-3 pb-[calc(150px+env(safe-area-inset-bottom))] pt-[88px] sm:px-5 lg:ml-[260px] lg:px-8 lg:pb-8 lg:pt-[96px] print:ml-0 print:p-0">
         <div className="mx-auto w-full max-w-full sm:max-w-[560px] lg:max-w-[1180px]">
+          <InstitutionDemoBanner />
           {children}
         </div>
       </main>
 
       <nav
-        className={`reflab-app-nav fixed bottom-[calc(10px+env(safe-area-inset-bottom))] left-2 right-2 z-50 grid h-[74px] ${mobileNavGrid} rounded-[26px] border border-white/10 p-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:left-3 sm:right-3 lg:hidden`}
+        className={`reflab-app-nav fixed bottom-[calc(10px+env(safe-area-inset-bottom))] left-2 right-2 z-50 grid h-[74px] ${mobileNavGrid} rounded-[26px] border border-white/10 p-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:left-3 sm:right-3 lg:hidden print:hidden`}
       >
         {visibleMobileItems.map((item) => {
           const Icon = item.icon;

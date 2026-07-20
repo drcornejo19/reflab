@@ -1,4 +1,3 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import {
   DEFAULT_SPORT_TYPE,
@@ -7,6 +6,11 @@ import {
   normalizeSportType,
 } from "@/lib/sports";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
+import {
+  assertInstitutionWriteAllowed,
+  InstitutionAccessError,
+  requireInstitutionPermission,
+} from "@/lib/institutional/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -14,48 +18,41 @@ export const runtime = "nodejs";
 const bucketName = "institutional-videos";
 
 export async function GET() {
-  const { userId } = await auth();
+  try {
+    const access = await requireInstitutionPermission("content.read");
+    const { data, error } = await access.supabase
+      .from("institutional_clips")
+      .select(
+        "id, title, description, match_context, incident_minute, category, topic, subtopic, rule_reference, correct_decision, correct_restart, correct_discipline, final_expected_answer, explanation, ifab_var_criteria, difficulty, mode, is_public, status, review_notes, source_url, storage_path, original_filename, created_at, sport_type, season, source_version, source_official, governing_body, technical_resolution, disciplinary_resolution, normative_status, language, reviewed_at"
+      )
+      .eq("institution_id", access.context.institution.id)
+      .order("created_at", { ascending: false })
+      .limit(50);
 
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("institutional_clips")
-    .select(
-      "id, title, description, match_context, incident_minute, category, topic, subtopic, rule_reference, correct_decision, correct_restart, correct_discipline, final_expected_answer, explanation, ifab_var_criteria, difficulty, mode, is_public, status, review_notes, source_url, storage_path, original_filename, created_at, sport_type, season, source_version, source_official, governing_body, technical_resolution, disciplinary_resolution, normative_status, language, reviewed_at"
-    )
-    .eq("uploaded_by", userId)
-    .order("created_at", { ascending: false })
-    .limit(50);
-
-  if (error) {
+    if (error) throw new Error(error.message);
+    return NextResponse.json({ clips: data ?? [] });
+  } catch (error) {
     return NextResponse.json(
       {
         error: "No se pudieron cargar los videos institucionales.",
-        technical: error.message,
+        technical: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 }
+      { status: error instanceof InstitutionAccessError ? error.status : 500 }
     );
   }
-
-  return NextResponse.json({ clips: data ?? [] });
 }
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
-
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const contentType = request.headers.get("content-type") ?? "";
-  const supabase = createSupabaseAdminClient();
 
   try {
+    const access = await requireInstitutionPermission("content.manage");
+    assertInstitutionWriteAllowed(access);
+    const userId = access.userId;
+    const supabase = access.supabase;
+    const institutionId = access.context.institution.id;
     const payload = contentType.includes("multipart/form-data")
-      ? await readFormPayload(request, supabase, userId)
+      ? await readFormPayload(request, supabase, userId, institutionId)
       : await readJsonPayload(request);
 
     if (!payload.title || payload.title.trim().length < 3) {
@@ -86,6 +83,7 @@ export async function POST(request: Request) {
     const { data, error } = await supabase
       .from("institutional_clips")
       .insert({
+        institution_id: institutionId,
         uploaded_by: userId,
         sport_type: sportType,
         source_url: payload.source_url || null,
@@ -141,7 +139,7 @@ export async function POST(request: Request) {
         error: "No se pudo procesar el envio del video.",
         technical: error instanceof Error ? error.message : "Error desconocido",
       },
-      { status: 500 }
+      { status: error instanceof InstitutionAccessError ? error.status : 500 }
     );
   }
 }
@@ -216,7 +214,8 @@ async function readJsonPayload(request: Request): Promise<ClipPayload> {
 async function readFormPayload(
   request: Request,
   supabase: ReturnType<typeof createSupabaseAdminClient>,
-  userId: string
+  userId: string,
+  institutionId: string
 ): Promise<ClipPayload> {
   const form = await request.formData();
   const file = form.get("video_file");
@@ -226,7 +225,7 @@ async function readFormPayload(
   if (file instanceof File && file.size > 0) {
     originalFilename = file.name;
     const extension = file.name.split(".").pop() || "mp4";
-    storagePath = `${userId}/${crypto.randomUUID()}.${extension}`;
+    storagePath = `${institutionId}/${userId}/${crypto.randomUUID()}.${extension}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const { error } = await supabase.storage
