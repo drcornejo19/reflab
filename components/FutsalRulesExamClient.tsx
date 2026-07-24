@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { futsalRulesExamQuestions } from "@/lib/futsalRulesQuestions";
-import { supabase } from "@/lib/supabase";
 import { FREE_WEEKLY_EXAM_LIMIT, getCurrentWeekStart } from "@/lib/subscription";
 import { useUserRole } from "@/lib/useUserRole";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
+import { useSupabase } from "@/components/SupabaseProvider";
 
 const EXAM_LIMIT = 10;
 const EXAM_TIME = 12 * 60;
@@ -19,6 +19,7 @@ function shuffle<T>(items: T[]) {
 }
 
 export function FutsalRulesExamClient() {
+  const supabase = useSupabase();
   const { user } = useUser();
   const { isPro, loadingRole } = useUserRole();
 
@@ -80,7 +81,7 @@ export function FutsalRulesExamClient() {
     return () => {
       cancelled = true;
     };
-  }, [user, isPro]);
+  }, [isPro, supabase, user]);
 
   const finishExam = useCallback((reason: Exclude<FinishReason, null>) => {
     setFinishReason(reason);
@@ -282,8 +283,8 @@ export function FutsalRulesExamClient() {
         {freeExamLimitReached && (
           <ProUpgradeCard
             title="Ya usaste tu examen gratuito de esta semana"
-            description="El plan FREE permite 1 examen semanal. RefLab Pro desbloquea examenes ilimitados."
-            reason={`Limite FREE: ${FREE_WEEKLY_EXAM_LIMIT} examen por semana.`}
+            description="El plan Basic permite 1 examen semanal. RefLab Pro desbloquea examenes ilimitados."
+            reason={`Limite Basic: ${FREE_WEEKLY_EXAM_LIMIT} examen por semana.`}
           />
         )}
 

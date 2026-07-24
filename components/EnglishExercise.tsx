@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   BookOpenCheck,
   CheckCircle2,
@@ -22,8 +23,8 @@ import {
 } from "@/lib/communicationContent";
 import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
 import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
-import { supabase } from "@/lib/supabase";
 import { getEnglishClips, type ClipRecord } from "@/lib/clips";
+import { useSupabase } from "@/components/SupabaseProvider";
 
 type EnglishClip = ClipRecord;
 type CommunicationMode = "spanish" | "english" | "trivia";
@@ -67,6 +68,7 @@ const modeCards: {
 ];
 
 export function EnglishExercise() {
+  const supabase = useSupabase();
   const { user } = useUser();
   const startedAtRef = useRef<number>(0);
   const [clips, setClips] = useState<EnglishClip[]>([]);
@@ -127,7 +129,7 @@ export function EnglishExercise() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
     startedAtRef.current = Date.now();
@@ -656,6 +658,7 @@ function ScorePanel({
 }
 
 function IfabTrivia({ userId }: { userId: string | null }) {
+  const supabase = useSupabase();
   const [mode, setMode] = useState<TriviaMode>("choice");
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -695,7 +698,13 @@ function IfabTrivia({ userId }: { userId: string | null }) {
     setSelected(selectedAnswer);
     setAnswered(true);
     setResults((prev) => ({ ...prev, [current.id]: correct }));
-    await saveTriviaAttempt(current, selectedAnswer, correct, userId);
+    await saveTriviaAttempt(
+      supabase,
+      current,
+      selectedAnswer,
+      correct,
+      userId
+    );
     setSaveMessage(userId ? "Progreso de vocabulario guardado." : "Progreso local. Inicia sesion para guardarlo.");
   }
 
@@ -878,6 +887,7 @@ function ConceptList({ title, items }: { title: string; items: string[] }) {
 }
 
 async function saveTriviaAttempt(
+  supabase: SupabaseClient,
   item: TriviaItem,
   selectedAnswer: string,
   correct: boolean,

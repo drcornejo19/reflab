@@ -24,7 +24,7 @@ export default function VarPage() {
         <ProFeatureGate
           title="VAR Lab es exclusivo de RefLab Pro"
           description="Entrena APP, OFR, factual vs interpretativo y protocolo VAR con todos los casos disponibles."
-          reason="El plan FREE te permite probar entrenamiento base; VAR Lab se desbloquea al actualizar."
+          reason="El plan Basic te permite probar entrenamiento base; VAR Lab se desbloquea al actualizar."
         >
           <TrainingClient mode="var" />
         </ProFeatureGate>

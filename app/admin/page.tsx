@@ -44,7 +44,7 @@ const adminAreas: AdminArea[] = [
     title: "Usuarios",
     category: "Roles y planes",
     description:
-      "Gestiona usuarios, roles y planes FREE/PRO para probar la experiencia completa.",
+      "Gestiona usuarios, roles globales y planes Basic/Pro.",
     status: "Disponible",
     href: "/admin/users",
     icon: Users,

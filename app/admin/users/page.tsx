@@ -16,7 +16,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { roleLabels, systemRoles, type SystemRole } from "@/lib/institutionalRoles";
+import { roleLabels, type SystemRole } from "@/lib/institutionalRoles";
 import { planLabels, subscriptionPlans, type SubscriptionPlan } from "@/lib/subscription";
 import { useUserRole } from "@/lib/useUserRole";
 
@@ -44,6 +44,11 @@ type DraftState = Record<
     subscriptionPlan: SubscriptionPlan;
   }
 >;
+
+const editableGlobalRoles = [
+  "super_admin",
+  "individual_referee",
+] as const satisfies readonly SystemRole[];
 
 export default function AdminUsersPage() {
   const router = useRouter();
@@ -202,7 +207,7 @@ export default function AdminUsersPage() {
             <div>
               <h1 className="text-3xl font-black sm:text-5xl">Usuarios y planes</h1>
               <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-400">
-                Cambia roles y simula la experiencia FREE o PRO con usuarios
+                Administra roles globales y planes Basic o Pro con usuarios
                 reales ya registrados en RefLab.
               </p>
             </div>
@@ -219,7 +224,7 @@ export default function AdminUsersPage() {
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="Usuarios" value={counts.total} icon={<UserCog size={22} />} />
-          <Metric label="FREE" value={counts.free} icon={<ShieldCheck size={22} />} />
+          <Metric label="BASIC" value={counts.free} icon={<ShieldCheck size={22} />} />
           <Metric label="PRO" value={counts.pro} icon={<ShieldCheck size={22} />} />
           <Metric label="Super admin" value={counts.super_admin} icon={<ShieldCheck size={22} />} />
         </section>
@@ -322,7 +327,7 @@ export default function AdminUsersPage() {
                       <SelectField
                         label="Rol"
                         value={draft.role}
-                        options={systemRoles.map((role) => ({
+                        options={editableGlobalRoles.map((role) => ({
                           value: role,
                           label: roleLabels[role],
                         }))}

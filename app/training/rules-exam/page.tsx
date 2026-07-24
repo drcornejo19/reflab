@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
+import { useSupabase } from "@/components/SupabaseProvider";
 import { rulesQuestions } from "@/lib/rulesQuestions";
 import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
-import { supabase } from "@/lib/supabase";
 import { FREE_WEEKLY_EXAM_LIMIT, getCurrentWeekStart } from "@/lib/subscription";
 import { useUserRole } from "@/lib/useUserRole";
 
@@ -25,6 +25,7 @@ function shuffle<T>(arr: T[]) {
 }
 
 export default function RulesExamPage() {
+  const supabase = useSupabase();
   const { user } = useUser();
   const { isPro, loadingRole } = useUserRole();
 
@@ -80,7 +81,7 @@ export default function RulesExamPage() {
       ]);
 
       if (examRes.error || rulesRes.error) {
-        console.warn("No se pudo calcular el limite semanal de examenes FREE.");
+        console.warn("No se pudo calcular el limite semanal de examenes Basic.");
         setWeeklyExamCount(0);
         return;
       }
@@ -89,7 +90,7 @@ export default function RulesExamPage() {
     }
 
     loadWeeklyUsage();
-  }, [user, isPro]);
+  }, [isPro, supabase, user]);
 
   const finishExam = useCallback((reason: Exclude<FinishReason, null>) => {
     setFinishReason(reason);
@@ -329,8 +330,8 @@ export default function RulesExamPage() {
           {freeExamLimitReached && (
             <ProUpgradeCard
               title="Ya usaste tu examen gratuito de esta semana"
-              description="El plan FREE permite 1 examen semanal. RefLab Pro desbloquea examenes ilimitados y estadisticas completas."
-              reason={`Limite FREE: ${FREE_WEEKLY_EXAM_LIMIT} examen por semana.`}
+              description="El plan Basic permite 1 examen semanal. RefLab Pro desbloquea examenes ilimitados y estadisticas completas."
+              reason={`Limite Basic: ${FREE_WEEKLY_EXAM_LIMIT} examen por semana.`}
             />
           )}
 

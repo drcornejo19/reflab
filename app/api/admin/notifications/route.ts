@@ -1,14 +1,12 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { requireSuperAdminAccess } from "@/lib/adminAuthorization";
 import { sendFcmNotification } from "@/lib/firebaseAdmin";
-import { normalizeRole } from "@/lib/institutionalRoles";
 import {
   getEnabledNotificationTokens,
   getUserNotificationPreferences,
   recordNotificationEvent,
 } from "@/lib/notificationServer";
 import type { SmartNotification } from "@/lib/notifications";
-import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,7 +16,7 @@ type PreferenceUserRow = {
 };
 
 export async function POST(request: Request) {
-  const access = await requireSuperAdmin();
+  const access = await requireSuperAdminAccess();
   if (access.response) return access.response;
 
   let body: {
@@ -149,35 +147,6 @@ export async function POST(request: Request) {
     skipped,
     failed,
   });
-}
-
-async function requireSuperAdmin() {
-  const session = await auth();
-  const userId = session.userId;
-
-  if (!userId) {
-    return {
-      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-      supabase: null as never,
-    };
-  }
-
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  const role = normalizeRole(data?.role);
-  if (error || role !== "super_admin") {
-    return {
-      response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
-      supabase,
-    };
-  }
-
-  return { response: null, supabase };
 }
 
 function normalizeActionUrl(value: unknown) {

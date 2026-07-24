@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useUser } from "@clerk/nextjs";
 import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
-import { supabase } from "@/lib/supabase";
 import type { Clip } from "@/lib/types";
+import { useSupabase } from "@/components/SupabaseProvider";
 
 type VarDecision = "check_complete" | "recommend_ofr" | "factual_review";
 type Incident =
@@ -46,6 +46,7 @@ const incidentButtons: {
 ];
 
 export function VarExercise({ clip }: VarExerciseProps) {
+  const supabase = useSupabase();
   const { user } = useUser();
   const startedAtRef = useRef<number>(0);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);

@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
-import { supabase } from "@/lib/supabase";
+import { useSupabase } from "@/components/SupabaseProvider";
 
 type IconType = ComponentType<{ size?: number; className?: string }>;
 type Phase = "idle" | "preparation" | "work" | "rest" | "finished";
@@ -88,6 +88,7 @@ const countdownGain = 2.6;
 const beepGain = 0.72;
 
 export function PhysicalTrainingClient() {
+  const supabase = useSupabase();
   const { user } = useUser();
   const [preparation, setPreparation] = useState(defaultConfig.preparation);
   const [work, setWork] = useState(defaultConfig.work);
@@ -236,7 +237,7 @@ export function PhysicalTrainingClient() {
         ? "Tabata registrado para futuras metricas de Preparacion Integral."
         : "Rutina completada. Registro de sesiones en construccion hasta habilitar campos fisicos en Supabase."
     );
-  }, [currentSet, playSoundOnce, safePreparation, safeRest, safeSets, safeWork, selectedPreset, soundEnabled, user]);
+  }, [currentSet, playSoundOnce, safePreparation, safeRest, safeSets, safeWork, selectedPreset, soundEnabled, supabase, user]);
 
   const advancePhase = useCallback(() => {
     if (phase === "preparation") {

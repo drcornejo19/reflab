@@ -14,13 +14,13 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
+import { useSupabase } from "@/components/SupabaseProvider";
 import { useInstitution } from "@/components/institutional/InstitutionProvider";
 import { getDisciplineDefinition } from "@/lib/discipline";
 import {
   isoToLocalDateTimeInput,
   localDateTimeInTimeZoneToIso,
 } from "@/lib/dateTime";
-import { supabase } from "@/lib/supabase";
 import {
   institutionContentStatuses,
   institutionContentTypes,
@@ -125,6 +125,7 @@ function createInitialForm(sportType: SportType): ContentForm {
 }
 
 export function InstitutionContentManager() {
+  const supabase = useSupabase();
   const { currentDiscipline } = useDiscipline();
   const { activeContext, loading: institutionLoading } = useInstitution();
   const theme = getDisciplineDefinition(currentDiscipline).theme;

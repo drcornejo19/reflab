@@ -30,6 +30,7 @@ import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { SportRadarGraphic } from "@/components/SportRadarGraphic";
+import { useSupabase } from "@/components/SupabaseProvider";
 import { getDisciplineDefinition } from "@/lib/discipline";
 import {
   buildSportPerformanceDataset,
@@ -39,7 +40,6 @@ import {
 } from "@/lib/performanceBySport";
 import { getSportLabel } from "@/lib/sports";
 import { useI18n } from "@/lib/useI18n";
-import { supabase } from "@/lib/supabase";
 import {
   type AttemptRecord,
   type ExamResultRecord,
@@ -92,6 +92,7 @@ export default function ProfilePage() {
 }
 
 function ProfilePageContent() {
+  const supabase = useSupabase();
   const { user, isLoaded } = useUser();
   const { currentDiscipline: sportType } = useDiscipline();
   const { t } = useI18n();
@@ -245,7 +246,7 @@ function ProfilePageContent() {
     }
 
     void loadProfile();
-  }, [applyProfile, isLoaded, user]);
+  }, [applyProfile, isLoaded, supabase, user]);
 
   async function saveProfile() {
     if (!user) return;
@@ -547,7 +548,7 @@ function ProfilePageContent() {
             />
             <ProUpgradeCard
               title="RefCard premium disponible en RefLab Pro"
-              description="Tu perfil basico queda activo en FREE. RefLab Pro desbloquea RefCard descargable, radar arbitral, ranking, historial y evolucion completa."
+              description="Tu perfil basico queda activo en Basic. RefLab Pro desbloquea RefCard descargable, radar arbitral, ranking, historial y evolucion completa."
               compact
             />
           </>

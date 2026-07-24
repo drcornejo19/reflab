@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { DisciplineProvider } from "@/components/DisciplineProvider";
 import { InstitutionProvider } from "@/components/institutional/InstitutionProvider";
+import { SupabaseProvider } from "@/components/SupabaseProvider";
 import { RF_LOGO_SRC } from "@/lib/brand";
 import "./globals.css";
 
@@ -30,9 +31,11 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="es" className="h-full antialiased">
         <body className="min-h-full flex flex-col">
-          <DisciplineProvider>
-            <InstitutionProvider>{children}</InstitutionProvider>
-          </DisciplineProvider>
+          <SupabaseProvider>
+            <DisciplineProvider>
+              <InstitutionProvider>{children}</InstitutionProvider>
+            </DisciplineProvider>
+          </SupabaseProvider>
         </body>
       </html>
     </ClerkProvider>

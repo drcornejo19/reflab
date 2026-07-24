@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
+import { useSupabase } from "@/components/SupabaseProvider";
 import { getDisciplineDefinition } from "@/lib/discipline";
 import {
   buildSportPerformanceDataset,
@@ -16,7 +17,6 @@ import {
   getSportTopicPerformance,
   type SportCriterionMetric,
 } from "@/lib/performanceBySport";
-import { supabase } from "@/lib/supabase";
 import {
   type AttemptRecord,
   type ExamResultRecord,
@@ -50,6 +50,7 @@ export default function StatsPage() {
 }
 
 function StatsPageContent() {
+  const supabase = useSupabase();
   const { user, isLoaded } = useUser();
   const { currentDiscipline: sportType } = useDiscipline();
   const { isPro, loadingRole } = useUserRole();
@@ -97,7 +98,7 @@ function StatsPageContent() {
     }
 
     void loadStats();
-  }, [isLoaded, user]);
+  }, [isLoaded, supabase, user]);
 
   const dataset = useMemo(
     () =>

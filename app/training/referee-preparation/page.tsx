@@ -9,7 +9,7 @@ export default function RefereePreparationPage() {
         <ProFeatureGate
           title="Preparacion Integral se desbloquea con RefLab Pro"
           description="Accede a entrenamiento fisico, Tabata arbitral, psicologia arbitral, preparacion mental y rutinas pre/post partido."
-          reason="El plan FREE mantiene entrenamiento tecnico base; la preparacion integral queda reservada para Pro."
+          reason="El plan Basic mantiene entrenamiento tecnico base; la preparacion integral queda reservada para Pro."
         >
           <PhysicalTrainingClient />
         </ProFeatureGate>

@@ -22,12 +22,16 @@ export const proBenefits = [
 ];
 
 export const planLabels: Record<SubscriptionPlan, string> = {
-  free: "FREE",
+  free: "BASIC",
   pro: "PRO",
 };
 
 export function normalizeSubscriptionPlan(value?: string | null): SubscriptionPlan {
   return value === "pro" ? "pro" : "free";
+}
+
+export function toCanonicalSubscriptionPlan(plan: SubscriptionPlan) {
+  return plan === "pro" ? "pro" : "basic";
 }
 
 export function hasProAccess(plan: SubscriptionPlan, role?: SystemRole | string | null) {

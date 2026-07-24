@@ -38,7 +38,7 @@ export function CommunicationArbitralPage() {
         <ProFeatureGate
           title="Comunicacion Arbitral es parte de RefLab Pro"
           description="Practica explicaciones tecnicas en espanol, ingles arbitral IFAB y vocabulario especializado."
-          reason="El plan FREE conserva acceso base; la comunicacion arbitral avanzada se desbloquea con Pro."
+          reason="El plan Basic conserva acceso base; la comunicacion arbitral avanzada se desbloquea con Pro."
         >
           <EnglishExercise />
         </ProFeatureGate>

@@ -1,11 +1,9 @@
 import type { User as ClerkBackendUser } from "@clerk/backend";
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { requireSuperAdminAccess } from "@/lib/adminAuthorization";
 import {
-  isSystemRole,
-  normalizeRole,
   roleLabels,
-  systemRoles,
   type SystemRole,
 } from "@/lib/institutionalRoles";
 import {
@@ -13,24 +11,28 @@ import {
   normalizeSubscriptionPlan,
   planLabels,
   subscriptionPlans,
+  toCanonicalSubscriptionPlan,
   type SubscriptionPlan,
 } from "@/lib/subscription";
-import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import {
   ensureUserRecords,
   getClerkFullName,
   getClerkPrimaryEmail,
   getClerkTimestamp,
-  isConfiguredSuperAdmin,
   resolveReflabName,
-  toClientProfile,
-  upsertUserProfile,
-  upsertUserRole,
   type UserProfileRow,
   type UserRoleRow,
 } from "@/lib/reflabUserRecords";
+import { loadAccessSnapshot } from "@/lib/access/server";
+import type { AccessSnapshot } from "@/lib/access/types";
+import type { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
+
+const editableGlobalRoles = [
+  "super_admin",
+  "individual_referee",
+] as const satisfies readonly SystemRole[];
 
 type AdminUser = {
   userId: string;
@@ -45,23 +47,30 @@ type AdminUser = {
   planLabel: string;
   institutionId: string | null;
   avatarUrl: string;
+  capabilities: string[];
+  inheritedFromInstitutionIds: string[];
   createdAt: string | null;
   updatedAt: string | null;
 };
 
 export async function GET() {
-  const access = await requireSuperAdmin();
+  const access = await requireSuperAdminAccess();
   if (access.response) return access.response;
 
   try {
     const clerkUsers = await listClerkUsers();
 
     await Promise.all(
-      clerkUsers.map((user) => ensureUserRecords(access.supabase, user))
+      clerkUsers.map(async (user) => {
+        await ensureUserRecords(access.supabase, user);
+        await loadAccessSnapshot(access.supabase, user.id);
+      })
     );
 
     const { profiles, roles } = await loadSupabaseUserRows(access.supabase);
-    const profilesByUser = new Map(profiles.map((profile) => [profile.user_id!, profile]));
+    const profilesByUser = new Map(
+      profiles.map((profile) => [profile.user_id!, profile])
+    );
     const rolesByUser = new Map(roles.map((role) => [role.user_id!, role]));
     const clerkUsersById = new Map(clerkUsers.map((user) => [user.id, user]));
     const userIds = Array.from(
@@ -72,6 +81,15 @@ export async function GET() {
       ])
     );
 
+    const snapshots = await Promise.all(
+      userIds.map((userId) =>
+        loadAccessSnapshot(access.supabase, userId).then(
+          (snapshot) => [userId, snapshot] as const
+        )
+      )
+    );
+    const accessByUser = new Map(snapshots);
+
     const users = userIds
       .map((userId) =>
         buildAdminUser({
@@ -79,13 +97,14 @@ export async function GET() {
           clerkUser: clerkUsersById.get(userId) ?? null,
           profile: profilesByUser.get(userId) ?? null,
           roleRow: rolesByUser.get(userId) ?? null,
+          accessSnapshot: accessByUser.get(userId)!,
         })
       )
       .sort((a, b) => a.name.localeCompare(b.name, "es"));
 
     return NextResponse.json({
       users,
-      roles: systemRoles,
+      roles: editableGlobalRoles,
       roleLabels,
       plans: subscriptionPlans,
       planLabels,
@@ -102,13 +121,14 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const access = await requireSuperAdmin();
+  const access = await requireSuperAdminAccess();
   if (access.response) return access.response;
 
   let body: {
     userId?: string;
     role?: SystemRole;
     subscriptionPlan?: SubscriptionPlan;
+    reason?: string;
   };
 
   try {
@@ -117,110 +137,105 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Body invalido." }, { status: 400 });
   }
 
-  const userId = typeof body.userId === "string" ? body.userId.trim() : "";
-  if (!userId) {
+  const targetUserId =
+    typeof body.userId === "string" ? body.userId.trim() : "";
+  const reason =
+    typeof body.reason === "string" && body.reason.trim()
+      ? body.reason.trim()
+      : null;
+
+  if (!targetUserId) {
     return NextResponse.json({ error: "Usuario invalido." }, { status: 400 });
   }
 
-  if (body.role && !isSystemRole(body.role)) {
-    return NextResponse.json({ error: "Rol invalido." }, { status: 400 });
+  if (
+    body.role &&
+    !editableGlobalRoles.includes(
+      body.role as (typeof editableGlobalRoles)[number]
+    )
+  ) {
+    return NextResponse.json(
+      { error: "El rol global seleccionado no es valido." },
+      { status: 400 }
+    );
   }
 
   if (body.subscriptionPlan && !isSubscriptionPlan(body.subscriptionPlan)) {
     return NextResponse.json({ error: "Plan invalido." }, { status: 400 });
   }
 
+  if (!body.role && !body.subscriptionPlan) {
+    return NextResponse.json(
+      { error: "No hay cambios para guardar." },
+      { status: 400 }
+    );
+  }
+
   try {
     const client = await clerkClient();
     const targetClerkUser = await client.users
-      .getUser(userId)
+      .getUser(targetUserId)
       .catch(() => null);
 
     if (targetClerkUser) {
       await ensureUserRecords(access.supabase, targetClerkUser);
     }
 
-    const [roleRead, profileRead] = await Promise.all([
-      access.supabase
-        .from("user_roles")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle(),
-      access.supabase
-        .from("user_profiles")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle(),
-    ]);
+    const current = await loadAccessSnapshot(
+      access.supabase,
+      targetUserId
+    );
+    const requestedPlan = body.subscriptionPlan
+      ? toCanonicalSubscriptionPlan(body.subscriptionPlan)
+      : current.individualPlan;
+    const requestedGlobalRole =
+      body.role === "super_admin" ? "super_admin" : "referee";
 
-    if (roleRead.error) throw roleRead.error;
-    if (profileRead.error) throw profileRead.error;
-
-    const existingRole = roleRead.data as UserRoleRow | null;
-    const existingProfile = profileRead.data as UserProfileRow | null;
-    const now = new Date().toISOString();
-    const role = body.role
-      ? normalizeRole(body.role)
-      : normalizeRole(existingRole?.role);
-    const subscriptionPlan = body.subscriptionPlan
-      ? normalizeSubscriptionPlan(body.subscriptionPlan)
-      : normalizeSubscriptionPlan(
-          existingRole?.subscription_plan ?? existingProfile?.subscription_plan
-        );
-
-    const roleResult = await upsertUserRole(access.supabase, {
-      user_id: userId,
-      role,
-      subscription_plan: subscriptionPlan,
-      institution_id: existingRole?.institution_id ?? existingProfile?.institution_id ?? null,
-      created_at: existingRole?.created_at ?? now,
-      updated_at: now,
-    });
-
-    if (roleResult.error) {
+    if (
+      body.role &&
+      targetUserId === access.userId &&
+      requestedGlobalRole !== "super_admin"
+    ) {
       return NextResponse.json(
         {
-          error: "No se pudo actualizar el rol o plan del usuario.",
-          technical: roleResult.error.message,
+          error:
+            "No podes quitarte tu propio acceso Super Admin desde esta pantalla.",
         },
-        { status: 500 }
+        { status: 409 }
       );
     }
 
-    if (body.subscriptionPlan || targetClerkUser || existingProfile) {
-      const profileResult = await upsertUserProfile(access.supabase, {
-        user_id: userId,
-        email: targetClerkUser
-          ? getClerkPrimaryEmail(targetClerkUser)
-          : existingProfile?.email ?? null,
-        reflab_name: existingProfile
-          ? existingProfile.reflab_name ?? resolveReflabName(existingProfile, targetClerkUser)
-          : targetClerkUser
-            ? resolveReflabName(null, targetClerkUser)
-            : null,
-        first_name: existingProfile?.first_name ?? targetClerkUser?.firstName ?? null,
-        last_name: existingProfile?.last_name ?? targetClerkUser?.lastName ?? null,
-        avatar_url: existingProfile?.avatar_url ?? targetClerkUser?.imageUrl ?? null,
-        ref_card_id:
-          existingProfile?.ref_card_id ??
-          (targetClerkUser ? toClientProfile(null, roleResult.data, targetClerkUser).refCardId : null),
-        subscription_plan: subscriptionPlan,
-        created_at: existingProfile?.created_at ?? now,
-        updated_at: now,
+    if (requestedPlan !== current.individualPlan) {
+      const planResult = await access.supabase.rpc("admin_set_user_plan", {
+        actor_user_id: access.userId,
+        target_user_id: targetUserId,
+        new_plan_key: requestedPlan,
+        change_reason: reason,
       });
 
-      if (profileResult.error) {
-        return NextResponse.json(
-          {
-            error: "No se pudo sincronizar el plan del perfil.",
-            technical: profileResult.error.message,
-          },
-          { status: 500 }
-        );
-      }
+      if (planResult.error) throw planResult.error;
     }
 
-    return NextResponse.json({ success: true });
+    if (body.role && requestedGlobalRole !== current.globalRole) {
+      const roleResult = await access.supabase.rpc("admin_set_global_role", {
+        actor_user_id: access.userId,
+        target_user_id: targetUserId,
+        new_role_key: requestedGlobalRole,
+        change_reason: reason,
+      });
+
+      if (roleResult.error) throw roleResult.error;
+    }
+
+    const updatedAccess = await loadAccessSnapshot(
+      access.supabase,
+      targetUserId
+    );
+
+    return NextResponse.json({
+      success: true,
+      access: updatedAccess,
+    });
   } catch (error) {
     return NextResponse.json(
       {
@@ -229,58 +244,6 @@ export async function PATCH(request: Request) {
       },
       { status: 500 }
     );
-  }
-}
-
-async function requireSuperAdmin() {
-  const session = await auth();
-  const userId = session.userId;
-
-  if (!userId) {
-    return {
-      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-      supabase: null as never,
-    };
-  }
-
-  try {
-    const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("user_roles")
-      .select("role, subscription_plan")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    const role = normalizeRole(data?.role);
-    if (!error && role === "super_admin") {
-      return { response: null, supabase };
-    }
-
-    if (error) throw error;
-
-    const client = await clerkClient();
-    const clerkUser = await client.users.getUser(userId);
-
-    if (isConfiguredSuperAdmin(clerkUser)) {
-      await ensureUserRecords(supabase, clerkUser);
-      return { response: null, supabase };
-    }
-
-    return {
-      response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
-      supabase,
-    };
-  } catch (error) {
-    return {
-      response: NextResponse.json(
-        {
-          error: "No se pudo validar el acceso admin.",
-          technical: getErrorMessage(error),
-        },
-        { status: 500 }
-      ),
-      supabase: null as never,
-    };
   }
 }
 
@@ -306,18 +269,24 @@ async function listClerkUsers() {
   return users;
 }
 
-async function loadSupabaseUserRows(supabase: ReturnType<typeof createSupabaseAdminClient>) {
-  const [profilesRes, rolesRes] = await Promise.all([
+async function loadSupabaseUserRows(
+  supabase: ReturnType<typeof createSupabaseAdminClient>
+) {
+  const [profilesResult, rolesResult] = await Promise.all([
     supabase.from("user_profiles").select("*"),
     supabase.from("user_roles").select("*"),
   ]);
 
-  if (profilesRes.error) throw profilesRes.error;
-  if (rolesRes.error) throw rolesRes.error;
+  if (profilesResult.error) throw profilesResult.error;
+  if (rolesResult.error) throw rolesResult.error;
 
   return {
-    profiles: ((profilesRes.data ?? []) as UserProfileRow[]).filter((row) => row.user_id),
-    roles: ((rolesRes.data ?? []) as UserRoleRow[]).filter((row) => row.user_id),
+    profiles: ((profilesResult.data ?? []) as UserProfileRow[]).filter(
+      (row) => row.user_id
+    ),
+    roles: ((rolesResult.data ?? []) as UserRoleRow[]).filter(
+      (row) => row.user_id
+    ),
   };
 }
 
@@ -326,15 +295,20 @@ function buildAdminUser({
   clerkUser,
   profile,
   roleRow,
+  accessSnapshot,
 }: {
   userId: string;
   clerkUser: ClerkBackendUser | null;
   profile: UserProfileRow | null;
   roleRow: UserRoleRow | null;
+  accessSnapshot: AccessSnapshot;
 }): AdminUser {
-  const role = normalizeRole(roleRow?.role);
+  const role: SystemRole =
+    accessSnapshot.globalRole === "super_admin"
+      ? "super_admin"
+      : "individual_referee";
   const subscriptionPlan = normalizeSubscriptionPlan(
-    roleRow?.subscription_plan ?? profile?.subscription_plan
+    accessSnapshot.individualPlan
   );
   const fullName = getClerkFullName(clerkUser);
   const name = resolveReflabName(profile, clerkUser);
@@ -342,7 +316,6 @@ function buildAdminUser({
     getClerkPrimaryEmail(clerkUser) ??
     profile?.email ??
     "Sin email registrado";
-  const avatarUrl = profile?.avatar_url ?? clerkUser?.imageUrl ?? "";
 
   return {
     userId,
@@ -356,7 +329,10 @@ function buildAdminUser({
     subscriptionPlan,
     planLabel: planLabels[subscriptionPlan],
     institutionId: profile?.institution_id ?? roleRow?.institution_id ?? null,
-    avatarUrl,
+    avatarUrl: profile?.avatar_url ?? clerkUser?.imageUrl ?? "",
+    capabilities: accessSnapshot.capabilities,
+    inheritedFromInstitutionIds:
+      accessSnapshot.inheritedFromInstitutionIds,
     createdAt:
       profile?.created_at ??
       roleRow?.created_at ??
@@ -370,9 +346,11 @@ function buildAdminUser({
 }
 
 function latestDate(...dates: Array<string | null | undefined>) {
-  return dates
-    .filter((date): date is string => Boolean(date))
-    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
+  return (
+    dates
+      .filter((date): date is string => Boolean(date))
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null
+  );
 }
 
 function getErrorMessage(error: unknown) {

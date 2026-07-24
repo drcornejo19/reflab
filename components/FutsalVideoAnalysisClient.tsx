@@ -6,7 +6,6 @@ import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { getTrainingClips, type ClipRecord } from "@/lib/clips";
 import { resolveRefCardId } from "@/lib/refCard";
 import { getSportTopics, normalizeSportTopicKey } from "@/lib/sports";
-import { supabase } from "@/lib/supabase";
 import { FREE_WEEKLY_CLIP_LIMIT, getCurrentWeekStart } from "@/lib/subscription";
 import {
   evaluateVideoAnswers,
@@ -20,6 +19,7 @@ import {
 } from "@/lib/videoAnalysisSchemas";
 import { useUserRole } from "@/lib/useUserRole";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
+import { useSupabase } from "@/components/SupabaseProvider";
 
 type FutsalClip = ClipRecord & {
   analysis_answers?: Record<string, string | boolean | null> | null;
@@ -28,6 +28,7 @@ type FutsalClip = ClipRecord & {
 const MAX_VIDEO_PLAYS = 3;
 
 export function FutsalVideoAnalysisClient() {
+  const supabase = useSupabase();
   const [allClips, setAllClips] = useState<FutsalClip[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -65,7 +66,7 @@ export function FutsalVideoAnalysisClient() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [supabase]);
 
   const topicCards = useMemo(() => {
     const definitions = getSportTopics("futsal").filter((topic) => topic.group === "video");
@@ -226,6 +227,7 @@ function FutsalVideoExercise({
   clip: FutsalClip;
   onNext: () => void;
 }) {
+  const supabase = useSupabase();
   const { user } = useUser();
   const { isPro, loadingRole } = useUserRole();
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -286,7 +288,7 @@ function FutsalVideoExercise({
     return () => {
       cancelled = true;
     };
-  }, [user, isPro]);
+  }, [isPro, supabase, user]);
 
   if (!schema) {
     return (
@@ -414,7 +416,7 @@ function FutsalVideoExercise({
       <ProUpgradeCard
         title="Has completado tus clips gratuitos de futsal esta semana"
         description="RefLab Pro desbloquea mas volumen de trabajo y seguimientos mas amplios por disciplina."
-        reason={`Limite FREE: ${FREE_WEEKLY_CLIP_LIMIT} clips por semana.`}
+        reason={`Limite Basic: ${FREE_WEEKLY_CLIP_LIMIT} clips por semana.`}
       />
     );
   }

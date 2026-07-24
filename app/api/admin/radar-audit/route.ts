@@ -1,12 +1,5 @@
-import type { User as ClerkBackendUser } from "@clerk/backend";
-import { auth, clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { normalizeRole } from "@/lib/institutionalRoles";
-import {
-  ensureUserRecords,
-  isConfiguredSuperAdmin,
-} from "@/lib/reflabUserRecords";
-import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
+import { requireSuperAdminAccess } from "@/lib/adminAuthorization";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +88,7 @@ const topicDictionary: Record<string, string> = {
 const coreTopics = ["VAR", "Fuera de juego", "Manos", "Disputas", "Faltas tacticas"];
 
 export async function GET() {
-  const access = await requireSuperAdmin();
+  const access = await requireSuperAdminAccess();
   if (access.response) return access.response;
 
   try {
@@ -330,57 +323,6 @@ function buildTopicAudit(entries: AuditEntry[], clips: AuditClipRow[]) {
       entries: topicEntries.sort((a, b) => dateMs(b.date) - dateMs(a.date)),
     };
   });
-}
-
-async function requireSuperAdmin() {
-  const session = await auth();
-  const userId = session.userId;
-
-  if (!userId) {
-    return {
-      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-      supabase: null as never,
-    };
-  }
-
-  try {
-    const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (!error && normalizeRole(data?.role) === "super_admin") {
-      return { response: null, supabase };
-    }
-
-    if (error) throw error;
-
-    const client = await clerkClient();
-    const clerkUser = (await client.users.getUser(userId)) as ClerkBackendUser;
-
-    if (isConfiguredSuperAdmin(clerkUser)) {
-      await ensureUserRecords(supabase, clerkUser);
-      return { response: null, supabase };
-    }
-
-    return {
-      response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
-      supabase,
-    };
-  } catch (error) {
-    return {
-      response: NextResponse.json(
-        {
-          error: "No se pudo validar el acceso admin.",
-          technical: getErrorMessage(error),
-        },
-        { status: 500 }
-      ),
-      supabase: null as never,
-    };
-  }
 }
 
 function getValidityReason({

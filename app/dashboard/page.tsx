@@ -8,6 +8,7 @@ import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { SportRadarGraphic } from "@/components/SportRadarGraphic";
+import { useSupabase } from "@/components/SupabaseProvider";
 import { getDisciplineAction, getDisciplineDefinition } from "@/lib/discipline";
 import {
   buildSportPerformanceDataset,
@@ -19,7 +20,6 @@ import {
   type RadarMetric,
   type SportCriterionMetric,
 } from "@/lib/performanceBySport";
-import { supabase } from "@/lib/supabase";
 import {
   formatPercent,
   formatScore,
@@ -58,6 +58,7 @@ export default function DashboardPage() {
 }
 
 function DashboardPageContent() {
+  const supabase = useSupabase();
   const { user, isLoaded } = useUser();
   const { currentDiscipline: sportType } = useDiscipline();
   const { isPro, loadingRole } = useUserRole();
@@ -123,7 +124,7 @@ function DashboardPageContent() {
     }
 
     loadData();
-  }, [isLoaded, user]);
+  }, [isLoaded, supabase, user]);
 
   const dataset = useMemo(
     () =>
@@ -219,7 +220,7 @@ function DashboardPageContent() {
                 ? "RefLab Pro desbloquea radar arbitral, evolucion historica, precision por criterio, historial completo, ranking y entrenamiento de futsal sin limites."
                 : "RefLab Pro desbloquea radar arbitral, evolucion historica, precision por criterio, historial completo, ranking, VAR Lab y entrenamiento sin limites."
             }
-            reason="El plan FREE mantiene el foco en un resumen basico para que pruebes la plataforma sin paywall inicial."
+            reason="El plan Basic mantiene el foco en un resumen basico para que pruebes la plataforma sin paywall inicial."
           />
         </div>
       </AppShell>
@@ -418,7 +419,7 @@ function FreeDashboardSummary({
           }
         />
         <TopMetric
-          title="Uso semanal FREE"
+          title="Uso semanal Basic"
           value={`${usage.weeklyClips}/${usage.clipLimit}`}
           detail={`${usage.examsRemaining} examen gratis disponible`}
         />

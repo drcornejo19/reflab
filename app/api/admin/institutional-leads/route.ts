@@ -1,7 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { normalizeRole } from "@/lib/institutionalRoles";
-import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
+import { requireSuperAdminAccess } from "@/lib/adminAuthorization";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +15,7 @@ const leadStatuses = [
 type LeadStatus = (typeof leadStatuses)[number];
 
 export async function GET() {
-  const access = await requireAdmin();
+  const access = await requireSuperAdminAccess();
   if (access.response) return access.response;
 
   const { data, error } = await access.supabase
@@ -42,7 +40,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const access = await requireAdmin();
+  const access = await requireSuperAdminAccess();
   if (access.response) return access.response;
 
   let body: { id?: string; status?: LeadStatus };
@@ -82,33 +80,4 @@ export async function PATCH(request: Request) {
   }
 
   return NextResponse.json({ lead: data });
-}
-
-async function requireAdmin() {
-  const session = await auth();
-  const userId = session.userId;
-
-  if (!userId) {
-    return {
-      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-      supabase: null as never,
-    };
-  }
-
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  const role = normalizeRole(data?.role);
-  if (error || role !== "super_admin") {
-    return {
-      response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
-      supabase,
-    };
-  }
-
-  return { response: null, supabase };
 }

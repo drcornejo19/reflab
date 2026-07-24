@@ -11,11 +11,16 @@ type PreferenceRow = {
 
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const authorization = request.headers.get("authorization");
-    if (authorization !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!cronSecret) {
+    return NextResponse.json(
+      { error: "CRON_SECRET no esta configurado." },
+      { status: 503 }
+    );
+  }
+
+  const authorization = request.headers.get("authorization");
+  if (authorization !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const supabase = createSupabaseAdminClient();

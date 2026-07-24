@@ -84,7 +84,7 @@ export default function TrainingPage() {
                 className="text-[10px] font-black uppercase tracking-[0.2em]"
                 style={{ color: theme.accent }}
               >
-                {loadingRole ? "Validando plan" : isPro ? "RefLab Pro" : "RefLab Free"}
+                {loadingRole ? "Validando plan" : isPro ? "RefLab Pro" : "RefLab Basic"}
               </p>
               <p className="mt-1 break-words text-sm font-black leading-5">
                 {isFutsal
@@ -98,7 +98,7 @@ export default function TrainingPage() {
         {!loadingRole && !isPro && (
           <ProUpgradeCard
             compact
-            title={isFutsal ? "Entrenamiento Futsal activo" : "Entrenamiento FREE activo"}
+            title={isFutsal ? "Entrenamiento Futsal activo" : "Entrenamiento Basic activo"}
             description={
               isFutsal
                 ? "Puedes practicar videoanalisis y reglas de futsal con trazabilidad propia. Las instancias formales se concentran en Evaluaciones."
@@ -106,8 +106,8 @@ export default function TrainingPage() {
             }
             reason={
               isFutsal
-                ? "Plan FREE: acceso inicial a entrenamiento reglamentario y audiovisual por disciplina."
-                : "Plan FREE: hasta 5 clips por semana y 1 examen semanal."
+                ? "Plan Basic: acceso inicial a entrenamiento reglamentario y audiovisual por disciplina."
+                : "Plan Basic: hasta 5 clips por semana y 1 examen semanal."
             }
           />
         )}

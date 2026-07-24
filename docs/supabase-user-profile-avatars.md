@@ -28,7 +28,8 @@ on conflict (id) do update set
 Para bootstrap de la cuenta principal, configurar en el entorno del servidor:
 
 ```env
-REFLAB_SUPER_ADMIN_EMAILS=tu-email@example.com
+REFLAB_SUPER_ADMIN_RECOVERY_ENABLED=false
+REFLAB_SUPER_ADMIN_RECOVERY_EMAILS=tu-email@example.com
 ```
 
 Al entrar con ese email de Clerk, la app sincroniza `user_roles.role = 'super_admin'`.

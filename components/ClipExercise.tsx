@@ -7,9 +7,9 @@ import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
 import { resolveRefCardId } from "@/lib/refCard";
 import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
-import { supabase } from "@/lib/supabase";
 import type { Clip } from "@/lib/types";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
+import { useSupabase } from "@/components/SupabaseProvider";
 import { FREE_WEEKLY_CLIP_LIMIT, getCurrentWeekStart } from "@/lib/subscription";
 import { useUserRole } from "@/lib/useUserRole";
 
@@ -85,6 +85,7 @@ export function ClipExercise({
   onComplete,
   onBack,
 }: ClipExerciseProps) {
+  const supabase = useSupabase();
   const typedClip = clip as ClipWithDetails;
   const initialDecisionState = createInitialClipDecisionState(typedClip);
 
@@ -136,7 +137,7 @@ export function ClipExercise({
         .gte("created_at", getCurrentWeekStart().toISOString());
 
       if (error) {
-        console.warn("No se pudo calcular el limite semanal FREE:", error.message);
+        console.warn("No se pudo calcular el limite semanal Basic:", error.message);
         setWeeklyClipCount(0);
         return;
       }
@@ -145,7 +146,7 @@ export function ClipExercise({
     }
 
     loadWeeklyUsage();
-  }, [user, isPro]);
+  }, [isPro, supabase, user]);
 
   useEffect(() => {
     const savedCount = Number(
@@ -475,7 +476,7 @@ export function ClipExercise({
       <ProUpgradeCard
         title="Has completado tus clips gratuitos de esta semana"
         description="Ya experimentaste el entrenamiento base. Con RefLab Pro podes seguir entrenando clips, acceder al analisis completo y ver tu evolucion real."
-        reason={`Limite FREE: ${FREE_WEEKLY_CLIP_LIMIT} clips por semana.`}
+        reason={`Limite Basic: ${FREE_WEEKLY_CLIP_LIMIT} clips por semana.`}
       />
     );
   }

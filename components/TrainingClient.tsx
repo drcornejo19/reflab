@@ -1,8 +1,8 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { ClipExercise } from "@/components/ClipExercise";
+import { useSupabase } from "@/components/SupabaseProvider";
 import { VarExercise } from "@/components/VarExercise";
 import { getTrainingClips, type ClipRecord } from "@/lib/clips";
 
@@ -59,6 +59,7 @@ const topicAliases: Record<TrainingTopic, string[]> = {
 };
 
 export function TrainingClient({ mode = "field" }: TrainingClientProps) {
+  const supabase = useSupabase();
   const [allClips, setAllClips] = useState<ClipWithMode[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<TrainingTopic | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -83,7 +84,7 @@ export function TrainingClient({ mode = "field" }: TrainingClientProps) {
     }
 
     loadTrainingClips();
-  }, [mode]);
+  }, [mode, supabase]);
 
   useEffect(() => {
     window.scrollTo({

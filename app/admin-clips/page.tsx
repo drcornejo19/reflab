@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { Loader2, Pencil, RefreshCw, Save, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { useSupabase } from "@/components/SupabaseProvider";
 import {
   deleteClipById,
   getClips,
@@ -29,7 +30,6 @@ import {
   normativeStatusOptions,
   sportTypeOptions,
 } from "@/lib/sportFormOptions";
-import { supabase } from "@/lib/supabase";
 import type { Clip, TrainingMode } from "@/lib/types";
 import { useUserRole } from "@/lib/useUserRole";
 import {
@@ -179,6 +179,7 @@ function createInitialForm(sportType: SportType = "football_11"): AdminFormState
 }
 
 export default function AdminClipsPage() {
+  const supabase = useSupabase();
   const router = useRouter();
   const { user, isLoaded } = useUser();
   const { isVideoAdmin, loadingRole } = useUserRole();
@@ -219,12 +220,7 @@ export default function AdminClipsPage() {
     }
   }, [isLoaded, isVideoAdmin, loadingRole, router, user]);
 
-  useEffect(() => {
-    if (!isLoaded || loadingRole || !user || !isVideoAdmin) return;
-    void loadClips();
-  }, [isLoaded, isVideoAdmin, loadingRole, user]);
-
-  async function loadClips() {
+  const loadClips = useCallback(async () => {
     setLoading(true);
     const { data, error } = await getClips(supabase);
 
@@ -236,7 +232,12 @@ export default function AdminClipsPage() {
     }
 
     setLoading(false);
-  }
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!isLoaded || loadingRole || !user || !isVideoAdmin) return;
+    void loadClips();
+  }, [isLoaded, isVideoAdmin, loadClips, loadingRole, user]);
 
   function updateForm<Key extends keyof AdminFormState>(
     key: Key,

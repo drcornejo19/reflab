@@ -6,6 +6,7 @@ import { useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
+import { useSupabase } from "@/components/SupabaseProvider";
 import { getDisciplineAction, getDisciplineDefinition } from "@/lib/discipline";
 import {
   buildSportPerformanceDataset,
@@ -15,7 +16,6 @@ import {
   getSportRecommendedPlan,
   getSportTopicPerformance,
 } from "@/lib/performanceBySport";
-import { supabase } from "@/lib/supabase";
 import {
   type AttemptRecord,
   type ExamResultRecord,
@@ -57,6 +57,7 @@ export default function MobileDashboardPage() {
 }
 
 function MobileDashboardPageContent() {
+  const supabase = useSupabase();
   const { user, isLoaded } = useUser();
   const { currentDiscipline: sportType } = useDiscipline();
   const theme = getDisciplineDefinition(sportType).theme;
@@ -110,7 +111,7 @@ function MobileDashboardPageContent() {
     }
 
     void loadData();
-  }, [isLoaded, user]);
+  }, [isLoaded, supabase, user]);
 
   const dataset = useMemo(
     () =>

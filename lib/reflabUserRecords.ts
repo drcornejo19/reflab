@@ -155,25 +155,6 @@ export function resolveReflabName(
   );
 }
 
-export function isConfiguredSuperAdmin(clerkUser?: ClerkBackendUser | null) {
-  const email = getClerkPrimaryEmail(clerkUser)?.toLowerCase();
-  if (!email) return false;
-
-  const configuredEmails = [
-    process.env.REFLAB_SUPER_ADMIN_EMAILS,
-    process.env.REFLAB_SUPER_ADMIN_EMAIL,
-    process.env.SUPER_ADMIN_EMAILS,
-    process.env.SUPER_ADMIN_EMAIL,
-    process.env.NEXT_PUBLIC_REFLAB_SUPER_ADMIN_EMAILS,
-  ]
-    .filter(Boolean)
-    .flatMap((value) => String(value).split(","))
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
-
-  return configuredEmails.includes(email);
-}
-
 export async function ensureUserRecords(
   supabase: SupabaseAnyClient,
   clerkUser: ClerkBackendUser
@@ -198,8 +179,7 @@ export async function ensureUserRecords(
 
   const profile = profileRes.data as UserProfileRow | null;
   const roleRow = roleRes.data as UserRoleRow | null;
-  const bootstrapSuperAdmin = isConfiguredSuperAdmin(clerkUser);
-  const role = bootstrapSuperAdmin ? "super_admin" : normalizeRole(roleRow?.role);
+  const role = normalizeRole(roleRow?.role);
   const subscriptionPlan = normalizeSubscriptionPlan(
     roleRow?.subscription_plan ?? profile?.subscription_plan
   );

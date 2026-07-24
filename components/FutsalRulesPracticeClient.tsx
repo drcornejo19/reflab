@@ -5,11 +5,12 @@ import { useUser } from "@clerk/nextjs";
 import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { futsalRulesPracticeQuestions } from "@/lib/futsalRulesQuestions";
 import { resolveRefCardId } from "@/lib/refCard";
-import { supabase } from "@/lib/supabase";
+import { useSupabase } from "@/components/SupabaseProvider";
 
 const FREE_LIMIT = 10;
 
 export function FutsalRulesPracticeClient() {
+  const supabase = useSupabase();
   const { user } = useUser();
   const questions = futsalRulesPracticeQuestions.slice(0, FREE_LIMIT);
 

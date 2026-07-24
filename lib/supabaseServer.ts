@@ -6,5 +6,5 @@ import { createAuthenticatedSupabaseClient } from "@/lib/supabaseAuthenticated";
 export async function createSupabaseServerClient() {
   const session = await auth();
 
-  return createAuthenticatedSupabaseClient(async () => session.getToken());
+  return createAuthenticatedSupabaseClient(() => session.getToken());
 }

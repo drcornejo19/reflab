@@ -33,6 +33,7 @@ import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { RefPerformanceClient } from "@/components/RefPerformanceClient";
 import { SportRadarGraphic } from "@/components/SportRadarGraphic";
+import { useSupabase } from "@/components/SupabaseProvider";
 import { getDisciplineDefinition } from "@/lib/discipline";
 import {
   buildSportPerformanceDataset,
@@ -48,19 +49,16 @@ import {
   type SportPerformanceItem,
 } from "@/lib/performanceBySport";
 import { type SportType } from "@/lib/sports";
-import { supabase } from "@/lib/supabase";
 import {
   formatDate,
   formatPercent,
   formatScore,
   getEvolutionData,
-  getRankingRows,
   getRecentHistory,
   type AttemptRecord,
   type ExamResultRecord,
   type PerformanceClipRecord,
   type RankingRow,
-  type RankingProfileRecord,
   type RulesExamResultRecord,
   type SummaryMetric,
   type TopicMetric,
@@ -79,8 +77,7 @@ type LoadState = {
   examResults: ExamResultRecord[];
   rulesResults: RulesExamResultRecord[];
   clips: PerformanceClipRecord[];
-  rankingAttempts: AttemptRecord[];
-  rankingProfiles: RankingProfileRecord[];
+  ranking: RankingRow[];
 };
 
 const initialData: LoadState = {
@@ -88,8 +85,7 @@ const initialData: LoadState = {
   examResults: [],
   rulesResults: [],
   clips: [],
-  rankingAttempts: [],
-  rankingProfiles: [],
+  ranking: [],
 };
 
 const sourceLabels: Record<HistoryMode, string> = {
@@ -143,6 +139,7 @@ export default function PerformancePage() {
 }
 
 function PerformancePageContent() {
+  const supabase = useSupabase();
   const { user, isLoaded } = useUser();
   const searchParams = useSearchParams();
   const { currentDiscipline: sportType } = useDiscipline();
@@ -192,7 +189,7 @@ function PerformancePageContent() {
       setLoading(true);
       setLoadError(null);
 
-      const [attemptsRes, examsRes, rulesRes, clipsRes, rankingRes, profilesRes] = await Promise.all([
+      const [attemptsRes, examsRes, rulesRes, clipsRes, rankingResponse] = await Promise.all([
         supabase
           .from("attempts")
           .select("*")
@@ -211,15 +208,14 @@ function PerformancePageContent() {
         supabase
           .from("clips")
           .select("*"),
-        supabase
-          .from("attempts")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(800),
-        supabase
-          .from("user_profiles")
-          .select("*"),
+        fetch(`/api/ranking?sport=${encodeURIComponent(sportType)}`, {
+          cache: "no-store",
+        }),
       ]);
+
+      const rankingPayload = rankingResponse.ok
+        ? ((await rankingResponse.json()) as { ranking?: RankingRow[] })
+        : { ranking: [] };
 
       if (attemptsRes.error || examsRes.error) {
         setLoadError("No se pudieron cargar todas las metricas principales. RefLab mantiene la pantalla sin inventar datos.");
@@ -234,15 +230,14 @@ function PerformancePageContent() {
         examResults: (examsRes.data ?? []) as ExamResultRecord[],
         rulesResults: rulesRes.error ? [] : ((rulesRes.data ?? []) as RulesExamResultRecord[]),
         clips: clipsRes.error ? [] : ((clipsRes.data ?? []) as PerformanceClipRecord[]),
-        rankingAttempts: (rankingRes.data ?? []) as AttemptRecord[],
-        rankingProfiles: profilesRes.error ? [] : ((profilesRes.data ?? []) as RankingProfileRecord[]),
+        ranking: rankingPayload.ranking ?? [],
       });
 
       setLoading(false);
     }
 
     loadPerformance();
-  }, [isLoaded, user]);
+  }, [isLoaded, sportType, supabase, user]);
 
   const dataset = useMemo(
     () =>
@@ -281,16 +276,7 @@ function PerformancePageContent() {
     () => getSportRecommendedPlan(summary, sportType),
     [summary, sportType]
   );
-  const ranking = useMemo(
-    () =>
-      getRankingRows(
-        data.rankingAttempts,
-        user?.id,
-        data.rankingProfiles,
-        sportType
-      ),
-    [data.rankingAttempts, data.rankingProfiles, user?.id, sportType]
-  );
+  const ranking = data.ranking;
   const currentRanking = ranking.find((row) => row.userId === user?.id);
 
   const history = useMemo(() => {
@@ -342,7 +328,7 @@ function PerformancePageContent() {
           <FreePerformanceOverview summary={summary} />
           <ProUpgradeCard
             title="Desbloquea tu evolucion completa con RefLab Pro"
-            description="El plan FREE muestra un resumen basico. RefLab Pro abre los modulos de evolucion, plan recomendado, topicos, criterios, historial, ranking y Ref Performance completo."
+            description="El plan Basic muestra un resumen basico. RefLab Pro abre los modulos de evolucion, plan recomendado, topicos, criterios, historial, ranking y Ref Performance completo."
             reason="Primero probas la plataforma. Cuando ya encontraste valor, podes pasar a una lectura profesional de tu rendimiento arbitral."
           />
         </div>
@@ -440,7 +426,7 @@ function FreePerformanceOverview({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[var(--accent)]">
-            Resumen FREE
+            Resumen Basic
           </p>
           <h2 className="mt-2 break-words text-2xl font-black leading-tight text-white sm:text-3xl">
             Tu primera lectura de rendimiento

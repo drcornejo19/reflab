@@ -1,12 +1,10 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { normalizeRole } from "@/lib/institutionalRoles";
+import { requireSuperAdminAccess } from "@/lib/adminAuthorization";
 import {
   getGoverningBodyForSport,
   isTopicAllowedForSport,
   normalizeSportType,
 } from "@/lib/sports";
-import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import {
   institutionalClipStatuses,
   type InstitutionalClipStatus,
@@ -15,7 +13,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const access = await requireAdmin();
+  const access = await requireSuperAdminAccess();
   if (access.response) return access.response;
 
   const { data, error } = await access.supabase
@@ -40,7 +38,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const access = await requireAdmin();
+  const access = await requireSuperAdminAccess();
   if (access.response) return access.response;
 
   let body: {
@@ -197,35 +195,6 @@ export async function PATCH(request: Request) {
   }
 
   return NextResponse.json({ clip: data });
-}
-
-async function requireAdmin() {
-  const session = await auth();
-  const userId = session.userId;
-
-  if (!userId) {
-    return {
-      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-      supabase: null as never,
-    };
-  }
-
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  const role = normalizeRole(data?.role);
-  if (error || role !== "super_admin") {
-    return {
-      response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
-      supabase,
-    };
-  }
-
-  return { response: null, supabase };
 }
 
 function nullableString(value: unknown) {

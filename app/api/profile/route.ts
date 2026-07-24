@@ -9,6 +9,8 @@ import {
 } from "@/lib/reflabUserRecords";
 import { resolveRefCardId } from "@/lib/refCard";
 import { normalizeSubscriptionPlan } from "@/lib/subscription";
+import { loadAccessSnapshot } from "@/lib/access/server";
+import { toLegacyPlan } from "@/lib/access/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -34,8 +36,24 @@ export async function GET() {
   if (access.response) return access.response;
 
   try {
-    const { clientProfile } = await ensureUserRecords(access.supabase, access.clerkUser);
-    return NextResponse.json({ profile: clientProfile });
+    const [{ clientProfile }, accessSnapshot] = await Promise.all([
+      ensureUserRecords(access.supabase, access.clerkUser),
+      loadAccessSnapshot(access.supabase, access.clerkUser.id),
+    ]);
+
+    return NextResponse.json({
+      profile: {
+        ...clientProfile,
+        role:
+          accessSnapshot.globalRole === "super_admin"
+            ? "super_admin"
+            : "individual_referee",
+        subscriptionPlan: toLegacyPlan(
+          accessSnapshot.effectiveIndividualPlan
+        ),
+      },
+      access: accessSnapshot,
+    });
   } catch (error) {
     return NextResponse.json(
       {
@@ -60,6 +78,10 @@ export async function PATCH(request: Request) {
 
   try {
     const ensured = await ensureUserRecords(access.supabase, access.clerkUser);
+    const accessSnapshot = await loadAccessSnapshot(
+      access.supabase,
+      access.clerkUser.id
+    );
     const existingProfile = ensured.profile;
     const existingRole = ensured.role;
     const now = new Date().toISOString();
@@ -76,7 +98,7 @@ export async function PATCH(request: Request) {
     const rankingDisplayName =
       reflabName || [firstName, lastName].filter(Boolean).join(" ").trim() || null;
     const subscriptionPlan = normalizeSubscriptionPlan(
-      existingRole?.subscription_plan ?? existingProfile?.subscription_plan
+      toLegacyPlan(accessSnapshot.individualPlan)
     );
 
     const profileResult = await upsertUserProfile(access.supabase, {
@@ -116,11 +138,21 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({
       success: true,
-      profile: toClientProfile(
-        profileResult.data,
-        existingRole,
-        access.clerkUser
-      ),
+      profile: {
+        ...toClientProfile(
+          profileResult.data,
+          existingRole,
+          access.clerkUser
+        ),
+        role:
+          accessSnapshot.globalRole === "super_admin"
+            ? "super_admin"
+            : "individual_referee",
+        subscriptionPlan: toLegacyPlan(
+          accessSnapshot.effectiveIndividualPlan
+        ),
+      },
+      access: accessSnapshot,
     });
   } catch (error) {
     return NextResponse.json(

@@ -1,20 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { Suspense, useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { getDisciplineDefinition } from "@/lib/discipline";
-import {
-  getRankingRows,
-  type AttemptRecord,
-  type RankingProfileRecord,
-  type RankingRow,
-} from "@/lib/performance";
+import { type RankingRow } from "@/lib/performance";
 import { getSportLabel } from "@/lib/sports";
-import { supabase } from "@/lib/supabase";
 import { useUserRole } from "@/lib/useUserRole";
 
 export const dynamic = "force-dynamic";
@@ -28,39 +21,49 @@ export default function RankingPage() {
 }
 
 function RankingPageContent() {
-  const { user } = useUser();
   const { currentDiscipline: sportType } = useDiscipline();
   const { isPro, loadingRole } = useUserRole();
   const theme = getDisciplineDefinition(sportType).theme;
-  const [attempts, setAttempts] = useState<AttemptRecord[]>([]);
-  const [profiles, setProfiles] = useState<RankingProfileRecord[]>([]);
+  const [ranking, setRanking] = useState<RankingRow[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadRanking() {
-      const [attemptsRes, profilesRes] = await Promise.all([
-        supabase.from("attempts").select("*").order("created_at", { ascending: false }),
-        supabase.from("user_profiles").select("*"),
-      ]);
+      setLoading(true);
+      setLoadError(null);
 
-      if (attemptsRes.error) {
-        console.error("Error cargando ranking:", attemptsRes.error);
-        setAttempts([]);
-      } else {
-        setAttempts((attemptsRes.data ?? []) as AttemptRecord[]);
+      try {
+        const response = await fetch(
+          `/api/ranking?sport=${encodeURIComponent(sportType)}`,
+          { cache: "no-store" }
+        );
+        const data = (await response.json()) as {
+          ranking?: RankingRow[];
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(data.error ?? "No se pudo cargar el ranking.");
+        }
+
+        setRanking(data.ranking ?? []);
+      } catch (error) {
+        setRanking([]);
+        setLoadError(
+          error instanceof Error ? error.message : "No se pudo cargar el ranking."
+        );
+      } finally {
+        setLoading(false);
       }
-
-      setProfiles(profilesRes.error ? [] : ((profilesRes.data ?? []) as RankingProfileRecord[]));
-      setLoading(false);
     }
 
-    loadRanking();
-  }, []);
-
-  const ranking = useMemo(
-    () => getRankingRows(attempts, user?.id, profiles, sportType),
-    [attempts, profiles, sportType, user?.id]
-  );
+    if (!loadingRole && isPro) {
+      void loadRanking();
+    } else if (!loadingRole) {
+      setLoading(false);
+    }
+  }, [isPro, loadingRole, sportType]);
   const podium = ranking.slice(0, 3);
   const rest = ranking.slice(3);
 
@@ -121,7 +124,11 @@ function RankingPageContent() {
         </header>
 
 
-        {ranking.length === 0 ? (
+        {loadError ? (
+          <div className="rounded-3xl border border-red-400/20 bg-red-400/5 p-8 text-center text-red-100">
+            {loadError}
+          </div>
+        ) : ranking.length === 0 ? (
           <div className="rounded-3xl border border-white/10 bg-[#0b131b] p-8 text-center text-zinc-400">
             Todavia no hay intentos registrados para generar ranking en esta disciplina.
           </div>

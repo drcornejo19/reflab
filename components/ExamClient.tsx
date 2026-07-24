@@ -5,10 +5,10 @@ import { useUser } from "@clerk/nextjs";
 import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { resolveRefCardId } from "@/lib/refCard";
 import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
-import { supabase } from "@/lib/supabase";
 import { calculateScore, normalizeDiscipline } from "@/lib/scoring";
 import { getExamClips, type ClipRecord } from "@/lib/clips";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
+import { useSupabase } from "@/components/SupabaseProvider";
 import { FREE_WEEKLY_EXAM_LIMIT, getCurrentWeekStart } from "@/lib/subscription";
 import { useUserRole } from "@/lib/useUserRole";
 
@@ -61,6 +61,7 @@ const offsideReasonOptions = [
 const handballReasonOptions = ["inmediatez", "bloqueo", "deliberada"];
 
 export function ExamClient() {
+  const supabase = useSupabase();
   const { user } = useUser();
   const { isPro, loadingRole } = useUserRole();
 
@@ -140,7 +141,7 @@ const videoLocked = remainingVideoPlays <= 0;
     }
 
     loadClips();
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
     async function loadWeeklyUsage() {
@@ -164,7 +165,7 @@ const videoLocked = remainingVideoPlays <= 0;
       ]);
 
       if (examRes.error || rulesRes.error) {
-        console.warn("No se pudo calcular el limite semanal de examenes FREE.");
+        console.warn("No se pudo calcular el limite semanal de examenes Basic.");
         setWeeklyExamCount(0);
         return;
       }
@@ -173,7 +174,7 @@ const videoLocked = remainingVideoPlays <= 0;
     }
 
     loadWeeklyUsage();
-  }, [user, isPro]);
+  }, [isPro, supabase, user]);
 
   useEffect(() => {
     window.scrollTo({
@@ -499,8 +500,8 @@ function handleVideoEnded() {
     return (
       <ProUpgradeCard
         title="Ya usaste tu examen gratuito de esta semana"
-        description="El plan FREE permite 1 examen semanal para que puedas probar la experiencia. RefLab Pro desbloquea examenes ilimitados, estadisticas completas y evolucion avanzada."
-        reason={`Limite FREE: ${FREE_WEEKLY_EXAM_LIMIT} examen por semana.`}
+        description="El plan Basic permite 1 examen semanal para que puedas probar la experiencia. RefLab Pro desbloquea examenes ilimitados, estadisticas completas y evolucion avanzada."
+        reason={`Limite Basic: ${FREE_WEEKLY_EXAM_LIMIT} examen por semana.`}
       />
     );
   }
