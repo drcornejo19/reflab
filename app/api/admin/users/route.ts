@@ -232,11 +232,27 @@ export async function PATCH(request: Request) {
       targetUserId
     );
 
+    if (
+      body.subscriptionPlan &&
+      updatedAccess.individualPlan !== requestedPlan
+    ) {
+      throw new Error(
+        "Supabase no confirmó la persistencia del plan solicitado."
+      );
+    }
+
+    if (body.role && updatedAccess.globalRole !== requestedGlobalRole) {
+      throw new Error(
+        "Supabase no confirmó la persistencia del rol solicitado."
+      );
+    }
+
     return NextResponse.json({
       success: true,
       access: updatedAccess,
     });
   } catch (error) {
+    console.error("Admin user update failed.", error);
     return NextResponse.json(
       {
         error: "No se pudo guardar el usuario.",
