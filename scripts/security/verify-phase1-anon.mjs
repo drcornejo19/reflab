@@ -37,7 +37,12 @@ let failed = false;
 for (const [table, columns] of protectedReads) {
   const { data, error } = await supabase.from(table).select(columns).limit(1);
 
-  if (!error && (data?.length ?? 0) > 0) {
+  if (error && !isExpectedAccessDenial(error)) {
+    failed = true;
+    console.error(
+      `[FAIL] no se pudo verificar ${table}: ${error.code ?? "sin codigo"} ${error.message}`
+    );
+  } else if (!error && (data?.length ?? 0) > 0) {
     failed = true;
     console.error(`[FAIL] anon obtuvo filas de ${table}.`);
   } else {
@@ -52,6 +57,10 @@ if (failed) {
 }
 
 console.log("Verificacion anonima de Fase 1 completada.");
+
+function isExpectedAccessDenial(error) {
+  return error.code === "42501";
+}
 
 function loadLocalEnvironment() {
   if (!fs.existsSync(".env.local")) return;

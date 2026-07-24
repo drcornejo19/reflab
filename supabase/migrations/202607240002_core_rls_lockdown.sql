@@ -3,6 +3,47 @@ begin;
 -- This migration deliberately keeps public lead creation outside the lockdown.
 -- It protects identity, access, attempts and private result tables.
 
+do $$
+begin
+  if to_regclass('public.user_global_roles') is null then
+    raise exception
+      'Missing public.user_global_roles. Run 202607240001_access_control_foundation.sql first.';
+  end if;
+end
+$$;
+
+-- Recreate the canonical helpers so this lockdown remains safe to rerun after
+-- an interrupted foundation migration or a manual schema reconciliation.
+create or replace function public.platform_request_user_id()
+returns text
+language sql
+stable
+as $$
+  select nullif(auth.jwt() ->> 'sub', '');
+$$;
+
+create or replace function public.platform_is_super_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.user_global_roles role_row
+    where role_row.user_id = public.platform_request_user_id()
+      and role_row.role_key = 'super_admin'
+  );
+$$;
+
+revoke all on function public.platform_request_user_id() from public, anon;
+revoke all on function public.platform_is_super_admin() from public, anon;
+grant execute on function public.platform_request_user_id()
+  to authenticated, service_role;
+grant execute on function public.platform_is_super_admin()
+  to authenticated, service_role;
+
 create or replace function public.institution_is_super_admin()
 returns boolean
 language sql
