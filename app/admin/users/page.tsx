@@ -252,14 +252,11 @@ export default function AdminUsersPage() {
           </div>
         ) : (
           <section className="overflow-hidden rounded-[30px] border border-white/10 bg-[#071019] shadow-2xl">
-            <div className="hidden grid-cols-[minmax(220px,1.1fr)_minmax(220px,1fr)_minmax(180px,0.9fr)_180px_130px_150px_150px_220px] gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500 2xl:grid">
+            <div className="hidden grid-cols-[minmax(220px,1.25fr)_minmax(210px,1fr)_180px_140px_220px] gap-4 border-b border-white/10 bg-white/[0.03] px-4 py-3 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500 xl:grid">
               <span>Nombre RefLab</span>
               <span>Email registrado</span>
-              <span>Clerk User ID</span>
               <span>Rol</span>
               <span>Plan</span>
-              <span>Creado</span>
-              <span>Actualizado</span>
               <span>Acciones</span>
             </div>
             {users.map((item) => {
@@ -276,7 +273,7 @@ export default function AdminUsersPage() {
                   key={item.userId}
                   className="border-b border-white/10 p-4 last:border-b-0"
                 >
-                  <div className="grid gap-4 2xl:grid-cols-[minmax(220px,1.1fr)_minmax(220px,1fr)_minmax(180px,0.9fr)_180px_130px_150px_150px_220px] 2xl:items-center">
+                  <div className="grid gap-4 xl:grid-cols-[minmax(220px,1.25fr)_minmax(210px,1fr)_180px_140px_220px] xl:items-end">
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-3">
                         <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 text-[#6fc11f]">
@@ -317,12 +314,6 @@ export default function AdminUsersPage() {
                       </span>
                     </FieldBlock>
 
-                    <FieldBlock label="Clerk User ID">
-                      <span className="break-all font-mono text-xs text-zinc-400">
-                        {item.clerkUserId}
-                      </span>
-                    </FieldBlock>
-
                     <div className="min-w-0">
                       <SelectField
                         label="Rol"
@@ -355,15 +346,7 @@ export default function AdminUsersPage() {
                       />
                     </div>
 
-                    <FieldBlock label="Creado">
-                      <DateValue value={item.createdAt} />
-                    </FieldBlock>
-
-                    <FieldBlock label="Actualizado">
-                      <DateValue value={item.updatedAt} />
-                    </FieldBlock>
-
-                    <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-1 min-[1720px]:grid-cols-2">
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                       <a
                         href={
                           item.refCardId === "Pendiente"
@@ -380,16 +363,34 @@ export default function AdminUsersPage() {
                         type="button"
                         onClick={() => saveUser(item.userId)}
                         disabled={!dirty || savingId === item.userId}
-                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#6fc11f] px-4 text-xs font-black text-black transition hover:bg-[#82dc2a] disabled:cursor-not-allowed disabled:opacity-45"
+                        className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 text-xs font-black transition ${
+                          dirty
+                            ? "bg-[#6fc11f] text-black shadow-[0_0_24px_rgba(111,193,31,0.2)] hover:bg-[#82dc2a]"
+                            : "border border-white/10 bg-white/[0.04] text-zinc-500"
+                        } disabled:cursor-not-allowed`}
                       >
                         {savingId === item.userId ? (
                           <Loader2 className="animate-spin" size={16} />
                         ) : (
                           <Save size={16} />
                         )}
-                        Guardar
+                        {dirty ? "Guardar cambio" : "Sin cambios"}
                       </button>
                     </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 border-t border-white/10 pt-4 text-xs sm:grid-cols-3">
+                    <FieldBlock label="Clerk User ID">
+                      <span className="break-all font-mono text-zinc-400">
+                        {item.clerkUserId}
+                      </span>
+                    </FieldBlock>
+                    <FieldBlock label="Creado">
+                      <DateValue value={item.createdAt} />
+                    </FieldBlock>
+                    <FieldBlock label="Actualizado">
+                      <DateValue value={item.updatedAt} />
+                    </FieldBlock>
                   </div>
                 </article>
               );
