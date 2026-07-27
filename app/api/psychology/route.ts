@@ -2,18 +2,23 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import {
   buildPsychologyInterfaceData,
-  normalizePsychologyModuleSlug,
   type PsychologyCheckinRecord,
   type PsychologyExerciseRecord,
   type PsychologyWellbeingRecord,
 } from "@/lib/psychology";
+import {
+  isPsychologyCheckInType,
+  isPsychologyExerciseType,
+  resolvePsychologyCheckinModule,
+  resolvePsychologyExerciseModule,
+  resolvePsychologyWellbeingModule,
+  type PsychologyCheckInType,
+  type PsychologyExerciseType,
+} from "@/lib/psychologyClassification";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-type PsychologyCheckInType = "pre_match" | "post_match" | "error_recovery";
-type PsychologyExerciseType = "focus_reset" | "pressure_scenario" | "self_talk" | "team_prebrief";
 
 type PsychologyInput = {
   moduleSlug?: unknown;
@@ -201,7 +206,9 @@ export async function POST(request: Request) {
     const supabase = createSupabaseAdminClient();
 
     if (body.action === "save_exercise") {
-      const payload = normalizeExerciseInput(body.payload as ExerciseInput);
+      const payload = normalizeExerciseInput(
+        (body.payload ?? {}) as ExerciseInput
+      );
       const feedback = buildExerciseFeedback(payload);
       const now = new Date().toISOString();
 
@@ -245,7 +252,9 @@ export async function POST(request: Request) {
     }
 
     if (body.action === "save_wellbeing") {
-      const payload = normalizeWellbeingInput(body.payload as WellbeingInput);
+      const payload = normalizeWellbeingInput(
+        (body.payload ?? {}) as WellbeingInput
+      );
       const risk = calculateBurnoutRisk(payload);
       const feedback = buildWellbeingFeedback(payload, risk);
       const now = new Date().toISOString();
@@ -346,6 +355,10 @@ export async function POST(request: Request) {
       ...(await loadPsychologyData(supabase, userId)),
     });
   } catch (error) {
+    if (error instanceof PsychologyPayloadValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     return psychologyErrorResponse(error);
   }
 }
@@ -402,11 +415,22 @@ async function loadPsychologyData(supabase: ReturnType<typeof createSupabaseAdmi
 }
 
 function normalizeInput(input: PsychologyInput) {
-  const checkinType = isCheckInType(input.checkinType) ? input.checkinType : "pre_match";
+  if (!isPsychologyCheckInType(input.checkinType)) {
+    throw new PsychologyPayloadValidationError(
+      "El tipo de check-in psicologico es obligatorio."
+    );
+  }
+  const checkinType = input.checkinType;
+  const moduleResolution = resolvePsychologyCheckinModule(
+    checkinType,
+    input.moduleSlug
+  );
+  if (!moduleResolution.ok) {
+    throw new PsychologyPayloadValidationError(moduleResolution.error);
+  }
 
   return {
-    module_slug:
-      normalizePsychologyModuleSlug(input.moduleSlug) ?? defaultModuleForCheckinType(checkinType),
+    module_slug: moduleResolution.moduleSlug,
     appointment_id: cleanText(input.appointmentId),
     fixture_id: cleanText(input.fixtureId),
     sport_type: cleanText(input.sportType),
@@ -435,8 +459,13 @@ function normalizeInput(input: PsychologyInput) {
 }
 
 function normalizeWellbeingInput(input: WellbeingInput) {
+  const moduleResolution = resolvePsychologyWellbeingModule(input.moduleSlug);
+  if (!moduleResolution.ok) {
+    throw new PsychologyPayloadValidationError(moduleResolution.error);
+  }
+
   return {
-    module_slug: normalizePsychologyModuleSlug(input.moduleSlug) ?? "resiliencia",
+    module_slug: moduleResolution.moduleSlug,
     week_context: cleanText(input.weekContext),
     stressors: cleanTextArray(input.stressors),
     protective_factors: cleanTextArray(input.protectiveFactors),
@@ -455,11 +484,22 @@ function normalizeWellbeingInput(input: WellbeingInput) {
 }
 
 function normalizeExerciseInput(input: ExerciseInput) {
-  const exerciseType = isExerciseType(input.exerciseType) ? input.exerciseType : "focus_reset";
+  if (!isPsychologyExerciseType(input.exerciseType)) {
+    throw new PsychologyPayloadValidationError(
+      "El tipo de ejercicio psicologico es obligatorio."
+    );
+  }
+  const exerciseType = input.exerciseType;
+  const moduleResolution = resolvePsychologyExerciseModule(
+    exerciseType,
+    input.moduleSlug
+  );
+  if (!moduleResolution.ok) {
+    throw new PsychologyPayloadValidationError(moduleResolution.error);
+  }
 
   return {
-    module_slug:
-      normalizePsychologyModuleSlug(input.moduleSlug) ?? defaultModuleForExerciseType(exerciseType),
+    module_slug: moduleResolution.moduleSlug,
     appointment_id: cleanText(input.appointmentId),
     fixture_id: cleanText(input.fixtureId),
     sport_type: cleanText(input.sportType),
@@ -716,27 +756,6 @@ function buildExerciseSummary(items: SavedExerciseRow[]) {
   };
 }
 
-function isCheckInType(value: unknown): value is PsychologyCheckInType {
-  return value === "pre_match" || value === "post_match" || value === "error_recovery";
-}
-
-function isExerciseType(value: unknown): value is PsychologyExerciseType {
-  return value === "focus_reset" || value === "pressure_scenario" || value === "self_talk" || value === "team_prebrief";
-}
-
-function defaultModuleForCheckinType(checkinType: PsychologyCheckInType) {
-  if (checkinType === "error_recovery") return "gestion-error" as const;
-  if (checkinType === "post_match") return "evaluacion-post-partido" as const;
-  return "preparacion-mental-pre-partido" as const;
-}
-
-function defaultModuleForExerciseType(exerciseType: PsychologyExerciseType) {
-  if (exerciseType === "pressure_scenario") return "presion-competitiva" as const;
-  if (exerciseType === "self_talk") return "confianza-arbitral" as const;
-  if (exerciseType === "team_prebrief") return "preparacion-mental-pre-partido" as const;
-  return "concentracion-foco" as const;
-}
-
 function cleanText(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -824,3 +843,5 @@ function psychologyErrorResponse(error: unknown) {
     { status: 500 }
   );
 }
+
+class PsychologyPayloadValidationError extends Error {}

@@ -416,19 +416,6 @@ const moduleKeywordMap: Record<PsychologyModuleSlug, string[]> = {
   "sin-clasificar": [],
 };
 
-const checkinTypeToModule: Record<string, PsychologyModuleSlug> = {
-  pre_match: "preparacion-mental-pre-partido",
-  post_match: "evaluacion-post-partido",
-  error_recovery: "gestion-error",
-};
-
-const exerciseTypeToModule: Record<string, PsychologyModuleSlug> = {
-  focus_reset: "concentracion-foco",
-  pressure_scenario: "presion-competitiva",
-  self_talk: "confianza-arbitral",
-  team_prebrief: "preparacion-mental-pre-partido",
-};
-
 const checkinTypeLabels: Record<string, string> = {
   pre_match: "Registro pre partido",
   post_match: "Registro post partido",
@@ -677,7 +664,10 @@ function resolveCheckinModule(record: PsychologyCheckinRecord): ModuleResolution
     };
   }
 
-  const fallback = checkinTypeToModule[record.checkin_type ?? ""];
+  const fallback =
+    psychologyCheckinModuleByType[
+      record.checkin_type as keyof typeof psychologyCheckinModuleByType
+    ];
   if (fallback) {
     return {
       moduleSlug: fallback,
@@ -771,7 +761,10 @@ function resolveExerciseModule(record: PsychologyExerciseRecord): ModuleResoluti
     };
   }
 
-  const fallback = exerciseTypeToModule[record.exercise_type ?? ""];
+  const fallback =
+    psychologyExerciseModuleByType[
+      record.exercise_type as keyof typeof psychologyExerciseModuleByType
+    ];
   if (fallback) {
     return {
       moduleSlug: fallback,
@@ -985,3 +978,7 @@ function toWeekStart(value: string) {
   date.setUTCHours(0, 0, 0, 0);
   return date.toISOString().slice(0, 10);
 }
+import {
+  psychologyCheckinModuleByType,
+  psychologyExerciseModuleByType,
+} from "./psychologyClassification";

@@ -84,7 +84,7 @@ export async function PATCH(request: Request) {
       ? normalizePsychologyModuleSlug(body.moduleSlug.trim())
       : null;
 
-  if (!source || !recordId) {
+  if (!source || !recordId || !moduleSlug) {
     return NextResponse.json({ error: "Faltan datos para actualizar la categoria." }, { status: 400 });
   }
 
@@ -97,7 +97,7 @@ export async function PATCH(request: Request) {
 
   const { error } = await access.supabase
     .from(table)
-    .update({ module_slug: moduleSlug ?? "sin-clasificar" })
+    .update({ module_slug: moduleSlug })
     .eq("id", recordId);
 
   if (error) {
