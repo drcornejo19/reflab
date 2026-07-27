@@ -1,17 +1,20 @@
-import fs from "node:fs";
-import process from "node:process";
 import { createClient } from "@supabase/supabase-js";
+import {
+  authorizeIsolatedSupabaseTarget,
+  SKIPPED_ISOLATED_TARGET_MESSAGE,
+} from "./isolated-supabase-target.mjs";
 
-loadLocalEnvironment();
+const target = authorizeIsolatedSupabaseTarget([
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
+]);
+if (!target.allowed) {
+  console.log(SKIPPED_ISOLATED_TARGET_MESSAGE);
+  process.exit(0);
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error(
-    "Faltan NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY."
-  );
-}
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: {
@@ -83,19 +86,3 @@ if (failed) {
 }
 
 console.log("Verificación del esquema administrativo completada.");
-
-function loadLocalEnvironment() {
-  if (!fs.existsSync(".env.local")) return;
-
-  for (const line of fs.readFileSync(".env.local", "utf8").split(/\r?\n/)) {
-    const match = line.match(/^([^#=]+)=(.*)$/);
-    if (!match) continue;
-
-    const key = match[1].trim();
-    const value = match[2].trim().replace(/^(['"])(.*)\1$/, "$2");
-
-    if (!process.env[key]) {
-      process.env[key] = value;
-    }
-  }
-}
