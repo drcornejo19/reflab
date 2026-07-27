@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  DEFAULT_SPORT_TYPE,
   getGoverningBodyForSport,
   isTopicAllowedForSport,
-  normalizeSportType,
 } from "@/lib/sports";
+import { parseInstitutionalClipSportType } from "@/lib/institutionalClip";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import {
   assertInstitutionWriteAllowed,
@@ -62,7 +61,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const sportType = normalizeSportType(payload.sport_type ?? DEFAULT_SPORT_TYPE);
+    const parsedSportType = parseInstitutionalClipSportType(payload.sport_type);
+    if (!parsedSportType.ok) {
+      return NextResponse.json(
+        { error: parsedSportType.error },
+        { status: 400 }
+      );
+    }
+
+    const sportType = parsedSportType.value;
     const governingBody =
       payload.governing_body || getGoverningBodyForSport(sportType);
 
@@ -134,6 +141,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ clip: data });
   } catch (error) {
+    if (error instanceof InstitutionalClipPayloadError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     return NextResponse.json(
       {
         error: "No se pudo procesar el envio del video.",
@@ -218,6 +229,13 @@ async function readFormPayload(
   institutionId: string
 ): Promise<ClipPayload> {
   const form = await request.formData();
+  const parsedSportType = parseInstitutionalClipSportType(
+    formString(form, "sport_type")
+  );
+  if (!parsedSportType.ok) {
+    throw new InstitutionalClipPayloadError(parsedSportType.error);
+  }
+
   const file = form.get("video_file");
   let storagePath: string | undefined;
   let originalFilename: string | undefined;
@@ -242,7 +260,7 @@ async function readFormPayload(
 
   return {
     title: formString(form, "title") ?? "",
-    sport_type: formString(form, "sport_type") ?? DEFAULT_SPORT_TYPE,
+    sport_type: parsedSportType.value,
     description: formString(form, "description"),
     match_context: formString(form, "match_context"),
     incident_minute: formString(form, "incident_minute"),
@@ -282,3 +300,5 @@ function formString(form: FormData, key: string) {
 function nullableString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
+
+class InstitutionalClipPayloadError extends Error {}
