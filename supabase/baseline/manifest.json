@@ -1,0 +1,266 @@
+{
+  "manifest_version": 1,
+  "baseline_version": "202607270000",
+  "status": "draft_not_executed",
+  "base_commit": "eddbd63140d56900a622d7a2fd12ccdae64d053a",
+  "counts": {
+    "production_tables_observed": 83,
+    "production_tables_canonical": 75,
+    "production_tables_compatibility": 2,
+    "production_tables_excluded": 6,
+    "git_only_tables_excluded": 5,
+    "views_excluded": 1,
+    "new_canonical_tables": 2,
+    "baseline_public_product_tables": 79
+  },
+  "schemas": {
+    "product": "public",
+    "private_helpers": "reflab_private",
+    "installation_metadata": "reflab_meta",
+    "storage": "storage",
+    "identity_claim_source": "auth.jwt() ->> 'sub'"
+  },
+  "extensions": [
+    {
+      "name": "pgcrypto",
+      "schema": "extensions",
+      "purpose": "UUID generation and SHA-256 hashes"
+    }
+  ],
+  "production_tables_canonical": [
+    "access_change_audit",
+    "access_plans",
+    "ai_usage_ledger",
+    "appointment_history",
+    "appointments",
+    "associations",
+    "attempts",
+    "capabilities",
+    "capability_overrides",
+    "clips",
+    "coach_data_consents",
+    "coach_evidence",
+    "coach_rate_limit_buckets",
+    "coach_runs",
+    "competition_categories",
+    "competition_seasons",
+    "competitions",
+    "countries",
+    "exam_results",
+    "fixture_sync_logs",
+    "fixtures",
+    "ifab_library_documents",
+    "institution_assessment_assignments",
+    "institution_assessment_feedback",
+    "institution_assessment_history",
+    "institution_assessment_items",
+    "institution_assessment_sessions",
+    "institution_assessments",
+    "institution_audit_logs",
+    "institution_cohorts",
+    "institution_content_assignments",
+    "institution_contents",
+    "institution_data_consents",
+    "institution_demo_sessions",
+    "institution_group_memberships",
+    "institution_groups",
+    "institution_membership_permission_overrides",
+    "institution_membership_roles",
+    "institution_memberships",
+    "institution_notification_campaigns",
+    "institution_notification_recipients",
+    "institution_permissions",
+    "institution_role_permissions",
+    "institution_roles",
+    "institution_subscriptions",
+    "institutional_clips",
+    "institutional_lead_activities",
+    "institutional_leads",
+    "institutions",
+    "match_context_snapshots",
+    "match_officials",
+    "match_preparations",
+    "notification_events",
+    "notification_preferences",
+    "notification_tokens",
+    "performance_checkins",
+    "performance_sessions",
+    "physical_tests",
+    "plan_capabilities",
+    "platform_audit_logs",
+    "platform_roles",
+    "post_match_reviews",
+    "psychology_checkins",
+    "psychology_exercise_sessions",
+    "psychology_wellbeing_assessments",
+    "readiness_scores",
+    "referee_eligibility",
+    "referee_roles",
+    "rules_exam_results",
+    "teams",
+    "user_global_roles",
+    "user_profiles",
+    "user_subscriptions",
+    "venues",
+    "wellness_logs"
+  ],
+  "production_tables_compatibility": [
+    "institution_members",
+    "user_roles"
+  ],
+  "production_tables_excluded": [
+    "institution_profiles",
+    "institution_program_items",
+    "institution_programs",
+    "institution_student_progress",
+    "performance_metrics",
+    "profiles"
+  ],
+  "git_only_tables_excluded": [
+    "daily_checkins",
+    "fatigue_logs",
+    "rule_questions",
+    "sleep_logs",
+    "training_sessions"
+  ],
+  "views_excluded": [
+    "leaderboard"
+  ],
+  "new_canonical_tables": [
+    "psychology_modules",
+    "referee_exam_sessions"
+  ],
+  "deliberately_omitted_columns": [
+    {
+      "table": "institution_cohorts",
+      "column": "program_id",
+      "reason": "No active consumer and the complete programs subsystem is excluded."
+    },
+    {
+      "table": "institution_groups",
+      "column": "program_id",
+      "reason": "No active consumer and the complete programs subsystem is excluded."
+    }
+  ],
+  "canonical_functions": {
+    "identity_and_rls": [
+      "reflab_private.request_user_id()",
+      "reflab_private.is_super_admin()",
+      "reflab_private.has_active_institution_membership(uuid)",
+      "reflab_private.has_institution_permission(uuid, text)",
+      "reflab_private.can_access_user_data(text, uuid, text)"
+    ],
+    "exam": [
+      "reflab_private.canonical_jsonb_text(jsonb)",
+      "reflab_private.validate_referee_exam_manifest()",
+      "reflab_private.protect_referee_exam_session()",
+      "reflab_private.validate_referee_exam_session_context()",
+      "reflab_private.validate_exam_result_context()",
+      "reflab_private.validate_attempt_exam_context()",
+      "public.submit_referee_exam(text, uuid, uuid, text, jsonb)"
+    ],
+    "integrity_triggers": [
+      "reflab_private.set_updated_at()",
+      "reflab_private.validate_institution_role_scope()",
+      "reflab_private.validate_institution_user_target()",
+      "reflab_private.validate_assessment_session_assignment()",
+      "reflab_private.validate_institution_data_consent()",
+      "reflab_private.validate_user_appointment_context()",
+      "reflab_private.validate_owned_appointment()",
+      "reflab_private.validate_performance_checkin_owner()"
+    ],
+    "installation": [
+      "reflab_meta.reject_schema_state_mutation()"
+    ]
+  },
+  "rls_owner": {
+    "role": "reflab_rls_owner",
+    "login": false,
+    "superuser": false,
+    "inherit": false,
+    "bypass_rls": false,
+    "owns_product_tables": false,
+    "purpose": "Own only approved SECURITY DEFINER authorization helpers."
+  },
+  "storage_buckets": [
+    {
+      "id": "Videos",
+      "public": true,
+      "file_size_limit_bytes": 104857600,
+      "allowed_mime_types": [
+        "video/mp4",
+        "video/quicktime",
+        "video/webm"
+      ],
+      "browser_write": false
+    },
+    {
+      "id": "Videos Modo Ingles",
+      "public": true,
+      "file_size_limit_bytes": 104857600,
+      "allowed_mime_types": [
+        "video/mp4",
+        "video/quicktime",
+        "video/webm"
+      ],
+      "browser_write": false
+    },
+    {
+      "id": "avatars",
+      "public": true,
+      "file_size_limit_bytes": 5242880,
+      "allowed_mime_types": [
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+      ],
+      "browser_write": false
+    },
+    {
+      "id": "institutional-content",
+      "public": false,
+      "file_size_limit_bytes": 104857600,
+      "allowed_mime_types": [
+        "application/pdf",
+        "audio/mpeg",
+        "audio/webm",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "video/mp4",
+        "video/quicktime",
+        "video/webm"
+      ],
+      "browser_write": false
+    }
+  ],
+  "installation_guard": {
+    "allowed_preexisting_public_tables": [
+      "spatial_ref_sys"
+    ],
+    "rejects_existing_reflab_marker": true,
+    "rejects_nonempty_migration_history": true,
+    "rejects_existing_managed_buckets": true,
+    "rejects_existing_application_tables": true
+  },
+  "migration_cutover": {
+    "strategy": "A_consolidated_chain",
+    "historical_migrations_moved": false,
+    "production_history_repaired": false,
+    "baseline_must_never_run_on_production": true,
+    "disposable_database_execution_required": true
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "sql_checksum_normalization": "Replace the reflab_schema_state sql_checksum literal with 64 zeroes before hashing the SQL bytes as UTF-8.",
+    "manifest_hash_normalization": "Replace both integrity hash values with 64 zeroes, serialize this JSON with two-space indentation and a final LF, then hash UTF-8 bytes.",
+    "sql_checksum": "1be3dabbbe9c5a4d7bdd2b12959082e0de13f50f9bc70dc95c1660f952bc9d0c",
+    "manifest_hash": "0125fbf5a33accc73b218a51f09cbef2c108d5f4235ff68a00f271904ea25844"
+  },
+  "execution": {
+    "sql_executed": false,
+    "supabase_project_created": false,
+    "production_modified": false,
+    "history_repaired": false
+  }
+}
