@@ -113,6 +113,17 @@ does not own product tables, and does not have `BYPASSRLS`. It owns only the
 approved `SECURITY DEFINER` authorization helpers and receives read access only
 to their authorization tables.
 
+The installation sequence is intentionally narrow:
+
+1. Create or validate `reflab_rls_owner`.
+2. Grant that role to the Supabase migration role `postgres`.
+3. Create `reflab_private` with no access for `PUBLIC`.
+4. Grant `CREATE` on `reflab_private` to `reflab_rls_owner` temporarily.
+5. Create and transfer only the four approved authorization helpers.
+6. Revoke `CREATE` from `reflab_rls_owner`.
+7. Assert role attributes, membership, function ownership, and the final
+   absence of `CREATE`.
+
 The role must be tested on a disposable Supabase project. If the platform does
 not permit these exact role properties, installation must stop; `postgres` must
 not be used silently as a fallback.

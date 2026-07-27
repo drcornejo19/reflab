@@ -254,7 +254,7 @@
     "algorithm": "sha256",
     "sql_checksum_normalization": "Replace the reflab_schema_state sql_checksum literal with 64 zeroes before hashing the SQL bytes as UTF-8.",
     "manifest_hash_normalization": "Replace both integrity hash values with 64 zeroes, serialize this JSON with two-space indentation and a final LF, then hash UTF-8 bytes.",
-    "sql_checksum": "1be3dabbbe9c5a4d7bdd2b12959082e0de13f50f9bc70dc95c1660f952bc9d0c",
+    "sql_checksum": "283fe6df8a83e9037753a49b19e48282dd4d27df9d13035063d262cf80ea3839",
     "manifest_hash": "0125fbf5a33accc73b218a51f09cbef2c108d5f4235ff68a00f271904ea25844"
   },
   "execution": {

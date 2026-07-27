@@ -117,6 +117,10 @@ begin
 end
 $roles$;
 
+-- Supabase migrations run as postgres. Membership allows the installer to
+-- transfer only the approved helper functions to the dedicated NOLOGIN role.
+grant reflab_rls_owner to postgres;
+
 -- ---------------------------------------------------------------------------
 -- Catalogs, identity, access plans and capabilities
 -- ---------------------------------------------------------------------------
@@ -4192,6 +4196,10 @@ values
 -- ---------------------------------------------------------------------------
 
 grant usage on schema public, auth, reflab_private to reflab_rls_owner;
+-- PostgreSQL requires the new function owner to hold CREATE on the function
+-- schema during ownership transfer. This privilege is revoked immediately
+-- after the four approved ALTER FUNCTION statements.
+grant create on schema reflab_private to reflab_rls_owner;
 grant execute on function auth.jwt() to reflab_rls_owner;
 grant execute on function reflab_private.request_user_id()
   to reflab_rls_owner;
@@ -4219,6 +4227,8 @@ alter function reflab_private.has_institution_permission(uuid, text)
   owner to reflab_rls_owner;
 alter function reflab_private.can_access_user_data(text, uuid, text)
   owner to reflab_rls_owner;
+
+revoke create on schema reflab_private from reflab_rls_owner;
 
 revoke all on function reflab_private.request_user_id()
   from public, anon, authenticated;
@@ -5617,7 +5627,7 @@ insert into reflab_meta.reflab_schema_state (
 )
 values (
   '202607270000',
-  '1be3dabbbe9c5a4d7bdd2b12959082e0de13f50f9bc70dc95c1660f952bc9d0c',
+  '283fe6df8a83e9037753a49b19e48282dd4d27df9d13035063d262cf80ea3839',
   '0125fbf5a33accc73b218a51f09cbef2c108d5f4235ff68a00f271904ea25844',
   coalesce(
     nullif(pg_catalog.current_setting('reflab.installation_environment', true), ''),
@@ -5639,6 +5649,8 @@ declare
   rls_table_count integer;
   anon_table_grant_count integer;
   unsafe_storage_write_policy_count integer;
+  rls_helper_owner_count integer;
+  rls_owner_record record;
 begin
   select count(*)
   into product_table_count
@@ -5695,6 +5707,65 @@ begin
 
   if unsafe_storage_write_policy_count > 0 then
     raise exception 'Unsafe browser storage write policies remain';
+  end if;
+
+  select
+    role.rolcanlogin,
+    role.rolsuper,
+    role.rolcreatedb,
+    role.rolcreaterole,
+    role.rolinherit,
+    role.rolbypassrls
+  into rls_owner_record
+  from pg_catalog.pg_roles role
+  where role.rolname = 'reflab_rls_owner';
+
+  if not found
+     or rls_owner_record.rolcanlogin
+     or rls_owner_record.rolsuper
+     or rls_owner_record.rolcreatedb
+     or rls_owner_record.rolcreaterole
+     or rls_owner_record.rolinherit
+     or rls_owner_record.rolbypassrls then
+    raise exception 'reflab_rls_owner attributes are unsafe or incompatible';
+  end if;
+
+  if not pg_catalog.pg_has_role(
+    'postgres',
+    'reflab_rls_owner',
+    'MEMBER'
+  ) then
+    raise exception 'postgres is not a member of reflab_rls_owner';
+  end if;
+
+  if pg_catalog.has_schema_privilege(
+    'reflab_rls_owner',
+    'reflab_private',
+    'CREATE'
+  ) then
+    raise exception 'reflab_rls_owner retained CREATE on reflab_private';
+  end if;
+
+  select count(*)
+  into rls_helper_owner_count
+  from pg_catalog.pg_proc function_row
+  join pg_catalog.pg_namespace namespace
+    on namespace.oid = function_row.pronamespace
+  join pg_catalog.pg_roles owner_role
+    on owner_role.oid = function_row.proowner
+  where namespace.nspname = 'reflab_private'
+    and function_row.proname in (
+      'is_super_admin',
+      'has_active_institution_membership',
+      'has_institution_permission',
+      'can_access_user_data'
+    )
+    and owner_role.rolname = 'reflab_rls_owner';
+
+  if rls_helper_owner_count <> 4 then
+    raise exception
+      'Expected 4 RLS helpers owned by reflab_rls_owner, found %',
+      rls_helper_owner_count;
   end if;
 end
 $baseline_assertions$;

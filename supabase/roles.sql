@@ -37,5 +37,9 @@ begin
 end
 $roles$;
 
+-- Supabase migrations run as postgres. Membership is required so that the
+-- installer can transfer function ownership to this dedicated NOLOGIN role.
+grant reflab_rls_owner to postgres;
+
 comment on role reflab_rls_owner is
   'NOLOGIN owner for audited RefLab RLS helper functions. It owns no product tables and has read-only access to authorization tables.';
