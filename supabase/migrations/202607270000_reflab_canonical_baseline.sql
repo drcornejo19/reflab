@@ -5627,8 +5627,8 @@ insert into reflab_meta.reflab_schema_state (
 )
 values (
   '202607270000',
-  '283fe6df8a83e9037753a49b19e48282dd4d27df9d13035063d262cf80ea3839',
-  '0125fbf5a33accc73b218a51f09cbef2c108d5f4235ff68a00f271904ea25844',
+  '1550998080602eb3eacc2ed2c5cc783d69646ad3e01c7eac0babb13a047078ae',
+  '157e4efefc03d2f40443d3dc5048bb980a5f4587b2cfa62f61f67d14ff4d077e',
   coalesce(
     nullif(pg_catalog.current_setting('reflab.installation_environment', true), ''),
     'development'
@@ -5648,6 +5648,7 @@ declare
   product_table_count integer;
   rls_table_count integer;
   anon_table_grant_count integer;
+  application_policy_count integer;
   unsafe_storage_write_policy_count integer;
   rls_helper_owner_count integer;
   rls_owner_record record;
@@ -5691,6 +5692,21 @@ begin
 
   if anon_table_grant_count > 0 then
     raise exception 'Anonymous table grants remain after baseline installation';
+  end if;
+
+  select count(*)
+  into application_policy_count
+  from pg_catalog.pg_policies policy
+  where policy.schemaname = 'public'
+     or (
+       policy.schemaname = 'storage'
+       and policy.tablename = 'objects'
+     );
+
+  if application_policy_count <> 120 then
+    raise exception
+      'Canonical baseline expected 120 application policies, found %',
+      application_policy_count;
   end if;
 
   select count(*)

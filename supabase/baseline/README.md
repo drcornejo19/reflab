@@ -39,6 +39,27 @@ The two new tables are:
 - `referee_exam_sessions`
 - `psychology_modules`
 
+The deterministic structural inventory currently contains:
+
+| Object | Count |
+| --- | ---: |
+| Tables including the installation marker | 80 |
+| Canonical functions | 21 |
+| Public policies | 117 |
+| Storage policies | 3 |
+| Policies total | 120 |
+| Triggers | 82 |
+| Explicit indexes | 110 |
+| Primary keys | 80 |
+| Foreign keys | 61 |
+| Unique constraints | 40 |
+| Check constraints | 297 |
+
+`npm run test:baseline` derives these objects from the canonical SQL and
+compares every entry with `manifest.json`. The policy inventory includes name,
+table, command, roles, permissive mode, authorization helpers, and access
+category; a missing, additional, renamed, or relocated policy fails validation.
+
 The compatibility tables are:
 
 - `institution_members`
@@ -294,6 +315,9 @@ Hash generation is deterministic:
 7. Store both final values in the SQL marker and manifest.
 
 The marker is inserted only at the end of a successful baseline transaction.
+`node scripts/security/validate-canonical-baseline.mjs --write` is the only
+approved generator for the manifest inventory and integrity values. It does not
+connect to Supabase or execute SQL.
 
 ## Baseline versus production reconciliation
 

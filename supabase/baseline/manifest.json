@@ -11,7 +11,17 @@
     "git_only_tables_excluded": 5,
     "views_excluded": 1,
     "new_canonical_tables": 2,
-    "baseline_public_product_tables": 79
+    "baseline_public_product_tables": 79,
+    "functions": 21,
+    "policies": 120,
+    "public_policies": 117,
+    "storage_policies": 3,
+    "triggers": 82,
+    "explicit_indexes": 110,
+    "primary_keys": 80,
+    "foreign_keys": 61,
+    "unique_constraints": 40,
+    "check_constraints": 297
   },
   "schemas": {
     "product": "public",
@@ -254,13 +264,6278 @@
     "algorithm": "sha256",
     "sql_checksum_normalization": "Replace the reflab_schema_state sql_checksum literal with 64 zeroes before hashing the SQL bytes as UTF-8.",
     "manifest_hash_normalization": "Replace both integrity hash values with 64 zeroes, serialize this JSON with two-space indentation and a final LF, then hash UTF-8 bytes.",
-    "sql_checksum": "283fe6df8a83e9037753a49b19e48282dd4d27df9d13035063d262cf80ea3839",
-    "manifest_hash": "0125fbf5a33accc73b218a51f09cbef2c108d5f4235ff68a00f271904ea25844"
+    "sql_checksum": "1550998080602eb3eacc2ed2c5cc783d69646ad3e01c7eac0babb13a047078ae",
+    "manifest_hash": "157e4efefc03d2f40443d3dc5048bb980a5f4587b2cfa62f61f67d14ff4d077e"
   },
   "execution": {
     "sql_executed": false,
     "supabase_project_created": false,
     "production_modified": false,
     "history_repaired": false
+  },
+  "object_inventory": {
+    "schemas": [
+      "reflab_meta",
+      "reflab_private"
+    ],
+    "technical_roles": [
+      "reflab_rls_owner"
+    ],
+    "extensions": [
+      {
+        "name": "if",
+        "schema": "extensions"
+      }
+    ],
+    "types_and_enums": [],
+    "tables": [
+      "public.access_change_audit",
+      "public.access_plans",
+      "public.ai_usage_ledger",
+      "public.appointment_history",
+      "public.appointments",
+      "public.associations",
+      "public.attempts",
+      "public.capabilities",
+      "public.capability_overrides",
+      "public.clips",
+      "public.coach_data_consents",
+      "public.coach_evidence",
+      "public.coach_rate_limit_buckets",
+      "public.coach_runs",
+      "public.competition_categories",
+      "public.competition_seasons",
+      "public.competitions",
+      "public.countries",
+      "public.exam_results",
+      "public.fixture_sync_logs",
+      "public.fixtures",
+      "public.ifab_library_documents",
+      "public.institution_assessment_assignments",
+      "public.institution_assessment_feedback",
+      "public.institution_assessment_history",
+      "public.institution_assessment_items",
+      "public.institution_assessment_sessions",
+      "public.institution_assessments",
+      "public.institution_audit_logs",
+      "public.institution_cohorts",
+      "public.institution_content_assignments",
+      "public.institution_contents",
+      "public.institution_data_consents",
+      "public.institution_demo_sessions",
+      "public.institution_group_memberships",
+      "public.institution_groups",
+      "public.institution_members",
+      "public.institution_membership_permission_overrides",
+      "public.institution_membership_roles",
+      "public.institution_memberships",
+      "public.institution_notification_campaigns",
+      "public.institution_notification_recipients",
+      "public.institution_permissions",
+      "public.institution_role_permissions",
+      "public.institution_roles",
+      "public.institution_subscriptions",
+      "public.institutional_clips",
+      "public.institutional_lead_activities",
+      "public.institutional_leads",
+      "public.institutions",
+      "public.match_context_snapshots",
+      "public.match_officials",
+      "public.match_preparations",
+      "public.notification_events",
+      "public.notification_preferences",
+      "public.notification_tokens",
+      "public.performance_checkins",
+      "public.performance_sessions",
+      "public.physical_tests",
+      "public.plan_capabilities",
+      "public.platform_audit_logs",
+      "public.platform_roles",
+      "public.post_match_reviews",
+      "public.psychology_checkins",
+      "public.psychology_exercise_sessions",
+      "public.psychology_modules",
+      "public.psychology_wellbeing_assessments",
+      "public.readiness_scores",
+      "public.referee_eligibility",
+      "public.referee_exam_sessions",
+      "public.referee_roles",
+      "public.rules_exam_results",
+      "public.teams",
+      "public.user_global_roles",
+      "public.user_profiles",
+      "public.user_roles",
+      "public.user_subscriptions",
+      "public.venues",
+      "public.wellness_logs",
+      "reflab_meta.reflab_schema_state"
+    ],
+    "views": [],
+    "functions": [
+      {
+        "signature": "public.submit_referee_exam(text, uuid, uuid, text, jsonb)",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_meta.reject_schema_state_mutation()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.can_access_user_data(text, uuid, text)",
+        "security": "DEFINER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.canonical_jsonb_text(jsonb)",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.has_active_institution_membership(uuid)",
+        "security": "DEFINER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.has_institution_permission(uuid, text)",
+        "security": "DEFINER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.is_super_admin()",
+        "security": "DEFINER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.protect_referee_exam_session()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.request_user_id()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.set_updated_at()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.validate_assessment_session_assignment()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.validate_attempt_exam_context()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.validate_exam_result_context()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.validate_institution_data_consent()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.validate_institution_role_scope()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.validate_institution_user_target()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.validate_owned_appointment()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.validate_performance_checkin_owner()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.validate_referee_exam_manifest()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.validate_referee_exam_session_context()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      },
+      {
+        "signature": "reflab_private.validate_user_appointment_context()",
+        "security": "INVOKER",
+        "search_path": "pg_catalog"
+      }
+    ],
+    "policies": [
+      {
+        "name": "access_change_audit_super_admin_read",
+        "schema": "public",
+        "table": "access_change_audit",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin"
+        ],
+        "category": "super_admin_audit_read"
+      },
+      {
+        "name": "access_plans_authenticated_read",
+        "schema": "public",
+        "table": "access_plans",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "ai_usage_ledger_own_read",
+        "schema": "public",
+        "table": "ai_usage_ledger",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_server_write"
+      },
+      {
+        "name": "appointment_history_own_read",
+        "schema": "public",
+        "table": "appointment_history",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_server_write"
+      },
+      {
+        "name": "appointments_own_insert",
+        "schema": "public",
+        "table": "appointments",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "appointments_own_read",
+        "schema": "public",
+        "table": "appointments",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "appointments_own_update",
+        "schema": "public",
+        "table": "appointments",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "associations_authenticated_read",
+        "schema": "public",
+        "table": "associations",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "attempts_own_read",
+        "schema": "public",
+        "table": "attempts",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_server_write"
+      },
+      {
+        "name": "capabilities_authenticated_read",
+        "schema": "public",
+        "table": "capabilities",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "capability_overrides_own_read",
+        "schema": "public",
+        "table": "capability_overrides",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "clips_authenticated_read",
+        "schema": "public",
+        "table": "clips",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "coach_data_consents_own_insert",
+        "schema": "public",
+        "table": "coach_data_consents",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "coach_data_consents_own_read",
+        "schema": "public",
+        "table": "coach_data_consents",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "coach_data_consents_own_update",
+        "schema": "public",
+        "table": "coach_data_consents",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "coach_evidence_own_read",
+        "schema": "public",
+        "table": "coach_evidence",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "coach_runs_own_read",
+        "schema": "public",
+        "table": "coach_runs",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_server_write"
+      },
+      {
+        "name": "competition_categories_authenticated_read",
+        "schema": "public",
+        "table": "competition_categories",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "competition_seasons_authenticated_read",
+        "schema": "public",
+        "table": "competition_seasons",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "competitions_authenticated_read",
+        "schema": "public",
+        "table": "competitions",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "countries_authenticated_read",
+        "schema": "public",
+        "table": "countries",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "exam_results_own_read",
+        "schema": "public",
+        "table": "exam_results",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_server_write"
+      },
+      {
+        "name": "fixtures_authenticated_read",
+        "schema": "public",
+        "table": "fixtures",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "library_authenticated_read",
+        "schema": "public",
+        "table": "ifab_library_documents",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "institution_assessment_assignments_scoped_read",
+        "schema": "public",
+        "table": "institution_assessment_assignments",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_assessment_feedback_scoped_read",
+        "schema": "public",
+        "table": "institution_assessment_feedback",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_assessment_history_manager_read",
+        "schema": "public",
+        "table": "institution_assessment_history",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_assessment_items_scoped_read",
+        "schema": "public",
+        "table": "institution_assessment_items",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_assessment_sessions_scoped_read",
+        "schema": "public",
+        "table": "institution_assessment_sessions",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.can_access_user_data",
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_assessments_scoped_read",
+        "schema": "public",
+        "table": "institution_assessments",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_audit_logs_authorized_read",
+        "schema": "public",
+        "table": "institution_audit_logs",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_cohorts_scoped_read",
+        "schema": "public",
+        "table": "institution_cohorts",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_content_assignments_scoped_read",
+        "schema": "public",
+        "table": "institution_content_assignments",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_contents_scoped_read",
+        "schema": "public",
+        "table": "institution_contents",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_data_consents_own_update",
+        "schema": "public",
+        "table": "institution_data_consents",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "institution_data_consents_scoped_read",
+        "schema": "public",
+        "table": "institution_data_consents",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_demo_sessions_own_read",
+        "schema": "public",
+        "table": "institution_demo_sessions",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "institution_group_memberships_scoped_read",
+        "schema": "public",
+        "table": "institution_group_memberships",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_groups_scoped_read",
+        "schema": "public",
+        "table": "institution_groups",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_members_legacy_scoped_read",
+        "schema": "public",
+        "table": "institution_members",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_permission_overrides_rls_owner_read",
+        "schema": "public",
+        "table": "institution_membership_permission_overrides",
+        "command": "SELECT",
+        "roles": [
+          "reflab_rls_owner"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "rls_helper_source"
+      },
+      {
+        "name": "institution_permission_overrides_scoped_read",
+        "schema": "public",
+        "table": "institution_membership_permission_overrides",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_membership_roles_rls_owner_read",
+        "schema": "public",
+        "table": "institution_membership_roles",
+        "command": "SELECT",
+        "roles": [
+          "reflab_rls_owner"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "rls_helper_source"
+      },
+      {
+        "name": "institution_membership_roles_scoped_read",
+        "schema": "public",
+        "table": "institution_membership_roles",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_memberships_rls_owner_read",
+        "schema": "public",
+        "table": "institution_memberships",
+        "command": "SELECT",
+        "roles": [
+          "reflab_rls_owner"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "rls_helper_source"
+      },
+      {
+        "name": "institution_memberships_scoped_read",
+        "schema": "public",
+        "table": "institution_memberships",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_notification_campaigns_scoped_read",
+        "schema": "public",
+        "table": "institution_notification_campaigns",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_notification_recipients_scoped_read",
+        "schema": "public",
+        "table": "institution_notification_recipients",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_permissions_member_read",
+        "schema": "public",
+        "table": "institution_permissions",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_permissions_rls_owner_read",
+        "schema": "public",
+        "table": "institution_permissions",
+        "command": "SELECT",
+        "roles": [
+          "reflab_rls_owner"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "rls_helper_source"
+      },
+      {
+        "name": "institution_role_permissions_member_read",
+        "schema": "public",
+        "table": "institution_role_permissions",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_active_institution_membership",
+          "reflab_private.is_super_admin"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_role_permissions_rls_owner_read",
+        "schema": "public",
+        "table": "institution_role_permissions",
+        "command": "SELECT",
+        "roles": [
+          "reflab_rls_owner"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "rls_helper_source"
+      },
+      {
+        "name": "institution_roles_member_read",
+        "schema": "public",
+        "table": "institution_roles",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_active_institution_membership",
+          "reflab_private.is_super_admin"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_roles_rls_owner_read",
+        "schema": "public",
+        "table": "institution_roles",
+        "command": "SELECT",
+        "roles": [
+          "reflab_rls_owner"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "rls_helper_source"
+      },
+      {
+        "name": "institution_subscriptions_member_read",
+        "schema": "public",
+        "table": "institution_subscriptions",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_active_institution_membership",
+          "reflab_private.is_super_admin"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institution_subscriptions_rls_owner_read",
+        "schema": "public",
+        "table": "institution_subscriptions",
+        "command": "SELECT",
+        "roles": [
+          "reflab_rls_owner"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "rls_helper_source"
+      },
+      {
+        "name": "institutional_clips_scoped_read",
+        "schema": "public",
+        "table": "institutional_clips",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission",
+          "reflab_private.is_super_admin"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institutional_lead_activities_super_admin_read",
+        "schema": "public",
+        "table": "institutional_lead_activities",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin"
+        ],
+        "category": "super_admin_audit_read"
+      },
+      {
+        "name": "institutional_leads_super_admin_read",
+        "schema": "public",
+        "table": "institutional_leads",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin"
+        ],
+        "category": "super_admin_audit_read"
+      },
+      {
+        "name": "institutions_member_read",
+        "schema": "public",
+        "table": "institutions",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_active_institution_membership",
+          "reflab_private.is_super_admin"
+        ],
+        "category": "institution_scoped_read"
+      },
+      {
+        "name": "institutions_rls_owner_read",
+        "schema": "public",
+        "table": "institutions",
+        "command": "SELECT",
+        "roles": [
+          "reflab_rls_owner"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "rls_helper_source"
+      },
+      {
+        "name": "match_context_snapshots_authenticated_read",
+        "schema": "public",
+        "table": "match_context_snapshots",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "match_officials_own_read",
+        "schema": "public",
+        "table": "match_officials",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "match_preparations_own_insert",
+        "schema": "public",
+        "table": "match_preparations",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "match_preparations_own_read",
+        "schema": "public",
+        "table": "match_preparations",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "match_preparations_own_update",
+        "schema": "public",
+        "table": "match_preparations",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "notification_events_own_read",
+        "schema": "public",
+        "table": "notification_events",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_server_write"
+      },
+      {
+        "name": "notification_preferences_own_insert",
+        "schema": "public",
+        "table": "notification_preferences",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "notification_preferences_own_read",
+        "schema": "public",
+        "table": "notification_preferences",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "notification_preferences_own_update",
+        "schema": "public",
+        "table": "notification_preferences",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "notification_tokens_own_insert",
+        "schema": "public",
+        "table": "notification_tokens",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "notification_tokens_own_read",
+        "schema": "public",
+        "table": "notification_tokens",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "notification_tokens_own_update",
+        "schema": "public",
+        "table": "notification_tokens",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "performance_checkins_own_insert",
+        "schema": "public",
+        "table": "performance_checkins",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "performance_checkins_own_read",
+        "schema": "public",
+        "table": "performance_checkins",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "performance_checkins_own_update",
+        "schema": "public",
+        "table": "performance_checkins",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "performance_sessions_own_insert",
+        "schema": "public",
+        "table": "performance_sessions",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "performance_sessions_own_read",
+        "schema": "public",
+        "table": "performance_sessions",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "performance_sessions_own_update",
+        "schema": "public",
+        "table": "performance_sessions",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "physical_tests_own_insert",
+        "schema": "public",
+        "table": "physical_tests",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "physical_tests_own_read",
+        "schema": "public",
+        "table": "physical_tests",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "physical_tests_own_update",
+        "schema": "public",
+        "table": "physical_tests",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "plan_capabilities_authenticated_read",
+        "schema": "public",
+        "table": "plan_capabilities",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "platform_audit_super_admin_read",
+        "schema": "public",
+        "table": "platform_audit_logs",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin"
+        ],
+        "category": "super_admin_audit_read"
+      },
+      {
+        "name": "platform_roles_authenticated_read",
+        "schema": "public",
+        "table": "platform_roles",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "post_match_reviews_own_insert",
+        "schema": "public",
+        "table": "post_match_reviews",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "post_match_reviews_own_read",
+        "schema": "public",
+        "table": "post_match_reviews",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "post_match_reviews_own_update",
+        "schema": "public",
+        "table": "post_match_reviews",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "psychology_checkins_own_insert",
+        "schema": "public",
+        "table": "psychology_checkins",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "psychology_checkins_own_read",
+        "schema": "public",
+        "table": "psychology_checkins",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "psychology_checkins_own_update",
+        "schema": "public",
+        "table": "psychology_checkins",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "psychology_exercise_sessions_own_insert",
+        "schema": "public",
+        "table": "psychology_exercise_sessions",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "psychology_exercise_sessions_own_read",
+        "schema": "public",
+        "table": "psychology_exercise_sessions",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "psychology_exercise_sessions_own_update",
+        "schema": "public",
+        "table": "psychology_exercise_sessions",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "psychology_modules_authenticated_read",
+        "schema": "public",
+        "table": "psychology_modules",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "psychology_wellbeing_assessments_own_insert",
+        "schema": "public",
+        "table": "psychology_wellbeing_assessments",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "psychology_wellbeing_assessments_own_read",
+        "schema": "public",
+        "table": "psychology_wellbeing_assessments",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "psychology_wellbeing_assessments_own_update",
+        "schema": "public",
+        "table": "psychology_wellbeing_assessments",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "readiness_scores_own_insert",
+        "schema": "public",
+        "table": "readiness_scores",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "readiness_scores_own_read",
+        "schema": "public",
+        "table": "readiness_scores",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "readiness_scores_own_update",
+        "schema": "public",
+        "table": "readiness_scores",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "referee_eligibility_own_read",
+        "schema": "public",
+        "table": "referee_eligibility",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_server_write"
+      },
+      {
+        "name": "referee_exam_sessions_own_read",
+        "schema": "public",
+        "table": "referee_exam_sessions",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_server_write"
+      },
+      {
+        "name": "referee_roles_authenticated_read",
+        "schema": "public",
+        "table": "referee_roles",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "rules_exam_results_own_read",
+        "schema": "public",
+        "table": "rules_exam_results",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_server_write"
+      },
+      {
+        "name": "teams_authenticated_read",
+        "schema": "public",
+        "table": "teams",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "user_global_roles_own_read",
+        "schema": "public",
+        "table": "user_global_roles",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "user_global_roles_rls_owner_read",
+        "schema": "public",
+        "table": "user_global_roles",
+        "command": "SELECT",
+        "roles": [
+          "reflab_rls_owner"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "rls_helper_source"
+      },
+      {
+        "name": "user_profiles_own_insert",
+        "schema": "public",
+        "table": "user_profiles",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "user_profiles_own_read",
+        "schema": "public",
+        "table": "user_profiles",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "user_profiles_own_update",
+        "schema": "public",
+        "table": "user_profiles",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "user_roles_legacy_own_read",
+        "schema": "public",
+        "table": "user_roles",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "user_subscriptions_own_read",
+        "schema": "public",
+        "table": "user_subscriptions",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "venues_authenticated_read",
+        "schema": "public",
+        "table": "venues",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "authenticated_catalog"
+      },
+      {
+        "name": "wellness_logs_own_insert",
+        "schema": "public",
+        "table": "wellness_logs",
+        "command": "INSERT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_insert"
+      },
+      {
+        "name": "wellness_logs_own_read",
+        "schema": "public",
+        "table": "wellness_logs",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.is_super_admin",
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_read"
+      },
+      {
+        "name": "wellness_logs_own_update",
+        "schema": "public",
+        "table": "wellness_logs",
+        "command": "UPDATE",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.request_user_id"
+        ],
+        "category": "user_owned_update"
+      },
+      {
+        "name": "avatars_public_read",
+        "schema": "storage",
+        "table": "objects",
+        "command": "SELECT",
+        "roles": [
+          "public"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "temporary_public_media_read"
+      },
+      {
+        "name": "institutional_content_authenticated_read",
+        "schema": "storage",
+        "table": "objects",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission"
+        ],
+        "category": "institutional_storage_read"
+      },
+      {
+        "name": "videos_public_read",
+        "schema": "storage",
+        "table": "objects",
+        "command": "SELECT",
+        "roles": [
+          "public"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "temporary_public_media_read"
+      }
+    ],
+    "triggers": [
+      {
+        "name": "access_plans_set_updated_at",
+        "table": "public.access_plans",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "appointments_set_updated_at",
+        "table": "public.appointments",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "associations_set_updated_at",
+        "table": "public.associations",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "attempts_validate_exam_context",
+        "table": "public.attempts",
+        "timing_and_events": "BEFORE INSERT OR UPDATE OF EXAM_RESULT_ID, USER_ID, SUBMISSION_ID, SPORT_TYPE, INSTITUTION_ID, INSTITUTION_GROUP_ID, INSTITUTION_ASSESSMENT_SESSION_ID",
+        "function": "reflab_private.validate_attempt_exam_context()",
+        "source": "explicit"
+      },
+      {
+        "name": "capabilities_set_updated_at",
+        "table": "public.capabilities",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "capability_overrides_set_updated_at",
+        "table": "public.capability_overrides",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "clips_set_updated_at",
+        "table": "public.clips",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "coach_data_consents_set_updated_at",
+        "table": "public.coach_data_consents",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "coach_rate_limit_buckets_set_updated_at",
+        "table": "public.coach_rate_limit_buckets",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "competition_categories_set_updated_at",
+        "table": "public.competition_categories",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "competition_seasons_set_updated_at",
+        "table": "public.competition_seasons",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "competitions_set_updated_at",
+        "table": "public.competitions",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "countries_set_updated_at",
+        "table": "public.countries",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "exam_results_validate_context",
+        "table": "public.exam_results",
+        "timing_and_events": "BEFORE INSERT",
+        "function": "reflab_private.validate_exam_result_context()",
+        "source": "explicit"
+      },
+      {
+        "name": "fixture_sync_logs_set_updated_at",
+        "table": "public.fixture_sync_logs",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "fixtures_set_updated_at",
+        "table": "public.fixtures",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "ifab_library_documents_set_updated_at",
+        "table": "public.ifab_library_documents",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_assessment_assignments_validate_user",
+        "table": "public.institution_assessment_assignments",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_institution_user_target()",
+        "source": "explicit"
+      },
+      {
+        "name": "institution_assessment_sessions_set_updated_at",
+        "table": "public.institution_assessment_sessions",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_assessment_sessions_validate_assignment",
+        "table": "public.institution_assessment_sessions",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_assessment_session_assignment()",
+        "source": "explicit"
+      },
+      {
+        "name": "institution_assessments_set_updated_at",
+        "table": "public.institution_assessments",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_cohorts_set_updated_at",
+        "table": "public.institution_cohorts",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_content_assignments_validate_user",
+        "table": "public.institution_content_assignments",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_institution_user_target()",
+        "source": "explicit"
+      },
+      {
+        "name": "institution_contents_set_updated_at",
+        "table": "public.institution_contents",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_data_consents_set_updated_at",
+        "table": "public.institution_data_consents",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_data_consents_validate_membership",
+        "table": "public.institution_data_consents",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_institution_data_consent()",
+        "source": "explicit"
+      },
+      {
+        "name": "institution_group_memberships_set_updated_at",
+        "table": "public.institution_group_memberships",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_groups_set_updated_at",
+        "table": "public.institution_groups",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_members_set_updated_at",
+        "table": "public.institution_members",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_membership_permission_overrides_set_updated_at",
+        "table": "public.institution_membership_permission_overrides",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_membership_roles_validate_scope",
+        "table": "public.institution_membership_roles",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_institution_role_scope()",
+        "source": "explicit"
+      },
+      {
+        "name": "institution_memberships_set_updated_at",
+        "table": "public.institution_memberships",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_notification_campaigns_set_updated_at",
+        "table": "public.institution_notification_campaigns",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_notification_recipients_set_updated_at",
+        "table": "public.institution_notification_recipients",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_notification_recipients_validate_user",
+        "table": "public.institution_notification_recipients",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_institution_user_target()",
+        "source": "explicit"
+      },
+      {
+        "name": "institution_permissions_set_updated_at",
+        "table": "public.institution_permissions",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_role_permissions_validate_scope",
+        "table": "public.institution_role_permissions",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_institution_role_scope()",
+        "source": "explicit"
+      },
+      {
+        "name": "institution_roles_set_updated_at",
+        "table": "public.institution_roles",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institution_subscriptions_set_updated_at",
+        "table": "public.institution_subscriptions",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institutional_clips_set_updated_at",
+        "table": "public.institutional_clips",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institutional_leads_set_updated_at",
+        "table": "public.institutional_leads",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "institutions_set_updated_at",
+        "table": "public.institutions",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "match_context_snapshots_set_updated_at",
+        "table": "public.match_context_snapshots",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "match_officials_set_updated_at",
+        "table": "public.match_officials",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "match_preparations_set_updated_at",
+        "table": "public.match_preparations",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "match_preparations_validate_appointment",
+        "table": "public.match_preparations",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_owned_appointment()",
+        "source": "explicit"
+      },
+      {
+        "name": "notification_events_set_updated_at",
+        "table": "public.notification_events",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "notification_events_validate_appointment_context",
+        "table": "public.notification_events",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_user_appointment_context()",
+        "source": "generated:appointment_context_triggers"
+      },
+      {
+        "name": "notification_preferences_set_updated_at",
+        "table": "public.notification_preferences",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "notification_tokens_set_updated_at",
+        "table": "public.notification_tokens",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "performance_checkins_set_updated_at",
+        "table": "public.performance_checkins",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "performance_checkins_validate_appointment_context",
+        "table": "public.performance_checkins",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_user_appointment_context()",
+        "source": "generated:appointment_context_triggers"
+      },
+      {
+        "name": "performance_sessions_set_updated_at",
+        "table": "public.performance_sessions",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "performance_sessions_validate_appointment_context",
+        "table": "public.performance_sessions",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_user_appointment_context()",
+        "source": "generated:appointment_context_triggers"
+      },
+      {
+        "name": "performance_sessions_validate_appointment_context",
+        "table": "public.performance_sessions",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_performance_checkin_owner()",
+        "source": "generated:performance_checkin_context_triggers"
+      },
+      {
+        "name": "physical_tests_set_updated_at",
+        "table": "public.physical_tests",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "platform_roles_set_updated_at",
+        "table": "public.platform_roles",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "post_match_reviews_set_updated_at",
+        "table": "public.post_match_reviews",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "post_match_reviews_validate_appointment",
+        "table": "public.post_match_reviews",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_owned_appointment()",
+        "source": "explicit"
+      },
+      {
+        "name": "psychology_checkins_set_updated_at",
+        "table": "public.psychology_checkins",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "psychology_checkins_validate_appointment_context",
+        "table": "public.psychology_checkins",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_user_appointment_context()",
+        "source": "generated:appointment_context_triggers"
+      },
+      {
+        "name": "psychology_exercise_sessions_set_updated_at",
+        "table": "public.psychology_exercise_sessions",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "psychology_exercise_sessions_validate_appointment_context",
+        "table": "public.psychology_exercise_sessions",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_user_appointment_context()",
+        "source": "generated:appointment_context_triggers"
+      },
+      {
+        "name": "psychology_modules_set_updated_at",
+        "table": "public.psychology_modules",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "psychology_wellbeing_assessments_set_updated_at",
+        "table": "public.psychology_wellbeing_assessments",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "readiness_scores_validate_appointment_context",
+        "table": "public.readiness_scores",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_user_appointment_context()",
+        "source": "generated:appointment_context_triggers"
+      },
+      {
+        "name": "readiness_scores_validate_appointment_context",
+        "table": "public.readiness_scores",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_performance_checkin_owner()",
+        "source": "generated:performance_checkin_context_triggers"
+      },
+      {
+        "name": "referee_eligibility_set_updated_at",
+        "table": "public.referee_eligibility",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "referee_exam_sessions_protect_immutable",
+        "table": "public.referee_exam_sessions",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.protect_referee_exam_session()",
+        "source": "explicit"
+      },
+      {
+        "name": "referee_exam_sessions_validate_context",
+        "table": "public.referee_exam_sessions",
+        "timing_and_events": "BEFORE INSERT",
+        "function": "reflab_private.validate_referee_exam_session_context()",
+        "source": "explicit"
+      },
+      {
+        "name": "referee_exam_sessions_validate_manifest",
+        "table": "public.referee_exam_sessions",
+        "timing_and_events": "BEFORE INSERT",
+        "function": "reflab_private.validate_referee_exam_manifest()",
+        "source": "explicit"
+      },
+      {
+        "name": "referee_roles_set_updated_at",
+        "table": "public.referee_roles",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "teams_set_updated_at",
+        "table": "public.teams",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "user_global_roles_set_updated_at",
+        "table": "public.user_global_roles",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "user_profiles_set_updated_at",
+        "table": "public.user_profiles",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "user_roles_set_updated_at",
+        "table": "public.user_roles",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "user_subscriptions_set_updated_at",
+        "table": "public.user_subscriptions",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "venues_set_updated_at",
+        "table": "public.venues",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "wellness_logs_set_updated_at",
+        "table": "public.wellness_logs",
+        "timing_and_events": "BEFORE UPDATE",
+        "function": "reflab_private.set_updated_at()",
+        "source": "generated:updated_at_triggers"
+      },
+      {
+        "name": "wellness_logs_validate_appointment_context",
+        "table": "public.wellness_logs",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_user_appointment_context()",
+        "source": "generated:appointment_context_triggers"
+      },
+      {
+        "name": "wellness_logs_validate_appointment_context",
+        "table": "public.wellness_logs",
+        "timing_and_events": "BEFORE INSERT OR UPDATE",
+        "function": "reflab_private.validate_performance_checkin_owner()",
+        "source": "generated:performance_checkin_context_triggers"
+      },
+      {
+        "name": "reflab_schema_state_immutable",
+        "table": "reflab_meta.reflab_schema_state",
+        "timing_and_events": "BEFORE UPDATE OR DELETE",
+        "function": "reflab_meta.reject_schema_state_mutation()",
+        "source": "explicit"
+      }
+    ],
+    "explicit_indexes": [
+      {
+        "name": "access_change_audit_actor_created_idx",
+        "table": "public.access_change_audit",
+        "unique": false,
+        "definition": "(actor_user_id, created_at desc)"
+      },
+      {
+        "name": "access_change_audit_target_created_idx",
+        "table": "public.access_change_audit",
+        "unique": false,
+        "definition": "(target_user_id, created_at desc)"
+      },
+      {
+        "name": "ai_usage_ledger_user_created_idx",
+        "table": "public.ai_usage_ledger",
+        "unique": false,
+        "definition": "(user_id, created_at desc)"
+      },
+      {
+        "name": "appointment_history_appointment_idx",
+        "table": "public.appointment_history",
+        "unique": false,
+        "definition": "(appointment_id, created_at desc)"
+      },
+      {
+        "name": "appointments_fixture_idx",
+        "table": "public.appointments",
+        "unique": false,
+        "definition": "(fixture_id, created_at desc)"
+      },
+      {
+        "name": "appointments_user_fixture_role_active_idx",
+        "table": "public.appointments",
+        "unique": true,
+        "definition": "(user_id, fixture_id, role_id) where status not in ('cancelled', 'replaced')"
+      },
+      {
+        "name": "appointments_user_status_idx",
+        "table": "public.appointments",
+        "unique": false,
+        "definition": "(user_id, status, created_at desc)"
+      },
+      {
+        "name": "associations_country_active_idx",
+        "table": "public.associations",
+        "unique": false,
+        "definition": "(country_id, is_active, name)"
+      },
+      {
+        "name": "attempts_exam_occurrence_unique",
+        "table": "public.attempts",
+        "unique": true,
+        "definition": "(exam_result_id, source_occurrence_id) where exam_result_id is not null and source_occurrence_id is not null"
+      },
+      {
+        "name": "attempts_exam_result_idx",
+        "table": "public.attempts",
+        "unique": false,
+        "definition": "(exam_result_id, created_at)"
+      },
+      {
+        "name": "attempts_sport_topic_created_idx",
+        "table": "public.attempts",
+        "unique": false,
+        "definition": "(sport_type, topic, created_at desc)"
+      },
+      {
+        "name": "attempts_user_sport_created_idx",
+        "table": "public.attempts",
+        "unique": false,
+        "definition": "(user_id, sport_type, created_at desc)"
+      },
+      {
+        "name": "capability_overrides_unique_scope",
+        "table": "public.capability_overrides",
+        "unique": true,
+        "definition": "( user_id, scope_type, coalesce(institution_id, '00000000-0000-0000-0000-000000000000'::uuid), capability_key )"
+      },
+      {
+        "name": "capability_overrides_user_validity_idx",
+        "table": "public.capability_overrides",
+        "unique": false,
+        "definition": "(user_id, valid_from, valid_until)"
+      },
+      {
+        "name": "clips_mode_created_idx",
+        "table": "public.clips",
+        "unique": false,
+        "definition": "(mode, created_at desc)"
+      },
+      {
+        "name": "clips_sport_topic_idx",
+        "table": "public.clips",
+        "unique": false,
+        "definition": "(sport_type, topic, is_active)"
+      },
+      {
+        "name": "coach_data_consents_user_idx",
+        "table": "public.coach_data_consents",
+        "unique": false,
+        "definition": "(user_id, data_category, purpose)"
+      },
+      {
+        "name": "coach_evidence_run_idx",
+        "table": "public.coach_evidence",
+        "unique": false,
+        "definition": "(run_id, created_at)"
+      },
+      {
+        "name": "coach_evidence_source_idx",
+        "table": "public.coach_evidence",
+        "unique": false,
+        "definition": "(source_table, source_id)"
+      },
+      {
+        "name": "coach_runs_institution_created_idx",
+        "table": "public.coach_runs",
+        "unique": false,
+        "definition": "(institution_id, created_at desc)"
+      },
+      {
+        "name": "coach_runs_sport_feature_created_idx",
+        "table": "public.coach_runs",
+        "unique": false,
+        "definition": "(sport_type, feature, created_at desc)"
+      },
+      {
+        "name": "coach_runs_user_created_idx",
+        "table": "public.coach_runs",
+        "unique": false,
+        "definition": "(user_id, created_at desc)"
+      },
+      {
+        "name": "competition_categories_competition_idx",
+        "table": "public.competition_categories",
+        "unique": false,
+        "definition": "(competition_id, sport_type, is_active)"
+      },
+      {
+        "name": "competition_categories_provider_external_unique",
+        "table": "public.competition_categories",
+        "unique": true,
+        "definition": "(provider, external_id) where provider is not null and external_id is not null"
+      },
+      {
+        "name": "competition_seasons_competition_idx",
+        "table": "public.competition_seasons",
+        "unique": false,
+        "definition": "(competition_id, status)"
+      },
+      {
+        "name": "competition_seasons_provider_external_unique",
+        "table": "public.competition_seasons",
+        "unique": true,
+        "definition": "(provider, external_id) where provider is not null and external_id is not null"
+      },
+      {
+        "name": "competitions_association_sport_idx",
+        "table": "public.competitions",
+        "unique": false,
+        "definition": "(association_id, sport_type, is_active)"
+      },
+      {
+        "name": "competitions_provider_external_unique",
+        "table": "public.competitions",
+        "unique": true,
+        "definition": "(provider, external_id) where provider is not null and external_id is not null"
+      },
+      {
+        "name": "exam_results_user_sport_created_idx",
+        "table": "public.exam_results",
+        "unique": false,
+        "definition": "(user_id, sport_type, created_at desc)"
+      },
+      {
+        "name": "fixture_sync_logs_provider_created_idx",
+        "table": "public.fixture_sync_logs",
+        "unique": false,
+        "definition": "(provider, created_at desc)"
+      },
+      {
+        "name": "fixtures_competition_status_idx",
+        "table": "public.fixtures",
+        "unique": false,
+        "definition": "(competition_id, status, kickoff_at desc)"
+      },
+      {
+        "name": "fixtures_provider_external_unique",
+        "table": "public.fixtures",
+        "unique": true,
+        "definition": "(provider, external_id) where provider is not null and external_id is not null"
+      },
+      {
+        "name": "fixtures_sport_kickoff_idx",
+        "table": "public.fixtures",
+        "unique": false,
+        "definition": "(sport_type, kickoff_at desc)"
+      },
+      {
+        "name": "ifab_library_documents_sport_season_idx",
+        "table": "public.ifab_library_documents",
+        "unique": false,
+        "definition": "(sport_type, season, language)"
+      },
+      {
+        "name": "ifab_library_documents_sport_status_idx",
+        "table": "public.ifab_library_documents",
+        "unique": false,
+        "definition": "(sport_type, status, created_at desc)"
+      },
+      {
+        "name": "institution_assessment_assignments_group_idx",
+        "table": "public.institution_assessment_assignments",
+        "unique": false,
+        "definition": "(group_id, status)"
+      },
+      {
+        "name": "institution_assessment_assignments_user_idx",
+        "table": "public.institution_assessment_assignments",
+        "unique": false,
+        "definition": "(user_id, status)"
+      },
+      {
+        "name": "institution_assessment_feedback_session_idx",
+        "table": "public.institution_assessment_feedback",
+        "unique": false,
+        "definition": "(session_id, created_at)"
+      },
+      {
+        "name": "institution_assessment_history_assessment_idx",
+        "table": "public.institution_assessment_history",
+        "unique": false,
+        "definition": "(assessment_id, created_at desc)"
+      },
+      {
+        "name": "institution_assessment_items_assessment_idx",
+        "table": "public.institution_assessment_items",
+        "unique": false,
+        "definition": "(assessment_id, sort_order)"
+      },
+      {
+        "name": "institution_assessment_sessions_tenant_group_idx",
+        "table": "public.institution_assessment_sessions",
+        "unique": false,
+        "definition": "(institution_id, group_id, status)"
+      },
+      {
+        "name": "institution_assessment_sessions_user_idx",
+        "table": "public.institution_assessment_sessions",
+        "unique": false,
+        "definition": "(user_id, status, created_at desc)"
+      },
+      {
+        "name": "institution_assessments_tenant_status_idx",
+        "table": "public.institution_assessments",
+        "unique": false,
+        "definition": "(institution_id, status, sport_type)"
+      },
+      {
+        "name": "institution_audit_logs_tenant_created_idx",
+        "table": "public.institution_audit_logs",
+        "unique": false,
+        "definition": "(institution_id, created_at desc)"
+      },
+      {
+        "name": "institution_cohorts_tenant_status_idx",
+        "table": "public.institution_cohorts",
+        "unique": false,
+        "definition": "(institution_id, status)"
+      },
+      {
+        "name": "institution_content_assignments_group_idx",
+        "table": "public.institution_content_assignments",
+        "unique": false,
+        "definition": "(group_id, due_at)"
+      },
+      {
+        "name": "institution_content_assignments_user_idx",
+        "table": "public.institution_content_assignments",
+        "unique": false,
+        "definition": "(user_id, due_at)"
+      },
+      {
+        "name": "institution_contents_tenant_status_idx",
+        "table": "public.institution_contents",
+        "unique": false,
+        "definition": "(institution_id, status, sport_type, created_at desc)"
+      },
+      {
+        "name": "institution_data_consents_user_idx",
+        "table": "public.institution_data_consents",
+        "unique": false,
+        "definition": "(user_id, institution_id)"
+      },
+      {
+        "name": "institution_demo_sessions_user_status_idx",
+        "table": "public.institution_demo_sessions",
+        "unique": false,
+        "definition": "(user_id, status, expires_at)"
+      },
+      {
+        "name": "institution_group_memberships_member_idx",
+        "table": "public.institution_group_memberships",
+        "unique": false,
+        "definition": "(membership_id, status)"
+      },
+      {
+        "name": "institution_groups_tenant_status_idx",
+        "table": "public.institution_groups",
+        "unique": false,
+        "definition": "(institution_id, status, sport_type)"
+      },
+      {
+        "name": "institution_members_legacy_user_idx",
+        "table": "public.institution_members",
+        "unique": false,
+        "definition": "(user_id, institution_id)"
+      },
+      {
+        "name": "institution_permission_overrides_tenant_idx",
+        "table": "public.institution_membership_permission_overrides",
+        "unique": false,
+        "definition": "(institution_id, membership_id)"
+      },
+      {
+        "name": "institution_membership_roles_tenant_idx",
+        "table": "public.institution_membership_roles",
+        "unique": false,
+        "definition": "(institution_id, membership_id)"
+      },
+      {
+        "name": "institution_memberships_tenant_status_idx",
+        "table": "public.institution_memberships",
+        "unique": false,
+        "definition": "(institution_id, status, user_id)"
+      },
+      {
+        "name": "institution_memberships_user_status_idx",
+        "table": "public.institution_memberships",
+        "unique": false,
+        "definition": "(user_id, status, institution_id)"
+      },
+      {
+        "name": "institution_notification_campaigns_status_idx",
+        "table": "public.institution_notification_campaigns",
+        "unique": false,
+        "definition": "(institution_id, status, scheduled_for)"
+      },
+      {
+        "name": "institution_notification_recipients_user_idx",
+        "table": "public.institution_notification_recipients",
+        "unique": false,
+        "definition": "(user_id, delivery_status)"
+      },
+      {
+        "name": "institution_roles_system_key_unique",
+        "table": "public.institution_roles",
+        "unique": true,
+        "definition": "(role_key) where institution_id is null"
+      },
+      {
+        "name": "institution_roles_tenant_key_unique",
+        "table": "public.institution_roles",
+        "unique": true,
+        "definition": "(institution_id, role_key) where institution_id is not null"
+      },
+      {
+        "name": "institution_subscriptions_plan_status_idx",
+        "table": "public.institution_subscriptions",
+        "unique": false,
+        "definition": "(plan_key, status, ends_at)"
+      },
+      {
+        "name": "institutional_clips_institution_status_idx",
+        "table": "public.institutional_clips",
+        "unique": false,
+        "definition": "(institution_id, status, created_at desc)"
+      },
+      {
+        "name": "institutional_clips_sport_topic_idx",
+        "table": "public.institutional_clips",
+        "unique": false,
+        "definition": "(sport_type, topic)"
+      },
+      {
+        "name": "institutional_lead_activities_lead_created_idx",
+        "table": "public.institutional_lead_activities",
+        "unique": false,
+        "definition": "(lead_id, created_at desc)"
+      },
+      {
+        "name": "institutional_leads_owner_idx",
+        "table": "public.institutional_leads",
+        "unique": false,
+        "definition": "(owner_user_id, status)"
+      },
+      {
+        "name": "institutional_leads_pipeline_idx",
+        "table": "public.institutional_leads",
+        "unique": false,
+        "definition": "(status, next_contact_at, created_at desc)"
+      },
+      {
+        "name": "institutions_domain_unique",
+        "table": "public.institutions",
+        "unique": true,
+        "definition": "(lower(domain)) where domain is not null and btrim(domain) <> ''"
+      },
+      {
+        "name": "institutions_plan_status_idx",
+        "table": "public.institutions",
+        "unique": false,
+        "definition": "(plan_key, status, created_at desc) where deleted_at is null"
+      },
+      {
+        "name": "institutions_slug_unique",
+        "table": "public.institutions",
+        "unique": true,
+        "definition": "(lower(slug))"
+      },
+      {
+        "name": "institutions_status_demo_idx",
+        "table": "public.institutions",
+        "unique": false,
+        "definition": "(status, is_demo)"
+      },
+      {
+        "name": "institutions_subdomain_unique",
+        "table": "public.institutions",
+        "unique": true,
+        "definition": "(lower(subdomain)) where subdomain is not null and btrim(subdomain) <> ''"
+      },
+      {
+        "name": "match_context_snapshots_fixture_type_idx",
+        "table": "public.match_context_snapshots",
+        "unique": false,
+        "definition": "(fixture_id, snapshot_type, created_at desc)"
+      },
+      {
+        "name": "match_officials_fixture_idx",
+        "table": "public.match_officials",
+        "unique": false,
+        "definition": "(fixture_id, status)"
+      },
+      {
+        "name": "match_preparations_appointment_idx",
+        "table": "public.match_preparations",
+        "unique": false,
+        "definition": "(appointment_id, stage)"
+      },
+      {
+        "name": "notification_events_appointment_idx",
+        "table": "public.notification_events",
+        "unique": false,
+        "definition": "(appointment_id, created_at desc)"
+      },
+      {
+        "name": "notification_events_deduplication_unique",
+        "table": "public.notification_events",
+        "unique": true,
+        "definition": "(user_id, deduplication_key) where deduplication_key is not null"
+      },
+      {
+        "name": "notification_events_user_status_idx",
+        "table": "public.notification_events",
+        "unique": false,
+        "definition": "(user_id, status, created_at desc)"
+      },
+      {
+        "name": "notification_tokens_user_enabled_idx",
+        "table": "public.notification_tokens",
+        "unique": false,
+        "definition": "(user_id, enabled)"
+      },
+      {
+        "name": "performance_checkins_user_appointment_idx",
+        "table": "public.performance_checkins",
+        "unique": false,
+        "definition": "(user_id, appointment_id, created_at desc)"
+      },
+      {
+        "name": "performance_checkins_user_date_type_idx",
+        "table": "public.performance_checkins",
+        "unique": false,
+        "definition": "(user_id, date, checkin_type)"
+      },
+      {
+        "name": "performance_sessions_user_appointment_idx",
+        "table": "public.performance_sessions",
+        "unique": false,
+        "definition": "(user_id, appointment_id, created_at desc)"
+      },
+      {
+        "name": "performance_sessions_user_created_idx",
+        "table": "public.performance_sessions",
+        "unique": false,
+        "definition": "(user_id, created_at desc)"
+      },
+      {
+        "name": "physical_tests_user_date_idx",
+        "table": "public.physical_tests",
+        "unique": false,
+        "definition": "(user_id, test_date desc)"
+      },
+      {
+        "name": "platform_audit_actor_created_idx",
+        "table": "public.platform_audit_logs",
+        "unique": false,
+        "definition": "(actor_user_id, created_at desc)"
+      },
+      {
+        "name": "platform_audit_entity_created_idx",
+        "table": "public.platform_audit_logs",
+        "unique": false,
+        "definition": "(entity_type, entity_id, created_at desc)"
+      },
+      {
+        "name": "post_match_reviews_user_created_idx",
+        "table": "public.post_match_reviews",
+        "unique": false,
+        "definition": "(user_id, created_at desc)"
+      },
+      {
+        "name": "psychology_checkins_user_appointment_idx",
+        "table": "public.psychology_checkins",
+        "unique": false,
+        "definition": "(user_id, appointment_id, created_at desc)"
+      },
+      {
+        "name": "psychology_checkins_user_module_created_idx",
+        "table": "public.psychology_checkins",
+        "unique": false,
+        "definition": "(user_id, module_slug, created_at desc)"
+      },
+      {
+        "name": "psychology_exercises_user_appointment_idx",
+        "table": "public.psychology_exercise_sessions",
+        "unique": false,
+        "definition": "(user_id, appointment_id, created_at desc)"
+      },
+      {
+        "name": "psychology_exercises_user_module_created_idx",
+        "table": "public.psychology_exercise_sessions",
+        "unique": false,
+        "definition": "(user_id, module_slug, created_at desc)"
+      },
+      {
+        "name": "psychology_wellbeing_user_module_created_idx",
+        "table": "public.psychology_wellbeing_assessments",
+        "unique": false,
+        "definition": "(user_id, module_slug, created_at desc)"
+      },
+      {
+        "name": "readiness_scores_user_appointment_idx",
+        "table": "public.readiness_scores",
+        "unique": false,
+        "definition": "(user_id, appointment_id, created_at desc)"
+      },
+      {
+        "name": "readiness_scores_user_created_idx",
+        "table": "public.readiness_scores",
+        "unique": false,
+        "definition": "(user_id, created_at desc)"
+      },
+      {
+        "name": "referee_eligibility_user_sport_idx",
+        "table": "public.referee_eligibility",
+        "unique": false,
+        "definition": "(user_id, sport_type, is_active)"
+      },
+      {
+        "name": "referee_exam_sessions_institution_idx",
+        "table": "public.referee_exam_sessions",
+        "unique": false,
+        "definition": "(institution_id, status, created_at desc)"
+      },
+      {
+        "name": "referee_exam_sessions_user_status_idx",
+        "table": "public.referee_exam_sessions",
+        "unique": false,
+        "definition": "(user_id, status, expires_at)"
+      },
+      {
+        "name": "referee_roles_sport_order_idx",
+        "table": "public.referee_roles",
+        "unique": false,
+        "definition": "(sport_type, display_order)"
+      },
+      {
+        "name": "rules_exam_results_user_sport_created_idx",
+        "table": "public.rules_exam_results",
+        "unique": false,
+        "definition": "(user_id, sport_type, created_at desc)"
+      },
+      {
+        "name": "teams_provider_external_unique",
+        "table": "public.teams",
+        "unique": true,
+        "definition": "(provider, external_id) where provider is not null and external_id is not null"
+      },
+      {
+        "name": "teams_sport_name_idx",
+        "table": "public.teams",
+        "unique": false,
+        "definition": "(sport_type, name)"
+      },
+      {
+        "name": "user_global_roles_role_idx",
+        "table": "public.user_global_roles",
+        "unique": false,
+        "definition": "(role_key)"
+      },
+      {
+        "name": "user_profiles_association_id_idx",
+        "table": "public.user_profiles",
+        "unique": false,
+        "definition": "(association_id)"
+      },
+      {
+        "name": "user_profiles_subscription_plan_idx",
+        "table": "public.user_profiles",
+        "unique": false,
+        "definition": "(subscription_plan)"
+      },
+      {
+        "name": "user_roles_institution_idx",
+        "table": "public.user_roles",
+        "unique": false,
+        "definition": "(institution_id, role)"
+      },
+      {
+        "name": "user_subscriptions_plan_status_idx",
+        "table": "public.user_subscriptions",
+        "unique": false,
+        "definition": "(plan_key, status, ends_at)"
+      },
+      {
+        "name": "venues_name_idx",
+        "table": "public.venues",
+        "unique": false,
+        "definition": "(name)"
+      },
+      {
+        "name": "venues_provider_external_unique",
+        "table": "public.venues",
+        "unique": true,
+        "definition": "(provider, external_id) where provider is not null and external_id is not null"
+      },
+      {
+        "name": "wellness_logs_user_appointment_idx",
+        "table": "public.wellness_logs",
+        "unique": false,
+        "definition": "(user_id, appointment_id, created_at desc)"
+      },
+      {
+        "name": "wellness_logs_user_date_idx",
+        "table": "public.wellness_logs",
+        "unique": false,
+        "definition": "(user_id, date desc)"
+      }
+    ],
+    "primary_keys": [
+      {
+        "table": "public.access_change_audit",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.access_plans",
+        "name": null,
+        "columns": [
+          "plan_key"
+        ]
+      },
+      {
+        "table": "public.ai_usage_ledger",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.appointment_history",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.appointments",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.associations",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.capabilities",
+        "name": null,
+        "columns": [
+          "capability_key"
+        ]
+      },
+      {
+        "table": "public.capability_overrides",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.clips",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.coach_data_consents",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.coach_evidence",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.coach_rate_limit_buckets",
+        "name": null,
+        "columns": [
+          "user_id",
+          "feature"
+        ]
+      },
+      {
+        "table": "public.coach_runs",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.competition_categories",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.competition_seasons",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.competitions",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.countries",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.exam_results",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.fixture_sync_logs",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.fixtures",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.ifab_library_documents",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_assessment_assignments",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_assessment_feedback",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_assessment_history",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_assessment_items",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_assessment_sessions",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_assessments",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_audit_logs",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_cohorts",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_content_assignments",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_contents",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_data_consents",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_demo_sessions",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_group_memberships",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_groups",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_members",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_membership_permission_overrides",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_membership_roles",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_memberships",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_notification_campaigns",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_notification_recipients",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_permissions",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_role_permissions",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_roles",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_subscriptions",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institutional_clips",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institutional_lead_activities",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institutional_leads",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institutions",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.match_context_snapshots",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.match_officials",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.match_preparations",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.notification_events",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.notification_preferences",
+        "name": null,
+        "columns": [
+          "user_id"
+        ]
+      },
+      {
+        "table": "public.notification_tokens",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.performance_checkins",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.performance_sessions",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.physical_tests",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.plan_capabilities",
+        "name": null,
+        "columns": [
+          "plan_key",
+          "capability_key"
+        ]
+      },
+      {
+        "table": "public.platform_audit_logs",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.platform_roles",
+        "name": null,
+        "columns": [
+          "role_key"
+        ]
+      },
+      {
+        "table": "public.post_match_reviews",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.psychology_exercise_sessions",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.psychology_modules",
+        "name": null,
+        "columns": [
+          "slug"
+        ]
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.readiness_scores",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.referee_eligibility",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.referee_roles",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.rules_exam_results",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.teams",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.user_global_roles",
+        "name": null,
+        "columns": [
+          "user_id"
+        ]
+      },
+      {
+        "table": "public.user_profiles",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.user_roles",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.user_subscriptions",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.venues",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.wellness_logs",
+        "name": null,
+        "columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "reflab_meta.reflab_schema_state",
+        "name": null,
+        "columns": [
+          "installation_id"
+        ]
+      }
+    ],
+    "foreign_keys": [
+      {
+        "table": "public.ai_usage_ledger",
+        "name": "ai_usage_ledger_run_fk",
+        "columns": [
+          "run_id"
+        ],
+        "references_table": "public.coach_runs",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.appointment_history",
+        "name": "appointment_history_appointment_fk",
+        "columns": [
+          "appointment_id"
+        ],
+        "references_table": "public.appointments",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.appointments",
+        "name": "appointments_fixture_fk",
+        "columns": [
+          "fixture_id"
+        ],
+        "references_table": "public.fixtures",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.associations",
+        "name": "associations_country_fk",
+        "columns": [
+          "country_id"
+        ],
+        "references_table": "public.countries",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.attempts",
+        "name": "attempts_exam_result_fk",
+        "columns": [
+          "exam_result_id"
+        ],
+        "references_table": "public.exam_results",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.capability_overrides",
+        "name": "capability_overrides_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.coach_evidence",
+        "name": "coach_evidence_run_fk",
+        "columns": [
+          "run_id"
+        ],
+        "references_table": "public.coach_runs",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.coach_runs",
+        "name": "coach_runs_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.competition_categories",
+        "name": "competition_categories_competition_fk",
+        "columns": [
+          "competition_id"
+        ],
+        "references_table": "public.competitions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.competition_seasons",
+        "name": "competition_seasons_competition_fk",
+        "columns": [
+          "competition_id"
+        ],
+        "references_table": "public.competitions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.competitions",
+        "name": "competitions_association_fk",
+        "columns": [
+          "association_id"
+        ],
+        "references_table": "public.associations",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.exam_results",
+        "name": "exam_results_session_fk",
+        "columns": [
+          "exam_session_id"
+        ],
+        "references_table": "public.referee_exam_sessions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.fixture_sync_logs",
+        "name": "fixture_sync_logs_competition_fk",
+        "columns": [
+          "competition_id"
+        ],
+        "references_table": "public.competitions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.fixtures",
+        "name": "fixtures_country_fk",
+        "columns": [
+          "country_id"
+        ],
+        "references_table": "public.countries",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_assessment_assignments",
+        "name": "institution_assessment_assignments_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_assessment_feedback",
+        "name": "institution_assessment_feedback_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_assessment_history",
+        "name": "institution_assessment_history_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_assessment_items",
+        "name": "institution_assessment_items_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_assessment_sessions",
+        "name": "institution_assessment_sessions_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_assessments",
+        "name": "institution_assessments_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_audit_logs",
+        "name": "institution_audit_logs_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_cohorts",
+        "name": "institution_cohorts_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_content_assignments",
+        "name": "institution_content_assignments_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_contents",
+        "name": "institution_contents_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_data_consents",
+        "name": "institution_data_consents_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_demo_sessions",
+        "name": "institution_demo_sessions_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_group_memberships",
+        "name": "institution_group_memberships_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_groups",
+        "name": "institution_groups_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_members",
+        "name": "institution_members_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_membership_permission_overrides",
+        "name": "institution_permission_overrides_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_membership_roles",
+        "name": "institution_membership_roles_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_memberships",
+        "name": "institution_memberships_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_notification_campaigns",
+        "name": "institution_notification_campaigns_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_notification_recipients",
+        "name": "institution_notification_recipients_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_role_permissions",
+        "name": "institution_role_permissions_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_roles",
+        "name": "institution_roles_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institution_subscriptions",
+        "name": "institution_subscriptions_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institutional_clips",
+        "name": "institutional_clips_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institutional_lead_activities",
+        "name": "institutional_lead_activities_lead_fk",
+        "columns": [
+          "lead_id"
+        ],
+        "references_table": "public.institutional_leads",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.institutional_leads",
+        "name": "institutional_leads_converted_institution_fk",
+        "columns": [
+          "converted_institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.match_context_snapshots",
+        "name": "match_context_snapshots_fixture_fk",
+        "columns": [
+          "fixture_id"
+        ],
+        "references_table": "public.fixtures",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.match_officials",
+        "name": "match_officials_fixture_fk",
+        "columns": [
+          "fixture_id"
+        ],
+        "references_table": "public.fixtures",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.match_preparations",
+        "name": "match_preparations_appointment_fk",
+        "columns": [
+          "appointment_id"
+        ],
+        "references_table": "public.appointments",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.notification_events",
+        "name": "notification_events_appointment_fk",
+        "columns": [
+          "appointment_id"
+        ],
+        "references_table": "public.appointments",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.performance_checkins",
+        "name": "performance_checkins_appointment_fk",
+        "columns": [
+          "appointment_id"
+        ],
+        "references_table": "public.appointments",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.performance_sessions",
+        "name": "performance_sessions_checkin_fk",
+        "columns": [
+          "checkin_id"
+        ],
+        "references_table": "public.performance_checkins",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.plan_capabilities",
+        "name": "plan_capabilities_plan_fk",
+        "columns": [
+          "plan_key"
+        ],
+        "references_table": "public.access_plans",
+        "references_columns": [
+          "plan_key"
+        ]
+      },
+      {
+        "table": "public.post_match_reviews",
+        "name": "post_match_reviews_appointment_fk",
+        "columns": [
+          "appointment_id"
+        ],
+        "references_table": "public.appointments",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": "psychology_checkins_module_fk",
+        "columns": [
+          "module_slug"
+        ],
+        "references_table": "public.psychology_modules",
+        "references_columns": [
+          "slug"
+        ]
+      },
+      {
+        "table": "public.psychology_exercise_sessions",
+        "name": "psychology_exercise_module_fk",
+        "columns": [
+          "module_slug"
+        ],
+        "references_table": "public.psychology_modules",
+        "references_columns": [
+          "slug"
+        ]
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": "psychology_wellbeing_module_fk",
+        "columns": [
+          "module_slug"
+        ],
+        "references_table": "public.psychology_modules",
+        "references_columns": [
+          "slug"
+        ]
+      },
+      {
+        "table": "public.readiness_scores",
+        "name": "readiness_scores_checkin_fk",
+        "columns": [
+          "checkin_id"
+        ],
+        "references_table": "public.performance_checkins",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.referee_eligibility",
+        "name": "referee_eligibility_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": "referee_exam_sessions_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.teams",
+        "name": "teams_country_fk",
+        "columns": [
+          "country_id"
+        ],
+        "references_table": "public.countries",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.user_global_roles",
+        "name": "user_global_roles_role_fk",
+        "columns": [
+          "role_key"
+        ],
+        "references_table": "public.platform_roles",
+        "references_columns": [
+          "role_key"
+        ]
+      },
+      {
+        "table": "public.user_profiles",
+        "name": "user_profiles_association_fk",
+        "columns": [
+          "association_id"
+        ],
+        "references_table": "public.associations",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.user_roles",
+        "name": "user_roles_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.user_subscriptions",
+        "name": "user_subscriptions_plan_fk",
+        "columns": [
+          "plan_key"
+        ],
+        "references_table": "public.access_plans",
+        "references_columns": [
+          "plan_key"
+        ]
+      },
+      {
+        "table": "public.venues",
+        "name": "venues_country_fk",
+        "columns": [
+          "country_id"
+        ],
+        "references_table": "public.countries",
+        "references_columns": [
+          "id"
+        ]
+      },
+      {
+        "table": "public.wellness_logs",
+        "name": "wellness_logs_checkin_fk",
+        "columns": [
+          "checkin_id"
+        ],
+        "references_table": "public.performance_checkins",
+        "references_columns": [
+          "id"
+        ]
+      }
+    ],
+    "unique_constraints": [
+      {
+        "table": "public.ai_usage_ledger",
+        "name": null,
+        "columns": [
+          "run_id"
+        ]
+      },
+      {
+        "table": "public.associations",
+        "name": "associations_country_name_unique",
+        "columns": [
+          "country_id",
+          "name"
+        ]
+      },
+      {
+        "table": "public.coach_data_consents",
+        "name": "coach_data_consents_user_category_purpose_unique",
+        "columns": [
+          "user_id",
+          "data_category",
+          "purpose"
+        ]
+      },
+      {
+        "table": "public.competition_categories",
+        "name": "competition_categories_scope_unique",
+        "columns": [
+          "competition_id",
+          "season_id",
+          "name"
+        ]
+      },
+      {
+        "table": "public.competition_seasons",
+        "name": "competition_seasons_competition_label_unique",
+        "columns": [
+          "competition_id",
+          "label"
+        ]
+      },
+      {
+        "table": "public.competitions",
+        "name": "competitions_association_sport_name_unique",
+        "columns": [
+          "association_id",
+          "sport_type",
+          "name"
+        ]
+      },
+      {
+        "table": "public.countries",
+        "name": null,
+        "columns": [
+          "code"
+        ]
+      },
+      {
+        "table": "public.exam_results",
+        "name": null,
+        "columns": [
+          "exam_session_id"
+        ]
+      },
+      {
+        "table": "public.exam_results",
+        "name": "exam_results_user_submission_unique",
+        "columns": [
+          "user_id",
+          "submission_id"
+        ]
+      },
+      {
+        "table": "public.institution_assessment_assignments",
+        "name": "institution_assessment_assignments_id_tenant_assessment_unique",
+        "columns": [
+          "id",
+          "institution_id",
+          "assessment_id"
+        ]
+      },
+      {
+        "table": "public.institution_assessment_sessions",
+        "name": "institution_assessment_sessions_id_tenant_unique",
+        "columns": [
+          "id",
+          "institution_id"
+        ]
+      },
+      {
+        "table": "public.institution_assessment_sessions",
+        "name": "institution_assessment_sessions_unique",
+        "columns": [
+          "assignment_id",
+          "user_id",
+          "attempt_number"
+        ]
+      },
+      {
+        "table": "public.institution_assessments",
+        "name": "institution_assessments_id_tenant_unique",
+        "columns": [
+          "id",
+          "institution_id"
+        ]
+      },
+      {
+        "table": "public.institution_cohorts",
+        "name": "institution_cohorts_id_tenant_unique",
+        "columns": [
+          "id",
+          "institution_id"
+        ]
+      },
+      {
+        "table": "public.institution_contents",
+        "name": "institution_contents_id_tenant_unique",
+        "columns": [
+          "id",
+          "institution_id"
+        ]
+      },
+      {
+        "table": "public.institution_data_consents",
+        "name": "institution_data_consents_unique",
+        "columns": [
+          "membership_id",
+          "data_category"
+        ]
+      },
+      {
+        "table": "public.institution_group_memberships",
+        "name": "institution_group_memberships_unique",
+        "columns": [
+          "group_id",
+          "membership_id"
+        ]
+      },
+      {
+        "table": "public.institution_groups",
+        "name": "institution_groups_id_tenant_unique",
+        "columns": [
+          "id",
+          "institution_id"
+        ]
+      },
+      {
+        "table": "public.institution_groups",
+        "name": "institution_groups_name_unique",
+        "columns": [
+          "institution_id",
+          "name"
+        ]
+      },
+      {
+        "table": "public.institution_membership_permission_overrides",
+        "name": "institution_membership_permission_overrides_unique",
+        "columns": [
+          "membership_id",
+          "permission_id"
+        ]
+      },
+      {
+        "table": "public.institution_membership_roles",
+        "name": "institution_membership_roles_unique",
+        "columns": [
+          "membership_id",
+          "role_id"
+        ]
+      },
+      {
+        "table": "public.institution_memberships",
+        "name": "institution_memberships_id_tenant_unique",
+        "columns": [
+          "id",
+          "institution_id"
+        ]
+      },
+      {
+        "table": "public.institution_memberships",
+        "name": "institution_memberships_unique",
+        "columns": [
+          "institution_id",
+          "user_id"
+        ]
+      },
+      {
+        "table": "public.institution_notification_campaigns",
+        "name": "institution_notification_campaigns_id_tenant_unique",
+        "columns": [
+          "id",
+          "institution_id"
+        ]
+      },
+      {
+        "table": "public.institution_notification_recipients",
+        "name": "institution_notification_recipients_unique",
+        "columns": [
+          "campaign_id",
+          "user_id"
+        ]
+      },
+      {
+        "table": "public.institution_permissions",
+        "name": null,
+        "columns": [
+          "permission_key"
+        ]
+      },
+      {
+        "table": "public.institution_role_permissions",
+        "name": "institution_role_permissions_unique",
+        "columns": [
+          "role_id",
+          "permission_id"
+        ]
+      },
+      {
+        "table": "public.institution_roles",
+        "name": "institution_roles_id_tenant_unique",
+        "columns": [
+          "id",
+          "institution_id"
+        ]
+      },
+      {
+        "table": "public.institution_subscriptions",
+        "name": null,
+        "columns": [
+          "institution_id"
+        ]
+      },
+      {
+        "table": "public.match_preparations",
+        "name": "match_preparations_stage_unique",
+        "columns": [
+          "appointment_id",
+          "stage"
+        ]
+      },
+      {
+        "table": "public.notification_tokens",
+        "name": null,
+        "columns": [
+          "token"
+        ]
+      },
+      {
+        "table": "public.post_match_reviews",
+        "name": null,
+        "columns": [
+          "appointment_id"
+        ]
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": "referee_exam_sessions_user_submission_unique",
+        "columns": [
+          "user_id",
+          "submission_id"
+        ]
+      },
+      {
+        "table": "public.referee_roles",
+        "name": "referee_roles_sport_key_unique",
+        "columns": [
+          "sport_type",
+          "role_key"
+        ]
+      },
+      {
+        "table": "public.user_profiles",
+        "name": null,
+        "columns": [
+          "ref_card_id"
+        ]
+      },
+      {
+        "table": "public.user_profiles",
+        "name": null,
+        "columns": [
+          "user_id"
+        ]
+      },
+      {
+        "table": "public.user_roles",
+        "name": null,
+        "columns": [
+          "user_id"
+        ]
+      },
+      {
+        "table": "public.user_subscriptions",
+        "name": null,
+        "columns": [
+          "user_id"
+        ]
+      },
+      {
+        "table": "reflab_meta.reflab_schema_state",
+        "name": null,
+        "columns": [
+          "baseline_version"
+        ]
+      },
+      {
+        "table": "reflab_meta.reflab_schema_state",
+        "name": "reflab_schema_state_singleton",
+        "columns": [
+          "installation_status"
+        ]
+      }
+    ],
+    "check_constraints": [
+      {
+        "table": "public.access_change_audit",
+        "name": null,
+        "expression": "check (jsonb_typeof(new_data) = 'object')"
+      },
+      {
+        "table": "public.access_change_audit",
+        "name": null,
+        "expression": "check (jsonb_typeof(old_data) = 'object')"
+      },
+      {
+        "table": "public.access_plans",
+        "name": null,
+        "expression": "check (audience in ('individual', 'institution'))"
+      },
+      {
+        "table": "public.ai_usage_ledger",
+        "name": null,
+        "expression": "check (estimated_cost_usd is null or estimated_cost_usd >= 0)"
+      },
+      {
+        "table": "public.ai_usage_ledger",
+        "name": null,
+        "expression": "check (input_tokens >= 0)"
+      },
+      {
+        "table": "public.ai_usage_ledger",
+        "name": null,
+        "expression": "check (output_tokens >= 0)"
+      },
+      {
+        "table": "public.ai_usage_ledger",
+        "name": null,
+        "expression": "check (total_tokens >= 0)"
+      },
+      {
+        "table": "public.appointment_history",
+        "name": null,
+        "expression": "check ( change_type in ( 'created', 'status_changed', 'role_changed', 'fixture_changed', 'note_updated', 'system_sync' ) )"
+      },
+      {
+        "table": "public.appointment_history",
+        "name": null,
+        "expression": "check (jsonb_typeof(snapshot) = 'object')"
+      },
+      {
+        "table": "public.appointments",
+        "name": null,
+        "expression": "check ( status in ( 'draft', 'pending_confirmation', 'confirmed', 'modified', 'replaced', 'cancelled', 'suspended', 'postponed', 'completed' ) )"
+      },
+      {
+        "table": "public.appointments",
+        "name": null,
+        "expression": "check (jsonb_typeof(metadata) = 'object')"
+      },
+      {
+        "table": "public.appointments",
+        "name": null,
+        "expression": "check (source_type in ('manual', 'institutional', 'api'))"
+      },
+      {
+        "table": "public.appointments",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.associations",
+        "name": null,
+        "expression": "check (source_type in ('manual', 'institutional', 'api'))"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (clarity_score is null or clarity_score between 0 and 100)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (communication_score is null or communication_score between 0 and 100)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (completed_rounds is null or completed_rounds >= 0)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (criterion_result is null or jsonb_typeof(criterion_result) = 'object')"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (english_score is null or english_score between 0 and 100)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (fatigue_level is null or fatigue_level between 1 and 10)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (grammar_score is null or grammar_score between 0 and 100)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (jsonb_typeof(mastered_concepts) = 'array')"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (jsonb_typeof(pending_concepts) = 'array')"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (justification_score is null or justification_score between 0 and 100)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (perceived_effort is null or perceived_effort between 1 and 10)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (pronunciation_score is null or pronunciation_score between 0 and 100)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (protocol_score is null or protocol_score between 0 and 100)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (structure_score is null or structure_score between 0 and 100)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (technical_accuracy_score is null or technical_accuracy_score between 0 and 100)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (terminology_score is null or terminology_score between 0 and 100)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (time_spent is null or time_spent >= 0)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (time_spent_seconds is null or time_spent_seconds >= 0)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (total_duration is null or total_duration >= 0)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (total_rounds is null or total_rounds >= 0)"
+      },
+      {
+        "table": "public.attempts",
+        "name": null,
+        "expression": "check (vocabulary_score is null or vocabulary_score between 0 and 100)"
+      },
+      {
+        "table": "public.attempts",
+        "name": "attempts_exam_source_check",
+        "expression": "check ( exam_result_id is null or ( source_item_type is not null and source_item_id is not null and source_occurrence_id is not null ) )"
+      },
+      {
+        "table": "public.attempts",
+        "name": "attempts_source_reference_check",
+        "expression": "check ( (source_item_type is null and source_item_id is null and source_occurrence_id is null) or ( source_item_type is not null and source_item_id is not null and source_occurrence_id is not null ) )"
+      },
+      {
+        "table": "public.attempts",
+        "name": "attempts_source_type_check",
+        "expression": "check ( source_item_type is null or source_item_type in ( 'global_clip', 'institutional_clip', 'rule_question', 'manual' ) )"
+      },
+      {
+        "table": "public.capability_overrides",
+        "name": null,
+        "expression": "check (effect in ('allow', 'deny'))"
+      },
+      {
+        "table": "public.capability_overrides",
+        "name": null,
+        "expression": "check (scope_type in ('global_user', 'institution_user'))"
+      },
+      {
+        "table": "public.capability_overrides",
+        "name": "capability_overrides_scope_check",
+        "expression": "check ( (scope_type = 'global_user' and institution_id is null) or (scope_type = 'institution_user' and institution_id is not null) )"
+      },
+      {
+        "table": "public.capability_overrides",
+        "name": "capability_overrides_window_check",
+        "expression": "check (valid_until is null or valid_until > valid_from)"
+      },
+      {
+        "table": "public.clips",
+        "name": null,
+        "expression": "check ( correct_app_status is null or correct_app_status in ('same_app', 'new_app', 'not_relevant') )"
+      },
+      {
+        "table": "public.clips",
+        "name": null,
+        "expression": "check ( correct_clear_error is null or correct_clear_error in ('yes', 'no', 'unclear') )"
+      },
+      {
+        "table": "public.clips",
+        "name": null,
+        "expression": "check ( correct_var_decision is null or correct_var_decision in ('check_complete', 'recommend_ofr', 'factual_review') )"
+      },
+      {
+        "table": "public.clips",
+        "name": null,
+        "expression": "check (mode in ('field', 'var', 'english', 'exam', 'training'))"
+      },
+      {
+        "table": "public.clips",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.clips",
+        "name": "clips_analysis_answers_object_check",
+        "expression": "check (analysis_answers is null or jsonb_typeof(analysis_answers) = 'object')"
+      },
+      {
+        "table": "public.coach_data_consents",
+        "name": null,
+        "expression": "check ( data_category in ( 'technical_history', 'match_operational', 'physical_summary', 'psychology_summary', 'psychology_detail', 'medical_sensitive' ) )"
+      },
+      {
+        "table": "public.coach_data_consents",
+        "name": null,
+        "expression": "check (purpose in ('personal_coaching', 'institutional_sharing', 'model_improvement'))"
+      },
+      {
+        "table": "public.coach_data_consents",
+        "name": "coach_data_consents_dates_check",
+        "expression": "check ( (granted and granted_at is not null and revoked_at is null) or (not granted) )"
+      },
+      {
+        "table": "public.coach_evidence",
+        "name": null,
+        "expression": "check (evidence_type in ('clip', 'attempt', 'exam', 'official_document', 'metric_snapshot'))"
+      },
+      {
+        "table": "public.coach_evidence",
+        "name": null,
+        "expression": "check (jsonb_typeof(evidence_snapshot) = 'object')"
+      },
+      {
+        "table": "public.coach_evidence",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.coach_rate_limit_buckets",
+        "name": null,
+        "expression": "check (request_count >= 0)"
+      },
+      {
+        "table": "public.coach_runs",
+        "name": null,
+        "expression": "check ( feature in ( 'technical_feedback', 'exam_analysis', 'communication_feedback', 'var_feedback', 'coach_conversation' ) )"
+      },
+      {
+        "table": "public.coach_runs",
+        "name": null,
+        "expression": "check (confidence_label in ('high', 'medium', 'human_review'))"
+      },
+      {
+        "table": "public.coach_runs",
+        "name": null,
+        "expression": "check (confidence_score between 0 and 100)"
+      },
+      {
+        "table": "public.coach_runs",
+        "name": null,
+        "expression": "check (evidence_count >= 0)"
+      },
+      {
+        "table": "public.coach_runs",
+        "name": null,
+        "expression": "check (input_tokens is null or input_tokens >= 0)"
+      },
+      {
+        "table": "public.coach_runs",
+        "name": null,
+        "expression": "check (latency_ms is null or latency_ms >= 0)"
+      },
+      {
+        "table": "public.coach_runs",
+        "name": null,
+        "expression": "check (output_tokens is null or output_tokens >= 0)"
+      },
+      {
+        "table": "public.coach_runs",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.coach_runs",
+        "name": null,
+        "expression": "check (status in ('running', 'completed', 'failed'))"
+      },
+      {
+        "table": "public.coach_runs",
+        "name": null,
+        "expression": "check (total_tokens is null or total_tokens >= 0)"
+      },
+      {
+        "table": "public.competition_categories",
+        "name": null,
+        "expression": "check (source_type in ('institutional', 'api', 'manual'))"
+      },
+      {
+        "table": "public.competition_categories",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.competition_seasons",
+        "name": null,
+        "expression": "check (source_type in ('institutional', 'api', 'manual'))"
+      },
+      {
+        "table": "public.competition_seasons",
+        "name": null,
+        "expression": "check (status in ('draft', 'active', 'archived'))"
+      },
+      {
+        "table": "public.competition_seasons",
+        "name": "competition_seasons_window_check",
+        "expression": "check (end_date is null or start_date is null or end_date >= start_date)"
+      },
+      {
+        "table": "public.competitions",
+        "name": null,
+        "expression": "check (competition_type in ('league', 'cup', 'playoff', 'friendly', 'tournament', 'other'))"
+      },
+      {
+        "table": "public.competitions",
+        "name": null,
+        "expression": "check (source_type in ('institutional', 'api', 'manual'))"
+      },
+      {
+        "table": "public.competitions",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.countries",
+        "name": "countries_code_length_check",
+        "expression": "check (char_length(code) between 2 and 3)"
+      },
+      {
+        "table": "public.exam_results",
+        "name": null,
+        "expression": "check (avg_score between 0 and 100)"
+      },
+      {
+        "table": "public.exam_results",
+        "name": null,
+        "expression": "check (correct_count between 0 and total_questions)"
+      },
+      {
+        "table": "public.exam_results",
+        "name": null,
+        "expression": "check (jsonb_typeof(details) = 'array')"
+      },
+      {
+        "table": "public.exam_results",
+        "name": null,
+        "expression": "check (payload_hash ~ '^[0-9a-f]{64}$')"
+      },
+      {
+        "table": "public.exam_results",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.exam_results",
+        "name": null,
+        "expression": "check (total_questions between 1 and 100)"
+      },
+      {
+        "table": "public.exam_results",
+        "name": null,
+        "expression": "check (total_score >= 0)"
+      },
+      {
+        "table": "public.fixture_sync_logs",
+        "name": null,
+        "expression": "check (competitions_upserted >= 0)"
+      },
+      {
+        "table": "public.fixture_sync_logs",
+        "name": null,
+        "expression": "check (fixtures_upserted >= 0)"
+      },
+      {
+        "table": "public.fixture_sync_logs",
+        "name": null,
+        "expression": "check (jsonb_typeof(error_payload) = 'object')"
+      },
+      {
+        "table": "public.fixture_sync_logs",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.fixture_sync_logs",
+        "name": null,
+        "expression": "check (sync_status in ('success', 'partial', 'error', 'skipped'))"
+      },
+      {
+        "table": "public.fixture_sync_logs",
+        "name": null,
+        "expression": "check (teams_upserted >= 0)"
+      },
+      {
+        "table": "public.fixture_sync_logs",
+        "name": null,
+        "expression": "check (venues_upserted >= 0)"
+      },
+      {
+        "table": "public.fixture_sync_logs",
+        "name": "fixture_sync_logs_date_window_check",
+        "expression": "check (date_to >= date_from)"
+      },
+      {
+        "table": "public.fixtures",
+        "name": null,
+        "expression": "check ( status in ( 'scheduled', 'confirmed', 'live', 'completed', 'postponed', 'suspended', 'cancelled' ) )"
+      },
+      {
+        "table": "public.fixtures",
+        "name": null,
+        "expression": "check (data_source in ('institutional', 'api', 'manual'))"
+      },
+      {
+        "table": "public.fixtures",
+        "name": null,
+        "expression": "check (jsonb_typeof(raw_source_reference) = 'object')"
+      },
+      {
+        "table": "public.fixtures",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.fixtures",
+        "name": "fixtures_distinct_teams_check",
+        "expression": "check (home_team_id is null or away_team_id is null or home_team_id <> away_team_id)"
+      },
+      {
+        "table": "public.ifab_library_documents",
+        "name": null,
+        "expression": "check ( category in ( 'reglas', 'circular', 'resumen', 'protocolo_var', 'cambios_reglamentarios', 'mundial', 'material_consulta' ) )"
+      },
+      {
+        "table": "public.ifab_library_documents",
+        "name": null,
+        "expression": "check (governing_body in ('IFAB', 'FIFA'))"
+      },
+      {
+        "table": "public.ifab_library_documents",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.ifab_library_documents",
+        "name": null,
+        "expression": "check (status in ('vigente', 'proxima_actualizacion', 'archivado'))"
+      },
+      {
+        "table": "public.ifab_library_documents",
+        "name": "ifab_library_documents_current_source_check",
+        "expression": "check ( status <> 'vigente' or (source_official is not null and btrim(source_official) <> '') )"
+      },
+      {
+        "table": "public.ifab_library_documents",
+        "name": "ifab_library_documents_sport_body_check",
+        "expression": "check ( (sport_type = 'football_11' and governing_body = 'IFAB') or (sport_type = 'futsal' and governing_body = 'FIFA') )"
+      },
+      {
+        "table": "public.institution_assessment_assignments",
+        "name": null,
+        "expression": "check (attempts_override is null or attempts_override > 0)"
+      },
+      {
+        "table": "public.institution_assessment_assignments",
+        "name": null,
+        "expression": "check (status in ('assigned', 'cancelled', 'completed'))"
+      },
+      {
+        "table": "public.institution_assessment_assignments",
+        "name": "institution_assessment_assignments_target_check",
+        "expression": "check ( (group_id is not null and user_id is null) or (group_id is null and user_id is not null) )"
+      },
+      {
+        "table": "public.institution_assessment_assignments",
+        "name": "institution_assessment_assignments_window_check",
+        "expression": "check ( opens_at_override is null or closes_at_override is null or closes_at_override > opens_at_override )"
+      },
+      {
+        "table": "public.institution_assessment_feedback",
+        "name": null,
+        "expression": "check ( action in ( 'comment', 'approve', 'fail', 'request_retry', 'mark_for_review', 'assign_activity' ) )"
+      },
+      {
+        "table": "public.institution_assessment_feedback",
+        "name": null,
+        "expression": "check (priority in ('low', 'normal', 'high', 'urgent'))"
+      },
+      {
+        "table": "public.institution_assessment_history",
+        "name": null,
+        "expression": "check (jsonb_typeof(snapshot) = 'object')"
+      },
+      {
+        "table": "public.institution_assessment_items",
+        "name": null,
+        "expression": "check ( item_type in ( 'global_clip', 'institutional_clip', 'rule_question', 'institution_content', 'manual' ) )"
+      },
+      {
+        "table": "public.institution_assessment_items",
+        "name": null,
+        "expression": "check (jsonb_typeof(item_snapshot) = 'object')"
+      },
+      {
+        "table": "public.institution_assessment_items",
+        "name": null,
+        "expression": "check (points >= 0)"
+      },
+      {
+        "table": "public.institution_assessment_sessions",
+        "name": null,
+        "expression": "check ( status in ( 'not_started', 'in_progress', 'submitted', 'graded', 'expired', 'cancelled' ) )"
+      },
+      {
+        "table": "public.institution_assessment_sessions",
+        "name": null,
+        "expression": "check (attempt_number > 0)"
+      },
+      {
+        "table": "public.institution_assessment_sessions",
+        "name": null,
+        "expression": "check (jsonb_typeof(result_payload) = 'object')"
+      },
+      {
+        "table": "public.institution_assessment_sessions",
+        "name": null,
+        "expression": "check (percentage is null or percentage between 0 and 100)"
+      },
+      {
+        "table": "public.institution_assessment_sessions",
+        "name": null,
+        "expression": "check (time_spent_seconds is null or time_spent_seconds >= 0)"
+      },
+      {
+        "table": "public.institution_assessments",
+        "name": null,
+        "expression": "check ( modality in ( 'video_analysis', 'rules_exam', 'trivia', 'referee_exam', 'communication', 'var', 'futsal', 'psychology_orientation', 'physical', 'custom' ) )"
+      },
+      {
+        "table": "public.institution_assessments",
+        "name": null,
+        "expression": "check (attempts_allowed > 0)"
+      },
+      {
+        "table": "public.institution_assessments",
+        "name": null,
+        "expression": "check (duration_minutes is null or duration_minutes > 0)"
+      },
+      {
+        "table": "public.institution_assessments",
+        "name": null,
+        "expression": "check (jsonb_typeof(settings) = 'object')"
+      },
+      {
+        "table": "public.institution_assessments",
+        "name": null,
+        "expression": "check (minimum_score is null or minimum_score between 0 and 100)"
+      },
+      {
+        "table": "public.institution_assessments",
+        "name": null,
+        "expression": "check (question_count is null or question_count > 0)"
+      },
+      {
+        "table": "public.institution_assessments",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.institution_assessments",
+        "name": null,
+        "expression": "check (status in ('draft', 'scheduled', 'open', 'closed', 'cancelled', 'archived'))"
+      },
+      {
+        "table": "public.institution_assessments",
+        "name": null,
+        "expression": "check (video_count is null or video_count > 0)"
+      },
+      {
+        "table": "public.institution_assessments",
+        "name": "institution_assessments_window_check",
+        "expression": "check (opens_at is null or closes_at is null or closes_at > opens_at)"
+      },
+      {
+        "table": "public.institution_audit_logs",
+        "name": null,
+        "expression": "check (after_state is null or jsonb_typeof(after_state) = 'object')"
+      },
+      {
+        "table": "public.institution_audit_logs",
+        "name": null,
+        "expression": "check (before_state is null or jsonb_typeof(before_state) = 'object')"
+      },
+      {
+        "table": "public.institution_audit_logs",
+        "name": null,
+        "expression": "check (jsonb_typeof(metadata) = 'object')"
+      },
+      {
+        "table": "public.institution_cohorts",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.institution_cohorts",
+        "name": null,
+        "expression": "check (status in ('draft', 'active', 'paused', 'completed', 'archived'))"
+      },
+      {
+        "table": "public.institution_cohorts",
+        "name": "institution_cohorts_window_check",
+        "expression": "check (ends_on is null or starts_on is null or ends_on >= starts_on)"
+      },
+      {
+        "table": "public.institution_content_assignments",
+        "name": "institution_content_assignments_target_check",
+        "expression": "check ( (group_id is not null and user_id is null) or (group_id is null and user_id is not null) )"
+      },
+      {
+        "table": "public.institution_content_assignments",
+        "name": "institution_content_assignments_window_check",
+        "expression": "check (due_at is null or available_from is null or due_at >= available_from)"
+      },
+      {
+        "table": "public.institution_contents",
+        "name": null,
+        "expression": "check ( content_type in ( 'video', 'question', 'trivia', 'document', 'circular', 'class', 'exercise', 'presentation', 'pdf', 'link', 'audio', 'case_study' ) )"
+      },
+      {
+        "table": "public.institution_contents",
+        "name": null,
+        "expression": "check (jsonb_typeof(metadata) = 'object')"
+      },
+      {
+        "table": "public.institution_contents",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.institution_contents",
+        "name": null,
+        "expression": "check (status in ('draft', 'in_review', 'published', 'archived', 'expired'))"
+      },
+      {
+        "table": "public.institution_contents",
+        "name": null,
+        "expression": "check (version > 0)"
+      },
+      {
+        "table": "public.institution_contents",
+        "name": null,
+        "expression": "check (visibility in ('private', 'institution', 'assigned_groups', 'public'))"
+      },
+      {
+        "table": "public.institution_contents",
+        "name": "institution_contents_validity_check",
+        "expression": "check (valid_until is null or valid_from is null or valid_until >= valid_from)"
+      },
+      {
+        "table": "public.institution_data_consents",
+        "name": null,
+        "expression": "check ( data_category in ( 'availability', 'readiness_summary', 'physical_load', 'physical_detail', 'medical_notes', 'psychology_compliance', 'psychology_detail', 'post_match_review' ) )"
+      },
+      {
+        "table": "public.institution_demo_sessions",
+        "name": null,
+        "expression": "check (jsonb_typeof(metadata) = 'object')"
+      },
+      {
+        "table": "public.institution_demo_sessions",
+        "name": null,
+        "expression": "check (status in ('active', 'ended', 'expired'))"
+      },
+      {
+        "table": "public.institution_demo_sessions",
+        "name": "institution_demo_sessions_expiry_check",
+        "expression": "check (expires_at > started_at)"
+      },
+      {
+        "table": "public.institution_group_memberships",
+        "name": null,
+        "expression": "check (group_role in ('participant', 'instructor', 'coordinator', 'observer'))"
+      },
+      {
+        "table": "public.institution_group_memberships",
+        "name": null,
+        "expression": "check (status in ('active', 'completed', 'removed'))"
+      },
+      {
+        "table": "public.institution_groups",
+        "name": null,
+        "expression": "check ( group_type in ( 'course', 'cohort', 'commission', 'category', 'role', 'training', 'work_team' ) )"
+      },
+      {
+        "table": "public.institution_groups",
+        "name": null,
+        "expression": "check (jsonb_typeof(metadata) = 'object')"
+      },
+      {
+        "table": "public.institution_groups",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.institution_groups",
+        "name": null,
+        "expression": "check (status in ('draft', 'active', 'paused', 'completed', 'archived'))"
+      },
+      {
+        "table": "public.institution_groups",
+        "name": "institution_groups_window_check",
+        "expression": "check (ends_on is null or starts_on is null or ends_on >= starts_on)"
+      },
+      {
+        "table": "public.institution_memberships",
+        "name": null,
+        "expression": "check (jsonb_typeof(metadata) = 'object')"
+      },
+      {
+        "table": "public.institution_memberships",
+        "name": null,
+        "expression": "check (primary_sport is null or primary_sport in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.institution_memberships",
+        "name": null,
+        "expression": "check (status in ('invited', 'active', 'suspended', 'revoked'))"
+      },
+      {
+        "table": "public.institution_notification_campaigns",
+        "name": null,
+        "expression": "check ( cardinality(channels) > 0 and channels <@ array['web', 'pwa', 'email', 'push']::text[] )"
+      },
+      {
+        "table": "public.institution_notification_campaigns",
+        "name": null,
+        "expression": "check (priority in ('low', 'normal', 'high', 'urgent'))"
+      },
+      {
+        "table": "public.institution_notification_campaigns",
+        "name": null,
+        "expression": "check (status in ('draft', 'scheduled', 'sending', 'sent', 'cancelled'))"
+      },
+      {
+        "table": "public.institution_notification_recipients",
+        "name": null,
+        "expression": "check (delivery_status in ('pending', 'sent', 'failed', 'read', 'dismissed'))"
+      },
+      {
+        "table": "public.institution_subscriptions",
+        "name": null,
+        "expression": "check (seat_limit is null or seat_limit >= 0)"
+      },
+      {
+        "table": "public.institution_subscriptions",
+        "name": null,
+        "expression": "check (status in ('trialing', 'active', 'paused', 'canceled', 'expired'))"
+      },
+      {
+        "table": "public.institution_subscriptions",
+        "name": "institution_subscriptions_plan_check",
+        "expression": "check (plan_key in ('academy', 'enterprise'))"
+      },
+      {
+        "table": "public.institution_subscriptions",
+        "name": "institution_subscriptions_window_check",
+        "expression": "check (ends_at is null or ends_at > starts_at)"
+      },
+      {
+        "table": "public.institutional_clips",
+        "name": null,
+        "expression": "check ( status in ( 'uploaded', 'under_review', 'processing', 'approved', 'rejected', 'published' ) )"
+      },
+      {
+        "table": "public.institutional_lead_activities",
+        "name": null,
+        "expression": "check ( activity_type in ( 'created', 'updated', 'status_changed', 'note_added', 'contact_logged', 'archived', 'restored', 'converted', 'deleted' ) )"
+      },
+      {
+        "table": "public.institutional_lead_activities",
+        "name": null,
+        "expression": "check (jsonb_typeof(metadata) = 'object')"
+      },
+      {
+        "table": "public.institutional_leads",
+        "name": null,
+        "expression": "check ( status in ( 'new', 'contacted', 'demo_scheduled', 'demo_completed', 'proposal_sent', 'negotiation', 'won', 'lost', 'archived' ) )"
+      },
+      {
+        "table": "public.institutional_leads",
+        "name": null,
+        "expression": "check (instructor_count is null or instructor_count >= 0)"
+      },
+      {
+        "table": "public.institutional_leads",
+        "name": null,
+        "expression": "check (potential_plan in ('academy', 'enterprise'))"
+      },
+      {
+        "table": "public.institutional_leads",
+        "name": null,
+        "expression": "check (referee_count is null or referee_count >= 0)"
+      },
+      {
+        "table": "public.institutional_leads",
+        "name": "institutional_leads_conversion_check",
+        "expression": "check ( (converted_institution_id is null and converted_at is null) or (converted_institution_id is not null and converted_at is not null) )"
+      },
+      {
+        "table": "public.institutions",
+        "name": null,
+        "expression": "check ( cardinality(enabled_sports) > 0 and enabled_sports <@ array['football_11', 'futsal']::text[] )"
+      },
+      {
+        "table": "public.institutions",
+        "name": null,
+        "expression": "check ( institution_type in ( 'school', 'league', 'association', 'federation', 'private_academy', 'other' ) )"
+      },
+      {
+        "table": "public.institutions",
+        "name": null,
+        "expression": "check (brand_color ~ '^#[0-9A-Fa-f]{6}$')"
+      },
+      {
+        "table": "public.institutions",
+        "name": null,
+        "expression": "check (jsonb_typeof(assessment_settings) = 'object')"
+      },
+      {
+        "table": "public.institutions",
+        "name": null,
+        "expression": "check (jsonb_typeof(metrics_settings) = 'object')"
+      },
+      {
+        "table": "public.institutions",
+        "name": null,
+        "expression": "check (jsonb_typeof(privacy_settings) = 'object')"
+      },
+      {
+        "table": "public.institutions",
+        "name": null,
+        "expression": "check (license_limit >= 0)"
+      },
+      {
+        "table": "public.institutions",
+        "name": null,
+        "expression": "check (seats_total >= 0)"
+      },
+      {
+        "table": "public.institutions",
+        "name": null,
+        "expression": "check (seats_used >= 0)"
+      },
+      {
+        "table": "public.institutions",
+        "name": null,
+        "expression": "check (status in ('pending', 'trial', 'active', 'suspended', 'expired', 'archived'))"
+      },
+      {
+        "table": "public.institutions",
+        "name": "institutions_license_window_check",
+        "expression": "check (license_end is null or license_start is null or license_end > license_start)"
+      },
+      {
+        "table": "public.institutions",
+        "name": "institutions_seat_usage_check",
+        "expression": "check (seats_used <= seats_total)"
+      },
+      {
+        "table": "public.match_context_snapshots",
+        "name": null,
+        "expression": "check (jsonb_typeof(payload) = 'object')"
+      },
+      {
+        "table": "public.match_context_snapshots",
+        "name": null,
+        "expression": "check (snapshot_type in ('standings', 'form', 'disciplinary', 'official_note', 'summary'))"
+      },
+      {
+        "table": "public.match_context_snapshots",
+        "name": null,
+        "expression": "check (source_type in ('manual', 'institutional', 'api'))"
+      },
+      {
+        "table": "public.match_context_snapshots",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.match_officials",
+        "name": null,
+        "expression": "check (source_type in ('manual', 'institutional', 'api'))"
+      },
+      {
+        "table": "public.match_officials",
+        "name": null,
+        "expression": "check (status in ('assigned', 'confirmed', 'replaced', 'removed'))"
+      },
+      {
+        "table": "public.match_preparations",
+        "name": null,
+        "expression": "check (jsonb_typeof(answers) = 'object')"
+      },
+      {
+        "table": "public.match_preparations",
+        "name": null,
+        "expression": "check (jsonb_typeof(checklist) = 'array')"
+      },
+      {
+        "table": "public.match_preparations",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.match_preparations",
+        "name": null,
+        "expression": "check (stage in ('72_48_hours', '24_hours', 'matchday'))"
+      },
+      {
+        "table": "public.match_preparations",
+        "name": null,
+        "expression": "check (status in ('draft', 'completed'))"
+      },
+      {
+        "table": "public.notification_events",
+        "name": null,
+        "expression": "check (sport_type is null or sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.notification_events",
+        "name": null,
+        "expression": "check (status in ('queued', 'sent', 'failed', 'skipped'))"
+      },
+      {
+        "table": "public.performance_checkins",
+        "name": null,
+        "expression": "check (checkin_type in ('pre', 'post', 'rest_day'))"
+      },
+      {
+        "table": "public.performance_checkins",
+        "name": null,
+        "expression": "check (duration_minutes is null or duration_minutes > 0)"
+      },
+      {
+        "table": "public.performance_checkins",
+        "name": null,
+        "expression": "check (emotional_score is null or emotional_score between 1 and 10)"
+      },
+      {
+        "table": "public.performance_checkins",
+        "name": null,
+        "expression": "check (fatigue is null or fatigue between 1 and 10)"
+      },
+      {
+        "table": "public.performance_checkins",
+        "name": null,
+        "expression": "check (internal_load is null or internal_load >= 0)"
+      },
+      {
+        "table": "public.performance_checkins",
+        "name": null,
+        "expression": "check (readiness_score is null or readiness_score between 0 and 100)"
+      },
+      {
+        "table": "public.performance_checkins",
+        "name": null,
+        "expression": "check (rpe is null or rpe between 1 and 10)"
+      },
+      {
+        "table": "public.performance_checkins",
+        "name": null,
+        "expression": "check (sleep_hours is null or sleep_hours between 0 and 24)"
+      },
+      {
+        "table": "public.performance_checkins",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.performance_sessions",
+        "name": null,
+        "expression": "check (duration_minutes is null or duration_minutes > 0)"
+      },
+      {
+        "table": "public.performance_sessions",
+        "name": null,
+        "expression": "check (fatigue_post is null or fatigue_post between 1 and 10)"
+      },
+      {
+        "table": "public.performance_sessions",
+        "name": null,
+        "expression": "check (internal_load is null or internal_load >= 0)"
+      },
+      {
+        "table": "public.performance_sessions",
+        "name": null,
+        "expression": "check (rpe is null or rpe between 1 and 10)"
+      },
+      {
+        "table": "public.performance_sessions",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.physical_tests",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.platform_audit_logs",
+        "name": null,
+        "expression": "check (jsonb_typeof(after_state) = 'object')"
+      },
+      {
+        "table": "public.platform_audit_logs",
+        "name": null,
+        "expression": "check (jsonb_typeof(before_state) = 'object')"
+      },
+      {
+        "table": "public.platform_audit_logs",
+        "name": null,
+        "expression": "check (jsonb_typeof(metadata) = 'object')"
+      },
+      {
+        "table": "public.post_match_reviews",
+        "name": null,
+        "expression": "check (fatigue_score is null or fatigue_score between 1 and 10)"
+      },
+      {
+        "table": "public.post_match_reviews",
+        "name": null,
+        "expression": "check (jsonb_typeof(incidents) = 'array')"
+      },
+      {
+        "table": "public.post_match_reviews",
+        "name": null,
+        "expression": "check (jsonb_typeof(key_decisions) = 'array')"
+      },
+      {
+        "table": "public.post_match_reviews",
+        "name": null,
+        "expression": "check (minutes_played is null or minutes_played between 0 and 180)"
+      },
+      {
+        "table": "public.post_match_reviews",
+        "name": null,
+        "expression": "check (perceived_load is null or perceived_load between 1 and 10)"
+      },
+      {
+        "table": "public.post_match_reviews",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (activation_score is null or activation_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (checkin_type in ('pre_match', 'post_match', 'error_recovery'))"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (concentration_score is null or concentration_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (confidence_score is null or confidence_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (emotional_control_score is null or emotional_control_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (error_impact_score is null or error_impact_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (incident_minute is null or incident_minute between 0 and 130)"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (jsonb_typeof(feedback) = 'object')"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (jsonb_typeof(responses) = 'object')"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (mental_fatigue_score is null or mental_fatigue_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (mental_score is null or mental_score between 0 and 100)"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (pressure_score is null or pressure_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (process_orientation_score is null or process_orientation_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (recovery_score is null or recovery_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.psychology_exercise_sessions",
+        "name": null,
+        "expression": "check (after_score is null or after_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_exercise_sessions",
+        "name": null,
+        "expression": "check (before_score is null or before_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_exercise_sessions",
+        "name": null,
+        "expression": "check (clarity_score is null or clarity_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_exercise_sessions",
+        "name": null,
+        "expression": "check (exercise_type in ('focus_reset', 'pressure_scenario', 'self_talk', 'team_prebrief'))"
+      },
+      {
+        "table": "public.psychology_exercise_sessions",
+        "name": null,
+        "expression": "check (jsonb_typeof(feedback) = 'object')"
+      },
+      {
+        "table": "public.psychology_exercise_sessions",
+        "name": null,
+        "expression": "check (pressure_level is null or pressure_level between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_exercise_sessions",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.psychology_modules",
+        "name": null,
+        "expression": "check (sort_order >= 0)"
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": null,
+        "expression": "check (burnout_risk_score is null or burnout_risk_score between 0 and 100)"
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": null,
+        "expression": "check (concentration_difficulty_score is null or concentration_difficulty_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": null,
+        "expression": "check (cynicism_score is null or cynicism_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": null,
+        "expression": "check (emotional_exhaustion_score is null or emotional_exhaustion_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": null,
+        "expression": "check (external_pressure_score is null or external_pressure_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": null,
+        "expression": "check (institutional_support_score is null or institutional_support_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": null,
+        "expression": "check (jsonb_typeof(feedback) = 'object')"
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": null,
+        "expression": "check (motivation_score is null or motivation_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": null,
+        "expression": "check (recovery_quality_score is null or recovery_quality_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": null,
+        "expression": "check (sleep_disruption_score is null or sleep_disruption_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": null,
+        "expression": "check (violence_exposure_score is null or violence_exposure_score between 1 and 10)"
+      },
+      {
+        "table": "public.psychology_wellbeing_assessments",
+        "name": null,
+        "expression": "check (workload_score is null or workload_score between 1 and 10)"
+      },
+      {
+        "table": "public.readiness_scores",
+        "name": null,
+        "expression": "check (factors is null or jsonb_typeof(factors) = 'object')"
+      },
+      {
+        "table": "public.readiness_scores",
+        "name": null,
+        "expression": "check (score between 0 and 100)"
+      },
+      {
+        "table": "public.readiness_scores",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.referee_eligibility",
+        "name": null,
+        "expression": "check (eligibility_mode in ('eligible', 'view_only', 'blocked'))"
+      },
+      {
+        "table": "public.referee_eligibility",
+        "name": null,
+        "expression": "check (source_type in ('profile', 'institutional', 'admin', 'system'))"
+      },
+      {
+        "table": "public.referee_eligibility",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": null,
+        "expression": "check (activity_type = 'referee_exam')"
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": null,
+        "expression": "check (context_type in ('individual', 'institutional'))"
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": null,
+        "expression": "check (item_count between 1 and 100)"
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": null,
+        "expression": "check (jsonb_typeof(item_manifest) = 'array')"
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": null,
+        "expression": "check (manifest_hash ~ '^[0-9a-f]{64}$')"
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": null,
+        "expression": "check (status in ('created', 'active', 'submitted', 'expired', 'cancelled'))"
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": "referee_exam_sessions_context_check",
+        "expression": "check ( ( context_type = 'individual' and institution_id is null and institution_group_id is null and institution_assessment_session_id is null ) or ( context_type = 'institutional' and institution_id is not null and institution_assessment_session_id is not null ) )"
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": "referee_exam_sessions_expiry_check",
+        "expression": "check (expires_at > started_at)"
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": "referee_exam_sessions_item_count_check",
+        "expression": "check (item_count = jsonb_array_length(item_manifest))"
+      },
+      {
+        "table": "public.referee_roles",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.rules_exam_results",
+        "name": null,
+        "expression": "check (correct_count between 0 and total_questions)"
+      },
+      {
+        "table": "public.rules_exam_results",
+        "name": null,
+        "expression": "check (jsonb_typeof(details) = 'array')"
+      },
+      {
+        "table": "public.rules_exam_results",
+        "name": null,
+        "expression": "check (jsonb_typeof(topic_performance) = 'array')"
+      },
+      {
+        "table": "public.rules_exam_results",
+        "name": null,
+        "expression": "check (percentage between 0 and 100)"
+      },
+      {
+        "table": "public.rules_exam_results",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.rules_exam_results",
+        "name": null,
+        "expression": "check (total_questions > 0)"
+      },
+      {
+        "table": "public.rules_exam_results",
+        "name": null,
+        "expression": "check (unanswered_count between 0 and total_questions)"
+      },
+      {
+        "table": "public.teams",
+        "name": null,
+        "expression": "check (source_type in ('institutional', 'api', 'manual'))"
+      },
+      {
+        "table": "public.teams",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.user_profiles",
+        "name": null,
+        "expression": "check (preferred_sport_type is null or preferred_sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "public.user_roles",
+        "name": null,
+        "expression": "check (subscription_plan in ('free', 'basic', 'pro'))"
+      },
+      {
+        "table": "public.user_subscriptions",
+        "name": null,
+        "expression": "check (status in ('trialing', 'active', 'paused', 'canceled', 'expired'))"
+      },
+      {
+        "table": "public.user_subscriptions",
+        "name": "user_subscriptions_individual_plan_check",
+        "expression": "check (plan_key in ('basic', 'pro'))"
+      },
+      {
+        "table": "public.user_subscriptions",
+        "name": "user_subscriptions_window_check",
+        "expression": "check (ends_at is null or ends_at > starts_at)"
+      },
+      {
+        "table": "public.venues",
+        "name": null,
+        "expression": "check (source_type in ('institutional', 'api', 'manual'))"
+      },
+      {
+        "table": "public.wellness_logs",
+        "name": null,
+        "expression": "check (emotional_score is null or emotional_score between 1 and 10)"
+      },
+      {
+        "table": "public.wellness_logs",
+        "name": null,
+        "expression": "check (fatigue is null or fatigue between 1 and 10)"
+      },
+      {
+        "table": "public.wellness_logs",
+        "name": null,
+        "expression": "check (sleep_hours is null or sleep_hours between 0 and 24)"
+      },
+      {
+        "table": "public.wellness_logs",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))"
+      },
+      {
+        "table": "reflab_meta.reflab_schema_state",
+        "name": null,
+        "expression": "check (environment in ('development', 'test', 'preview', 'staging', 'production'))"
+      },
+      {
+        "table": "reflab_meta.reflab_schema_state",
+        "name": null,
+        "expression": "check (installation_status = 'installed')"
+      },
+      {
+        "table": "reflab_meta.reflab_schema_state",
+        "name": null,
+        "expression": "check (manifest_hash ~ '^[0-9a-f]{64}$')"
+      },
+      {
+        "table": "reflab_meta.reflab_schema_state",
+        "name": null,
+        "expression": "check (schema_version > 0)"
+      },
+      {
+        "table": "reflab_meta.reflab_schema_state",
+        "name": null,
+        "expression": "check (sql_checksum ~ '^[0-9a-f]{64}$')"
+      }
+    ],
+    "buckets": [
+      {
+        "id": "Videos",
+        "public": true,
+        "file_size_limit_bytes": 104857600,
+        "allowed_mime_types": [
+          "video/mp4",
+          "video/quicktime",
+          "video/webm"
+        ],
+        "browser_write": false
+      },
+      {
+        "id": "Videos Modo Ingles",
+        "public": true,
+        "file_size_limit_bytes": 104857600,
+        "allowed_mime_types": [
+          "video/mp4",
+          "video/quicktime",
+          "video/webm"
+        ],
+        "browser_write": false
+      },
+      {
+        "id": "avatars",
+        "public": true,
+        "file_size_limit_bytes": 5242880,
+        "allowed_mime_types": [
+          "image/jpeg",
+          "image/png",
+          "image/webp"
+        ],
+        "browser_write": false
+      },
+      {
+        "id": "institutional-content",
+        "public": false,
+        "file_size_limit_bytes": 104857600,
+        "allowed_mime_types": [
+          "application/pdf",
+          "audio/mpeg",
+          "audio/webm",
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "video/mp4",
+          "video/quicktime",
+          "video/webm"
+        ],
+        "browser_write": false
+      }
+    ],
+    "storage_policies": [
+      {
+        "name": "avatars_public_read",
+        "schema": "storage",
+        "table": "objects",
+        "command": "SELECT",
+        "roles": [
+          "public"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "temporary_public_media_read"
+      },
+      {
+        "name": "institutional_content_authenticated_read",
+        "schema": "storage",
+        "table": "objects",
+        "command": "SELECT",
+        "roles": [
+          "authenticated"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [
+          "reflab_private.has_institution_permission"
+        ],
+        "category": "institutional_storage_read"
+      },
+      {
+        "name": "videos_public_read",
+        "schema": "storage",
+        "table": "objects",
+        "command": "SELECT",
+        "roles": [
+          "public"
+        ],
+        "mode": "PERMISSIVE",
+        "helpers": [],
+        "category": "temporary_public_media_read"
+      }
+    ],
+    "baseline_marker": "reflab_meta.reflab_schema_state"
   }
 }
