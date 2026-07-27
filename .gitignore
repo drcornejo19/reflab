@@ -48,3 +48,8 @@ next-env.d.ts
 amison-crm/
 outputs/
 tmp/
+/tmp copy/
+**/qa-session.json
+**/*session*.json
+!**/fixtures/**/*session*.json
+!**/__fixtures__/**/*session*.json
