@@ -11,6 +11,7 @@
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/coach/confidence.test.mts lib/access/resolveCapabilities.test.mts",
     "test:coach": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/coach/confidence.test.mts",
     "test:access": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/access/resolveCapabilities.test.mts",
+    "test:secrets": "node scripts/security/scan-secrets.mjs",
     "test:security": "node scripts/security/verify-phase1-anon.mjs",
     "test:access-schema": "node scripts/security/verify-admin-access-schema.mjs"
   },
