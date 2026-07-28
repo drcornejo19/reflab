@@ -256,6 +256,7 @@ function parsePolicies() {
 function parseTables() {
   const tables = [];
   const definitions = new Map();
+  const locations = new Map();
   const pattern = /^create table\s+([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)\s*\(/gim;
   let match;
 
@@ -264,6 +265,7 @@ function parseTables() {
     const closingIndex = readBalanced(sql, openingIndex);
     const qualifiedName = `${match[1]}.${match[2]}`;
     tables.push(qualifiedName);
+    locations.set(qualifiedName, sql.slice(0, match.index).split("\n").length);
     definitions.set(
       qualifiedName,
       splitTopLevel(sql.slice(openingIndex + 1, closingIndex))
@@ -271,7 +273,57 @@ function parseTables() {
     pattern.lastIndex = closingIndex;
   }
 
-  return { tables: uniqueSorted(tables), definitions };
+  return { tables: uniqueSorted(tables), definitions, locations };
+}
+
+function classifyTables(tables, locations) {
+  const canonical = new Set(manifest.production_tables_canonical);
+  const compatibility = new Set(manifest.production_tables_compatibility);
+  const newCanonical = new Set(manifest.new_canonical_tables);
+
+  return tables.map((qualifiedName) => {
+    const [schema, name] = qualifiedName.split(".");
+    let classification;
+    let reason;
+
+    if (schema === "reflab_meta" && name === "reflab_schema_state") {
+      classification = "private_installation_metadata";
+      reason =
+        "Immutable baseline installation marker outside the exposed PostgREST schemas.";
+    } else if (schema === "public" && canonical.has(name)) {
+      classification = "production_canonical";
+      reason =
+        "Observed in production and approved as part of the canonical product model.";
+    } else if (schema === "public" && compatibility.has(name)) {
+      classification = "production_compatibility";
+      reason =
+        "Temporary compatibility table retained while canonical consumers replace legacy reads.";
+    } else if (schema === "public" && newCanonical.has(name)) {
+      classification = "new_canonical";
+      reason =
+        name === "psychology_modules"
+          ? "Canonical catalog for validated Psychology module slugs."
+          : "Immutable server-created manifest for secure referee exam submissions.";
+    } else {
+      throw new Error(`Unclassified baseline table: ${qualifiedName}.`);
+    }
+
+    return {
+      name,
+      schema,
+      qualified_name: qualifiedName,
+      classification,
+      reason,
+      source_file:
+        "supabase/migrations/202607270000_reflab_canonical_baseline.sql",
+      source_line: locations.get(qualifiedName),
+      part_of_production_75: canonical.has(name),
+      compatibility: compatibility.has(name),
+      new_canonical: newCanonical.has(name),
+      private_metadata: schema === "reflab_meta",
+      supabase_managed: false,
+    };
+  });
 }
 
 function normalizeColumns(value) {
@@ -506,7 +558,7 @@ function parseTriggers() {
 }
 
 function buildInventory() {
-  const { tables, definitions } = parseTables();
+  const { tables, definitions, locations } = parseTables();
   const constraints = parseConstraints(definitions);
   const policies = parsePolicies();
   const functions = parseFunctions();
@@ -523,13 +575,15 @@ function buildInventory() {
     )
   );
   const extensions = sortObjects(
-    [...sql.matchAll(/^create extension\s+([a-z_][a-z0-9_]*)([\s\S]*?);/gim)].map(
-      (match) => ({
-        name: match[1],
-        schema:
-          match[2].match(/\bwith schema\s+([a-z_][a-z0-9_]*)/i)?.[1] ?? null,
-      })
-    ),
+    [
+      ...sql.matchAll(
+        /^create extension(?:\s+if\s+not\s+exists)?\s+([a-z_][a-z0-9_]*)([\s\S]*?);/gim
+      ),
+    ].map((match) => ({
+      name: match[1],
+      schema:
+        match[2].match(/\bwith schema\s+([a-z_][a-z0-9_]*)/i)?.[1] ?? null,
+    })),
     (extension) => extension.name
   );
   const types = sortObjects(
@@ -567,6 +621,7 @@ function buildInventory() {
     extensions,
     types_and_enums: types,
     tables,
+    table_inventory: classifyTables(tables, locations),
     views,
     functions,
     policies,
@@ -599,6 +654,16 @@ function normalizedSqlChecksum(value) {
 
 function updateIntegrity(inventory) {
   manifest.object_inventory = inventory;
+  manifest.counts.baseline_public_tables = inventory.table_inventory.filter(
+    (table) => table.schema === "public"
+  ).length;
+  manifest.counts.baseline_private_metadata_tables =
+    inventory.table_inventory.filter(
+      (table) => table.classification === "private_installation_metadata"
+    ).length;
+  manifest.counts.baseline_total_tables = inventory.table_inventory.length;
+  manifest.counts.supabase_managed_tables_created =
+    inventory.table_inventory.filter((table) => table.supabase_managed).length;
   manifest.counts.functions = inventory.functions.length;
   manifest.counts.policies = inventory.policies.length;
   manifest.counts.public_policies = inventory.policies.filter(
@@ -634,6 +699,39 @@ const inventory = buildInventory();
 assert(
   inventory.tables.filter((table) => table.startsWith("public.")).length === 79,
   "Expected exactly 79 public baseline tables."
+);
+assert(
+  inventory.table_inventory.length === 80,
+  "Expected exactly 80 baseline tables including private metadata."
+);
+assert(
+  inventory.table_inventory.filter(
+    (table) => table.classification === "production_canonical"
+  ).length === 75,
+  "Expected exactly 75 production canonical tables."
+);
+assert(
+  inventory.table_inventory.filter(
+    (table) => table.classification === "production_compatibility"
+  ).length === 2,
+  "Expected exactly 2 production compatibility tables."
+);
+assert(
+  inventory.table_inventory.filter(
+    (table) => table.classification === "new_canonical"
+  ).length === 2,
+  "Expected exactly 2 new canonical tables."
+);
+assert(
+  inventory.table_inventory.filter(
+    (table) => table.classification === "private_installation_metadata"
+  ).length === 1,
+  "Expected exactly 1 private metadata table."
+);
+assert(
+  JSON.stringify(inventory.extensions) ===
+    JSON.stringify([{ name: "pgcrypto", schema: "extensions" }]),
+  "Expected exactly the pgcrypto extension in the extensions schema."
 );
 assert(inventory.functions.length === 21, "Expected exactly 21 functions.");
 assert(inventory.policies.length === 120, "Expected exactly 120 policies.");

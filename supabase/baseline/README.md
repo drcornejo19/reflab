@@ -39,6 +39,17 @@ The two new tables are:
 - `referee_exam_sessions`
 - `psychology_modules`
 
+The table totals use two different scopes and must not be conflated:
+
+`75 production canonical + 2 compatibility + 2 new canonical = 79 public tables`
+
+`79 public tables + 1 private installation marker = 80 baseline tables`
+
+The eightieth table is `reflab_meta.reflab_schema_state`. It is private
+installation metadata, not a product table and not a Supabase-managed table.
+The manifest records the classification, reason, source file, and creation line
+for every table.
+
 The deterministic structural inventory currently contains:
 
 | Object | Count |
