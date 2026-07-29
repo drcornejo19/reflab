@@ -268,8 +268,8 @@
     "algorithm": "sha256",
     "sql_checksum_normalization": "Replace the reflab_schema_state sql_checksum literal with 64 zeroes before hashing the SQL bytes as UTF-8.",
     "manifest_hash_normalization": "Replace both integrity hash values with 64 zeroes, serialize this JSON with two-space indentation and a final LF, then hash UTF-8 bytes.",
-    "sql_checksum": "8865724659096ebbcb04bcffdc490737e61ae0919d6b190e8f6b4b9ed5cdb6ed",
-    "manifest_hash": "e5ef6e82fe12ef1bd1fb9ccd596494fd132976a9327ee0d63c45e5e105bbb0f5"
+    "sql_checksum": "dd0c8f9d4ec4707c7483a4e333a2e59ba79356fffc1877bdae30f31b9d7ccb37",
+    "manifest_hash": "7c6f2480aeff86609e5f33a81ba45693a74f6e3296d62fbdbd61c70a28b41046"
   },
   "execution": {
     "sql_executed": false,
@@ -1488,7 +1488,7 @@
         "classification": "private_installation_metadata",
         "reason": "Immutable baseline installation marker outside the exposed PostgREST schemas.",
         "source_file": "supabase/migrations/202607270000_reflab_canonical_baseline.sql",
-        "source_line": 5579,
+        "source_line": 5593,
         "part_of_production_75": false,
         "compatibility": false,
         "new_canonical": false,

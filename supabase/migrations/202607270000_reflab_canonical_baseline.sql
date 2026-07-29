@@ -3075,7 +3075,22 @@ security invoker
 set search_path = pg_catalog
 as $function$
   select nullif(
-    pg_catalog.btrim(coalesce(auth.jwt()->>'sub', '')),
+    pg_catalog.btrim(
+      coalesce(
+        (
+          coalesce(
+            nullif(
+              pg_catalog.btrim(
+                pg_catalog.current_setting('request.jwt.claims', true)
+              ),
+              ''
+            ),
+            '{}'
+          )::pg_catalog.jsonb
+        )->>'sub',
+        ''
+      )
+    ),
     ''
   );
 $function$;
@@ -4197,12 +4212,11 @@ values
 -- RLS helper ownership and least-privilege table access
 -- ---------------------------------------------------------------------------
 
-grant usage on schema public, auth, reflab_private to reflab_rls_owner;
+grant usage on schema public, reflab_private to reflab_rls_owner;
 -- PostgreSQL requires the new function owner to hold CREATE on the function
 -- schema during ownership transfer. This privilege is revoked immediately
 -- after the four approved ALTER FUNCTION statements.
 grant create on schema reflab_private to reflab_rls_owner;
-grant execute on function auth.jwt() to reflab_rls_owner;
 grant execute on function reflab_private.request_user_id()
   to reflab_rls_owner;
 
@@ -5629,8 +5643,8 @@ insert into reflab_meta.reflab_schema_state (
 )
 values (
   '202607270000',
-  '8865724659096ebbcb04bcffdc490737e61ae0919d6b190e8f6b4b9ed5cdb6ed',
-  'e5ef6e82fe12ef1bd1fb9ccd596494fd132976a9327ee0d63c45e5e105bbb0f5',
+  'dd0c8f9d4ec4707c7483a4e333a2e59ba79356fffc1877bdae30f31b9d7ccb37',
+  '7c6f2480aeff86609e5f33a81ba45693a74f6e3296d62fbdbd61c70a28b41046',
   coalesce(
     nullif(pg_catalog.current_setting('reflab.installation_environment', true), ''),
     'development'
