@@ -7,6 +7,9 @@ import {
 } from "./baseline-validation-target.mjs";
 import {
   createSanitizedSupabaseError,
+  parseDatabaseInspection,
+  parseRemoteMigrationCount,
+  PREFLIGHT_DATABASE_INSPECTION_SQL,
   resolveLocalSupabaseCliBinary,
   runLocalSupabase,
 } from "./preflight-baseline-project.mjs";
@@ -166,4 +169,75 @@ test("preflight reports Windows process errors without exposing secrets", () => 
   assert.doesNotMatch(error.message, /private-password/);
   assert.doesNotMatch(error.message, /private-service-role/);
   assert.doesNotMatch(error.message, /postgresql:\/\//);
+});
+
+test("preflight counts only remote migration history", () => {
+  const output = [
+    JSON.stringify({
+      migrations: [
+        {
+          local: "202607270000",
+          remote: "",
+          time: "202607270000",
+        },
+        {
+          local: "",
+          remote: "202607280001",
+          time: "202607280001",
+        },
+      ],
+      message: "Migrations listed",
+    }),
+    "Connecting to remote database...",
+  ].join("\n");
+
+  assert.equal(parseRemoteMigrationCount(output), 1);
+  assert.equal(
+    parseRemoteMigrationCount(
+      JSON.stringify({
+        migrations: [
+          {
+            local: "202607270000",
+            remote: "",
+            time: "202607270000",
+          },
+        ],
+      })
+    ),
+    0
+  );
+});
+
+test("preflight parses the read-only database inspection marker", () => {
+  const output = JSON.stringify({
+    result: [
+      {
+        preflight_result: "REFLAB_PREFLIGHT|0|0|0",
+      },
+    ],
+    message: "Query executed",
+  });
+
+  assert.deepEqual(parseDatabaseInspection(output), {
+    application_table_count: 0,
+    marker_exists: false,
+    reflab_bucket_count: 0,
+  });
+});
+
+test("database inspection uses only approved read-only catalogs", () => {
+  assert.match(PREFLIGHT_DATABASE_INSPECTION_SQL, /select concat/i);
+  assert.match(
+    PREFLIGHT_DATABASE_INSPECTION_SQL,
+    /information_schema\.tables/i
+  );
+  assert.match(
+    PREFLIGHT_DATABASE_INSPECTION_SQL,
+    /pg_catalog\.pg_class/i
+  );
+  assert.match(PREFLIGHT_DATABASE_INSPECTION_SQL, /storage\.buckets/i);
+  assert.doesNotMatch(
+    PREFLIGHT_DATABASE_INSPECTION_SQL,
+    /\b(insert|update|delete|alter|create|drop|truncate|grant|revoke)\b/i
+  );
 });
