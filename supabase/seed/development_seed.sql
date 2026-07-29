@@ -439,7 +439,7 @@ values (
 -- The exam seed uses one manual item, so it needs no clip row or Storage file.
 do $seed_exam$
 declare
-  exam_session_id constant uuid :=
+  seed_exam_session_id constant uuid :=
     '60000000-0000-4000-8000-000000000001';
   submission_id constant uuid :=
     '61000000-0000-4000-8000-000000000001';
@@ -488,7 +488,7 @@ begin
     expires_at
   )
   values (
-    exam_session_id,
+    seed_exam_session_id,
     'user_dev_referee_a',
     submission_id,
     'individual',
@@ -531,7 +531,7 @@ begin
 
   submission_result := public.submit_referee_exam(
     'user_dev_referee_a',
-    exam_session_id,
+    seed_exam_session_id,
     submission_id,
     payload_hash,
     evaluated_attempts
@@ -544,7 +544,7 @@ begin
   if (
     select count(*)
     from public.exam_results result
-    where result.exam_session_id = exam_session_id
+    where result.exam_session_id = seed_exam_session_id
   ) <> 1 then
     raise exception 'development exam seed expected exactly one result';
   end if;
