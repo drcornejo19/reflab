@@ -1428,7 +1428,9 @@ create table public.referee_exam_sessions (
     check (jsonb_typeof(item_manifest) = 'array'),
   manifest_hash text not null
     check (manifest_hash ~ '^[0-9a-f]{64}$'),
-  item_count integer not null check (item_count between 1 and 100),
+  item_count integer not null
+    constraint referee_exam_sessions_item_count_range_check
+    check (item_count between 1 and 100),
   status text not null default 'active'
     check (status in ('created', 'active', 'submitted', 'expired', 'cancelled')),
   created_at timestamptz not null default now(),
@@ -5627,8 +5629,8 @@ insert into reflab_meta.reflab_schema_state (
 )
 values (
   '202607270000',
-  'dbfa55b45ec144b90e7fe9694512778c872d997312117e964aa9538adb556401',
-  'cec4ca01de18a68248d04e14ea09ad14efa7531dadba4226f552e51f27cde3c1',
+  '8865724659096ebbcb04bcffdc490737e61ae0919d6b190e8f6b4b9ed5cdb6ed',
+  'e5ef6e82fe12ef1bd1fb9ccd596494fd132976a9327ee0d63c45e5e105bbb0f5',
   coalesce(
     nullif(pg_catalog.current_setting('reflab.installation_environment', true), ''),
     'development'
