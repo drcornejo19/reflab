@@ -1,0 +1,493 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+import {
+  DEVELOPMENT_IDENTITY_LINK_SECRET_HEADER,
+  DEVELOPMENT_SUPABASE_PROJECT_REF,
+  DevelopmentIdentityLinkerConfigurationError,
+  FORBIDDEN_PRODUCTION_PROJECT_REF,
+  assertDevelopmentIdentityLinkerEnvironment,
+  handleDevelopmentIdentityLinkRequest,
+  linkDevelopmentClerkIdentity,
+  type DevelopmentIdentityLinkStatus,
+} from "./developmentLinker.ts";
+
+const repositoryRoot = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  ".."
+);
+const migrationSql = readFileSync(
+  resolve(
+    repositoryRoot,
+    "supabase",
+    "migrations",
+    "202607300001_clerk_identity_links.sql"
+  ),
+  "utf8"
+);
+const routeSource = readFileSync(
+  resolve(
+    repositoryRoot,
+    "app",
+    "api",
+    "development",
+    "identity-link",
+    "route.ts"
+  ),
+  "utf8"
+);
+
+const localDevelopmentSecret =
+  "synthetic-development-linker-secret-0000000000000001";
+
+function developmentEnvironment(
+  overrides: Partial<NodeJS.ProcessEnv> = {}
+): NodeJS.ProcessEnv {
+  return {
+    APP_ENV: "development",
+    CLERK_ENV: "development",
+    NODE_ENV: "development",
+    SUPABASE_ENV: "development",
+    SUPABASE_PROJECT_REF: DEVELOPMENT_SUPABASE_PROJECT_REF,
+    NEXT_PUBLIC_SUPABASE_URL:
+      `https://${DEVELOPMENT_SUPABASE_PROJECT_REF}.supabase.co`,
+    SUPABASE_SERVICE_ROLE_KEY: "synthetic-test-value",
+    ENABLE_DEVELOPMENT_IDENTITY_LINKER: "true",
+    DEVELOPMENT_IDENTITY_LINK_SECRET: localDevelopmentSecret,
+    ...overrides,
+  };
+}
+
+function authorizedRequest() {
+  return new Request(
+    "http://localhost/api/development/identity-link",
+    {
+      method: "POST",
+      headers: {
+        [DEVELOPMENT_IDENTITY_LINK_SECRET_HEADER]:
+          localDevelopmentSecret,
+      },
+    }
+  );
+}
+
+function rpcClient(status: DevelopmentIdentityLinkStatus) {
+  return {
+    client: {
+      async rpc(
+        functionName: "link_development_clerk_identity",
+        parameters: { p_external_subject: string }
+      ) {
+        assert.equal(functionName, "link_development_clerk_identity");
+        assert.equal(parameters.p_external_subject, "user_clerk_local_a");
+        return { data: status, error: null };
+      },
+    },
+  };
+}
+
+test("the linker calls only the fixed server RPC and returns created", async () => {
+  const calls: Array<{
+    functionName: string;
+    parameters: Record<string, string>;
+  }> = [];
+  const status = await linkDevelopmentClerkIdentity("user_clerk_local_a", {
+    environment: developmentEnvironment(),
+    createClient: () => ({
+      async rpc(functionName, parameters) {
+        calls.push({ functionName, parameters });
+        return { data: "created", error: null };
+      },
+    }),
+  });
+
+  assert.equal(status, "created");
+  assert.deepEqual(calls, [
+    {
+      functionName: "link_development_clerk_identity",
+      parameters: { p_external_subject: "user_clerk_local_a" },
+    },
+  ]);
+});
+
+test("the linker preserves idempotent and conflict statuses", async () => {
+  for (const expected of ["already_linked", "conflict"] as const) {
+    const fake = rpcClient(expected);
+    const status = await linkDevelopmentClerkIdentity(
+      "user_clerk_local_a",
+      {
+        environment: developmentEnvironment(),
+        createClient: () => fake.client,
+      }
+    );
+
+    assert.equal(status, expected);
+  }
+});
+
+test("the linker blocks non-development and production targets", () => {
+  assert.throws(
+    () =>
+      assertDevelopmentIdentityLinkerEnvironment(
+        developmentEnvironment({ APP_ENV: "production" })
+      ),
+    DevelopmentIdentityLinkerConfigurationError
+  );
+  assert.throws(
+    () =>
+      assertDevelopmentIdentityLinkerEnvironment(
+        developmentEnvironment({
+          SUPABASE_PROJECT_REF: FORBIDDEN_PRODUCTION_PROJECT_REF,
+          NEXT_PUBLIC_SUPABASE_URL:
+            `https://${FORBIDDEN_PRODUCTION_PROJECT_REF}.supabase.co`,
+        })
+      ),
+    DevelopmentIdentityLinkerConfigurationError
+  );
+  assert.throws(
+    () =>
+      assertDevelopmentIdentityLinkerEnvironment(
+        developmentEnvironment({ CLERK_ENV: "production" })
+      ),
+    DevelopmentIdentityLinkerConfigurationError
+  );
+  assert.throws(
+    () =>
+      assertDevelopmentIdentityLinkerEnvironment(
+        developmentEnvironment({ NODE_ENV: "production" })
+      ),
+    DevelopmentIdentityLinkerConfigurationError
+  );
+});
+
+test("the request handler rejects users without a Clerk session", async () => {
+  const response = await handleDevelopmentIdentityLinkRequest(
+    new Request("http://localhost/api/development/identity-link", {
+      method: "POST",
+    }),
+    {
+      getAuthenticatedUserId: async () => null,
+      environment: developmentEnvironment(),
+    }
+  );
+
+  assert.equal(response.status, 401);
+});
+
+test("the request handler is disabled without its explicit flag", async () => {
+  const response = await handleDevelopmentIdentityLinkRequest(
+    authorizedRequest(),
+    {
+      getAuthenticatedUserId: async () => "user_clerk_local_a",
+      environment: developmentEnvironment({
+        ENABLE_DEVELOPMENT_IDENTITY_LINKER: "false",
+      }),
+      linkIdentity: async () => {
+        throw new Error("The linker must remain disabled.");
+      },
+    }
+  );
+
+  assert.equal(response.status, 403);
+});
+
+test("an authenticated user needs the operational secret", async () => {
+  const cases = [
+    {
+      request: new Request(
+        "http://localhost/api/development/identity-link",
+        { method: "POST" }
+      ),
+      environment: developmentEnvironment(),
+    },
+    {
+      request: new Request(
+        "http://localhost/api/development/identity-link",
+        {
+          method: "POST",
+          headers: {
+            [DEVELOPMENT_IDENTITY_LINK_SECRET_HEADER]:
+              "incorrect-development-secret-000000000000",
+          },
+        }
+      ),
+      environment: developmentEnvironment(),
+    },
+    {
+      request: authorizedRequest(),
+      environment: developmentEnvironment({
+        DEVELOPMENT_IDENTITY_LINK_SECRET: "",
+      }),
+    },
+  ];
+
+  for (const currentCase of cases) {
+    const response = await handleDevelopmentIdentityLinkRequest(
+      currentCase.request,
+      {
+        getAuthenticatedUserId: async () => "user_clerk_local_a",
+        environment: currentCase.environment,
+        linkIdentity: async () => {
+          throw new Error("Unauthorized requests must not call the RPC.");
+        },
+      },
+    );
+
+    assert.equal(response.status, 403);
+  }
+});
+
+test("the request handler rejects production and non-local requests", async () => {
+  const cases = [
+    {
+      request: authorizedRequest(),
+      environment: developmentEnvironment({ NODE_ENV: "production" }),
+    },
+    {
+      request: new Request(
+        "https://preview.example.test/api/development/identity-link",
+        {
+          method: "POST",
+          headers: {
+            [DEVELOPMENT_IDENTITY_LINK_SECRET_HEADER]:
+              localDevelopmentSecret,
+          },
+        }
+      ),
+      environment: developmentEnvironment(),
+    },
+  ];
+
+  for (const currentCase of cases) {
+    const response = await handleDevelopmentIdentityLinkRequest(
+      currentCase.request,
+      {
+        getAuthenticatedUserId: async () => "user_clerk_local_a",
+        environment: currentCase.environment,
+        linkIdentity: async () => {
+          throw new Error("Production and remote requests must be blocked.");
+        },
+      }
+    );
+
+    assert.equal(response.status, 403);
+  }
+});
+
+test("the request handler never accepts identity input from the browser", async () => {
+  const requests = [
+    new Request(
+      "http://localhost/api/development/identity-link?userId=forged",
+      { method: "POST" }
+    ),
+    new Request("http://localhost/api/development/identity-link", {
+      method: "POST",
+      body: JSON.stringify({ externalSubject: "forged" }),
+    }),
+  ];
+
+  for (const request of requests) {
+    const response = await handleDevelopmentIdentityLinkRequest(request, {
+      getAuthenticatedUserId: async () => "user_clerk_local_a",
+      environment: developmentEnvironment(),
+    });
+    assert.equal(response.status, 400);
+  }
+});
+
+test("the request handler maps valid RPC states to HTTP status codes", async () => {
+  const expectedCodes = {
+    created: 201,
+    already_linked: 200,
+    conflict: 409,
+  } as const;
+
+  for (const [linkStatus, expectedStatus] of Object.entries(
+    expectedCodes
+  ) as Array<[DevelopmentIdentityLinkStatus, number]>) {
+    const response = await handleDevelopmentIdentityLinkRequest(
+      authorizedRequest(),
+      {
+        getAuthenticatedUserId: async () => "user_clerk_local_a",
+        linkIdentity: async () => linkStatus,
+        environment: developmentEnvironment(),
+      }
+    );
+
+    assert.equal(response.status, expectedStatus);
+    assert.deepEqual(response.body, { status: linkStatus });
+  }
+});
+
+test("the route derives identity exclusively from Clerk auth", () => {
+  assert.match(routeSource, /await auth\(\)/);
+  assert.match(routeSource, /return session\.userId/);
+  assert.doesNotMatch(
+    routeSource,
+    /request\.(?:json|formData)\(\)|searchParams\.get\(/i
+  );
+  assert.doesNotMatch(
+    routeSource,
+    /SUPABASE_SERVICE_ROLE_KEY|console\.(?:log|error|warn)/i
+  );
+});
+
+test("the migration creates a private, provider-scoped identity map", () => {
+  assert.match(
+    migrationSql,
+    /create table reflab_private\.user_identity_links\s*\(/i
+  );
+  assert.match(
+    migrationSql,
+    /primary key \(provider, external_subject\)/i
+  );
+  assert.match(
+    migrationSql,
+    /unique \(provider, user_id\)/i
+  );
+  assert.match(
+    migrationSql,
+    /references public\.user_profiles \(user_id\)/i
+  );
+  assert.match(
+    migrationSql,
+    /check \(provider = 'clerk'\)/i
+  );
+  assert.match(
+    migrationSql,
+    /char_length\(external_subject\) between 1 and 255/i
+  );
+  assert.match(
+    migrationSql,
+    /alter table reflab_private\.user_identity_links force row level security;/i
+  );
+  assert.doesNotMatch(
+    migrationSql,
+    /external_subject\s*~\s*['"][^'"]+['"]/i
+  );
+});
+
+test("the private map and RPC are not available to browser roles", () => {
+  assert.match(
+    migrationSql,
+    /revoke all on table reflab_private\.user_identity_links\s+from public, anon, authenticated, service_role;/i
+  );
+  assert.match(
+    migrationSql,
+    /revoke all on function public\.link_development_clerk_identity\(text\)\s+from public, anon, authenticated;/i
+  );
+  assert.match(
+    migrationSql,
+    /grant execute on function public\.link_development_clerk_identity\(text\)\s+to service_role;/i
+  );
+  assert.doesNotMatch(
+    migrationSql,
+    /grant\s+(?:select|insert|update|delete|all)\s+on\s+table\s+reflab_private\.user_identity_links\s+to\s+(?:public|anon|authenticated|service_role)/i
+  );
+});
+
+test("the migration reuses only the canonical RLS owner", () => {
+  assert.doesNotMatch(
+    migrationSql,
+    /\b(?:create|alter)\s+role\b|\bgrant\s+reflab_[a-z0-9_]+\s+to\s+[a-z0-9_]+/i
+  );
+  assert.doesNotMatch(
+    migrationSql,
+    /reflab_identity_linker_owner/i
+  );
+  assert.match(
+    migrationSql,
+    /alter table reflab_private\.user_identity_links owner to reflab_rls_owner;/i
+  );
+  assert.match(
+    migrationSql,
+    /alter function reflab_private\.request_user_id\(\)\s+owner to reflab_rls_owner;/i
+  );
+  assert.match(
+    migrationSql,
+    /alter function public\.link_development_clerk_identity\(text\)\s+owner to reflab_rls_owner;/i
+  );
+});
+
+test("the migration adds exactly five least-privilege policies", () => {
+  const policyNames = Array.from(
+    migrationSql.matchAll(/create policy\s+([a-z0-9_]+)/gi),
+    (match) => match[1]
+  );
+
+  assert.deepEqual(policyNames, [
+    "user_identity_links_rls_owner_read",
+    "user_identity_links_rls_owner_insert",
+    "reflab_schema_state_identity_rls_owner_read",
+    "user_profiles_identity_rls_owner_read",
+    "user_subscriptions_identity_rls_owner_read",
+  ]);
+});
+
+test("request_user_id resolves links and preserves the unlinked subject", () => {
+  const helper = migrationSql.match(
+    /create or replace function reflab_private\.request_user_id\(\)[\s\S]*?\$function\$;/i
+  )?.[0];
+
+  assert.ok(helper);
+  assert.match(helper, /security definer/i);
+  assert.match(helper, /set search_path = pg_catalog/i);
+  assert.match(
+    helper,
+    /current_setting\(\s*'request\.jwt\.claims'\s*,\s*true\s*\)/i
+  );
+  assert.match(
+    helper,
+    /join reflab_private\.user_identity_links identity_link/i
+  );
+  assert.match(
+    helper,
+    /coalesce\([\s\S]*resolved_identity\.user_id[\s\S]*request_subject\.external_subject/i
+  );
+  assert.doesNotMatch(helper, /auth\.jwt\(|execute\s+format/i);
+});
+
+test("the RPC fixes the synthetic target and exposes only safe states", () => {
+  const rpc = migrationSql.match(
+    /create function public\.link_development_clerk_identity\([\s\S]*?\$function\$;/i
+  )?.[0];
+
+  assert.ok(rpc);
+  assert.match(rpc, /target_user_id constant text := 'user_dev_referee_a'/i);
+  assert.match(rpc, /security definer/i);
+  assert.match(rpc, /set search_path = pg_catalog/i);
+  assert.match(rpc, /installation_status = 'installed'/i);
+  assert.match(rpc, /environment = 'development'/i);
+  assert.match(rpc, /'created'/i);
+  assert.match(rpc, /'already_linked'/i);
+  assert.match(rpc, /'conflict'/i);
+  assert.doesNotMatch(rpc, /execute\s+format|return\s+p_external_subject/i);
+});
+
+test("the RPC uses only the canonical RLS owner", () => {
+  assert.match(
+    migrationSql,
+    /alter function public\.link_development_clerk_identity\(text\)\s+owner to reflab_rls_owner;/i
+  );
+  assert.match(
+    migrationSql,
+    /revoke create on schema public from reflab_rls_owner;/i
+  );
+});
+
+test("the application guard uses a constant-time secret comparison", () => {
+  const linkerSource = readFileSync(
+    resolve(repositoryRoot, "lib", "identity", "developmentLinker.ts"),
+    "utf8"
+  );
+
+  assert.match(linkerSource, /timingSafeEqual/);
+  assert.match(linkerSource, /ENABLE_DEVELOPMENT_IDENTITY_LINKER/);
+  assert.match(linkerSource, /DEVELOPMENT_IDENTITY_LINK_SECRET/);
+  assert.match(linkerSource, /NODE_ENV/);
+  assert.match(linkerSource, /LOOPBACK_HOSTNAMES/);
+  assert.doesNotMatch(linkerSource, /console\.(?:log|error|warn)/i);
+});
