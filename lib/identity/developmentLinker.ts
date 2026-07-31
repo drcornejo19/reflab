@@ -37,7 +37,7 @@ type LinkerOptions = {
   createClient?: () => IdentityLinkRpcClient;
 };
 
-type RequestHandlerOptions = LinkerOptions & {
+export type DevelopmentIdentityLinkRequestOptions = LinkerOptions & {
   getAuthenticatedUserId: () => Promise<string | null>;
   linkIdentity?: (
     externalSubject: string,
@@ -177,7 +177,7 @@ export async function linkDevelopmentClerkIdentity(
 
 export async function handleDevelopmentIdentityLinkRequest(
   request: Request,
-  options: RequestHandlerOptions
+  options: DevelopmentIdentityLinkRequestOptions
 ): Promise<HandlerResult> {
   const requestUrl = new URL(request.url);
   const body = await request.text();
@@ -240,6 +240,20 @@ export async function handleDevelopmentIdentityLinkRequest(
 
 function normalized(value: string | undefined) {
   return value?.trim().toLowerCase();
+}
+
+export async function executeDevelopmentIdentityLinkRoute(
+  request: Request,
+  options: DevelopmentIdentityLinkRequestOptions
+) {
+  const result = await handleDevelopmentIdentityLinkRequest(request, options);
+
+  return Response.json(result.body, {
+    status: result.status,
+    headers: {
+      "cache-control": "no-store",
+    },
+  });
 }
 
 function constantTimeSecretEqual(provided: string, expected: string) {

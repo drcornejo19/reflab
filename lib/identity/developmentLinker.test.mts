@@ -9,6 +9,7 @@ import {
   DevelopmentIdentityLinkerConfigurationError,
   FORBIDDEN_PRODUCTION_PROJECT_REF,
   assertDevelopmentIdentityLinkerEnvironment,
+  executeDevelopmentIdentityLinkRoute,
   handleDevelopmentIdentityLinkRequest,
   linkDevelopmentClerkIdentity,
   type DevelopmentIdentityLinkStatus,
@@ -39,6 +40,7 @@ const routeSource = readFileSync(
   ),
   "utf8"
 );
+const proxySource = readFileSync(resolve(repositoryRoot, "proxy.ts"), "utf8");
 
 const localDevelopmentSecret =
   "synthetic-development-linker-secret-0000000000000001";
@@ -322,6 +324,85 @@ test("the request handler maps valid RPC states to HTTP status codes", async () 
   }
 });
 
+test("the route executor calls the identity service exactly once without self-proxying", async () => {
+  let serviceCalls = 0;
+  const response = await executeDevelopmentIdentityLinkRoute(
+    authorizedRequest(),
+    {
+      getAuthenticatedUserId: async () => "user_clerk_local_a",
+      environment: developmentEnvironment(),
+      linkIdentity: async (externalSubject) => {
+        serviceCalls += 1;
+        assert.equal(externalSubject, "user_clerk_local_a");
+        return "created";
+      },
+    }
+  );
+
+  assert.equal(response.status, 201);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await response.json(), { status: "created" });
+  assert.equal(serviceCalls, 1);
+});
+
+test("the route executor rejects requests before reaching the service", async () => {
+  const cases = [
+    {
+      request: authorizedRequest(),
+      userId: null,
+      environment: developmentEnvironment(),
+      expectedStatus: 401,
+    },
+    {
+      request: authorizedRequest(),
+      userId: "user_clerk_local_a",
+      environment: developmentEnvironment({
+        ENABLE_DEVELOPMENT_IDENTITY_LINKER: "false",
+      }),
+      expectedStatus: 403,
+    },
+    {
+      request: new Request(
+        "http://localhost/api/development/identity-link",
+        {
+          method: "POST",
+          headers: {
+            [DEVELOPMENT_IDENTITY_LINK_SECRET_HEADER]:
+              "incorrect-development-secret-000000000000",
+          },
+        }
+      ),
+      userId: "user_clerk_local_a",
+      environment: developmentEnvironment(),
+      expectedStatus: 403,
+    },
+    {
+      request: authorizedRequest(),
+      userId: "user_clerk_local_a",
+      environment: developmentEnvironment({ NODE_ENV: "production" }),
+      expectedStatus: 403,
+    },
+  ];
+
+  for (const currentCase of cases) {
+    let serviceCalls = 0;
+    const response = await executeDevelopmentIdentityLinkRoute(
+      currentCase.request,
+      {
+        getAuthenticatedUserId: async () => currentCase.userId,
+        environment: currentCase.environment,
+        linkIdentity: async () => {
+          serviceCalls += 1;
+          return "created";
+        },
+      }
+    );
+
+    assert.equal(response.status, currentCase.expectedStatus);
+    assert.equal(serviceCalls, 0);
+  }
+});
+
 test("the route derives identity exclusively from Clerk auth", () => {
   assert.match(routeSource, /await auth\(\)/);
   assert.match(routeSource, /return session\.userId/);
@@ -332,6 +413,21 @@ test("the route derives identity exclusively from Clerk auth", () => {
   assert.doesNotMatch(
     routeSource,
     /SUPABASE_SERVICE_ROLE_KEY|console\.(?:log|error|warn)/i
+  );
+  assert.match(routeSource, /executeDevelopmentIdentityLinkRoute/);
+  assert.doesNotMatch(
+    routeSource,
+    /\bfetch\s*\(|localhost:3000|127\.0\.0\.1:3000|NextResponse\.rewrite/i
+  );
+});
+
+test("Clerk protects the identity route without a same-origin proxy", () => {
+  assert.match(proxySource, /\/api\/development\/identity-link/);
+  assert.match(proxySource, /isDevelopmentIdentityLinkRoute\(req\)/);
+  assert.match(proxySource, /\"\/\(api\|trpc\)\(\.\*\)\"/);
+  assert.doesNotMatch(
+    proxySource,
+    /\bfetch\s*\(|NextResponse\.(?:rewrite|redirect)|localhost:3000|127\.0\.0\.1:3000/i
   );
 });
 
