@@ -40,6 +40,15 @@ const routeSource = readFileSync(
   ),
   "utf8"
 );
+const resolutionMigrationSql = readFileSync(
+  resolve(
+    repositoryRoot,
+    "supabase",
+    "migrations",
+    "202608030001_development_identity_resolution.sql"
+  ),
+  "utf8"
+);
 const proxySource = readFileSync(resolve(repositoryRoot, "proxy.ts"), "utf8");
 
 const localDevelopmentSecret =
@@ -345,6 +354,13 @@ test("the route executor calls the identity service exactly once without self-pr
   assert.equal(serviceCalls, 1);
 });
 
+test("the identity endpoint remains independent from access provisioning", () => {
+  assert.doesNotMatch(
+    routeSource,
+    /loadAccessSnapshot|ensureCanonicalAccessRecords|user_global_roles|user_subscriptions/
+  );
+});
+
 test("the route executor rejects requests before reaching the service", async () => {
   const cases = [
     {
@@ -482,6 +498,39 @@ test("the private map and RPC are not available to browser roles", () => {
   assert.doesNotMatch(
     migrationSql,
     /grant\s+(?:select|insert|update|delete|all)\s+on\s+table\s+reflab_private\.user_identity_links\s+to\s+(?:public|anon|authenticated|service_role)/i
+  );
+});
+
+test("the server identity resolver is read-only and service-role only", () => {
+  const resolver = resolutionMigrationSql.match(
+    /create function public\.resolve_development_clerk_identity\([\s\S]*?\$function\$;/i
+  )?.[0];
+
+  assert.ok(resolver);
+  assert.match(resolver, /stable/i);
+  assert.match(resolver, /security definer/i);
+  assert.match(resolver, /set search_path = pg_catalog/i);
+  assert.match(resolver, /reflab_private\.user_identity_links/i);
+  assert.match(resolver, /environment = 'development'/i);
+  assert.doesNotMatch(
+    resolver,
+    /\binsert\b|\bupdate\b|\bdelete\b|\bauth\.jwt\(|execute\s+format/i
+  );
+  assert.match(
+    resolutionMigrationSql,
+    /alter function public\.resolve_development_clerk_identity\(text\)\s+owner to reflab_rls_owner;/i
+  );
+  assert.match(
+    resolutionMigrationSql,
+    /revoke all on function\s+public\.resolve_development_clerk_identity\(text\)\s+from public, anon, authenticated;/i
+  );
+  assert.match(
+    resolutionMigrationSql,
+    /grant execute on function\s+public\.resolve_development_clerk_identity\(text\)\s+to service_role;/i
+  );
+  assert.doesNotMatch(
+    resolutionMigrationSql,
+    /\b(?:create|alter)\s+role\b|\bgrant\s+reflab_[a-z0-9_]+\s+to\s+[a-z0-9_]+/i
   );
 });
 

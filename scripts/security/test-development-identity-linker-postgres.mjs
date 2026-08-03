@@ -40,6 +40,12 @@ const migrationPath = resolve(
   "migrations",
   "202607300001_clerk_identity_links.sql"
 );
+const resolutionMigrationPath = resolve(
+  repositoryRoot,
+  "supabase",
+  "migrations",
+  "202608030001_development_identity_resolution.sql"
+);
 const temporaryRoot = mkdtempSync(
   join(tmpdir(), "reflab-identity-linker-postgres-")
 );
@@ -50,6 +56,10 @@ const behaviorPath = join(temporaryRoot, "identity-linker-behavior.sql");
 const rollbackMigrationPath = join(
   temporaryRoot,
   "identity-linker-rollback.sql"
+);
+const rollbackResolutionMigrationPath = join(
+  temporaryRoot,
+  "identity-resolution-rollback.sql"
 );
 const port = await reservePort();
 const connectionEnvironment = {
@@ -88,6 +98,7 @@ try {
   applyBootstrapAndBaseline("reflab_identity_linker_test");
   applySqlFile("reflab_identity_linker_test", seedPath);
   applySqlFile("reflab_identity_linker_test", migrationPath);
+  applySqlFile("reflab_identity_linker_test", resolutionMigrationPath);
   applySqlFile("reflab_identity_linker_test", behaviorPath);
   assertCanonicalStructure("reflab_identity_linker_test");
 
@@ -104,6 +115,21 @@ try {
     rollbackMigrationPath
   );
   assertRollback("reflab_identity_linker_rollback");
+
+  createDatabase("reflab_identity_resolution_rollback");
+  applyBootstrapAndBaseline("reflab_identity_resolution_rollback");
+  applySqlFile("reflab_identity_resolution_rollback", seedPath);
+  applySqlFile("reflab_identity_resolution_rollback", migrationPath);
+  writeFileSync(
+    rollbackResolutionMigrationPath,
+    migrationWithRollback(readFileSync(resolutionMigrationPath, "utf8")),
+    "utf8"
+  );
+  applySqlFile(
+    "reflab_identity_resolution_rollback",
+    rollbackResolutionMigrationPath
+  );
+  assertResolutionRollback("reflab_identity_resolution_rollback");
 
   console.log(
     "Development identity linker PostgreSQL test passed in an isolated local cluster."
@@ -284,6 +310,22 @@ begin
 
   if not exists (
     select 1
+    from pg_catalog.pg_proc function_row
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = function_row.pronamespace
+    join pg_catalog.pg_roles owner_role
+      on owner_role.oid = function_row.proowner
+    where namespace.nspname = 'public'
+      and function_row.proname = 'resolve_development_clerk_identity'
+      and owner_role.rolname = 'reflab_rls_owner'
+      and function_row.prosecdef
+      and function_row.proconfig = array['search_path=pg_catalog']
+  ) then
+    raise exception 'identity resolver RPC ownership is unsafe';
+  end if;
+
+  if not exists (
+    select 1
     from pg_catalog.pg_class table_row
     join pg_catalog.pg_namespace namespace
       on namespace.oid = table_row.relnamespace
@@ -330,6 +372,22 @@ begin
     raise exception 'identity linker RPC grants are incorrect';
   end if;
 
+  if pg_catalog.has_function_privilege(
+    'anon',
+    'public.resolve_development_clerk_identity(text)',
+    'EXECUTE'
+  ) or pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.resolve_development_clerk_identity(text)',
+    'EXECUTE'
+  ) or not pg_catalog.has_function_privilege(
+    'service_role',
+    'public.resolve_development_clerk_identity(text)',
+    'EXECUTE'
+  ) then
+    raise exception 'identity resolver RPC grants are incorrect';
+  end if;
+
   if (
     select pg_catalog.array_agg(policy.policyname order by policy.policyname)
     from pg_catalog.pg_policies policy
@@ -361,6 +419,14 @@ begin
     raise exception 'unlinked Clerk subject did not use the fallback';
   end if;
 
+  select public.resolve_development_clerk_identity(
+    'user_clerk_unlinked'
+  )
+  into resolved_user_id;
+  if resolved_user_id is not null then
+    raise exception 'unlinked Clerk subject resolved unexpectedly';
+  end if;
+
   link_status := public.link_development_clerk_identity(
     'user_clerk_local_a'
   );
@@ -384,6 +450,14 @@ begin
   into resolved_user_id;
   if resolved_user_id <> 'user_dev_referee_a' then
     raise exception 'linked Clerk subject did not resolve to the synthetic user';
+  end if;
+
+  select public.resolve_development_clerk_identity(
+    'user_clerk_local_a'
+  )
+  into resolved_user_id;
+  if resolved_user_id <> 'user_dev_referee_a' then
+    raise exception 'server identity resolver did not return the canonical user';
   end if;
 
   delete from reflab_private.user_identity_links;
@@ -512,7 +586,7 @@ select pg_catalog.json_build_object(
   const expected = {
     public_tables: 79,
     private_tables: 2,
-    functions: 22,
+    functions: 23,
     policies: 125,
     triggers: 82,
   };
@@ -527,6 +601,10 @@ select pg_catalog.json_build_object(
 
   const baselineSql = readFileSync(baselinePath, "utf8");
   const migrationSql = readFileSync(migrationPath, "utf8");
+  const resolutionMigrationSql = readFileSync(
+    resolutionMigrationPath,
+    "utf8"
+  );
   const explicitIndexCount =
     (
       baselineSql.match(
@@ -535,6 +613,11 @@ select pg_catalog.json_build_object(
     ).length +
     (
       migrationSql.match(
+        /^\s*create\s+(?:unique\s+)?index\s+/gim
+      ) ?? []
+    ).length +
+    (
+      resolutionMigrationSql.match(
         /^\s*create\s+(?:unique\s+)?index\s+/gim
       ) ?? []
     ).length;
@@ -588,6 +671,38 @@ where namespace.nspname = 'reflab_private'
     parsed.helper_invoker !== true
   ) {
     throw new Error("Identity linker rollback left persistent objects.");
+  }
+}
+
+function assertResolutionRollback(databaseName) {
+  const result = query(
+    databaseName,
+    String.raw`
+select pg_catalog.json_build_object(
+  'resolver_absent',
+  pg_catalog.to_regprocedure(
+    'public.resolve_development_clerk_identity(text)'
+  ) is null,
+  'identity_table_present',
+  pg_catalog.to_regclass(
+    'reflab_private.user_identity_links'
+  ) is not null,
+  'linker_rpc_present',
+  pg_catalog.to_regprocedure(
+    'public.link_development_clerk_identity(text)'
+  ) is not null
+);
+`
+  );
+  const parsed = JSON.parse(result);
+  if (
+    parsed.resolver_absent !== true ||
+    parsed.identity_table_present !== true ||
+    parsed.linker_rpc_present !== true
+  ) {
+    throw new Error(
+      "Identity resolution rollback left persistent objects."
+    );
   }
 }
 

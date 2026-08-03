@@ -1,18 +1,59 @@
 import "server-only";
 
-import type { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
+import type { createSupabaseAdminClient } from "../supabaseAdmin.ts";
 import {
   normalizeGlobalRole,
   normalizeIndividualPlan,
-} from "@/lib/access/catalog";
+} from "./catalog.ts";
 import type {
   AccessSnapshot,
   AccessSource,
   CanonicalPlanKey,
-} from "@/lib/access/types";
-import { resolveCapabilityKeys } from "@/lib/access/resolveCapabilities";
+} from "./types.ts";
+import { assertDevelopmentIdentityLinkerEnvironment } from "../identity/developmentLinker.ts";
+import { resolveCapabilityKeys } from "./resolveCapabilities.ts";
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
+
+type GlobalRoleRecord = {
+  role_key: string;
+};
+
+type SubscriptionRecord = {
+  plan_key: string;
+  status: string;
+  starts_at: string | null;
+  ends_at: string | null;
+};
+
+type CanonicalAccessRecords = {
+  userId: string;
+  globalRole: GlobalRoleRecord;
+  subscription: SubscriptionRecord;
+};
+
+type CanonicalAccessOptions = {
+  environment?: NodeJS.ProcessEnv;
+  resolveLinkedIdentity?: (externalSubject: string) => Promise<string | null>;
+};
+
+type IdentityResolutionRpcClient = {
+  rpc(
+    functionName: "resolve_development_clerk_identity",
+    parameters: { p_external_subject: string }
+  ): PromiseLike<{ data: unknown; error: unknown }>;
+};
+
+export const IDENTITY_LINK_REQUIRED = "identity_link_required";
+
+export class IdentityLinkRequiredError extends Error {
+  readonly code = IDENTITY_LINK_REQUIRED;
+
+  constructor() {
+    super(IDENTITY_LINK_REQUIRED);
+    this.name = "IdentityLinkRequiredError";
+  }
+}
 
 type InstitutionGrant = {
   institutionId: string;
@@ -21,39 +62,24 @@ type InstitutionGrant = {
 
 export async function loadAccessSnapshot(
   supabase: AdminClient,
-  userId: string
+  externalUserId: string
 ): Promise<AccessSnapshot> {
-  const [globalRoleResult, subscriptionResult, membershipResult] =
-    await Promise.all([
-      supabase
-        .from("user_global_roles")
-        .select("role_key")
-        .eq("user_id", userId)
-        .maybeSingle(),
-      supabase
-        .from("user_subscriptions")
-        .select("plan_key,status,starts_at,ends_at")
-        .eq("user_id", userId)
-        .maybeSingle(),
-      supabase
-        .from("institution_memberships")
-        .select("institution_id,status")
-        .eq("user_id", userId)
-        .eq("status", "active"),
-    ]);
+  const accessRecords = await ensureCanonicalAccessRecords(
+    supabase,
+    externalUserId
+  );
+  const userId = accessRecords.userId;
+  const membershipResult = await supabase
+    .from("institution_memberships")
+    .select("institution_id,status")
+    .eq("user_id", userId)
+    .eq("status", "active");
 
-  if (globalRoleResult.error) throw globalRoleResult.error;
-  if (subscriptionResult.error) throw subscriptionResult.error;
   if (membershipResult.error) throw membershipResult.error;
 
-  await ensureCanonicalAccessRecords(supabase, userId, {
-    hasGlobalRole: Boolean(globalRoleResult.data),
-    hasSubscription: Boolean(subscriptionResult.data),
-  });
-
-  const globalRole = normalizeGlobalRole(globalRoleResult.data?.role_key);
-  const individualPlan = isActiveSubscription(subscriptionResult.data)
-    ? normalizeIndividualPlan(subscriptionResult.data?.plan_key)
+  const globalRole = normalizeGlobalRole(accessRecords.globalRole.role_key);
+  const individualPlan = isActiveSubscription(accessRecords.subscription)
+    ? normalizeIndividualPlan(accessRecords.subscription.plan_key)
     : "basic";
 
   if (globalRole === "super_admin") {
@@ -141,15 +167,18 @@ export async function loadAccessSnapshot(
 
 export async function ensureCanonicalAccessRecords(
   supabase: AdminClient,
-  userId: string,
-  knownState?: {
-    hasGlobalRole: boolean;
-    hasSubscription: boolean;
-  }
-) {
+  externalUserId: string,
+  options: CanonicalAccessOptions = {}
+): Promise<CanonicalAccessRecords> {
+  const userId = await resolveCanonicalAccessUserId(
+    supabase,
+    externalUserId,
+    options
+  );
+  let state = await loadCanonicalAccessRecords(supabase, userId);
   const writes: Array<PromiseLike<unknown>> = [];
 
-  if (!knownState?.hasGlobalRole) {
+  if (!state.globalRole) {
     writes.push(
       supabase.from("user_global_roles").upsert(
         {
@@ -163,7 +192,7 @@ export async function ensureCanonicalAccessRecords(
     );
   }
 
-  if (!knownState?.hasSubscription) {
+  if (!state.subscription) {
     writes.push(
       supabase.from("user_subscriptions").upsert(
         {
@@ -188,6 +217,92 @@ export async function ensureCanonicalAccessRecords(
   ) as { error?: unknown } | undefined;
 
   if (failedResult?.error) throw failedResult.error;
+
+  if (writes.length > 0) {
+    state = await loadCanonicalAccessRecords(supabase, userId);
+  }
+
+  if (!state.globalRole || !state.subscription) {
+    throw new Error("Canonical access provisioning did not complete.");
+  }
+
+  return {
+    userId,
+    globalRole: state.globalRole,
+    subscription: state.subscription,
+  };
+}
+
+async function resolveCanonicalAccessUserId(
+  supabase: AdminClient,
+  externalUserId: string,
+  options: CanonicalAccessOptions
+) {
+  const environment = options.environment ?? process.env;
+  if (normalized(environment.ENABLE_DEVELOPMENT_IDENTITY_LINKER) !== "true") {
+    return externalUserId;
+  }
+
+  assertDevelopmentIdentityLinkerEnvironment(environment);
+
+  const resolveLinkedIdentity =
+    options.resolveLinkedIdentity ??
+    ((subject: string) => resolveDevelopmentIdentity(supabase, subject));
+  const canonicalUserId = await resolveLinkedIdentity(externalUserId);
+
+  if (canonicalUserId === null) {
+    throw new IdentityLinkRequiredError();
+  }
+
+  if (
+    !canonicalUserId ||
+    canonicalUserId !== canonicalUserId.trim() ||
+    canonicalUserId.length > 255
+  ) {
+    throw new Error("Canonical identity resolution returned invalid data.");
+  }
+
+  return canonicalUserId;
+}
+
+async function resolveDevelopmentIdentity(
+  supabase: AdminClient,
+  externalSubject: string
+) {
+  const { data, error } = await (
+    supabase as IdentityResolutionRpcClient
+  ).rpc("resolve_development_clerk_identity", {
+    p_external_subject: externalSubject,
+  });
+
+  if (error) throw error;
+  return data === null ? null : typeof data === "string" ? data : "";
+}
+
+async function loadCanonicalAccessRecords(
+  supabase: AdminClient,
+  userId: string
+) {
+  const [globalRoleResult, subscriptionResult] = await Promise.all([
+    supabase
+      .from("user_global_roles")
+      .select("role_key")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    supabase
+      .from("user_subscriptions")
+      .select("plan_key,status,starts_at,ends_at")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
+
+  if (globalRoleResult.error) throw globalRoleResult.error;
+  if (subscriptionResult.error) throw subscriptionResult.error;
+
+  return {
+    globalRole: globalRoleResult.data as GlobalRoleRecord | null,
+    subscription: subscriptionResult.data as SubscriptionRecord | null,
+  };
 }
 
 async function loadInstitutionGrants(
@@ -271,4 +386,8 @@ function isActiveWindow(
 
 function uniqueSorted<T extends string>(values: T[]) {
   return [...new Set(values)].sort() as T[];
+}
+
+function normalized(value: string | undefined) {
+  return value?.trim().toLowerCase();
 }
