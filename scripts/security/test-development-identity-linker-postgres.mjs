@@ -61,6 +61,10 @@ const rollbackResolutionMigrationPath = join(
   temporaryRoot,
   "identity-resolution-rollback.sql"
 );
+const failedResolutionMigrationPath = join(
+  temporaryRoot,
+  "identity-resolution-failure.sql"
+);
 const port = await reservePort();
 const connectionEnvironment = {
   ...process.env,
@@ -98,7 +102,15 @@ try {
   applyBootstrapAndBaseline("reflab_identity_linker_test");
   applySqlFile("reflab_identity_linker_test", seedPath);
   applySqlFile("reflab_identity_linker_test", migrationPath);
+  assertNoPublicCreatePrivilege(
+    "reflab_identity_linker_test",
+    "before identity resolver migration"
+  );
   applySqlFile("reflab_identity_linker_test", resolutionMigrationPath);
+  assertNoPublicCreatePrivilege(
+    "reflab_identity_linker_test",
+    "after identity resolver migration"
+  );
   applySqlFile("reflab_identity_linker_test", behaviorPath);
   assertCanonicalStructure("reflab_identity_linker_test");
 
@@ -130,6 +142,31 @@ try {
     rollbackResolutionMigrationPath
   );
   assertResolutionRollback("reflab_identity_resolution_rollback");
+
+  createDatabase("reflab_identity_resolution_failure");
+  applyBootstrapAndBaseline("reflab_identity_resolution_failure");
+  applySqlFile("reflab_identity_resolution_failure", seedPath);
+  applySqlFile("reflab_identity_resolution_failure", migrationPath);
+  assertNoPublicCreatePrivilege(
+    "reflab_identity_resolution_failure",
+    "before intentional migration failure"
+  );
+  writeFileSync(
+    failedResolutionMigrationPath,
+    migrationWithIntentionalFailure(
+      readFileSync(resolutionMigrationPath, "utf8")
+    ),
+    "utf8"
+  );
+  applySqlFileExpectFailure(
+    "reflab_identity_resolution_failure",
+    failedResolutionMigrationPath
+  );
+  assertResolutionRollback("reflab_identity_resolution_failure");
+  assertNoPublicCreatePrivilege(
+    "reflab_identity_resolution_failure",
+    "after intentional migration failure"
+  );
 
   console.log(
     "Development identity linker PostgreSQL test passed in an isolated local cluster."
@@ -181,6 +218,20 @@ function applySqlFile(databaseName, filePath) {
     "--file",
     filePath,
   ]);
+}
+
+function applySqlFileExpectFailure(databaseName, filePath) {
+  let failed = false;
+
+  try {
+    applySqlFile(databaseName, filePath);
+  } catch {
+    failed = true;
+  }
+
+  if (!failed) {
+    throw new Error("The intentionally failing migration succeeded.");
+  }
 }
 
 function query(databaseName, sql) {
@@ -515,6 +566,43 @@ function migrationWithRollback(migrationSql) {
   return migrationSql.replace(/^commit;\s*$/im, "rollback;");
 }
 
+function migrationWithIntentionalFailure(migrationSql) {
+  const matches = [...migrationSql.matchAll(/^commit;\s*$/gim)];
+  if (matches.length !== 1) {
+    throw new Error(
+      `Expected one canonical migration COMMIT, found ${matches.length}.`
+    );
+  }
+
+  return migrationSql.replace(
+    /^commit;\s*$/im,
+    String.raw`do $intentional_failure$
+begin
+  raise exception 'intentional identity resolution migration failure';
+end
+$intentional_failure$;
+
+commit;`
+  );
+}
+
+function assertNoPublicCreatePrivilege(databaseName, stage) {
+  const hasPrivilege = query(
+    databaseName,
+    String.raw`select pg_catalog.has_schema_privilege(
+  'reflab_rls_owner',
+  'public',
+  'CREATE'
+);`
+  );
+
+  if (hasPrivilege !== "f") {
+    throw new Error(
+      `reflab_rls_owner retained CREATE on public ${stage}.`
+    );
+  }
+}
+
 function assertCanonicalStructure(databaseName) {
   const result = query(
     databaseName,
@@ -690,7 +778,13 @@ select pg_catalog.json_build_object(
   'linker_rpc_present',
   pg_catalog.to_regprocedure(
     'public.link_development_clerk_identity(text)'
-  ) is not null
+  ) is not null,
+  'owner_has_no_public_create',
+  not pg_catalog.has_schema_privilege(
+    'reflab_rls_owner',
+    'public',
+    'CREATE'
+  )
 );
 `
   );
@@ -698,7 +792,8 @@ select pg_catalog.json_build_object(
   if (
     parsed.resolver_absent !== true ||
     parsed.identity_table_present !== true ||
-    parsed.linker_rpc_present !== true
+    parsed.linker_rpc_present !== true ||
+    parsed.owner_has_no_public_create !== true
   ) {
     throw new Error(
       "Identity resolution rollback left persistent objects."

@@ -67,8 +67,10 @@ begin
 end;
 $function$;
 
+grant create on schema public to reflab_rls_owner;
 alter function public.resolve_development_clerk_identity(text)
   owner to reflab_rls_owner;
+revoke create on schema public from reflab_rls_owner;
 
 revoke all on function
   public.resolve_development_clerk_identity(text)

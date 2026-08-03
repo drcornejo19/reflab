@@ -518,7 +518,19 @@ test("the server identity resolver is read-only and service-role only", () => {
   );
   assert.match(
     resolutionMigrationSql,
-    /alter function public\.resolve_development_clerk_identity\(text\)\s+owner to reflab_rls_owner;/i
+    /grant create on schema public to reflab_rls_owner;\s+alter function public\.resolve_development_clerk_identity\(text\)\s+owner to reflab_rls_owner;\s+revoke create on schema public from reflab_rls_owner;/i
+  );
+  assert.equal(
+    resolutionMigrationSql.match(
+      /grant create on schema public to reflab_rls_owner;/gi
+    )?.length,
+    1
+  );
+  assert.equal(
+    resolutionMigrationSql.match(
+      /revoke create on schema public from reflab_rls_owner;/gi
+    )?.length,
+    1
   );
   assert.match(
     resolutionMigrationSql,
