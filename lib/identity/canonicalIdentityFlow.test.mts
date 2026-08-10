@@ -15,7 +15,15 @@ const avatarRouteSource = read("app/api/profile/avatar/route.ts");
 const adminUsersRouteSource = read("app/api/admin/users/route.ts");
 const adminAuthorizationSource = read("lib/adminAuthorization.ts");
 const userRecordsSource = read("lib/reflabUserRecords.ts");
+const profileReaderSource = read("lib/profile/getProfile.ts");
 const instrumentationSource = read("instrumentation.ts");
+const profileGetSource = profileRouteSource.slice(
+  profileRouteSource.indexOf("export async function GET"),
+  profileRouteSource.indexOf("export async function PATCH")
+);
+const profilePatchSource = profileRouteSource.slice(
+  profileRouteSource.indexOf("export async function PATCH")
+);
 
 function read(path: string) {
   return readFileSync(resolve(repositoryRoot, path), "utf8");
@@ -61,18 +69,37 @@ test("incomplete or production-mixed Development configuration fails closed", ()
   );
 });
 
-test("profile and avatar resolve access before provisioning legacy records", () => {
-  for (const source of [profileRouteSource, avatarRouteSource]) {
-    assert.ok(
-      source.indexOf("await loadAccessSnapshot(") <
-        source.indexOf("await ensureUserRecords(")
-    );
-    assert.match(source, /ensureUserRecords\([\s\S]*?accessSnapshot\.userId/);
-  }
-
+test("profile GET is canonical and side-effect free while PATCH remains unchanged", () => {
+  assert.match(profileGetSource, /getProfilePayload\(/);
+  assert.doesNotMatch(profileGetSource, /ensureUserRecords/);
   assert.doesNotMatch(
-    profileRouteSource,
-    /Promise\.all\([\s\S]{0,300}ensureUserRecords/
+    profileGetSource,
+    /\.(?:insert|upsert|update|delete)\s*\(/
+  );
+  assert.match(profileGetSource, /createProfileGetResponse/);
+
+  assert.match(profileReaderSource, /loadAccessSnapshot\([\s\S]*?provisionMissing:\s*false/);
+  assert.match(profileReaderSource, /\.from\("user_profiles"\)/);
+  assert.match(profileReaderSource, /\.eq\("user_id", access\.userId\)/);
+  assert.doesNotMatch(profileReaderSource, /\.from\("user_roles"\)/);
+  assert.doesNotMatch(
+    profileReaderSource,
+    /\.(?:insert|upsert|update|delete)\s*\(/
+  );
+  assert.match(profileReaderSource, /sanitizeProfileGetError/);
+  assert.match(profileReaderSource, /status:\s*409/);
+
+  assert.match(
+    profilePatchSource,
+    /ensureUserRecords\([\s\S]*?accessSnapshot\.userId/
+  );
+  assert.ok(
+    avatarRouteSource.indexOf("await loadAccessSnapshot(") <
+      avatarRouteSource.indexOf("await ensureUserRecords(")
+  );
+  assert.match(
+    avatarRouteSource,
+    /ensureUserRecords\([\s\S]*?accessSnapshot\.userId/
   );
 });
 

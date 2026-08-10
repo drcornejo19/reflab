@@ -4,6 +4,7 @@ import {
   IDENTITY_LINK_REQUIRED,
   IdentityLinkRequiredError,
   ensureCanonicalAccessRecords,
+  loadAccessSnapshot,
 } from "./server.ts";
 import {
   DEVELOPMENT_SUPABASE_PROJECT_REF,
@@ -257,6 +258,25 @@ test("existing normal users keep their records without duplicate writes", async 
   assert.equal(result.userId, "user_normal_existing");
   assert.equal(result.subscription.plan_key, "pro");
   assert.deepEqual(fake.writes, []);
+});
+
+test("read-only access snapshots never provision missing canonical records", async () => {
+  const fake = createAccessClient();
+
+  await assert.rejects(
+    () =>
+      loadAccessSnapshot(fake.client as never, "user_normal_missing", {
+        environment: normalEnvironment(),
+        provisionMissing: false,
+      }),
+    /Canonical access records are missing/
+  );
+
+  assert.deepEqual(fake.writes, []);
+  assert.deepEqual(fake.reads, [
+    { table: "user_global_roles", userId: "user_normal_missing" },
+    { table: "user_subscriptions", userId: "user_normal_missing" },
+  ]);
 });
 
 test("production cannot activate Development identity resolution", async () => {

@@ -35,6 +35,7 @@ type CanonicalAccessRecords = {
 type CanonicalAccessOptions = {
   environment?: NodeJS.ProcessEnv;
   resolveLinkedIdentity?: (externalSubject: string) => Promise<string | null>;
+  provisionMissing?: boolean;
 };
 
 type IdentityResolutionRpcClient = {
@@ -62,23 +63,25 @@ type InstitutionGrant = {
 
 export async function loadAccessSnapshot(
   supabase: AdminClient,
-  externalUserId: string
+  externalUserId: string,
+  options: CanonicalAccessOptions = {}
 ): Promise<AccessSnapshot> {
   const userId = await resolveCanonicalAccessUserId(
     supabase,
-    externalUserId
+    externalUserId,
+    options
   );
-  return loadCanonicalAccessSnapshot(supabase, userId);
+  return loadCanonicalAccessSnapshot(supabase, userId, options);
 }
 
 export async function loadCanonicalAccessSnapshot(
   supabase: AdminClient,
-  userId: string
+  userId: string,
+  options: Pick<CanonicalAccessOptions, "provisionMissing"> = {}
 ): Promise<AccessSnapshot> {
-  const accessRecords = await ensureCanonicalAccessRecordsForUserId(
-    supabase,
-    userId
-  );
+  const accessRecords = options.provisionMissing === false
+    ? await requireCanonicalAccessRecordsForUserId(supabase, userId)
+    : await ensureCanonicalAccessRecordsForUserId(supabase, userId);
   const membershipResult = await supabase
     .from("institution_memberships")
     .select("institution_id,status")
@@ -186,6 +189,23 @@ export async function ensureCanonicalAccessRecords(
     options
   );
   return ensureCanonicalAccessRecordsForUserId(supabase, userId);
+}
+
+async function requireCanonicalAccessRecordsForUserId(
+  supabase: AdminClient,
+  userId: string
+): Promise<CanonicalAccessRecords> {
+  const state = await loadCanonicalAccessRecords(supabase, userId);
+
+  if (!state.globalRole || !state.subscription) {
+    throw new Error("Canonical access records are missing.");
+  }
+
+  return {
+    userId,
+    globalRole: state.globalRole,
+    subscription: state.subscription,
+  };
 }
 
 async function ensureCanonicalAccessRecordsForUserId(

@@ -10,6 +10,10 @@ import {
 import { resolveRefCardId } from "@/lib/refCard";
 import { normalizeSubscriptionPlan } from "@/lib/subscription";
 import {
+  createProfileGetResponse,
+  getProfilePayload,
+} from "@/lib/profile/getProfile";
+import {
   IdentityLinkRequiredError,
   loadAccessSnapshot,
 } from "@/lib/access/server";
@@ -38,46 +42,13 @@ export async function GET() {
   const access = await getProfileAccess();
   if (access.response) return access.response;
 
-  try {
-    const accessSnapshot = await loadAccessSnapshot(
+  return createProfileGetResponse(() =>
+    getProfilePayload(
       access.supabase,
-      access.clerkUser.id
-    );
-    const { clientProfile } = await ensureUserRecords(
-      access.supabase,
-      accessSnapshot.userId,
+      access.clerkUser.id,
       access.clerkUser
-    );
-
-    return NextResponse.json({
-      profile: {
-        ...clientProfile,
-        role:
-          accessSnapshot.globalRole === "super_admin"
-            ? "super_admin"
-            : "individual_referee",
-        subscriptionPlan: toLegacyPlan(
-          accessSnapshot.effectiveIndividualPlan
-        ),
-      },
-      access: accessSnapshot,
-    });
-  } catch (error) {
-    if (error instanceof IdentityLinkRequiredError) {
-      return NextResponse.json(
-        { error: error.code },
-        { status: 409 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        error: "No se pudo cargar el perfil.",
-        technical: getErrorMessage(error),
-      },
-      { status: 500 }
-    );
-  }
+    )
+  );
 }
 
 export async function PATCH(request: Request) {

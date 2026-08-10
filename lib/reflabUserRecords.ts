@@ -1,10 +1,10 @@
 import "server-only";
 
 import type { User as ClerkBackendUser } from "@clerk/backend";
-import { normalizeRole, type SystemRole } from "@/lib/institutionalRoles";
-import { generateRefCardId, resolveRefCardId } from "@/lib/refCard";
-import { normalizeSubscriptionPlan, type SubscriptionPlan } from "@/lib/subscription";
-import type { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
+import { normalizeRole, type SystemRole } from "./institutionalRoles.ts";
+import { generateRefCardId, resolveRefCardId } from "./refCard.ts";
+import { normalizeSubscriptionPlan, type SubscriptionPlan } from "./subscription.ts";
+import type { createSupabaseAdminClient } from "./supabaseAdmin.ts";
 
 type SupabaseAnyClient = ReturnType<typeof createSupabaseAdminClient>;
 
