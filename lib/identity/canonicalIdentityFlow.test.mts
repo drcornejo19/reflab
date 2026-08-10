@@ -16,6 +16,7 @@ const adminUsersRouteSource = read("app/api/admin/users/route.ts");
 const adminAuthorizationSource = read("lib/adminAuthorization.ts");
 const userRecordsSource = read("lib/reflabUserRecords.ts");
 const profileReaderSource = read("lib/profile/getProfile.ts");
+const avatarUploadSource = read("lib/profile/avatarUpload.ts");
 const instrumentationSource = read("instrumentation.ts");
 const profileGetSource = profileRouteSource.slice(
   profileRouteSource.indexOf("export async function GET"),
@@ -93,14 +94,14 @@ test("profile GET is canonical and side-effect free while PATCH remains unchange
     profilePatchSource,
     /ensureUserRecords\([\s\S]*?accessSnapshot\.userId/
   );
-  assert.ok(
-    avatarRouteSource.indexOf("await loadAccessSnapshot(") <
-      avatarRouteSource.indexOf("await ensureUserRecords(")
-  );
+  assert.match(avatarRouteSource, /uploadCanonicalAvatar\(/);
+  assert.doesNotMatch(avatarRouteSource, /ensureUserRecords|user_roles/);
   assert.match(
-    avatarRouteSource,
-    /ensureUserRecords\([\s\S]*?accessSnapshot\.userId/
+    avatarUploadSource,
+    /loadAccessSnapshot\([\s\S]*?provisionMissing:\s*false/
   );
+  assert.match(avatarUploadSource, /\.from\("user_profiles"\)/);
+  assert.doesNotMatch(avatarUploadSource, /ensureUserRecords|user_roles/);
 });
 
 test("administration resolves Clerk users before provisioning and uses canonical snapshots", () => {

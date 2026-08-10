@@ -2,19 +2,12 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import {
-  ensureUserRecords,
-  toClientProfile,
-  upsertUserProfile,
-} from "@/lib/reflabUserRecords";
-import {
-  IdentityLinkRequiredError,
-  loadAccessSnapshot,
-} from "@/lib/access/server";
+  createAvatarUploadResponse,
+  sanitizeAvatarError,
+  uploadCanonicalAvatar,
+} from "@/lib/profile/avatarUpload";
 
 export const dynamic = "force-dynamic";
-
-const maxAvatarBytes = 5 * 1024 * 1024;
-const allowedAvatarTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 export async function POST(request: Request) {
   const access = await getAvatarAccess();
@@ -32,92 +25,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Falta la imagen recortada." }, { status: 400 });
   }
 
-  if (!allowedAvatarTypes.has(avatar.type)) {
-    return NextResponse.json(
-      { error: "Formato no permitido. Usa PNG, JPG o WebP." },
-      { status: 400 }
-    );
-  }
-
-  if (avatar.size > maxAvatarBytes) {
-    return NextResponse.json(
-      { error: "La imagen supera el limite de 5 MB." },
-      { status: 400 }
-    );
-  }
-
-  try {
-    const accessSnapshot = await loadAccessSnapshot(
+  return createAvatarUploadResponse(() =>
+    uploadCanonicalAvatar(
       access.supabase,
-      access.clerkUser.id
-    );
-    const ensured = await ensureUserRecords(
-      access.supabase,
-      accessSnapshot.userId,
-      access.clerkUser
-    );
-    const filePath = `${accessSnapshot.userId}/profile.png`;
-    const { error: uploadError } = await access.supabase.storage
-      .from("avatars")
-      .upload(filePath, avatar, {
-        cacheControl: "3600",
-        contentType: avatar.type || "image/png",
-        upsert: true,
-      });
-
-    if (uploadError) {
-      return NextResponse.json(
-        {
-          error: "No se pudo subir la foto.",
-          technical: uploadError.message,
-        },
-        { status: 500 }
-      );
-    }
-
-    const { data } = access.supabase.storage.from("avatars").getPublicUrl(filePath);
-    const avatarUrl = `${data.publicUrl}?v=${Date.now()}`;
-    const profileResult = await upsertUserProfile(access.supabase, {
-      user_id: accessSnapshot.userId,
-      avatar_url: avatarUrl,
-      updated_at: new Date().toISOString(),
-    });
-
-    if (profileResult.error) {
-      return NextResponse.json(
-        {
-          error: "La foto subio, pero no se pudo actualizar el perfil.",
-          technical: profileResult.error.message,
-        },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      avatarUrl,
-      profile: toClientProfile(
-        profileResult.data ?? ensured.profile,
-        ensured.role,
-        access.clerkUser
-      ),
-    });
-  } catch (error) {
-    if (error instanceof IdentityLinkRequiredError) {
-      return NextResponse.json(
-        { error: error.code },
-        { status: 409 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        error: "No se pudo guardar la foto.",
-        technical: getErrorMessage(error),
-      },
-      { status: 500 }
-    );
-  }
+      access.clerkUser.id,
+      access.clerkUser,
+      avatar
+    )
+  );
 }
 
 async function getAvatarAccess() {
@@ -139,11 +54,13 @@ async function getAvatarAccess() {
 
     return { response: null, clerkUser, supabase };
   } catch (error) {
+    const diagnostic = sanitizeAvatarError(error);
+    console.error("[profile.avatar.access]", diagnostic);
     return {
       response: NextResponse.json(
         {
           error: "No se pudo validar el usuario.",
-          technical: getErrorMessage(error),
+          code: diagnostic.code,
         },
         { status: 500 }
       ),
@@ -151,8 +68,4 @@ async function getAvatarAccess() {
       supabase: null as never,
     };
   }
-}
-
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
 }
