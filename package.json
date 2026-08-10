@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/coach/confidence.test.mts lib/access/resolveCapabilities.test.mts lib/access/server.test.mts lib/identity/developmentLinker.test.mts lib/institutionalClip.test.mts lib/psychologyClassification.test.mts scripts/security/isolated-supabase-target.test.mjs scripts/security/baseline-validation-target.test.mjs scripts/security/canonical-rls-owner.test.mjs",
+    "test": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/coach/confidence.test.mts lib/access/resolveCapabilities.test.mts lib/access/server.test.mts lib/identity/canonicalIdentityFlow.test.mts lib/identity/developmentLinker.test.mts lib/institutionalClip.test.mts lib/psychologyClassification.test.mts scripts/security/isolated-supabase-target.test.mjs scripts/security/baseline-validation-target.test.mjs scripts/security/canonical-rls-owner.test.mjs",
     "test:coach": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/coach/confidence.test.mts",
     "test:access": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/access/resolveCapabilities.test.mts lib/access/server.test.mts",
     "test:baseline": "node scripts/security/validate-canonical-baseline.mjs",

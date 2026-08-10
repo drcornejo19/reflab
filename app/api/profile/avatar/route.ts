@@ -6,6 +6,10 @@ import {
   toClientProfile,
   upsertUserProfile,
 } from "@/lib/reflabUserRecords";
+import {
+  IdentityLinkRequiredError,
+  loadAccessSnapshot,
+} from "@/lib/access/server";
 
 export const dynamic = "force-dynamic";
 
@@ -43,8 +47,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    const ensured = await ensureUserRecords(access.supabase, access.clerkUser);
-    const filePath = `${access.clerkUser.id}/profile.png`;
+    const accessSnapshot = await loadAccessSnapshot(
+      access.supabase,
+      access.clerkUser.id
+    );
+    const ensured = await ensureUserRecords(
+      access.supabase,
+      accessSnapshot.userId,
+      access.clerkUser
+    );
+    const filePath = `${accessSnapshot.userId}/profile.png`;
     const { error: uploadError } = await access.supabase.storage
       .from("avatars")
       .upload(filePath, avatar, {
@@ -66,7 +78,7 @@ export async function POST(request: Request) {
     const { data } = access.supabase.storage.from("avatars").getPublicUrl(filePath);
     const avatarUrl = `${data.publicUrl}?v=${Date.now()}`;
     const profileResult = await upsertUserProfile(access.supabase, {
-      user_id: access.clerkUser.id,
+      user_id: accessSnapshot.userId,
       avatar_url: avatarUrl,
       updated_at: new Date().toISOString(),
     });
@@ -91,6 +103,13 @@ export async function POST(request: Request) {
       ),
     });
   } catch (error) {
+    if (error instanceof IdentityLinkRequiredError) {
+      return NextResponse.json(
+        { error: error.code },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json(
       {
         error: "No se pudo guardar la foto.",

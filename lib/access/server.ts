@@ -10,7 +10,7 @@ import type {
   AccessSource,
   CanonicalPlanKey,
 } from "./types.ts";
-import { assertDevelopmentIdentityLinkerEnvironment } from "../identity/developmentLinker.ts";
+import { requiresCanonicalDevelopmentIdentity } from "../identity/developmentLinker.ts";
 import { resolveCapabilityKeys } from "./resolveCapabilities.ts";
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
@@ -64,11 +64,21 @@ export async function loadAccessSnapshot(
   supabase: AdminClient,
   externalUserId: string
 ): Promise<AccessSnapshot> {
-  const accessRecords = await ensureCanonicalAccessRecords(
+  const userId = await resolveCanonicalAccessUserId(
     supabase,
     externalUserId
   );
-  const userId = accessRecords.userId;
+  return loadCanonicalAccessSnapshot(supabase, userId);
+}
+
+export async function loadCanonicalAccessSnapshot(
+  supabase: AdminClient,
+  userId: string
+): Promise<AccessSnapshot> {
+  const accessRecords = await ensureCanonicalAccessRecordsForUserId(
+    supabase,
+    userId
+  );
   const membershipResult = await supabase
     .from("institution_memberships")
     .select("institution_id,status")
@@ -175,6 +185,13 @@ export async function ensureCanonicalAccessRecords(
     externalUserId,
     options
   );
+  return ensureCanonicalAccessRecordsForUserId(supabase, userId);
+}
+
+async function ensureCanonicalAccessRecordsForUserId(
+  supabase: AdminClient,
+  userId: string
+): Promise<CanonicalAccessRecords> {
   let state = await loadCanonicalAccessRecords(supabase, userId);
   const writes: Array<PromiseLike<unknown>> = [];
 
@@ -233,17 +250,15 @@ export async function ensureCanonicalAccessRecords(
   };
 }
 
-async function resolveCanonicalAccessUserId(
+export async function resolveCanonicalAccessUserId(
   supabase: AdminClient,
   externalUserId: string,
-  options: CanonicalAccessOptions
+  options: CanonicalAccessOptions = {}
 ) {
   const environment = options.environment ?? process.env;
-  if (normalized(environment.ENABLE_DEVELOPMENT_IDENTITY_LINKER) !== "true") {
+  if (!requiresCanonicalDevelopmentIdentity(environment)) {
     return externalUserId;
   }
-
-  assertDevelopmentIdentityLinkerEnvironment(environment);
 
   const resolveLinkedIdentity =
     options.resolveLinkedIdentity ??
@@ -386,8 +401,4 @@ function isActiveWindow(
 
 function uniqueSorted<T extends string>(values: T[]) {
   return [...new Set(values)].sort() as T[];
-}
-
-function normalized(value: string | undefined) {
-  return value?.trim().toLowerCase();
 }

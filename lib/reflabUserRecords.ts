@@ -157,6 +157,7 @@ export function resolveReflabName(
 
 export async function ensureUserRecords(
   supabase: SupabaseAnyClient,
+  canonicalUserId: string,
   clerkUser: ClerkBackendUser
 ) {
   const now = new Date().toISOString();
@@ -165,12 +166,12 @@ export async function ensureUserRecords(
     supabase
       .from("user_profiles")
       .select("*")
-      .eq("user_id", clerkUser.id)
+      .eq("user_id", canonicalUserId)
       .maybeSingle(),
     supabase
       .from("user_roles")
       .select("*")
-      .eq("user_id", clerkUser.id)
+      .eq("user_id", canonicalUserId)
       .maybeSingle(),
   ]);
 
@@ -191,7 +192,7 @@ export async function ensureUserRecords(
     normalizeSubscriptionPlan(roleRow.subscription_plan) !== subscriptionPlan
   ) {
     const roleResult = await upsertUserRole(supabase, {
-      user_id: clerkUser.id,
+      user_id: canonicalUserId,
       role,
       subscription_plan: subscriptionPlan,
       institution_id: roleRow?.institution_id ?? profile?.institution_id ?? null,
@@ -202,14 +203,14 @@ export async function ensureUserRecords(
     if (roleResult.error) throw roleResult.error;
     savedRole = roleResult.data ?? {
       ...roleRow,
-      user_id: clerkUser.id,
+      user_id: canonicalUserId,
       role,
       subscription_plan: subscriptionPlan,
       updated_at: now,
     };
   }
 
-  const profilePatch = buildProfilePatch(profile, clerkUser, {
+  const profilePatch = buildProfilePatch(profile, canonicalUserId, clerkUser, {
     email,
     subscriptionPlan,
     now,
@@ -261,6 +262,11 @@ export function toClientProfile(
   roleRow: UserRoleRow | null | undefined,
   clerkUser?: ClerkBackendUser | null
 ): ReflabUserProfile {
+  const canonicalUserId =
+    textOrNull(profile?.user_id) ??
+    textOrNull(roleRow?.user_id) ??
+    clerkUser?.id ??
+    "";
   const email = getClerkPrimaryEmail(clerkUser) ?? textOrNull(profile?.email) ?? "";
   const firstName = textOrNull(profile?.first_name) ?? clerkUser?.firstName ?? "";
   const lastName = textOrNull(profile?.last_name) ?? clerkUser?.lastName ?? "";
@@ -273,13 +279,13 @@ export function toClientProfile(
   );
   const role = normalizeRole(roleRow?.role);
   const refCardId = profile?.ref_card_id
-    ? resolveRefCardId(clerkUser?.id ?? profile?.user_id ?? "", profile)
-    : clerkUser?.id
-      ? generateRefCardId(clerkUser.id)
+    ? resolveRefCardId(canonicalUserId, profile)
+    : canonicalUserId
+      ? generateRefCardId(canonicalUserId)
       : "";
 
   return {
-    userId: clerkUser?.id ?? profile?.user_id ?? "",
+    userId: canonicalUserId,
     email,
     reflabName,
     firstName,
@@ -328,6 +334,7 @@ export function toClientProfile(
 
 function buildProfilePatch(
   profile: UserProfileRow | null,
+  canonicalUserId: string,
   clerkUser: ClerkBackendUser,
   {
     email,
@@ -339,7 +346,7 @@ function buildProfilePatch(
     now: string;
   }
 ) {
-  const refCardId = resolveRefCardId(clerkUser.id, profile);
+  const refCardId = resolveRefCardId(canonicalUserId, profile);
   const firstName = textOrNull(profile?.first_name) ?? clerkUser.firstName ?? null;
   const lastName = textOrNull(profile?.last_name) ?? clerkUser.lastName ?? null;
   const reflabName = resolveReflabName(profile, clerkUser);
@@ -351,7 +358,7 @@ function buildProfilePatch(
 
   if (!profile) {
     return stripUndefined({
-      user_id: clerkUser.id,
+      user_id: canonicalUserId,
       email,
       reflab_name: reflabName,
       first_name: firstName,
@@ -368,7 +375,7 @@ function buildProfilePatch(
     });
   }
 
-  const patch: Record<string, unknown> = { user_id: clerkUser.id };
+  const patch: Record<string, unknown> = { user_id: canonicalUserId };
   setIfDifferent(patch, profile.email, "email", email);
   setIfMissing(patch, profile.reflab_name, "reflab_name", reflabName);
   setIfMissing(patch, profile.first_name, "first_name", firstName);

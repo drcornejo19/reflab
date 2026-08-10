@@ -46,6 +46,18 @@ function developmentEnvironment(
   };
 }
 
+function normalEnvironment(): NodeJS.ProcessEnv {
+  return {
+    APP_ENV: "test",
+    CLERK_ENV: "test",
+    NODE_ENV: "test",
+    SUPABASE_ENV: "test",
+    SUPABASE_PROJECT_REF: "synthetic-non-development-ref",
+    NEXT_PUBLIC_SUPABASE_URL: "https://synthetic-non-development.supabase.co",
+    ENABLE_DEVELOPMENT_IDENTITY_LINKER: "false",
+  };
+}
+
 function createAccessClient(fixture: AccessFixture = {}) {
   const globalRoles = new Map(
     Object.entries(fixture.globalRoles ?? {})
@@ -168,19 +180,33 @@ test("a linked Development subject reuses the synthetic canonical records", asyn
   );
 });
 
-test("a disabled linker preserves automatic provisioning for a new user", async () => {
+test("a disabled linker endpoint does not disable canonical Development identity resolution", async () => {
+  const fake = createAccessClient();
+  await assert.rejects(
+    () =>
+      ensureCanonicalAccessRecords(
+        fake.client as never,
+        "user_clerk_unlinked",
+        {
+          environment: developmentEnvironment({
+            ENABLE_DEVELOPMENT_IDENTITY_LINKER: "false",
+          }),
+          resolveLinkedIdentity: async () => null,
+        }
+      ),
+    IdentityLinkRequiredError
+  );
+
+  assert.deepEqual(fake.reads, []);
+  assert.deepEqual(fake.writes, []);
+});
+
+test("a non-Development project preserves automatic provisioning for a new user", async () => {
   const fake = createAccessClient();
   const result = await ensureCanonicalAccessRecords(
     fake.client as never,
     "user_normal_new",
-    {
-      environment: developmentEnvironment({
-        ENABLE_DEVELOPMENT_IDENTITY_LINKER: "false",
-      }),
-      resolveLinkedIdentity: async () => {
-        throw new Error("Disabled linker must not resolve identities.");
-      },
-    }
+    { environment: normalEnvironment() }
   );
 
   assert.equal(result.userId, "user_normal_new");
@@ -224,9 +250,7 @@ test("existing normal users keep their records without duplicate writes", async 
     fake.client as never,
     "user_normal_existing",
     {
-      environment: developmentEnvironment({
-        ENABLE_DEVELOPMENT_IDENTITY_LINKER: "false",
-      }),
+      environment: normalEnvironment(),
     }
   );
 

@@ -23,7 +23,12 @@ import {
   type UserProfileRow,
   type UserRoleRow,
 } from "@/lib/reflabUserRecords";
-import { loadAccessSnapshot } from "@/lib/access/server";
+import {
+  IdentityLinkRequiredError,
+  loadAccessSnapshot,
+  loadCanonicalAccessSnapshot,
+  resolveCanonicalAccessUserId,
+} from "@/lib/access/server";
 import type { AccessSnapshot } from "@/lib/access/types";
 import type { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
@@ -59,20 +64,39 @@ export async function GET() {
 
   try {
     const clerkUsers = await listClerkUsers();
-
-    await Promise.all(
-      clerkUsers.map(async (user) => {
-        await ensureUserRecords(access.supabase, user);
-        await loadAccessSnapshot(access.supabase, user.id);
-      })
-    );
+    const resolvedClerkUsers = (
+      await Promise.all(
+        clerkUsers.map(async (user) => {
+          try {
+            const accessSnapshot = await loadAccessSnapshot(
+              access.supabase,
+              user.id
+            );
+            await ensureUserRecords(
+              access.supabase,
+              accessSnapshot.userId,
+              user
+            );
+            return { user, accessSnapshot };
+          } catch (error) {
+            if (error instanceof IdentityLinkRequiredError) return null;
+            throw error;
+          }
+        })
+      )
+    ).filter((entry) => entry !== null);
 
     const { profiles, roles } = await loadSupabaseUserRows(access.supabase);
     const profilesByUser = new Map(
       profiles.map((profile) => [profile.user_id!, profile])
     );
     const rolesByUser = new Map(roles.map((role) => [role.user_id!, role]));
-    const clerkUsersById = new Map(clerkUsers.map((user) => [user.id, user]));
+    const clerkUsersById = new Map(
+      resolvedClerkUsers.map(({ user, accessSnapshot }) => [
+        accessSnapshot.userId,
+        user,
+      ])
+    );
     const userIds = Array.from(
       new Set([
         ...clerkUsersById.keys(),
@@ -81,14 +105,23 @@ export async function GET() {
       ])
     );
 
-    const snapshots = await Promise.all(
-      userIds.map((userId) =>
-        loadAccessSnapshot(access.supabase, userId).then(
-          (snapshot) => [userId, snapshot] as const
-        )
-      )
+    const accessByUser = new Map(
+      resolvedClerkUsers.map(({ accessSnapshot }) => [
+        accessSnapshot.userId,
+        accessSnapshot,
+      ])
     );
-    const accessByUser = new Map(snapshots);
+    const missingSnapshots = await Promise.all(
+      userIds
+        .filter((userId) => !accessByUser.has(userId))
+        .map(async (userId) => [
+          userId,
+          await loadCanonicalAccessSnapshot(access.supabase, userId),
+        ] as const)
+    );
+    for (const [userId, snapshot] of missingSnapshots) {
+      accessByUser.set(userId, snapshot);
+    }
 
     const users = userIds
       .map((userId) =>
@@ -172,16 +205,20 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    const client = await clerkClient();
-    const targetClerkUser = await client.users
-      .getUser(targetUserId)
-      .catch(() => null);
+    const targetClerkUser = await findClerkUserForCanonicalUserId(
+      access.supabase,
+      targetUserId
+    );
 
     if (targetClerkUser) {
-      await ensureUserRecords(access.supabase, targetClerkUser);
+      await ensureUserRecords(
+        access.supabase,
+        targetUserId,
+        targetClerkUser
+      );
     }
 
-    const current = await loadAccessSnapshot(
+    const current = await loadCanonicalAccessSnapshot(
       access.supabase,
       targetUserId
     );
@@ -227,7 +264,7 @@ export async function PATCH(request: Request) {
       if (roleResult.error) throw roleResult.error;
     }
 
-    const updatedAccess = await loadAccessSnapshot(
+    const updatedAccess = await loadCanonicalAccessSnapshot(
       access.supabase,
       targetUserId
     );
@@ -285,6 +322,28 @@ async function listClerkUsers() {
   return users;
 }
 
+async function findClerkUserForCanonicalUserId(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  canonicalUserId: string
+) {
+  const clerkUsers = await listClerkUsers();
+
+  for (const user of clerkUsers) {
+    try {
+      const resolvedUserId = await resolveCanonicalAccessUserId(
+        supabase,
+        user.id
+      );
+      if (resolvedUserId === canonicalUserId) return user;
+    } catch (error) {
+      if (error instanceof IdentityLinkRequiredError) continue;
+      throw error;
+    }
+  }
+
+  return null;
+}
+
 async function loadSupabaseUserRows(
   supabase: ReturnType<typeof createSupabaseAdminClient>
 ) {
@@ -338,7 +397,7 @@ function buildAdminUser({
     name,
     fullName,
     email,
-    clerkUserId: userId,
+    clerkUserId: clerkUser?.id ?? userId,
     refCardId: profile?.ref_card_id || "Pendiente",
     role,
     roleLabel: roleLabels[role],

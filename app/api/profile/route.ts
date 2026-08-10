@@ -9,7 +9,10 @@ import {
 } from "@/lib/reflabUserRecords";
 import { resolveRefCardId } from "@/lib/refCard";
 import { normalizeSubscriptionPlan } from "@/lib/subscription";
-import { loadAccessSnapshot } from "@/lib/access/server";
+import {
+  IdentityLinkRequiredError,
+  loadAccessSnapshot,
+} from "@/lib/access/server";
 import { toLegacyPlan } from "@/lib/access/catalog";
 
 export const dynamic = "force-dynamic";
@@ -36,10 +39,15 @@ export async function GET() {
   if (access.response) return access.response;
 
   try {
-    const [{ clientProfile }, accessSnapshot] = await Promise.all([
-      ensureUserRecords(access.supabase, access.clerkUser),
-      loadAccessSnapshot(access.supabase, access.clerkUser.id),
-    ]);
+    const accessSnapshot = await loadAccessSnapshot(
+      access.supabase,
+      access.clerkUser.id
+    );
+    const { clientProfile } = await ensureUserRecords(
+      access.supabase,
+      accessSnapshot.userId,
+      access.clerkUser
+    );
 
     return NextResponse.json({
       profile: {
@@ -55,6 +63,13 @@ export async function GET() {
       access: accessSnapshot,
     });
   } catch (error) {
+    if (error instanceof IdentityLinkRequiredError) {
+      return NextResponse.json(
+        { error: error.code },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json(
       {
         error: "No se pudo cargar el perfil.",
@@ -77,10 +92,14 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    const ensured = await ensureUserRecords(access.supabase, access.clerkUser);
     const accessSnapshot = await loadAccessSnapshot(
       access.supabase,
       access.clerkUser.id
+    );
+    const ensured = await ensureUserRecords(
+      access.supabase,
+      accessSnapshot.userId,
+      access.clerkUser
     );
     const existingProfile = ensured.profile;
     const existingRole = ensured.role;
@@ -102,7 +121,7 @@ export async function PATCH(request: Request) {
     );
 
     const profileResult = await upsertUserProfile(access.supabase, {
-      user_id: access.clerkUser.id,
+      user_id: accessSnapshot.userId,
       email,
       reflab_name: reflabName || null,
       first_name: firstName || null,
@@ -117,7 +136,7 @@ export async function PATCH(request: Request) {
       level: cleanText(body.level) || null,
       birth_date: cleanDate(body.birthDate),
       avatar_url: existingProfile?.avatar_url ?? access.clerkUser.imageUrl ?? null,
-      ref_card_id: resolveRefCardId(access.clerkUser.id, existingProfile),
+      ref_card_id: resolveRefCardId(accessSnapshot.userId, existingProfile),
       ranking_display_name: rankingDisplayName,
       show_real_name_in_ranking: showRealNameInRanking,
       public_profile: body.publicProfile !== false,
@@ -155,6 +174,13 @@ export async function PATCH(request: Request) {
       access: accessSnapshot,
     });
   } catch (error) {
+    if (error instanceof IdentityLinkRequiredError) {
+      return NextResponse.json(
+        { error: error.code },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json(
       {
         error: "No se pudo guardar el perfil.",

@@ -50,7 +50,7 @@ export async function GET(request: Request) {
 
     const ranking = getRankingRows(
       attemptsResult.data ?? [],
-      userId,
+      access.userId,
       profilesResult.data ?? [],
       sportType
     );

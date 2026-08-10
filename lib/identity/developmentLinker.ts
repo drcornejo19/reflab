@@ -69,7 +69,7 @@ export class DevelopmentIdentityLinkerRpcError extends Error {
   }
 }
 
-export function assertDevelopmentIdentityLinkerEnvironment(
+export function assertCanonicalIdentityEnvironmentAtStartup(
   environment: NodeJS.ProcessEnv = process.env
 ) {
   const appEnvironment = normalized(environment.APP_ENV);
@@ -77,7 +77,53 @@ export function assertDevelopmentIdentityLinkerEnvironment(
   const nodeEnvironment = normalized(environment.NODE_ENV);
   const supabaseEnvironment = normalized(environment.SUPABASE_ENV);
   const configuredProjectRef = normalized(environment.SUPABASE_PROJECT_REF);
-  const supabaseUrl = environment.NEXT_PUBLIC_SUPABASE_URL;
+  const enabled = normalized(
+    environment.ENABLE_DEVELOPMENT_IDENTITY_LINKER
+  );
+  const parsedUrl = parseSupabaseUrl(environment.NEXT_PUBLIC_SUPABASE_URL);
+  const configuredHost = parsedUrl?.hostname.toLowerCase() ?? "";
+  const developmentConfigured =
+    appEnvironment === "development" ||
+    clerkEnvironment === "development" ||
+    supabaseEnvironment === "development" ||
+    configuredProjectRef === DEVELOPMENT_SUPABASE_PROJECT_REF ||
+    configuredHost === `${DEVELOPMENT_SUPABASE_PROJECT_REF}.supabase.co` ||
+    enabled === "true";
+  const productionConfigured =
+    configuredProjectRef === FORBIDDEN_PRODUCTION_PROJECT_REF ||
+    configuredHost === `${FORBIDDEN_PRODUCTION_PROJECT_REF}.supabase.co`;
+
+  if (!developmentConfigured) return false;
+
+  if (
+    productionConfigured ||
+    nodeEnvironment === "production" ||
+    appEnvironment !== "development" ||
+    clerkEnvironment !== "development" ||
+    supabaseEnvironment !== "development" ||
+    configuredProjectRef !== DEVELOPMENT_SUPABASE_PROJECT_REF ||
+    configuredHost !== `${DEVELOPMENT_SUPABASE_PROJECT_REF}.supabase.co` ||
+    parsedUrl?.protocol !== "https:" ||
+    parsedUrl?.username ||
+    parsedUrl?.password ||
+    parsedUrl?.port
+  ) {
+    throw new DevelopmentIdentityLinkerConfigurationError();
+  }
+
+  return true;
+}
+
+export function requiresCanonicalDevelopmentIdentity(
+  environment: NodeJS.ProcessEnv = process.env
+) {
+  return assertCanonicalIdentityEnvironmentAtStartup(environment);
+}
+
+export function assertDevelopmentIdentityLinkerEnvironment(
+  environment: NodeJS.ProcessEnv = process.env
+) {
+  const nodeEnvironment = normalized(environment.NODE_ENV);
   const enabled = normalized(
     environment.ENABLE_DEVELOPMENT_IDENTITY_LINKER
   );
@@ -85,34 +131,11 @@ export function assertDevelopmentIdentityLinkerEnvironment(
     environment.DEVELOPMENT_IDENTITY_LINK_SECRET ?? "";
 
   if (
+    !assertCanonicalIdentityEnvironmentAtStartup(environment) ||
     enabled !== "true" ||
     nodeEnvironment === "production" ||
-    appEnvironment !== "development" ||
-    clerkEnvironment !== "development" ||
-    supabaseEnvironment !== "development" ||
-    configuredProjectRef === FORBIDDEN_PRODUCTION_PROJECT_REF ||
-    configuredProjectRef !== DEVELOPMENT_SUPABASE_PROJECT_REF ||
     configuredSecret.length < MINIMUM_DEVELOPMENT_SECRET_LENGTH ||
     !environment.SUPABASE_SERVICE_ROLE_KEY
-  ) {
-    throw new DevelopmentIdentityLinkerConfigurationError();
-  }
-
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(supabaseUrl ?? "");
-  } catch {
-    throw new DevelopmentIdentityLinkerConfigurationError();
-  }
-
-  if (
-    parsedUrl.protocol !== "https:" ||
-    parsedUrl.hostname.toLowerCase() !==
-      `${DEVELOPMENT_SUPABASE_PROJECT_REF}.supabase.co` ||
-    parsedUrl.username ||
-    parsedUrl.password ||
-    parsedUrl.port ||
-    parsedUrl.href.includes(FORBIDDEN_PRODUCTION_PROJECT_REF)
   ) {
     throw new DevelopmentIdentityLinkerConfigurationError();
   }
@@ -240,6 +263,14 @@ export async function handleDevelopmentIdentityLinkRequest(
 
 function normalized(value: string | undefined) {
   return value?.trim().toLowerCase();
+}
+
+function parseSupabaseUrl(value: string | undefined) {
+  try {
+    return new URL(value ?? "");
+  } catch {
+    return null;
+  }
 }
 
 export async function executeDevelopmentIdentityLinkRoute(
