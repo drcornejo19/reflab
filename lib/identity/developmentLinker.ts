@@ -2,9 +2,18 @@ import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createSupabaseAdminClient } from "../supabaseAdmin.ts";
+import {
+  DEVELOPMENT_SUPABASE_PROJECT_REF,
+  DevelopmentIdentityLinkerConfigurationError,
+  FORBIDDEN_PRODUCTION_PROJECT_REF,
+  requiresCanonicalDevelopmentIdentity,
+} from "./developmentIdentityEnvironment.ts";
 
-export const DEVELOPMENT_SUPABASE_PROJECT_REF = "bthnhbpgiyuajsgoccrp";
-export const FORBIDDEN_PRODUCTION_PROJECT_REF = "nagjddldrldwavmfaytc";
+export {
+  DEVELOPMENT_SUPABASE_PROJECT_REF,
+  DevelopmentIdentityLinkerConfigurationError,
+  FORBIDDEN_PRODUCTION_PROJECT_REF,
+};
 export const DEVELOPMENT_IDENTITY_LINK_SECRET_HEADER =
   "x-reflab-development-identity-link-secret";
 
@@ -52,13 +61,6 @@ type HandlerResult = {
     | { error: string };
 };
 
-export class DevelopmentIdentityLinkerConfigurationError extends Error {
-  constructor() {
-    super("Development identity linker is unavailable in this environment.");
-    this.name = "DevelopmentIdentityLinkerConfigurationError";
-  }
-}
-
 export class DevelopmentIdentityLinkerRpcError extends Error {
   readonly code?: string;
 
@@ -72,52 +74,7 @@ export class DevelopmentIdentityLinkerRpcError extends Error {
 export function assertCanonicalIdentityEnvironmentAtStartup(
   environment: NodeJS.ProcessEnv = process.env
 ) {
-  const appEnvironment = normalized(environment.APP_ENV);
-  const clerkEnvironment = normalized(environment.CLERK_ENV);
-  const nodeEnvironment = normalized(environment.NODE_ENV);
-  const supabaseEnvironment = normalized(environment.SUPABASE_ENV);
-  const configuredProjectRef = normalized(environment.SUPABASE_PROJECT_REF);
-  const enabled = normalized(
-    environment.ENABLE_DEVELOPMENT_IDENTITY_LINKER
-  );
-  const parsedUrl = parseSupabaseUrl(environment.NEXT_PUBLIC_SUPABASE_URL);
-  const configuredHost = parsedUrl?.hostname.toLowerCase() ?? "";
-  const developmentConfigured =
-    appEnvironment === "development" ||
-    clerkEnvironment === "development" ||
-    supabaseEnvironment === "development" ||
-    configuredProjectRef === DEVELOPMENT_SUPABASE_PROJECT_REF ||
-    configuredHost === `${DEVELOPMENT_SUPABASE_PROJECT_REF}.supabase.co` ||
-    enabled === "true";
-  const productionConfigured =
-    configuredProjectRef === FORBIDDEN_PRODUCTION_PROJECT_REF ||
-    configuredHost === `${FORBIDDEN_PRODUCTION_PROJECT_REF}.supabase.co`;
-
-  if (!developmentConfigured) return false;
-
-  if (
-    productionConfigured ||
-    nodeEnvironment === "production" ||
-    appEnvironment !== "development" ||
-    clerkEnvironment !== "development" ||
-    supabaseEnvironment !== "development" ||
-    configuredProjectRef !== DEVELOPMENT_SUPABASE_PROJECT_REF ||
-    configuredHost !== `${DEVELOPMENT_SUPABASE_PROJECT_REF}.supabase.co` ||
-    parsedUrl?.protocol !== "https:" ||
-    parsedUrl?.username ||
-    parsedUrl?.password ||
-    parsedUrl?.port
-  ) {
-    throw new DevelopmentIdentityLinkerConfigurationError();
-  }
-
-  return true;
-}
-
-export function requiresCanonicalDevelopmentIdentity(
-  environment: NodeJS.ProcessEnv = process.env
-) {
-  return assertCanonicalIdentityEnvironmentAtStartup(environment);
+  return requiresCanonicalDevelopmentIdentity(environment);
 }
 
 export function assertDevelopmentIdentityLinkerEnvironment(
@@ -263,14 +220,6 @@ export async function handleDevelopmentIdentityLinkRequest(
 
 function normalized(value: string | undefined) {
   return value?.trim().toLowerCase();
-}
-
-function parseSupabaseUrl(value: string | undefined) {
-  try {
-    return new URL(value ?? "");
-  } catch {
-    return null;
-  }
 }
 
 export async function executeDevelopmentIdentityLinkRoute(

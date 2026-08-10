@@ -10,7 +10,7 @@ import type {
   AccessSource,
   CanonicalPlanKey,
 } from "./types.ts";
-import { requiresCanonicalDevelopmentIdentity } from "../identity/developmentLinker.ts";
+import { requiresCanonicalDevelopmentIdentity } from "../identity/developmentIdentityEnvironment.ts";
 import { resolveCapabilityKeys } from "./resolveCapabilities.ts";
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;

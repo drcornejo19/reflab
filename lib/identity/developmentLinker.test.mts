@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import {
   DEVELOPMENT_IDENTITY_LINK_SECRET_HEADER,
   DEVELOPMENT_SUPABASE_PROJECT_REF,
@@ -50,6 +51,18 @@ const resolutionMigrationSql = readFileSync(
   "utf8"
 );
 const proxySource = readFileSync(resolve(repositoryRoot, "proxy.ts"), "utf8");
+const linkerSource = readFileSync(
+  resolve(repositoryRoot, "lib", "identity", "developmentLinker.ts"),
+  "utf8"
+);
+const environmentSource = readFileSync(
+  resolve(repositoryRoot, "lib", "identity", "developmentIdentityEnvironment.ts"),
+  "utf8"
+);
+const instrumentationSource = readFileSync(
+  resolve(repositoryRoot, "instrumentation.ts"),
+  "utf8"
+);
 
 const localDevelopmentSecret =
   "synthetic-development-linker-secret-0000000000000001";
@@ -636,11 +649,6 @@ test("the RPC uses only the canonical RLS owner", () => {
 });
 
 test("the application guard uses a constant-time secret comparison", () => {
-  const linkerSource = readFileSync(
-    resolve(repositoryRoot, "lib", "identity", "developmentLinker.ts"),
-    "utf8"
-  );
-
   assert.match(linkerSource, /timingSafeEqual/);
   assert.match(linkerSource, /ENABLE_DEVELOPMENT_IDENTITY_LINKER/);
   assert.match(linkerSource, /DEVELOPMENT_IDENTITY_LINK_SECRET/);
@@ -648,3 +656,149 @@ test("the application guard uses a constant-time secret comparison", () => {
   assert.match(linkerSource, /LOOPBACK_HOSTNAMES/);
   assert.doesNotMatch(linkerSource, /console\.(?:log|error|warn)/i);
 });
+
+test("the Development linker remains an explicit server-only boundary", () => {
+  assert.match(linkerSource, /^import "server-only";/);
+  assert.match(linkerSource, /from "node:crypto"/);
+  assert.match(linkerSource, /createSupabaseAdminClient/);
+  assert.match(linkerSource, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(linkerSource, /DEVELOPMENT_IDENTITY_LINK_SECRET/);
+  assert.doesNotMatch(instrumentationSource, /developmentLinker/);
+});
+
+test("the shared identity environment guard is client-safe and pure", () => {
+  assert.doesNotMatch(environmentSource, /(?:from|import\s*)\s*["']node:/);
+  assert.doesNotMatch(environmentSource, /@clerk\/nextjs\/server/);
+  assert.doesNotMatch(environmentSource, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.doesNotMatch(environmentSource, /DEVELOPMENT_IDENTITY_LINK_SECRET/);
+  assert.doesNotMatch(environmentSource, /process\.env/);
+});
+
+test("client entrypoints cannot reach server-only identity or node modules", () => {
+  const sourceFiles = collectSourceFiles(repositoryRoot);
+  const clientRoots = sourceFiles.filter((path) => isClientModule(path));
+  const visited = new Set<string>();
+  const pending = [...clientRoots];
+  const nodeImports: Array<{ importer: string; specifier: string }> = [];
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current || visited.has(current)) continue;
+    visited.add(current);
+
+    for (const specifier of importedRuntimeSpecifiers(current)) {
+      if (specifier.startsWith("node:")) {
+        nodeImports.push({ importer: current, specifier });
+        continue;
+      }
+
+      const resolvedImport = resolveSourceImport(current, specifier);
+      if (resolvedImport && !visited.has(resolvedImport)) {
+        pending.push(resolvedImport);
+      }
+    }
+  }
+
+  const linkerPath = resolve(
+    repositoryRoot,
+    "lib",
+    "identity",
+    "developmentLinker.ts"
+  );
+  assert.equal(visited.has(linkerPath), false);
+  assert.deepEqual(nodeImports, []);
+});
+
+function collectSourceFiles(root: string) {
+  const result: string[] = [];
+  const pending = [resolve(root, "app"), resolve(root, "components"), resolve(root, "lib")];
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current) continue;
+
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const entryPath = join(current, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(entryPath);
+      } else if (
+        /\.(?:[cm]?[jt]sx?)$/.test(entry.name) &&
+        !/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(entry.name)
+      ) {
+        result.push(entryPath);
+      }
+    }
+  }
+
+  return result;
+}
+
+function isClientModule(path: string) {
+  const source = readFileSync(path, "utf8");
+  const sourceFile = ts.createSourceFile(
+    path,
+    source,
+    ts.ScriptTarget.Latest,
+    true
+  );
+  const firstStatement = sourceFile.statements[0];
+  return Boolean(
+    firstStatement &&
+      ts.isExpressionStatement(firstStatement) &&
+      ts.isStringLiteral(firstStatement.expression) &&
+      firstStatement.expression.text === "use client"
+  );
+}
+
+function importedRuntimeSpecifiers(path: string) {
+  const source = readFileSync(path, "utf8");
+  const sourceFile = ts.createSourceFile(
+    path,
+    source,
+    ts.ScriptTarget.Latest,
+    true
+  );
+  const specifiers: string[] = [];
+
+  sourceFile.forEachChild((node) => {
+    if (
+      ts.isImportDeclaration(node) &&
+      !node.importClause?.isTypeOnly &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      specifiers.push(node.moduleSpecifier.text);
+    } else if (
+      ts.isExportDeclaration(node) &&
+      !node.isTypeOnly &&
+      node.moduleSpecifier &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      specifiers.push(node.moduleSpecifier.text);
+    }
+  });
+
+  return specifiers;
+}
+
+function resolveSourceImport(importer: string, specifier: string) {
+  let basePath: string;
+  if (specifier.startsWith("@/")) {
+    basePath = resolve(repositoryRoot, specifier.slice(2));
+  } else if (specifier.startsWith(".")) {
+    basePath = resolve(dirname(importer), specifier);
+  } else {
+    return null;
+  }
+
+  const withoutTypeScriptExtension = basePath.replace(/\.(?:[cm]?[jt]sx?)$/, "");
+  const candidates = [
+    ...[".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx"].map(
+      (extension) => `${withoutTypeScriptExtension}${extension}`
+    ),
+    ...[".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx"].map(
+      (extension) => join(basePath, `index${extension}`)
+    ),
+  ];
+
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}

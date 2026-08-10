@@ -131,6 +131,8 @@ test("the startup hook validates canonical Development configuration", () => {
   assert.match(instrumentationSource, /NEXT_RUNTIME !== "nodejs"/);
   assert.match(
     instrumentationSource,
-    /assertCanonicalIdentityEnvironmentAtStartup/
+    /requiresCanonicalDevelopmentIdentity\(process\.env\)/
   );
+  assert.match(instrumentationSource, /developmentIdentityEnvironment/);
+  assert.doesNotMatch(instrumentationSource, /developmentLinker/);
 });
