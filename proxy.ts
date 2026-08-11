@@ -13,6 +13,7 @@ const isPublicRoute = createRouteMatcher([
 
 const isDevelopmentIdentityLinkRoute = createRouteMatcher([
   "/api/development/identity-link",
+  "/api/development/super-admin-identity-link",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

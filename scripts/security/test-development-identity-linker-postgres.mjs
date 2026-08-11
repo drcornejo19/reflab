@@ -52,6 +52,12 @@ const adminAccessMigrationPath = resolve(
   "migrations",
   "202608110001_canonical_admin_user_access.sql"
 );
+const superAdminIdentityMigrationPath = resolve(
+  repositoryRoot,
+  "supabase",
+  "migrations",
+  "202608110002_development_super_admin_identity_link.sql"
+);
 const temporaryRoot = mkdtempSync(
   join(tmpdir(), "reflab-identity-linker-postgres-")
 );
@@ -75,6 +81,10 @@ const rollbackAdminAccessMigrationPath = join(
   temporaryRoot,
   "admin-access-rollback.sql"
 );
+const rollbackSuperAdminIdentityMigrationPath = join(
+  temporaryRoot,
+  "super-admin-identity-rollback.sql"
+);
 const concurrentDemotionPath = join(
   temporaryRoot,
   "admin-access-concurrent-demotion.sql"
@@ -82,6 +92,10 @@ const concurrentDemotionPath = join(
 const staleAuthorizationPath = join(
   temporaryRoot,
   "admin-access-stale-authorization.sql"
+);
+const concurrentIdentityPath = join(
+  temporaryRoot,
+  "identity-link-concurrent-first.sql"
 );
 const port = await reservePort();
 const connectionEnvironment = {
@@ -134,6 +148,16 @@ try {
     "reflab_identity_linker_test",
     "after canonical admin access migration"
   );
+  applySqlFile(
+    "reflab_identity_linker_test",
+    superAdminIdentityMigrationPath
+  );
+  assertNoPublicCreatePrivilege(
+    "reflab_identity_linker_test",
+    "after Development Super Admin identity migration"
+  );
+  assertRlsOwnerPolicyIsolation("reflab_identity_linker_test");
+  await assertIdentityLinkConcurrency("reflab_identity_linker_test");
   applySqlFile("reflab_identity_linker_test", behaviorPath);
   await assertAdminAccessConcurrency("reflab_identity_linker_test");
   assertCanonicalStructure("reflab_identity_linker_test");
@@ -207,6 +231,33 @@ try {
     rollbackAdminAccessMigrationPath
   );
   assertAdminAccessRollback("reflab_admin_access_rollback");
+
+  createDatabase("reflab_super_admin_identity_rollback");
+  applyBootstrapAndBaseline("reflab_super_admin_identity_rollback");
+  applySqlFile("reflab_super_admin_identity_rollback", seedPath);
+  applySqlFile("reflab_super_admin_identity_rollback", migrationPath);
+  applySqlFile(
+    "reflab_super_admin_identity_rollback",
+    resolutionMigrationPath
+  );
+  applySqlFile(
+    "reflab_super_admin_identity_rollback",
+    adminAccessMigrationPath
+  );
+  writeFileSync(
+    rollbackSuperAdminIdentityMigrationPath,
+    migrationWithRollback(
+      readFileSync(superAdminIdentityMigrationPath, "utf8")
+    ),
+    "utf8"
+  );
+  applySqlFile(
+    "reflab_super_admin_identity_rollback",
+    rollbackSuperAdminIdentityMigrationPath
+  );
+  assertSuperAdminIdentityRollback(
+    "reflab_super_admin_identity_rollback"
+  );
 
   console.log(
     "Development identity linker PostgreSQL test passed in an isolated local cluster."
@@ -413,6 +464,284 @@ select pg_catalog.json_build_object(
   }
 }
 
+async function assertIdentityLinkConcurrency(databaseName) {
+  const initialCount = query(
+    databaseName,
+    "select pg_catalog.count(*) from reflab_private.user_identity_links;"
+  );
+  if (initialCount !== "0") {
+    throw new Error("Identity concurrency test requires an empty link table.");
+  }
+
+  const crossSubject = "user_clerk_concurrent_cross_target";
+  const { operation: crossTargetFirst } = await startConcurrentIdentityCall(
+    databaseName,
+    "reflab_identity_cross_target",
+    `public.link_development_clerk_identity('${crossSubject}')`
+  );
+  const crossTargetSecond = query(
+    databaseName,
+    `select public.link_development_super_admin_clerk_identity('${crossSubject}');`
+  );
+  await crossTargetFirst;
+  if (crossTargetSecond !== "conflict") {
+    throw new Error("One Clerk subject was linked to two canonical targets.");
+  }
+  assertExactIdentityLinks(databaseName, [
+    [crossSubject, "user_dev_referee_a"],
+  ]);
+  deleteIdentityTestLinks(databaseName, [crossSubject]);
+
+  query(
+    databaseName,
+    String.raw`begin;
+select public.link_development_super_admin_clerk_identity(
+  'user_clerk_concurrent_rollback'
+);
+rollback;`
+  );
+  if (
+    query(
+      databaseName,
+      "select pg_catalog.count(*) from reflab_private.user_identity_links;"
+    ) !== "0"
+  ) {
+    throw new Error("Rolled-back identity linking left a residual row.");
+  }
+
+  const protectedRefereeSubject = "user_clerk_protected_referee";
+  if (
+    query(
+      databaseName,
+      `select public.link_development_clerk_identity('${protectedRefereeSubject}');`
+    ) !== "created"
+  ) {
+    throw new Error("The protected referee fixture link was not created.");
+  }
+
+  const winningSubject = "user_clerk_super_admin_winner";
+  const losingSubject = "user_clerk_super_admin_conflict";
+  const { operation: differentSubjectsFirst } =
+    await startConcurrentIdentityCall(
+    databaseName,
+    "reflab_identity_same_target",
+    `public.link_development_super_admin_clerk_identity('${winningSubject}')`
+  );
+  const differentSubjectsSecond = query(
+    databaseName,
+    `select public.link_development_super_admin_clerk_identity('${losingSubject}');`
+  );
+  await differentSubjectsFirst;
+  if (differentSubjectsSecond !== "conflict") {
+    throw new Error("Two Clerk subjects linked to the fixed Super Admin target.");
+  }
+  assertExactIdentityLinks(databaseName, [
+    [protectedRefereeSubject, "user_dev_referee_a"],
+    [winningSubject, "user_dev_super_admin"],
+  ]);
+  deleteIdentityTestLinks(databaseName, [winningSubject]);
+
+  const repeatedSubject = "user_clerk_super_admin_repeated";
+  const { operation: samePairFirst } = await startConcurrentIdentityCall(
+    databaseName,
+    "reflab_identity_same_pair",
+    `public.link_development_super_admin_clerk_identity('${repeatedSubject}')`
+  );
+  const samePairSecond = query(
+    databaseName,
+    `select public.link_development_super_admin_clerk_identity('${repeatedSubject}');`
+  );
+  await samePairFirst;
+  if (samePairSecond !== "already_linked") {
+    throw new Error("Concurrent identical linking was not idempotent.");
+  }
+  assertExactIdentityLinks(databaseName, [
+    [protectedRefereeSubject, "user_dev_referee_a"],
+    [repeatedSubject, "user_dev_super_admin"],
+  ]);
+
+  deleteIdentityTestLinks(databaseName, [
+    protectedRefereeSubject,
+    repeatedSubject,
+  ]);
+  if (
+    query(
+      databaseName,
+      "select pg_catalog.count(*) from reflab_private.user_identity_links;"
+    ) !== "0"
+  ) {
+    throw new Error("Identity concurrency test left residual rows.");
+  }
+}
+
+async function startConcurrentIdentityCall(
+  databaseName,
+  applicationName,
+  functionCall
+) {
+  writeFileSync(
+    concurrentIdentityPath,
+    `begin;\nselect ${functionCall};\nselect pg_catalog.pg_sleep(1);\ncommit;\n`,
+    "utf8"
+  );
+  const operation = runPsqlFileAsync(
+    databaseName,
+    concurrentIdentityPath,
+    applicationName
+  );
+  await waitForActiveQuery(databaseName, applicationName, "pg_sleep");
+  return { operation };
+}
+
+function assertExactIdentityLinks(databaseName, expectedLinks) {
+  const result = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select coalesce(
+  pg_catalog.json_agg(
+    pg_catalog.json_build_array(external_subject, user_id)
+    order by external_subject
+  ),
+  '[]'::pg_catalog.json
+)
+from reflab_private.user_identity_links;`
+    )
+  );
+  const sortedExpected = [...expectedLinks].sort(([left], [right]) =>
+    left.localeCompare(right)
+  );
+  if (JSON.stringify(result) !== JSON.stringify(sortedExpected)) {
+    throw new Error("Concurrent identity links do not match the expected set.");
+  }
+}
+
+function deleteIdentityTestLinks(databaseName, subjects) {
+  const literals = subjects
+    .map((subject) => `'${subject.replaceAll("'", "''")}'`)
+    .join(", ");
+  query(
+    databaseName,
+    `delete from reflab_private.user_identity_links where external_subject in (${literals});`
+  );
+}
+
+function assertRlsOwnerPolicyIsolation(databaseName) {
+  const result = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select pg_catalog.json_build_object(
+  'constraints', (
+    select pg_catalog.array_agg(constraint_row.conname order by constraint_row.conname)
+    from pg_catalog.pg_constraint constraint_row
+    where constraint_row.conrelid =
+      'reflab_private.user_identity_links'::pg_catalog.regclass
+      and constraint_row.conname in (
+        'user_identity_links_pkey',
+        'user_identity_links_provider_user_key'
+      )
+  ),
+  'new_policies', (
+    select pg_catalog.json_agg(
+      pg_catalog.json_build_array(
+        policy.policyname,
+        policy.cmd,
+        policy.roles
+      )
+      order by policy.policyname
+    )
+    from pg_catalog.pg_policies policy
+    where policy.policyname in (
+      'user_identity_links_super_admin_rls_owner_insert',
+      'user_profiles_super_admin_identity_rls_owner_read',
+      'user_subscriptions_super_admin_identity_rls_owner_read'
+    )
+  ),
+  'unexpected_identity_mutators', (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_proc function_row
+    join pg_catalog.pg_roles owner_role
+      on owner_role.oid = function_row.proowner
+    where owner_role.rolname = 'reflab_rls_owner'
+      and pg_catalog.lower(function_row.prosrc) like
+        '%insert into reflab_private.user_identity_links%'
+      and function_row.proname not in (
+        'link_development_clerk_identity',
+        'link_development_super_admin_clerk_identity'
+      )
+  ),
+  'authenticated_helpers_expose_new_rows', (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_proc function_row
+    join pg_catalog.pg_roles owner_role
+      on owner_role.oid = function_row.proowner
+    where owner_role.rolname = 'reflab_rls_owner'
+      and pg_catalog.has_function_privilege(
+        'authenticated',
+        function_row.oid,
+        'EXECUTE'
+      )
+      and (
+        pg_catalog.lower(function_row.prosrc) like '%public.user_profiles%'
+        or pg_catalog.lower(function_row.prosrc) like '%public.user_subscriptions%'
+        or pg_catalog.lower(function_row.prosrc) like
+          '%insert into reflab_private.user_identity_links%'
+      )
+  ),
+  'public_executes_owner_functions', (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_proc function_row
+    join pg_catalog.pg_roles owner_role
+      on owner_role.oid = function_row.proowner
+    where owner_role.rolname = 'reflab_rls_owner'
+      and exists (
+        select 1
+        from pg_catalog.aclexplode(
+          coalesce(
+            function_row.proacl,
+            pg_catalog.acldefault('f', function_row.proowner)
+          )
+        ) privilege
+        where privilege.grantee = 0
+          and privilege.privilege_type = 'EXECUTE'
+      )
+  )
+);`
+    )
+  );
+
+  const expectedPolicies = [
+    [
+      "user_identity_links_super_admin_rls_owner_insert",
+      "INSERT",
+      ["reflab_rls_owner"],
+    ],
+    [
+      "user_profiles_super_admin_identity_rls_owner_read",
+      "SELECT",
+      ["reflab_rls_owner"],
+    ],
+    [
+      "user_subscriptions_super_admin_identity_rls_owner_read",
+      "SELECT",
+      ["reflab_rls_owner"],
+    ],
+  ];
+  if (
+    JSON.stringify(result.constraints) !==
+      JSON.stringify([
+        "user_identity_links_pkey",
+        "user_identity_links_provider_user_key",
+      ]) ||
+    JSON.stringify(result.new_policies) !==
+      JSON.stringify(expectedPolicies) ||
+    Number(result.unexpected_identity_mutators) !== 0 ||
+    Number(result.authenticated_helpers_expose_new_rows) !== 0 ||
+    Number(result.public_executes_owner_functions) !== 0
+  ) {
+    throw new Error("RLS owner policy isolation is broader than expected.");
+  }
+}
+
 function runPsqlFileAsync(databaseName, filePath, applicationName) {
   const child = spawn(
     psql,
@@ -596,6 +925,23 @@ begin
     join pg_catalog.pg_roles owner_role
       on owner_role.oid = function_row.proowner
     where namespace.nspname = 'public'
+      and function_row.proname =
+        'link_development_super_admin_clerk_identity'
+      and owner_role.rolname = 'reflab_rls_owner'
+      and function_row.prosecdef
+      and function_row.proconfig = array['search_path=pg_catalog']
+  ) then
+    raise exception 'Super Admin identity linker RPC ownership is unsafe';
+  end if;
+
+  if not exists (
+    select 1
+    from pg_catalog.pg_proc function_row
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = function_row.pronamespace
+    join pg_catalog.pg_roles owner_role
+      on owner_role.oid = function_row.proowner
+    where namespace.nspname = 'public'
       and function_row.proname = 'resolve_development_clerk_identity'
       and owner_role.rolname = 'reflab_rls_owner'
       and function_row.prosecdef
@@ -668,6 +1014,22 @@ begin
     raise exception 'identity resolver RPC grants are incorrect';
   end if;
 
+  if pg_catalog.has_function_privilege(
+    'anon',
+    'public.link_development_super_admin_clerk_identity(text)',
+    'EXECUTE'
+  ) or pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.link_development_super_admin_clerk_identity(text)',
+    'EXECUTE'
+  ) or not pg_catalog.has_function_privilege(
+    'service_role',
+    'public.link_development_super_admin_clerk_identity(text)',
+    'EXECUTE'
+  ) then
+    raise exception 'Super Admin identity linker RPC grants are incorrect';
+  end if;
+
   if (
     select pg_catalog.array_agg(policy.policyname order by policy.policyname)
     from pg_catalog.pg_policies policy
@@ -686,6 +1048,23 @@ begin
     'user_subscriptions_identity_rls_owner_read'
   ]::name[] then
     raise exception 'identity linker policy inventory is incomplete';
+  end if;
+
+  if (
+    select pg_catalog.array_agg(policy.policyname order by policy.policyname)
+    from pg_catalog.pg_policies policy
+    where policy.policyname in (
+      'user_identity_links_super_admin_rls_owner_insert',
+      'user_profiles_super_admin_identity_rls_owner_read',
+      'user_subscriptions_super_admin_identity_rls_owner_read'
+    )
+      and policy.roles = array['reflab_rls_owner']::name[]
+  ) <> array[
+    'user_identity_links_super_admin_rls_owner_insert',
+    'user_profiles_super_admin_identity_rls_owner_read',
+    'user_subscriptions_super_admin_identity_rls_owner_read'
+  ]::name[] then
+    raise exception 'Super Admin identity policy inventory is incomplete';
   end if;
 
   perform pg_catalog.set_config(
@@ -719,6 +1098,72 @@ begin
   );
   if link_status <> 'already_linked' then
     raise exception 'repeated link was not idempotent';
+  end if;
+
+  link_status := public.link_development_super_admin_clerk_identity(
+    'user_clerk_super_admin_local'
+  );
+  if link_status <> 'created' then
+    raise exception 'Super Admin link did not return created';
+  end if;
+
+  link_status := public.link_development_super_admin_clerk_identity(
+    'user_clerk_super_admin_local'
+  );
+  if link_status <> 'already_linked' then
+    raise exception 'repeated Super Admin link was not idempotent';
+  end if;
+
+  if (
+    select pg_catalog.count(*)
+    from reflab_private.user_identity_links
+  ) <> 2 or not exists (
+    select 1
+    from reflab_private.user_identity_links
+    where provider = 'clerk'
+      and external_subject = 'user_clerk_local_a'
+      and user_id = 'user_dev_referee_a'
+  ) or not exists (
+    select 1
+    from reflab_private.user_identity_links
+    where provider = 'clerk'
+      and external_subject = 'user_clerk_super_admin_local'
+      and user_id = 'user_dev_super_admin'
+  ) then
+    raise exception 'independent Development identity links are incorrect';
+  end if;
+
+  link_status := public.link_development_super_admin_clerk_identity(
+    'user_clerk_local_a'
+  );
+  if link_status <> 'conflict' then
+    raise exception 'existing referee subject was not protected';
+  end if;
+
+  perform pg_catalog.set_config(
+    'request.jwt.claims',
+    '{"sub":"user_clerk_super_admin_local"}',
+    true
+  );
+  select reflab_private.request_user_id()
+  into resolved_user_id;
+  if resolved_user_id <> 'user_dev_super_admin' then
+    raise exception 'linked Super Admin subject did not resolve canonically';
+  end if;
+
+  if (select pg_catalog.count(*) from public.user_profiles) <> 5
+     or (select pg_catalog.count(*) from public.user_global_roles) <> 5
+     or (select pg_catalog.count(*) from public.user_subscriptions) <> 5
+     or (select pg_catalog.count(*) from public.institution_memberships) <> 4
+     or (select pg_catalog.count(*) from public.user_roles) <> 0
+     or exists (
+       select 1 from public.user_global_roles
+       where source = 'automatic_default'
+     ) or exists (
+       select 1 from public.user_subscriptions
+       where source = 'automatic_default'
+     ) then
+    raise exception 'Super Admin linking provisioned lateral access records';
   end if;
 
   perform pg_catalog.set_config(
@@ -1286,8 +1731,8 @@ select pg_catalog.json_build_object(
   const expected = {
     public_tables: 79,
     private_tables: 2,
-    functions: 25,
-    policies: 132,
+    functions: 26,
+    policies: 135,
     triggers: 82,
   };
 
@@ -1309,6 +1754,10 @@ select pg_catalog.json_build_object(
     adminAccessMigrationPath,
     "utf8"
   );
+  const superAdminIdentityMigrationSql = readFileSync(
+    superAdminIdentityMigrationPath,
+    "utf8"
+  );
   const explicitIndexCount =
     (
       baselineSql.match(
@@ -1327,6 +1776,11 @@ select pg_catalog.json_build_object(
     ).length +
     (
       adminAccessMigrationSql.match(
+        /^\s*create\s+(?:unique\s+)?index\s+/gim
+      ) ?? []
+    ).length +
+    (
+      superAdminIdentityMigrationSql.match(
         /^\s*create\s+(?:unique\s+)?index\s+/gim
       ) ?? []
     ).length;
@@ -1473,6 +1927,50 @@ select pg_catalog.json_build_object(
   const parsed = JSON.parse(result);
   if (Object.values(parsed).some((value) => value !== true)) {
     throw new Error("Canonical admin migration rollback left privileges or objects.");
+  }
+}
+
+function assertSuperAdminIdentityRollback(databaseName) {
+  const result = query(
+    databaseName,
+    String.raw`
+select pg_catalog.json_build_object(
+  'super_admin_rpc_absent',
+  pg_catalog.to_regprocedure(
+    'public.link_development_super_admin_clerk_identity(text)'
+  ) is null,
+  'super_admin_policies_absent',
+  not exists (
+    select 1
+    from pg_catalog.pg_policies policy
+    where policy.policyname in (
+      'user_identity_links_super_admin_rls_owner_insert',
+      'user_profiles_super_admin_identity_rls_owner_read',
+      'user_subscriptions_super_admin_identity_rls_owner_read'
+    )
+  ),
+  'original_linker_present',
+  pg_catalog.to_regprocedure(
+    'public.link_development_clerk_identity(text)'
+  ) is not null,
+  'identity_table_present',
+  pg_catalog.to_regclass(
+    'reflab_private.user_identity_links'
+  ) is not null,
+  'owner_has_no_public_create',
+  not pg_catalog.has_schema_privilege(
+    'reflab_rls_owner',
+    'public',
+    'CREATE'
+  )
+);
+`
+  );
+  const parsed = JSON.parse(result);
+  if (Object.values(parsed).some((value) => value !== true)) {
+    throw new Error(
+      "Development Super Admin identity migration rollback left objects."
+    );
   }
 }
 
