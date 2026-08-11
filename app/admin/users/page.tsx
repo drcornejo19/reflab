@@ -25,7 +25,6 @@ type AdminUser = {
   name: string;
   fullName: string;
   email: string;
-  clerkUserId: string;
   refCardId: string;
   role: SystemRole;
   roleLabel: string;
@@ -379,12 +378,7 @@ export default function AdminUsersPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 border-t border-white/10 pt-4 text-xs sm:grid-cols-3">
-                    <FieldBlock label="Clerk User ID">
-                      <span className="break-all font-mono text-zinc-400">
-                        {item.clerkUserId}
-                      </span>
-                    </FieldBlock>
+                  <div className="mt-4 grid gap-3 border-t border-white/10 pt-4 text-xs sm:grid-cols-2">
                     <FieldBlock label="Creado">
                       <DateValue value={item.createdAt} />
                     </FieldBlock>

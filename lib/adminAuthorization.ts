@@ -7,6 +7,63 @@ import {
   IdentityLinkRequiredError,
   loadAccessSnapshot,
 } from "@/lib/access/server";
+import {
+  AdminUsersForbiddenError,
+  authorizeCanonicalAdminUsersRead,
+  sanitizeAdminUsersReadError,
+} from "@/lib/admin/usersRead";
+
+export async function requireSuperAdminReadAccess() {
+  const session = await auth();
+  const userId = session.userId;
+
+  if (!userId) {
+    return {
+      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      supabase: null as never,
+      userId: null as never,
+    };
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const access = await authorizeCanonicalAdminUsersRead(supabase, userId);
+    return {
+      response: null,
+      supabase,
+      userId: access.userId,
+    };
+  } catch (error) {
+    if (error instanceof IdentityLinkRequiredError) {
+      return {
+        response: NextResponse.json({ error: error.code }, { status: 409 }),
+        supabase: null as never,
+        userId,
+      };
+    }
+    if (error instanceof AdminUsersForbiddenError) {
+      return {
+        response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+        supabase: null as never,
+        userId,
+      };
+    }
+
+    const diagnostic = sanitizeAdminUsersReadError(error);
+    console.error("[admin.users.authorization]", diagnostic);
+    return {
+      response: NextResponse.json(
+        {
+          error: "No se pudo validar el acceso administrativo.",
+          technical: diagnostic.message,
+        },
+        { status: 500 }
+      ),
+      supabase: null as never,
+      userId,
+    };
+  }
+}
 
 export async function requireSuperAdminAccess() {
   const session = await auth();
