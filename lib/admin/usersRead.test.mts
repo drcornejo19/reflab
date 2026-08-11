@@ -201,7 +201,7 @@ test("structured Supabase errors are sanitized", () => {
   );
 });
 
-test("GET is side-effect free and PATCH keeps its existing write flow", async () => {
+test("GET stays side-effect free while PATCH uses canonical RPCs", async () => {
   const [routeSource, pageSource, readerSource] = await Promise.all([
     readFile(new URL("../../app/api/admin/users/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../../app/admin/users/page.tsx", import.meta.url), "utf8"),
@@ -231,8 +231,10 @@ test("GET is side-effect free and PATCH keeps its existing write flow", async ()
     ]
   );
   assert.doesNotMatch(readerSource, /user_roles|ensureUserRecords|clerkClient/);
-  assert.match(patchSource, /requireSuperAdminAccess/);
-  assert.match(patchSource, /ensureUserRecords/);
-  assert.match(patchSource, /admin_set_user_plan/);
-  assert.match(patchSource, /admin_set_global_role/);
+  assert.match(patchSource, /requireSuperAdminReadAccess/);
+  assert.match(patchSource, /applyCanonicalAdminUserMutation/);
+  assert.doesNotMatch(
+    patchSource,
+    /ensureUserRecords|user_roles|clerkClient|admin_set_user_plan|admin_set_global_role/
+  );
 });

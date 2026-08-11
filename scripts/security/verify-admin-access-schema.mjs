@@ -63,26 +63,38 @@ for (const [table, columns] of probes) {
   }
 }
 
-const { error: rpcError } = await supabase.rpc("admin_set_user_plan", {
-  actor_user_id: "diagnostic_invalid_actor",
-  target_user_id: "diagnostic_invalid_target",
-  new_plan_key: "basic",
-  change_reason: "schema verification without writes",
+const openApiResponse = await fetch(`${supabaseUrl.replace(/\/$/, "")}/rest/v1/`, {
+  method: "GET",
+  headers: {
+    apikey: serviceRoleKey,
+    authorization: `Bearer ${serviceRoleKey}`,
+    accept: "application/openapi+json, application/json",
+  },
+  cache: "no-store",
 });
 
-if (
-  rpcError?.message !== "Only a canonical Super Admin can change plans"
-) {
+if (!openApiResponse.ok) {
   failed = true;
-  console.error(
-    `[FAIL] RPC admin_set_user_plan inesperada: ${rpcError?.message ?? "sin error"}`
-  );
+  console.error(`[FAIL] inventario RPC: HTTP ${openApiResponse.status}`);
 } else {
-  console.log("[PASS] RPC admin_set_user_plan canónica y sin escrituras.");
+  const openApi = await openApiResponse.json();
+  const expectedRpcPaths = [
+    "/rpc/admin_set_canonical_user_plan",
+    "/rpc/admin_set_canonical_global_role",
+  ];
+
+  for (const rpcPath of expectedRpcPaths) {
+    if (!openApi?.paths?.[rpcPath]?.post) {
+      failed = true;
+      console.error(`[FAIL] RPC canonica ausente: ${rpcPath}`);
+    } else {
+      console.log(`[PASS] RPC canonica expuesta a service_role: ${rpcPath}.`);
+    }
+  }
 }
 
 if (failed) {
-  throw new Error("La reconciliación administrativa no está completa.");
+  throw new Error("La reconciliacion administrativa no esta completa.");
 }
 
-console.log("Verificación del esquema administrativo completada.");
+console.log("Verificacion read-only del esquema administrativo completada.");

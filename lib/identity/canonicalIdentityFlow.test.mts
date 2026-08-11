@@ -13,6 +13,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", ".
 const profileRouteSource = read("app/api/profile/route.ts");
 const avatarRouteSource = read("app/api/profile/avatar/route.ts");
 const adminUsersRouteSource = read("app/api/admin/users/route.ts");
+const adminUsersWriteSource = read("lib/admin/usersWrite.ts");
 const adminAuthorizationSource = read("lib/adminAuthorization.ts");
 const userRecordsSource = read("lib/reflabUserRecords.ts");
 const profileReaderSource = read("lib/profile/getProfile.ts");
@@ -104,14 +105,25 @@ test("profile GET is canonical and side-effect free while PATCH remains unchange
   assert.doesNotMatch(avatarUploadSource, /ensureUserRecords|user_roles/);
 });
 
-test("administration resolves Clerk users before provisioning and uses canonical snapshots", () => {
-  assert.ok(
-    adminUsersRouteSource.indexOf("await loadAccessSnapshot(") <
-      adminUsersRouteSource.indexOf("await ensureUserRecords(")
+test("administration resolves canonical identity without provisioning", () => {
+  assert.match(adminUsersRouteSource, /requireSuperAdminReadAccess/);
+  assert.match(adminUsersRouteSource, /applyCanonicalAdminUserMutation/);
+  assert.doesNotMatch(
+    adminUsersRouteSource,
+    /ensureUserRecords|clerkClient|resolveCanonicalAccessUserId/
   );
-  assert.match(adminUsersRouteSource, /loadCanonicalAccessSnapshot/);
-  assert.match(adminUsersRouteSource, /resolveCanonicalAccessUserId/);
-  assert.match(adminAuthorizationSource, /loadAccessSnapshot\(supabase, userId\)/);
+  assert.match(
+    adminUsersWriteSource,
+    /loadCanonicalAccessSnapshot[\s\S]*?provisionMissing:\s*false/
+  );
+  assert.doesNotMatch(
+    adminUsersWriteSource,
+    /ensureUserRecords|user_roles|automatic_default/
+  );
+  assert.match(
+    adminAuthorizationSource,
+    /authorizeCanonicalAdminUsersRead\(supabase, userId\)/
+  );
   assert.doesNotMatch(
     adminAuthorizationSource,
     /\.from\("user_global_roles"\)[\s\S]*?\.eq\("user_id", userId\)/
