@@ -83,6 +83,25 @@ test("a member of A and B may explicitly select B", () => {
   assert.equal(selected.institution.id, "institution-b");
 });
 
+test("an institutional administrator retains the authorized permission set", () => {
+  const selected = requireAuthorizedInstitutionContext(
+    snapshot([
+      context("institution-a", [
+        "institution.manage",
+        "members.manage",
+        "roles.manage",
+      ]),
+    ]),
+    "institution-a"
+  );
+
+  assert.deepEqual(selected.membership?.permissionKeys, [
+    "institution.manage",
+    "members.manage",
+    "roles.manage",
+  ]);
+});
+
 test("an explicit ID never falls back to the active or first context", () => {
   const accessSnapshot = snapshot(
     [context("institution-a"), context("institution-b")],

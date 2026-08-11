@@ -3,6 +3,7 @@ import "server-only";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
+import { IdentityLinkRequiredError } from "@/lib/access/server";
 import {
   institutionPermissionKeys,
   isInstitutionPermissionKey,
@@ -30,6 +31,7 @@ import {
   requireAuthorizedInstitutionContext,
   selectActiveInstitutionContext,
 } from "@/lib/institutional/tenantIsolation";
+import { resolveInstitutionalActorUserId } from "@/lib/institutional/institutionalIdentity";
 
 export { selectActiveInstitutionContext };
 
@@ -65,20 +67,32 @@ export class InstitutionAccessError extends Error {
 }
 
 export async function getInstitutionAccessForCurrentUser() {
-  const userId = await requireInstitutionUserId();
-
   const supabase = createSupabaseAdminClient();
+  const userId = await requireInstitutionUserId(supabase);
   const snapshot = await loadInstitutionAccess(userId, supabase);
 
   return { userId, supabase, snapshot };
 }
 
-export async function requireInstitutionUserId() {
+export async function requireInstitutionUserId(
+  supabase?: SupabaseAdminClient
+) {
   const session = await auth();
   if (!session.userId) {
     throw new InstitutionAccessError("Unauthorized", 401);
   }
-  return session.userId;
+
+  try {
+    return await resolveInstitutionalActorUserId(
+      supabase ?? createSupabaseAdminClient(),
+      session.userId
+    );
+  } catch (error) {
+    if (error instanceof IdentityLinkRequiredError) {
+      throw new InstitutionAccessError(error.code, 409);
+    }
+    throw error;
+  }
 }
 
 export async function getRequestedInstitutionId(explicitInstitutionId?: string | null) {
