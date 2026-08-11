@@ -25,6 +25,13 @@ import {
   institutionRoleLabels,
 } from "@/lib/institutional/permissions";
 import { isSportType, type SportType } from "@/lib/sports";
+import {
+  InstitutionTenantAccessError,
+  requireAuthorizedInstitutionContext,
+  selectActiveInstitutionContext,
+} from "@/lib/institutional/tenantIsolation";
+
+export { selectActiveInstitutionContext };
 
 export const ACTIVE_INSTITUTION_COOKIE = "reflab_active_institution";
 
@@ -35,6 +42,7 @@ export type InstitutionAuthorization = {
   supabase: SupabaseAdminClient;
   snapshot: InstitutionAccessSnapshot;
   context: InstitutionContext;
+  institutionId: string;
 };
 
 type CreateInstitutionInput = {
@@ -74,22 +82,11 @@ export async function requireInstitutionUserId() {
 }
 
 export async function getRequestedInstitutionId(explicitInstitutionId?: string | null) {
-  if (explicitInstitutionId) return explicitInstitutionId;
+  if (explicitInstitutionId !== undefined && explicitInstitutionId !== null) {
+    return explicitInstitutionId.trim();
+  }
   const cookieStore = await cookies();
-  return cookieStore.get(ACTIVE_INSTITUTION_COOKIE)?.value ?? null;
-}
-
-export function selectActiveInstitutionContext(
-  snapshot: InstitutionAccessSnapshot,
-  requestedInstitutionId?: string | null
-) {
-  if (!snapshot.contexts.length) return null;
-
-  return (
-    snapshot.contexts.find(
-      (context) => context.institution.id === requestedInstitutionId
-    ) ?? snapshot.contexts[0]
-  );
+  return cookieStore.get(ACTIVE_INSTITUTION_COOKIE)?.value.trim() ?? null;
 }
 
 export async function requireInstitutionPermission(
@@ -107,10 +104,18 @@ export async function requireInstitutionAnyPermission(
   const requestedInstitutionId = await getRequestedInstitutionId(
     explicitInstitutionId
   );
-  const context = selectActiveInstitutionContext(
-    access.snapshot,
-    requestedInstitutionId
-  );
+  let context: InstitutionContext;
+  try {
+    context = requireAuthorizedInstitutionContext(
+      access.snapshot,
+      requestedInstitutionId
+    );
+  } catch (error) {
+    if (error instanceof InstitutionTenantAccessError) {
+      throw new InstitutionAccessError(error.message, error.status);
+    }
+    throw error;
+  }
 
   if (!context) {
     throw new InstitutionAccessError(
@@ -130,7 +135,11 @@ export async function requireInstitutionAnyPermission(
     );
   }
 
-  return { ...access, context };
+  return {
+    ...access,
+    context,
+    institutionId: context.institution.id,
+  };
 }
 
 export function assertInstitutionWriteAllowed(
@@ -159,6 +168,12 @@ export async function createInstitutionForSuperAdmin(
     access.snapshot,
     requestedInstitutionId
   );
+  if (requestedInstitutionId !== null && !activeContext) {
+    throw new InstitutionAccessError(
+      "No tenes acceso a la institucion seleccionada.",
+      403
+    );
+  }
   if (activeContext?.demoMode) {
     throw new InstitutionAccessError(
       "El modo demo es de solo lectura. Sali del modo demo para crear instituciones.",
