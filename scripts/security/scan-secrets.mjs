@@ -27,7 +27,7 @@ const detectors = [
   {
     name: "Server secret assignment",
     pattern:
-      /(?:^|\n)\s*(?:SUPABASE_SERVICE_ROLE_KEY|CLERK_SECRET_KEY)\s*=\s*([^\s#]+)/g,
+      /(?:^|\n)\s*(?:SUPABASE_SECRET_KEY|CLERK_SECRET_KEY)\s*=\s*([^\s#]+)/g,
     validate: (match) => !isPlaceholder(match[1]),
   },
 ];

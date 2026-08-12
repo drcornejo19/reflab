@@ -78,7 +78,7 @@ function developmentEnvironment(
     SUPABASE_PROJECT_REF: DEVELOPMENT_SUPABASE_PROJECT_REF,
     NEXT_PUBLIC_SUPABASE_URL:
       `https://${DEVELOPMENT_SUPABASE_PROJECT_REF}.supabase.co`,
-    SUPABASE_SERVICE_ROLE_KEY: "synthetic-test-value",
+    SUPABASE_SECRET_KEY: "sb_secret_synthetic-test-value",
     ENABLE_DEVELOPMENT_IDENTITY_LINKER: "true",
     DEVELOPMENT_IDENTITY_LINK_SECRET: localDevelopmentSecret,
     ...overrides,
@@ -441,7 +441,7 @@ test("the route derives identity exclusively from Clerk auth", () => {
   );
   assert.doesNotMatch(
     routeSource,
-    /SUPABASE_SERVICE_ROLE_KEY|console\.(?:log|error|warn)/i
+    /SUPABASE_SECRET_KEY|console\.(?:log|error|warn)/i
   );
   assert.match(routeSource, /executeDevelopmentIdentityLinkRoute/);
   assert.doesNotMatch(
@@ -452,7 +452,10 @@ test("the route derives identity exclusively from Clerk auth", () => {
 
 test("Clerk protects the identity route without a same-origin proxy", () => {
   assert.match(proxySource, /\/api\/development\/identity-link/);
-  assert.match(proxySource, /isDevelopmentIdentityLinkRoute\(req\)/);
+  assert.match(
+    proxySource,
+    /isProtectedDevelopmentIdentityLinkRoute\(req\)/
+  );
   assert.match(proxySource, /\"\/\(api\|trpc\)\(\.\*\)\"/);
   assert.doesNotMatch(
     proxySource,
@@ -661,7 +664,7 @@ test("the Development linker remains an explicit server-only boundary", () => {
   assert.match(linkerSource, /^import "server-only";/);
   assert.match(linkerSource, /from "node:crypto"/);
   assert.match(linkerSource, /createSupabaseAdminClient/);
-  assert.match(linkerSource, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(linkerSource, /SUPABASE_SECRET_KEY/);
   assert.match(linkerSource, /DEVELOPMENT_IDENTITY_LINK_SECRET/);
   assert.doesNotMatch(instrumentationSource, /developmentLinker/);
 });
@@ -669,7 +672,7 @@ test("the Development linker remains an explicit server-only boundary", () => {
 test("the shared identity environment guard is client-safe and pure", () => {
   assert.doesNotMatch(environmentSource, /(?:from|import\s*)\s*["']node:/);
   assert.doesNotMatch(environmentSource, /@clerk\/nextjs\/server/);
-  assert.doesNotMatch(environmentSource, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.doesNotMatch(environmentSource, /SUPABASE_SECRET_KEY/);
   assert.doesNotMatch(environmentSource, /DEVELOPMENT_IDENTITY_LINK_SECRET/);
   assert.doesNotMatch(environmentSource, /process\.env/);
 });

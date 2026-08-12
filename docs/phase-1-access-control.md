@@ -40,7 +40,7 @@ El navegador crea un cliente Supabase con el token de sesión de Clerk mediante
 `SupabaseProvider`. La clave pública identifica el proyecto, pero las políticas
 RLS determinan qué filas puede leer o escribir el usuario.
 
-`SUPABASE_SERVICE_ROLE_KEY` se importa únicamente desde módulos con
+`SUPABASE_SECRET_KEY` se importa únicamente desde módulos con
 `server-only`. Nunca debe usar el prefijo `NEXT_PUBLIC_`.
 
 ## Super Admin

@@ -92,7 +92,7 @@ export function assertDevelopmentIdentityLinkerEnvironment(
     enabled !== "true" ||
     nodeEnvironment === "production" ||
     configuredSecret.length < MINIMUM_DEVELOPMENT_SECRET_LENGTH ||
-    !environment.SUPABASE_SERVICE_ROLE_KEY
+    !environment.SUPABASE_SECRET_KEY
   ) {
     throw new DevelopmentIdentityLinkerConfigurationError();
   }

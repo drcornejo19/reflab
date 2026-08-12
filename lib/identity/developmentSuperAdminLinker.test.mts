@@ -55,7 +55,7 @@ function developmentEnvironment(
       `https://${DEVELOPMENT_SUPABASE_PROJECT_REF}.supabase.co`,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_synthetic",
     CLERK_SECRET_KEY: "sk_test_synthetic",
-    SUPABASE_SERVICE_ROLE_KEY: "synthetic-test-value",
+    SUPABASE_SECRET_KEY: "sb_secret_synthetic-test-value",
     ENABLE_DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINKER: "true",
     DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINK_SECRET: localSecret,
     ...overrides,
@@ -465,7 +465,7 @@ test("the route derives the subject only from Clerk auth", () => {
   assert.match(routeSource, /return session\.userId/);
   assert.doesNotMatch(
     routeSource,
-    /request\.(?:json|formData)\(\)|searchParams\.get\(|SUPABASE_SERVICE_ROLE_KEY|console\./i
+    /request\.(?:json|formData)\(\)|searchParams\.get\(|SUPABASE_SECRET_KEY|console\./i
   );
   assert.doesNotMatch(routeSource, /request\.(?:headers|url).*user/i);
   assert.doesNotMatch(routeSource, /canonicalUserId|externalSubject|target/i);

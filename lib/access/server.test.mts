@@ -39,7 +39,7 @@ function developmentEnvironment(
     SUPABASE_PROJECT_REF: DEVELOPMENT_SUPABASE_PROJECT_REF,
     NEXT_PUBLIC_SUPABASE_URL:
       `https://${DEVELOPMENT_SUPABASE_PROJECT_REF}.supabase.co`,
-    SUPABASE_SERVICE_ROLE_KEY: "synthetic-test-value",
+    SUPABASE_SECRET_KEY: "sb_secret_synthetic-test-value",
     ENABLE_DEVELOPMENT_IDENTITY_LINKER: "true",
     DEVELOPMENT_IDENTITY_LINK_SECRET:
       "synthetic-development-linker-secret-0000000000000001",

@@ -61,7 +61,7 @@ const forbiddenContent = [
   /nagjddldrldwavmfaytc/i,
   /eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\./,
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
-  /(?:SUPABASE_SERVICE_ROLE_KEY|CLERK_SECRET_KEY)\s*=\s*\S+/,
+  /(?:SUPABASE_SECRET_KEY|CLERK_SECRET_KEY)\s*=\s*\S+/,
 ];
 
 const copied = [];

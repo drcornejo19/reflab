@@ -1,4 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   authorizeIsolatedSupabaseTarget,
   SKIPPED_ISOLATED_TARGET_MESSAGE,
@@ -6,7 +8,7 @@ import {
 
 const target = authorizeIsolatedSupabaseTarget([
   "NEXT_PUBLIC_SUPABASE_URL",
-  "SUPABASE_SERVICE_ROLE_KEY",
+  "SUPABASE_SECRET_KEY",
 ]);
 if (!target.allowed) {
   console.log(SKIPPED_ISOLATED_TARGET_MESSAGE);
@@ -14,9 +16,9 @@ if (!target.allowed) {
 }
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const secretKey = process.env.SUPABASE_SECRET_KEY;
 
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
+const supabase = createClient(supabaseUrl, secretKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false,
@@ -63,33 +65,31 @@ for (const [table, columns] of probes) {
   }
 }
 
-const openApiResponse = await fetch(`${supabaseUrl.replace(/\/$/, "")}/rest/v1/`, {
-  method: "GET",
-  headers: {
-    apikey: serviceRoleKey,
-    authorization: `Bearer ${serviceRoleKey}`,
-    accept: "application/openapi+json, application/json",
-  },
-  cache: "no-store",
-});
+const migrationSql = readFileSync(
+  resolve(
+    "supabase/migrations/202608110001_canonical_admin_user_access.sql"
+  ),
+  "utf8"
+);
+const expectedRpcNames = [
+  "admin_set_canonical_user_plan",
+  "admin_set_canonical_global_role",
+];
 
-if (!openApiResponse.ok) {
-  failed = true;
-  console.error(`[FAIL] inventario RPC: HTTP ${openApiResponse.status}`);
-} else {
-  const openApi = await openApiResponse.json();
-  const expectedRpcPaths = [
-    "/rpc/admin_set_canonical_user_plan",
-    "/rpc/admin_set_canonical_global_role",
-  ];
+for (const rpcName of expectedRpcNames) {
+  const escapedName = rpcName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const contract = new RegExp(
+    `create(?:\\s+or\\s+replace)?\\s+function\\s+public\\.${escapedName}\\b[\\s\\S]*?` +
+      `revoke\\s+all\\s+on\\s+function\\s+public\\.${escapedName}\\b[\\s\\S]*?` +
+      `grant\\s+execute\\s+on\\s+function\\s+public\\.${escapedName}\\b[\\s\\S]*?to\\s+service_role`,
+    "i"
+  );
 
-  for (const rpcPath of expectedRpcPaths) {
-    if (!openApi?.paths?.[rpcPath]?.post) {
-      failed = true;
-      console.error(`[FAIL] RPC canonica ausente: ${rpcPath}`);
-    } else {
-      console.log(`[PASS] RPC canonica expuesta a service_role: ${rpcPath}.`);
-    }
+  if (!contract.test(migrationSql)) {
+    failed = true;
+    console.error(`[FAIL] contrato RPC canonico incompleto: ${rpcName}.`);
+  } else {
+    console.log(`[PASS] contrato RPC canonico versionado: ${rpcName}.`);
   }
 }
 

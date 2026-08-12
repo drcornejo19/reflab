@@ -101,7 +101,7 @@ export function createSanitizedSupabaseError(
   const raw = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
   const secrets = [
     environment.SUPABASE_DB_URL,
-    environment.SUPABASE_SERVICE_ROLE_KEY,
+    environment.SUPABASE_SECRET_KEY,
   ];
 
   try {

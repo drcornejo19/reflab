@@ -89,7 +89,7 @@ test("connected validation requires a database URL for the same project", () => 
             "https://developmentref.supabase.co",
           SUPABASE_DB_URL:
             "postgresql://postgres.otherref:password@pooler.supabase.com:5432/postgres",
-          SUPABASE_SERVICE_ROLE_KEY: "synthetic",
+          SUPABASE_SECRET_KEY: "sb_secret_synthetic",
         },
         { requireConnectionVariables: true }
       ),
@@ -152,14 +152,14 @@ test("preflight reports Windows process errors without exposing secrets", () => 
   const environment = {
     SUPABASE_DB_URL:
       "postgresql://postgres:private-password@db.developmentref.supabase.co:5432/postgres",
-    SUPABASE_SERVICE_ROLE_KEY: "private-service-role",
+    SUPABASE_SECRET_KEY: "sb_secret_private-synthetic",
   };
   const error = createSanitizedSupabaseError(
     "Migration-history preflight",
     {
       status: null,
       stdout: environment.SUPABASE_DB_URL,
-      stderr: environment.SUPABASE_SERVICE_ROLE_KEY,
+      stderr: environment.SUPABASE_SECRET_KEY,
       error: { code: "EINVAL" },
     },
     environment

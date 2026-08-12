@@ -100,7 +100,7 @@ export function assertDevelopmentSuperAdminIdentityLinkerEnvironment(
     !clerkPublishableKey.startsWith("pk_test_") ||
     !clerkSecretKey.startsWith("sk_test_") ||
     configuredSecret.length < MINIMUM_DEVELOPMENT_SECRET_LENGTH ||
-    !environment.SUPABASE_SERVICE_ROLE_KEY ||
+    !environment.SUPABASE_SECRET_KEY ||
     DEPLOYED_RUNTIME_VARIABLES.some((name) =>
       Boolean(environment[name]?.trim())
     )

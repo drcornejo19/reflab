@@ -91,7 +91,7 @@ export function evaluateBaselineValidationTarget(
     const required = [
       "NEXT_PUBLIC_SUPABASE_URL",
       "SUPABASE_DB_URL",
-      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_SECRET_KEY",
     ];
     const missing = required.filter((name) => !environment[name]);
     if (missing.length > 0) {
@@ -122,4 +122,3 @@ export function evaluateBaselineValidationTarget(
 export function authorizeBaselineValidationTarget(options) {
   return evaluateBaselineValidationTarget(process.env, options);
 }
-
