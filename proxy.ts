@@ -11,13 +11,21 @@ const isPublicRoute = createRouteMatcher([
   "/api/notifications/scheduled",
 ]);
 
-const isDevelopmentIdentityLinkRoute = createRouteMatcher([
+const DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINK_PATH =
+  "/api/development/super-admin-identity-link";
+
+const isProtectedDevelopmentIdentityLinkRoute = createRouteMatcher([
   "/api/development/identity-link",
-  "/api/development/super-admin-identity-link",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-  if (isDevelopmentIdentityLinkRoute(req)) {
+  if (
+    req.nextUrl.pathname === DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINK_PATH
+  ) {
+    return;
+  }
+
+  if (isProtectedDevelopmentIdentityLinkRoute(req)) {
     await auth.protect();
     return;
   }

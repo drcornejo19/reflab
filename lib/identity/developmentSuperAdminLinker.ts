@@ -19,6 +19,11 @@ const LOOPBACK_HOSTNAMES = new Set([
   "::1",
   "[::1]",
 ]);
+const LOOPBACK_FORWARDED_FOR_VALUES = new Set([
+  "127.0.0.1",
+  "::1",
+  "::ffff:127.0.0.1",
+]);
 const DEPLOYED_RUNTIME_VARIABLES = [
   "VERCEL",
   "VERCEL_ENV",
@@ -113,6 +118,9 @@ export function assertDevelopmentSuperAdminIdentityLinkerRequest(
   const requestUrl = new URL(request.url);
   const requestOrigin = parseOrigin(request.headers.get("origin"));
   const requestHost = request.headers.get("host")?.trim().toLowerCase();
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto");
   if (
     requestUrl.protocol !== "http:" ||
     requestUrl.username ||
@@ -125,9 +133,18 @@ export function assertDevelopmentSuperAdminIdentityLinkerRequest(
     requestOrigin.origin !== requestUrl.origin ||
     requestHost !== requestUrl.host.toLowerCase() ||
     request.headers.has("forwarded") ||
-    request.headers.has("x-forwarded-for") ||
-    request.headers.has("x-forwarded-host") ||
-    request.headers.has("x-forwarded-proto")
+    !isValidOptionalForwardedHeader(forwardedFor, (value) =>
+      LOOPBACK_FORWARDED_FOR_VALUES.has(value)
+    ) ||
+    !isValidOptionalForwardedHeader(
+      forwardedHost,
+      (value) =>
+        value === requestHost && value === requestUrl.host.toLowerCase()
+    ) ||
+    !isValidOptionalForwardedHeader(
+      forwardedProto,
+      (value) => value === "http"
+    )
   ) {
     throw new DevelopmentIdentityLinkerConfigurationError();
   }
@@ -286,4 +303,20 @@ function parseOrigin(value: string | null) {
   } catch {
     return null;
   }
+}
+
+function isValidOptionalForwardedHeader(
+  value: string | null,
+  validate: (value: string) => boolean
+) {
+  if (value === null) {
+    return true;
+  }
+
+  return (
+    value.length > 0 &&
+    value === value.trim() &&
+    !value.includes(",") &&
+    validate(value)
+  );
 }

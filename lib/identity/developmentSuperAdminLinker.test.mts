@@ -7,6 +7,7 @@ import {
   DEVELOPMENT_SUPER_ADMIN_CANONICAL_USER_ID,
   DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINK_SECRET_HEADER,
   assertDevelopmentSuperAdminIdentityLinkerEnvironment,
+  assertDevelopmentSuperAdminIdentityLinkerRequest,
   executeDevelopmentSuperAdminIdentityLinkRoute,
   handleDevelopmentSuperAdminIdentityLinkRequest,
   linkDevelopmentSuperAdminClerkIdentity,
@@ -215,14 +216,28 @@ test("the endpoint is disabled by default and requires its own secret", async ()
 });
 
 test("the endpoint requires Clerk and accepts no target input", async () => {
-  const unauthorized = await handleDevelopmentSuperAdminIdentityLinkRequest(
+  let unauthorizedServiceCalls = 0;
+  const unauthorized = await executeDevelopmentSuperAdminIdentityLinkRoute(
     authorizedRequest(),
     {
       getAuthenticatedUserId: async () => null,
       environment: developmentEnvironment(),
+      linkIdentity: async () => {
+        unauthorizedServiceCalls += 1;
+        return "created";
+      },
     }
   );
   assert.equal(unauthorized.status, 401);
+  assert.equal(unauthorized.headers.get("location"), null);
+  assert.match(
+    unauthorized.headers.get("content-type") ?? "",
+    /application\/json/i
+  );
+  assert.deepEqual(await unauthorized.json(), {
+    error: "Debes iniciar sesion para continuar.",
+  });
+  assert.equal(unauthorizedServiceCalls, 0);
 
   const forgedRequests = [
     new Request(
@@ -258,7 +273,68 @@ test("the endpoint requires Clerk and accepts no target input", async () => {
   }
 });
 
-test("the endpoint rejects non-local origins and forwarded requests", async () => {
+test("the endpoint accepts strict local headers added by Next", async () => {
+  for (const forwardedFor of [
+    "127.0.0.1",
+    "::1",
+    "::ffff:127.0.0.1",
+  ]) {
+    const request = new Request(
+      "http://localhost:3000/api/development/super-admin-identity-link",
+      {
+        method: "POST",
+        headers: {
+          [DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINK_SECRET_HEADER]:
+            localSecret,
+          host: "localhost:3000",
+          origin: "http://localhost:3000",
+          "x-forwarded-for": forwardedFor,
+          "x-forwarded-host": "localhost:3000",
+          "x-forwarded-proto": "http",
+        },
+      }
+    );
+
+    let serviceCalls = 0;
+    const response = await handleDevelopmentSuperAdminIdentityLinkRequest(
+      request,
+      {
+        getAuthenticatedUserId: async () =>
+          "user_clerk_super_admin_local",
+        environment: developmentEnvironment(),
+        linkIdentity: async () => {
+          serviceCalls += 1;
+          return "created";
+        },
+      }
+    );
+
+    assert.equal(response.status, 201);
+    assert.equal(serviceCalls, 1);
+  }
+});
+
+test("Next forwarded headers remain optional for a valid local request", () => {
+  assert.doesNotThrow(() =>
+    assertDevelopmentSuperAdminIdentityLinkerRequest(
+      authorizedRequest(),
+      developmentEnvironment()
+    )
+  );
+});
+
+test("the endpoint rejects non-local and ambiguous forwarding headers", async () => {
+  const invalidForwardingHeaders: Array<Record<string, string>> = [
+    { "x-forwarded-for": "127.0.0.1, 10.0.0.1" },
+    { "x-forwarded-for": "" },
+    { "x-forwarded-host": "example.test" },
+    { "x-forwarded-host": "" },
+    { "x-forwarded-host": "localhost, localhost" },
+    { "x-forwarded-proto": "https" },
+    { "x-forwarded-proto": "" },
+    { "x-forwarded-proto": "http, https" },
+    { forwarded: "for=127.0.0.1" },
+  ];
   const cases = [
     new Request(
       "http://localhost/api/development/super-admin-identity-link",
@@ -281,7 +357,7 @@ test("the endpoint rejects non-local origins and forwarded requests", async () =
             localSecret,
           host: "localhost",
           origin: "http://localhost",
-          "x-forwarded-host": "localhost",
+          "x-forwarded-for": "10.0.0.1",
         },
       }
     ),
@@ -296,6 +372,22 @@ test("the endpoint rejects non-local origins and forwarded requests", async () =
           origin: "http://localhost",
         },
       }
+    ),
+    ...invalidForwardingHeaders.map(
+      (forwardingHeaders) =>
+        new Request(
+          "http://localhost/api/development/super-admin-identity-link",
+          {
+            method: "POST",
+            headers: {
+              [DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINK_SECRET_HEADER]:
+                localSecret,
+              host: "localhost",
+              origin: "http://localhost",
+              ...forwardingHeaders,
+            },
+          }
+        )
     ),
   ];
 
@@ -368,24 +460,54 @@ test("an authorized request reaches the fixed service exactly once", async () =>
   assert.equal(serviceCalls, 1);
 });
 
-test("the route and proxy keep the operation server-only and Clerk-protected", () => {
+test("the route derives the subject only from Clerk auth", () => {
   assert.match(routeSource, /await auth\(\)/);
   assert.match(routeSource, /return session\.userId/);
   assert.doesNotMatch(
     routeSource,
     /request\.(?:json|formData)\(\)|searchParams\.get\(|SUPABASE_SERVICE_ROLE_KEY|console\./i
   );
+  assert.doesNotMatch(routeSource, /request\.(?:headers|url).*user/i);
+  assert.doesNotMatch(routeSource, /canonicalUserId|externalSubject|target/i);
+  assert.match(linkerSource, /^import "server-only";/);
+  assert.match(linkerSource, /from "node:crypto"/);
+  assert.doesNotMatch(linkerSource, /console\.(?:log|warn|error)/);
+});
+
+test("Clerk middleware defers auth only for the exact Super Admin link route", () => {
+  const configuredPath = proxySource.match(
+    /const DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINK_PATH\s*=\s*\n?\s*"([^"]+)";/
+  )?.[1];
+  assert.equal(
+    configuredPath,
+    "/api/development/super-admin-identity-link"
+  );
   assert.match(
     proxySource,
-    /\/api\/development\/super-admin-identity-link/
+    /req\.nextUrl\.pathname\s*===\s*DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINK_PATH/
   );
+  assert.match(
+    proxySource,
+    /if \(!isPublicRoute\(req\)\) \{[\s\S]*?await auth\.protect\(\);/
+  );
+  assert.match(
+    proxySource,
+    /isProtectedDevelopmentIdentityLinkRoute\(req\)[\s\S]*?await auth\.protect\(\)/
+  );
+
+  const bypassesProtect = (pathname: string) => pathname === configuredPath;
+  assert.equal(bypassesProtect(configuredPath), true);
+  assert.equal(bypassesProtect(`${configuredPath}/nested`), false);
+  assert.equal(bypassesProtect(`${configuredPath}-similar`), false);
+  assert.equal(
+    bypassesProtect("/api/development/identity-link"),
+    false
+  );
+  assert.equal(bypassesProtect("/api/profile"), false);
   assert.doesNotMatch(
     proxySource,
     /\bfetch\s*\(|NextResponse\.(?:rewrite|redirect)|localhost:3000|127\.0\.0\.1:3000/i
   );
-  assert.match(linkerSource, /^import "server-only";/);
-  assert.match(linkerSource, /from "node:crypto"/);
-  assert.doesNotMatch(linkerSource, /console\.(?:log|warn|error)/);
 });
 
 test("the migration fixes the target and grants only service_role execution", () => {
