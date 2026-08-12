@@ -53,3 +53,6 @@ tmp/
 **/*session*.json
 !**/fixtures/**/*session*.json
 !**/__fixtures__/**/*session*.json
+
+# clerk configuration (can include secrets)
+/.clerk/
