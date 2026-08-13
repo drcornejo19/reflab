@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   BookOpenCheck,
   CheckCircle2,
@@ -18,13 +17,16 @@ import {
   spanishDecisionExercises,
   triviaItems,
   type SpanishDecisionExercise,
-  type TriviaItem,
   type TriviaMode,
 } from "@/lib/communicationContent";
 import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
 import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
 import { getEnglishClips, type ClipRecord } from "@/lib/clips";
 import { useSupabase } from "@/components/SupabaseProvider";
+import {
+  createTrainingSubmissionId,
+  submitTrainingAttempt,
+} from "@/lib/training/attemptClient";
 
 type EnglishClip = ClipRecord;
 type CommunicationMode = "spanish" | "english" | "trivia";
@@ -391,7 +393,7 @@ export function EnglishExercise() {
       </section>
 
       {activeMode === "trivia" ? (
-        <IfabTrivia userId={user?.id ?? null} />
+        <IfabTrivia />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1.35fr_0.9fr]">
           <section className="space-y-4">
@@ -657,8 +659,7 @@ function ScorePanel({
   );
 }
 
-function IfabTrivia({ userId }: { userId: string | null }) {
-  const supabase = useSupabase();
+function IfabTrivia() {
   const [mode, setMode] = useState<TriviaMode>("choice");
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -698,14 +699,21 @@ function IfabTrivia({ userId }: { userId: string | null }) {
     setSelected(selectedAnswer);
     setAnswered(true);
     setResults((prev) => ({ ...prev, [current.id]: correct }));
-    await saveTriviaAttempt(
-      supabase,
-      current,
-      selectedAnswer,
-      correct,
-      userId
-    );
-    setSaveMessage(userId ? "Progreso de vocabulario guardado." : "Progreso local. Inicia sesion para guardarlo.");
+    try {
+      await submitTrainingAttempt({
+        kind: "ifab_trivia",
+        submissionId: createTrainingSubmissionId(),
+        itemId: current.id,
+        selectedAnswer,
+      });
+      setSaveMessage("Progreso de vocabulario guardado.");
+    } catch (error) {
+      setSaveMessage(
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar el progreso de vocabulario."
+      );
+    }
   }
 
   function next() {
@@ -884,48 +892,6 @@ function ConceptList({ title, items }: { title: string; items: string[] }) {
       </div>
     </div>
   );
-}
-
-async function saveTriviaAttempt(
-  supabase: SupabaseClient,
-  item: TriviaItem,
-  selectedAnswer: string,
-  correct: boolean,
-  userId: string | null
-) {
-  if (!userId) return;
-
-  const score = correct ? 100 : 0;
-  const primaryPayload = {
-    user_id: userId,
-    module: "english_referee",
-    mode: "ifab_trivia",
-    communication_mode: "ifab_trivia",
-    topic: "IFAB English Vocabulary",
-    clip_title: item.term,
-    answer_text: selectedAnswer,
-    correct_decision: item.answer,
-    score,
-    is_correct: correct,
-    vocabulary_score: score,
-    mastered_concepts: correct ? [item.term] : [],
-    pending_concepts: correct ? [] : [item.term],
-    vocabulary_level: correct ? "concept_mastered" : "concept_pending",
-    feedback: item.explanation,
-    created_at: new Date().toISOString(),
-  };
-
-  const fallbackPayload = {
-    user_id: userId,
-    clip_title: item.term,
-    score,
-    topic: "IFAB English Vocabulary",
-    difficulty: item.difficulty.toLowerCase(),
-    is_correct: correct,
-    technical_correct: correct,
-  };
-
-  await insertAttemptSafely(supabase, primaryPayload, fallbackPayload);
 }
 
 function matchesSpanishExercise(

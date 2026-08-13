@@ -2,11 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { getTrainingClips, type ClipRecord } from "@/lib/clips";
-import { resolveRefCardId } from "@/lib/refCard";
 import { getSportTopics, normalizeSportTopicKey } from "@/lib/sports";
-import { FREE_WEEKLY_CLIP_LIMIT, getCurrentWeekStart } from "@/lib/subscription";
+import { FREE_WEEKLY_CLIP_LIMIT } from "@/lib/subscription";
 import {
   evaluateVideoAnswers,
   normalizeVideoAnswerMap,
@@ -20,6 +18,11 @@ import {
 import { useUserRole } from "@/lib/useUserRole";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { useSupabase } from "@/components/SupabaseProvider";
+import {
+  createTrainingSubmissionId,
+  loadTrainingUsage,
+  submitTrainingAttempt,
+} from "@/lib/training/attemptClient";
 
 type FutsalClip = ClipRecord & {
   analysis_answers?: Record<string, string | boolean | null> | null;
@@ -227,7 +230,6 @@ function FutsalVideoExercise({
   clip: FutsalClip;
   onNext: () => void;
 }) {
-  const supabase = useSupabase();
   const { user } = useUser();
   const { isPro, loadingRole } = useUserRole();
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -265,22 +267,15 @@ function FutsalVideoExercise({
         return;
       }
 
-      const { count, error } = await supabase
-        .from("attempts")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("sport_type", "futsal")
-        .gte("created_at", getCurrentWeekStart().toISOString());
-
-      if (cancelled) return;
-
-      if (error) {
+      try {
+        const usage = await loadTrainingUsage("futsal");
+        if (cancelled) return;
+        setWeeklyClipCount(usage.weeklyUsed);
+      } catch {
+        if (cancelled) return;
         console.warn("No se pudo calcular el limite semanal de clips de futsal.");
         setWeeklyClipCount(0);
-        return;
       }
-
-      setWeeklyClipCount(count ?? 0);
     }
 
     loadWeeklyUsage();
@@ -288,7 +283,7 @@ function FutsalVideoExercise({
     return () => {
       cancelled = true;
     };
-  }, [isPro, supabase, user]);
+  }, [isPro, user]);
 
   if (!schema) {
     return (
@@ -531,109 +526,20 @@ function FutsalVideoExercise({
             setSaving(true);
             setSaveError(null);
 
-            const profileRes = await supabase
-              .from("user_profiles")
-              .select("ref_card_id")
-              .eq("user_id", user.id)
-              .maybeSingle();
-            const refCardId = resolveRefCardId(user.id, profileRes.data);
-
-            const technicalDecisionValue = answers.technical_decision;
-            const disciplinaryValue = answers.disciplinary_action;
-            const restartValue = answers.restart;
-
-            const savedAttempt = await insertAttemptSafely(
-              supabase,
-              {
-                user_id: user.id,
-                sport_type: "futsal",
-                activity_type: "video_training",
-                ref_card_id: refCardId,
-                clip_id: clip.id,
-                clip_title: clip.title,
-                module: "futsal_video_analysis",
-                mode: "training",
-                topic: clip.topic,
-                subtopic: clip.subtopic ?? null,
-                rule_reference: clip.rule_reference ?? schema.topic,
-                season: clip.season ?? "2024-25",
-                source_version:
-                  clip.source_version ?? "Futsal Laws of the Game 2024-25",
-                difficulty: clip.difficulty,
-                score: evaluation.score,
-                is_correct: evaluation.score >= 85,
-                selected_decision: formatTechnicalDecision(technicalDecisionValue),
-                correct_decision: formatTechnicalDecision(
-                  expectedAnswers.technical_decision ?? null
-                ),
-                selected_restart:
-                  typeof restartValue === "string" ? restartValue : null,
-                correct_restart:
-                  typeof expectedAnswers.restart === "string"
-                    ? expectedAnswers.restart
-                    : null,
-                selected_discipline:
-                  typeof disciplinaryValue === "string" ? disciplinaryValue : null,
-                correct_discipline:
-                  typeof expectedAnswers.disciplinary_action === "string"
-                    ? expectedAnswers.disciplinary_action
-                    : null,
-                foul:
-                  typeof technicalDecisionValue === "boolean"
-                    ? technicalDecisionValue
-                    : null,
-                restart: typeof restartValue === "string" ? restartValue : null,
-                discipline:
-                  typeof disciplinaryValue === "string" ? disciplinaryValue : null,
-                technical_correct: evaluation.technicalCorrect,
-                restart_correct: evaluation.restartCorrect,
-                discipline_correct: evaluation.disciplinaryCorrect,
-                disciplinary_correct: evaluation.disciplinaryCorrect,
-                subtype_correct: evaluation.subtypeCorrect,
-                accumulated_foul_correct: evaluation.accumulatedFoulCorrect,
-                four_second_correct: evaluation.fourSecondCorrect,
-                goalkeeper_correct: evaluation.goalkeeperCorrect,
-                criterion_result: {
-                  technical: evaluation.technicalCorrect,
-                  restart: evaluation.restartCorrect,
-                  discipline: evaluation.disciplinaryCorrect,
-                  subtype: evaluation.subtypeCorrect,
-                  accumulated_foul: evaluation.accumulatedFoulCorrect,
-                  four_second: evaluation.fourSecondCorrect,
-                  goalkeeper: evaluation.goalkeeperCorrect,
-                  responses: answers,
-                  expected: expectedAnswers,
-                  field_results: evaluation.fieldResults,
-                  justification,
-                },
-                feedback: `Videoanalisis futsal: ${evaluation.score}/100`,
-              },
-              {
-                user_id: user.id,
-                sport_type: "futsal",
-                activity_type: "video_training",
-                clip_title: clip.title,
-                score: evaluation.score,
-                topic: clip.topic,
-                subtopic: clip.subtopic ?? null,
-                rule_reference: clip.rule_reference ?? schema.topic,
-                season: clip.season ?? "2024-25",
-                source_version:
-                  clip.source_version ?? "Futsal Laws of the Game 2024-25",
-                difficulty: clip.difficulty,
-                technical_correct: evaluation.technicalCorrect,
-                restart_correct: evaluation.restartCorrect,
-                discipline_correct: evaluation.disciplinaryCorrect,
-                disciplinary_correct: evaluation.disciplinaryCorrect,
-                subtype_correct: evaluation.subtypeCorrect,
-                accumulated_foul_correct: evaluation.accumulatedFoulCorrect,
-                four_second_correct: evaluation.fourSecondCorrect,
-                goalkeeper_correct: evaluation.goalkeeperCorrect,
-              }
-            );
-
-            if (!savedAttempt.saved) {
-              setSaveError(savedAttempt.error ?? "No se pudo guardar el intento.");
+            try {
+              await submitTrainingAttempt({
+                kind: "futsal_video",
+                submissionId: createTrainingSubmissionId(),
+                clipId: clip.id,
+                answers,
+                justification,
+              });
+            } catch (error) {
+              setSaveError(
+                error instanceof Error
+                  ? error.message
+                  : "No se pudo guardar el intento."
+              );
               setSaving(false);
               return;
             }
@@ -734,12 +640,6 @@ function formatAnswerValue(value: VideoAnswerValue) {
   if (value === false) return "No";
   if (typeof value === "string" && value.length > 0) return labelFromValue(value);
   return "Sin dato";
-}
-
-function formatTechnicalDecision(value: VideoAnswerValue | undefined) {
-  if (value === true) return "Infraccion";
-  if (value === false) return "No infraccion";
-  return null;
 }
 
 function labelFromValue(value?: string | null) {

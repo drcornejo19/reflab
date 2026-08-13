@@ -2,16 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { calculateScore, normalizeDiscipline } from "@/lib/scoring";
-import { insertAttemptSafely } from "@/lib/attemptPersistence";
+import { calculateScore } from "@/lib/scoring";
 import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
-import { resolveRefCardId } from "@/lib/refCard";
 import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
 import type { Clip } from "@/lib/types";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
-import { useSupabase } from "@/components/SupabaseProvider";
-import { FREE_WEEKLY_CLIP_LIMIT, getCurrentWeekStart } from "@/lib/subscription";
+import { FREE_WEEKLY_CLIP_LIMIT } from "@/lib/subscription";
 import { useUserRole } from "@/lib/useUserRole";
+import {
+  createTrainingSubmissionId,
+  loadTrainingUsage,
+  submitTrainingAttempt,
+} from "@/lib/training/attemptClient";
 
 type ExamAnswer = {
   clipId: string;
@@ -72,7 +74,6 @@ function createInitialClipDecisionState(clip: ClipWithDetails): ClipDecisionStat
     discipline: "",
   };
 }
-
 function getSavedClipPlayCount(clipId: string) {
   if (typeof window === "undefined") return 0;
 
@@ -85,7 +86,6 @@ export function ClipExercise({
   onComplete,
   onBack,
 }: ClipExerciseProps) {
-  const supabase = useSupabase();
   const typedClip = clip as ClipWithDetails;
   const initialDecisionState = createInitialClipDecisionState(typedClip);
 
@@ -130,23 +130,19 @@ export function ClipExercise({
         return;
       }
 
-      const { count, error } = await supabase
-        .from("attempts")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .gte("created_at", getCurrentWeekStart().toISOString());
-
-      if (error) {
-        console.warn("No se pudo calcular el limite semanal Basic:", error.message);
+      try {
+        const usage = await loadTrainingUsage(
+          typedClip.sport_type ?? DEFAULT_SPORT_TYPE
+        );
+        setWeeklyClipCount(usage.weeklyUsed);
+      } catch {
+        console.warn("No se pudo calcular el limite semanal Basic.");
         setWeeklyClipCount(0);
-        return;
       }
-
-      setWeeklyClipCount(count ?? 0);
     }
 
     loadWeeklyUsage();
-  }, [isPro, supabase, user]);
+  }, [isPro, typedClip.sport_type, user]);
 
   useEffect(() => {
     const savedCount = Number(
@@ -226,12 +222,6 @@ export function ClipExercise({
     };
 
     const score = calculateScore(userAnswer, correctAnswer);
-    const technicalCorrect = foul === typedClip.correct_foul;
-    const restartCorrect = restart === typedClip.correct_restart;
-    const disciplineCorrect =
-      normalizeDiscipline(discipline) ===
-      normalizeDiscipline(typedClip.correct_discipline);
-
     if (examMode && onComplete) {
       onComplete({
         clipId: typedClip.id,
@@ -254,81 +244,17 @@ export function ClipExercise({
     setSaveError(null);
     setAiFeedback(null);
 
-    const profileRes = await supabase
-      .from("user_profiles")
-      .select("ref_card_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    const refCardId = resolveRefCardId(user.id, profileRes.data);
-
-    const savedAttempt = await insertAttemptSafely(
-      supabase,
-      {
-        user_id: user.id,
-        sport_type: typedClip.sport_type ?? DEFAULT_SPORT_TYPE,
-        activity_type: isVarClip ? "var_training" : "video_training",
-        ref_card_id: refCardId,
-        clip_id: typedClip.id,
-        clip_title: typedClip.title,
-        module: isVarClip ? "var_lab" : "decision",
-        mode: isVarClip ? "var" : "training",
-        foul,
-        restart,
-        discipline,
-        var_review: typedClip.correct_var,
-        score,
-        topic: typedClip.topic,
-        subtopic: typedClip.subtopic ?? typedClip.sub_type ?? null,
-        rule_reference: typedClip.rule_reference ?? null,
-        season: typedClip.season ?? "2026/27",
-        source_version:
-          typedClip.source_version ?? "RefLab football_11 video training",
-        difficulty: typedClip.difficulty,
-        is_correct: score >= 85,
-        selected_decision: decisionLabel(foul),
-        correct_decision: decisionLabel(typedClip.correct_foul),
-        selected_restart: restart,
-        correct_restart: typedClip.correct_restart,
-        selected_discipline: discipline,
-        correct_discipline: typedClip.correct_discipline,
-        technical_correct: technicalCorrect,
-        restart_correct: restartCorrect,
-        discipline_correct: disciplineCorrect,
-        disciplinary_correct: disciplineCorrect,
-        var_correct: null,
-        criterion_result: {
-          technical: technicalCorrect,
-          restart: restartCorrect,
-          discipline: disciplineCorrect,
-        },
-      },
-      {
-        user_id: user.id,
-        sport_type: typedClip.sport_type ?? DEFAULT_SPORT_TYPE,
-        activity_type: isVarClip ? "var_training" : "video_training",
-        clip_title: typedClip.title,
-        foul,
-        restart,
-        discipline,
-        var_review: typedClip.correct_var,
-        score,
-        topic: typedClip.topic,
-        subtopic: typedClip.subtopic ?? typedClip.sub_type ?? null,
-        rule_reference: typedClip.rule_reference ?? null,
-        season: typedClip.season ?? "2026/27",
-        source_version:
-          typedClip.source_version ?? "RefLab football_11 video training",
-        difficulty: typedClip.difficulty,
-        technical_correct: technicalCorrect,
-        restart_correct: restartCorrect,
-        discipline_correct: disciplineCorrect,
-        disciplinary_correct: disciplineCorrect,
-        var_correct: null,
-      },
-    );
-
-    if (!savedAttempt.saved) {
-      setSaveError(savedAttempt.error ?? "No se pudo guardar el intento.");
+    try {
+      await submitTrainingAttempt({
+        kind: "field_clip",
+        submissionId: createTrainingSubmissionId(),
+        clipId: typedClip.id,
+        answer: { foul, restart, discipline },
+      });
+    } catch (error) {
+      setSaveError(
+        error instanceof Error ? error.message : "No se pudo guardar el intento."
+      );
       setIsSaving(false);
       return;
     }
@@ -800,10 +726,4 @@ function labelFromValue(value?: string | null) {
   };
 
   return dictionary[value] ?? value;
-}
-
-function decisionLabel(value: boolean | null | undefined) {
-  if (value === true) return "Infraccion";
-  if (value === false) return "No infraccion";
-  return "Sin respuesta";
 }

@@ -2,7 +2,7 @@ import type {
   VideoFieldDefinition,
   VideoFieldKey,
   VideoTopicSchema,
-} from "@/lib/videoAnalysisSchemas";
+} from "./videoAnalysisSchemas.ts";
 
 export type VideoAnswerValue = string | boolean | null;
 export type VideoAnswerMap = Partial<Record<VideoFieldKey, VideoAnswerValue>>;

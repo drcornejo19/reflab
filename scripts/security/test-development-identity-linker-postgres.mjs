@@ -58,6 +58,12 @@ const superAdminIdentityMigrationPath = resolve(
   "migrations",
   "202608110002_development_super_admin_identity_link.sql"
 );
+const trainingAttemptsMigrationPath = resolve(
+  repositoryRoot,
+  "supabase",
+  "migrations",
+  "202608130001_canonical_training_attempts.sql"
+);
 const temporaryRoot = mkdtempSync(
   join(tmpdir(), "reflab-identity-linker-postgres-")
 );
@@ -97,6 +103,18 @@ const concurrentIdentityPath = join(
   temporaryRoot,
   "identity-link-concurrent-first.sql"
 );
+const trainingBehaviorPath = join(
+  temporaryRoot,
+  "canonical-training-behavior.sql"
+);
+const concurrentTrainingPath = join(
+  temporaryRoot,
+  "canonical-training-concurrent-first.sql"
+);
+const rollbackTrainingMigrationPath = join(
+  temporaryRoot,
+  "canonical-training-rollback.sql"
+);
 const port = await reservePort();
 const connectionEnvironment = {
   ...process.env,
@@ -129,6 +147,7 @@ try {
 
   writeFileSync(bootstrapPath, bootstrapSql(), "utf8");
   writeFileSync(behaviorPath, behaviorSql(), "utf8");
+  writeFileSync(trainingBehaviorPath, trainingBehaviorSql(), "utf8");
 
   createDatabase("reflab_identity_linker_test");
   applyBootstrapAndBaseline("reflab_identity_linker_test");
@@ -156,10 +175,21 @@ try {
     "reflab_identity_linker_test",
     "after Development Super Admin identity migration"
   );
+  applySqlFile(
+    "reflab_identity_linker_test",
+    trainingAttemptsMigrationPath
+  );
+  assertNoPublicCreatePrivilege(
+    "reflab_identity_linker_test",
+    "after canonical training attempts migration"
+  );
+  assertTrainingAttemptSecurity("reflab_identity_linker_test");
   assertRlsOwnerPolicyIsolation("reflab_identity_linker_test");
   await assertIdentityLinkConcurrency("reflab_identity_linker_test");
   applySqlFile("reflab_identity_linker_test", behaviorPath);
   await assertAdminAccessConcurrency("reflab_identity_linker_test");
+  applySqlFile("reflab_identity_linker_test", trainingBehaviorPath);
+  await assertTrainingAttemptConcurrency("reflab_identity_linker_test");
   assertCanonicalStructure("reflab_identity_linker_test");
 
   createDatabase("reflab_identity_linker_rollback");
@@ -258,6 +288,35 @@ try {
   assertSuperAdminIdentityRollback(
     "reflab_super_admin_identity_rollback"
   );
+
+  createDatabase("reflab_training_attempts_rollback");
+  applyBootstrapAndBaseline("reflab_training_attempts_rollback");
+  applySqlFile("reflab_training_attempts_rollback", seedPath);
+  applySqlFile("reflab_training_attempts_rollback", migrationPath);
+  applySqlFile(
+    "reflab_training_attempts_rollback",
+    resolutionMigrationPath
+  );
+  applySqlFile(
+    "reflab_training_attempts_rollback",
+    adminAccessMigrationPath
+  );
+  applySqlFile(
+    "reflab_training_attempts_rollback",
+    superAdminIdentityMigrationPath
+  );
+  writeFileSync(
+    rollbackTrainingMigrationPath,
+    migrationWithRollback(
+      readFileSync(trainingAttemptsMigrationPath, "utf8")
+    ),
+    "utf8"
+  );
+  applySqlFile(
+    "reflab_training_attempts_rollback",
+    rollbackTrainingMigrationPath
+  );
+  assertTrainingAttemptRollback("reflab_training_attempts_rollback");
 
   console.log(
     "Development identity linker PostgreSQL test passed in an isolated local cluster."
@@ -571,6 +630,790 @@ rollback;`
     ) !== "0"
   ) {
     throw new Error("Identity concurrency test left residual rows.");
+  }
+}
+
+function trainingBehaviorSql() {
+  return String.raw`
+begin;
+
+insert into public.clips (
+  id,
+  sport_type,
+  title,
+  video_url,
+  topic,
+  difficulty,
+  mode,
+  correct_foul,
+  correct_restart,
+  correct_discipline,
+  correct_var,
+  is_active,
+  status
+)
+values (
+  '91000000-0000-4000-8000-000000000001',
+  'football_11',
+  'Local canonical training clip',
+  'https://development.invalid/training.mp4',
+  'Dispute',
+  'basic',
+  'field',
+  true,
+  'Tiro libre directo',
+  'Sin sancion',
+  false,
+  true,
+  'published'
+);
+
+insert into public.user_profiles (user_id, ref_card_id, reflab_name)
+values ('user_local_training_basic', 'RF-LOCAL-TRAINING', 'Local training basic');
+
+insert into public.user_global_roles (
+  user_id, role_key, source, assigned_by_user_id
+)
+values (
+  'user_local_training_basic',
+  'referee',
+  'local_training_test',
+  'user_dev_super_admin'
+);
+
+insert into public.user_subscriptions (
+  id, user_id, plan_key, status, source, assigned_by_user_id
+)
+values (
+  '91500000-0000-4000-8000-000000000001',
+  'user_local_training_basic',
+  'basic',
+  'active',
+  'local_training_test',
+  'user_dev_super_admin'
+);
+
+set local role service_role;
+
+do $training_behavior$
+declare
+  first_result jsonb;
+  repeated_result jsonb;
+  attempt_row public.attempts%rowtype;
+  rejected boolean;
+  index_value integer;
+begin
+  first_result := public.submit_canonical_training_attempt(
+    'user_dev_referee_a',
+    '92000000-0000-4000-8000-000000000001',
+    '{
+      "sport_type":"football_11",
+      "activity_type":"video_training",
+      "clip_id":"91000000-0000-4000-8000-000000000001",
+      "clip_title":"Local canonical training clip",
+      "source_item_type":"global_clip",
+      "source_item_id":"91000000-0000-4000-8000-000000000001",
+      "module":"decision",
+      "mode":"training",
+      "topic":"Dispute",
+      "score":100,
+      "is_correct":true,
+      "selected_decision":"Falta",
+      "correct_decision":"Falta",
+      "technical_correct":true
+    }'::jsonb,
+    0
+  );
+
+  if first_result->>'status' <> 'created' then
+    raise exception 'canonical training attempt was not created';
+  end if;
+
+  repeated_result := public.submit_canonical_training_attempt(
+    'user_dev_referee_a',
+    '92000000-0000-4000-8000-000000000001',
+    '{
+      "technical_correct":true,
+      "correct_decision":"Falta",
+      "selected_decision":"Falta",
+      "is_correct":true,
+      "score":100,
+      "topic":"Dispute",
+      "mode":"training",
+      "module":"decision",
+      "source_item_id":"91000000-0000-4000-8000-000000000001",
+      "source_item_type":"global_clip",
+      "clip_title":"Local canonical training clip",
+      "clip_id":"91000000-0000-4000-8000-000000000001",
+      "activity_type":"video_training",
+      "sport_type":"football_11"
+    }'::jsonb,
+    0
+  );
+
+  if repeated_result->>'status' <> 'already_recorded' then
+    raise exception 'canonical training retry was not idempotent';
+  end if;
+
+  select attempt.*
+  into attempt_row
+  from public.attempts attempt
+  where attempt.submission_id = '92000000-0000-4000-8000-000000000001';
+
+  if attempt_row.user_id <> 'user_dev_referee_a'
+     or attempt_row.exam_result_id is not null
+     or attempt_row.canonical_payload_hash !~ '^[0-9a-f]{64}$'
+     or attempt_row.source_occurrence_id <> attempt_row.submission_id then
+    raise exception 'canonical training attempt identity or provenance is invalid';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.submit_canonical_training_attempt(
+      'user_dev_referee_a',
+      '92000000-0000-4000-8000-000000000001',
+      '{
+        "sport_type":"football_11",
+        "activity_type":"video_training",
+        "clip_id":"91000000-0000-4000-8000-000000000001",
+        "clip_title":"Local canonical training clip",
+        "source_item_type":"global_clip",
+        "source_item_id":"91000000-0000-4000-8000-000000000001",
+        "module":"decision",
+        "mode":"training",
+        "topic":"Dispute",
+        "score":0,
+        "is_correct":false
+      }'::jsonb,
+      0
+    );
+  exception when unique_violation then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'conflicting canonical training retry was accepted';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.submit_canonical_training_attempt(
+      'user_dev_referee_a',
+      '92000000-0000-4000-8000-000000000002',
+      '{
+        "sport_type":"football_11",
+        "activity_type":"video_training",
+        "clip_id":"91000000-0000-4000-8000-000000000099",
+        "clip_title":"Missing clip",
+        "source_item_type":"global_clip",
+        "source_item_id":"91000000-0000-4000-8000-000000000099",
+        "score":100
+      }'::jsonb,
+      0
+    );
+  exception when no_data_found then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'missing canonical training clip was accepted';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.submit_canonical_training_attempt(
+      'user_dev_referee_a',
+      '92000000-0000-4000-8000-000000000003',
+      '{
+        "sport_type":"football_11",
+        "activity_type":"video_training",
+        "clip_id":"91000000-0000-4000-8000-000000000001",
+        "source_item_type":"global_clip",
+        "source_item_id":"91000000-0000-4000-8000-000000000001",
+        "score":100,
+        "user_id":"attacker"
+      }'::jsonb,
+      0
+    );
+  exception when invalid_parameter_value then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'unsupported canonical training field was accepted';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.submit_canonical_training_attempt(
+      'user_dev_referee_a',
+      '92000000-0000-4000-8000-000000000004',
+      '{
+        "sport_type":"football_11",
+        "activity_type":"video_training",
+        "clip_id":"91000000-0000-4000-8000-000000000001",
+        "source_item_type":"global_clip",
+        "source_item_id":"91000000-0000-4000-8000-000000000001",
+        "score":"100"
+      }'::jsonb,
+      0
+    );
+  exception when invalid_parameter_value then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'invalid canonical training field type was accepted';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.submit_canonical_training_attempt(
+      'user_local_training_basic',
+      '93000000-0000-4000-8000-000000000000',
+      '{
+        "sport_type":"football_11",
+        "activity_type":"video_training",
+        "clip_id":"91000000-0000-4000-8000-000000000001",
+        "source_item_type":"global_clip",
+        "source_item_id":"91000000-0000-4000-8000-000000000001",
+        "score":100
+      }'::jsonb,
+      0
+    );
+  exception when invalid_parameter_value then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'client-supplied weekly limit bypassed canonical access';
+  end if;
+
+  for index_value in 1..5 loop
+    perform public.submit_canonical_training_attempt(
+      'user_local_training_basic',
+      ('93000000-0000-4000-8000-' || pg_catalog.lpad(index_value::text, 12, '0'))::uuid,
+      pg_catalog.jsonb_build_object(
+        'sport_type', 'football_11',
+        'activity_type', 'video_training',
+        'clip_id', '91000000-0000-4000-8000-000000000001',
+        'clip_title', 'Local canonical training clip',
+        'source_item_type', 'global_clip',
+        'source_item_id', '91000000-0000-4000-8000-000000000001',
+        'module', 'decision',
+        'mode', 'training',
+        'topic', 'Dispute',
+        'score', 100,
+        'criterion_result', pg_catalog.jsonb_build_object('ordinal', index_value)
+      ),
+      5
+    );
+  end loop;
+
+  rejected := false;
+  begin
+    perform public.submit_canonical_training_attempt(
+      'user_local_training_basic',
+      '93000000-0000-4000-8000-000000000006',
+      '{
+        "sport_type":"football_11",
+        "activity_type":"video_training",
+        "clip_id":"91000000-0000-4000-8000-000000000001",
+        "clip_title":"Local canonical training clip",
+        "source_item_type":"global_clip",
+        "source_item_id":"91000000-0000-4000-8000-000000000001",
+        "module":"decision",
+        "mode":"training",
+        "topic":"Dispute",
+        "score":100
+      }'::jsonb,
+      5
+    );
+  exception when raise_exception then
+    if sqlerrm = 'Canonical weekly training limit reached' then
+      rejected := true;
+    else
+      raise;
+    end if;
+  end;
+  if not rejected then
+    raise exception 'canonical weekly training limit was not enforced';
+  end if;
+
+  if exists (select 1 from public.user_roles)
+     or exists (
+       select 1 from public.user_global_roles where source = 'automatic_default'
+     )
+     or exists (
+       select 1 from public.user_subscriptions where source = 'automatic_default'
+     ) then
+    raise exception 'canonical training created legacy or default access rows';
+  end if;
+end
+$training_behavior$;
+
+reset role;
+
+set local role reflab_rls_owner;
+select pg_catalog.set_config(
+  'reflab.training_user_id',
+  'user_dev_referee_a',
+  true
+);
+select pg_catalog.set_config(
+  'reflab.training_institution_id',
+  '30000000-0000-4000-8000-000000000001',
+  true
+);
+
+do $training_lock_boundaries$
+declare
+  rejected boolean;
+begin
+  rejected := false;
+  begin
+    update public.user_global_roles
+    set source = 'forbidden_training_policy_update'
+    where user_id = 'user_dev_referee_a';
+  exception when insufficient_privilege then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'training role lock policy allowed mutation';
+  end if;
+
+  rejected := false;
+  begin
+    update public.user_subscriptions
+    set source = 'forbidden_training_policy_update'
+    where user_id = 'user_dev_referee_a';
+  exception when insufficient_privilege then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'training subscription lock policy allowed mutation';
+  end if;
+
+  rejected := false;
+  begin
+    update public.institution_memberships
+    set category = 'forbidden_training_policy_update'
+    where user_id = 'user_dev_referee_a';
+  exception when insufficient_privilege then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'training membership lock policy allowed mutation';
+  end if;
+
+  rejected := false;
+  begin
+    update public.institutions
+    set updated_at = updated_at
+    where id = '30000000-0000-4000-8000-000000000001';
+  exception when insufficient_privilege then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'training institution lock policy allowed mutation';
+  end if;
+
+  rejected := false;
+  begin
+    update public.institution_subscriptions
+    set source = 'forbidden_training_policy_update'
+    where institution_id = '30000000-0000-4000-8000-000000000001';
+  exception when insufficient_privilege then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'training institution subscription lock policy allowed mutation';
+  end if;
+end
+$training_lock_boundaries$;
+
+reset role;
+rollback;
+`;
+}
+
+async function assertTrainingAttemptConcurrency(databaseName) {
+  query(
+    databaseName,
+    String.raw`
+insert into public.clips (
+  id, sport_type, title, video_url, topic, difficulty, mode,
+  correct_foul, correct_restart, correct_discipline, correct_var,
+  is_active, status
+)
+values (
+  '91000000-0000-4000-8000-000000000002',
+  'football_11',
+  'Concurrent canonical training clip',
+  'https://development.invalid/concurrent.mp4',
+  'Dispute',
+  'basic',
+  'field',
+  true,
+  'Tiro libre directo',
+  'Sin sancion',
+  false,
+  true,
+  'published'
+);
+
+insert into public.user_profiles (user_id, ref_card_id, reflab_name)
+values ('user_local_training_concurrent', 'RF-LOCAL-CONCURRENT', 'Local concurrent');
+
+insert into public.user_global_roles (
+  user_id, role_key, source, assigned_by_user_id
+)
+values (
+  'user_local_training_concurrent',
+  'referee',
+  'local_training_test',
+  'user_dev_super_admin'
+);
+
+insert into public.user_subscriptions (
+  id, user_id, plan_key, status, source, assigned_by_user_id
+)
+values (
+  '91500000-0000-4000-8000-000000000002',
+  'user_local_training_concurrent',
+  'basic',
+  'active',
+  'local_training_test',
+  'user_dev_super_admin'
+);`
+  );
+
+  const payload = String.raw`'{
+    "sport_type":"football_11",
+    "activity_type":"video_training",
+    "clip_id":"91000000-0000-4000-8000-000000000002",
+    "clip_title":"Concurrent canonical training clip",
+    "source_item_type":"global_clip",
+    "source_item_id":"91000000-0000-4000-8000-000000000002",
+    "module":"decision",
+    "mode":"training",
+    "topic":"Dispute",
+    "score":100
+  }'::jsonb`;
+  writeFileSync(
+    concurrentTrainingPath,
+    String.raw`
+begin;
+set local role service_role;
+select public.submit_canonical_training_attempt(
+  'user_dev_referee_a',
+  '94000000-0000-4000-8000-000000000001',
+  ${payload},
+  0
+);
+select pg_catalog.pg_sleep(1);
+commit;
+`,
+    "utf8"
+  );
+
+  const first = runPsqlFileAsync(
+    databaseName,
+    concurrentTrainingPath,
+    "reflab_training_same_submission"
+  );
+  await waitForActiveQuery(
+    databaseName,
+    "reflab_training_same_submission",
+    "pg_sleep"
+  );
+  const second = query(
+    databaseName,
+    String.raw`set role service_role;
+select public.submit_canonical_training_attempt(
+  'user_dev_referee_a',
+  '94000000-0000-4000-8000-000000000001',
+  ${payload},
+  0
+);
+reset role;`
+  );
+  await first;
+
+  if (!second.includes("already_recorded")) {
+    throw new Error("Concurrent identical training retry was not idempotent.");
+  }
+  if (
+    query(
+      databaseName,
+      String.raw`select pg_catalog.count(*)
+from public.attempts
+where submission_id = '94000000-0000-4000-8000-000000000001';`
+    ) !== "1"
+  ) {
+    throw new Error("Concurrent training submissions created duplicate attempts.");
+  }
+
+  for (let index = 1; index <= 4; index += 1) {
+    query(
+      databaseName,
+      String.raw`set role service_role;
+select public.submit_canonical_training_attempt(
+  'user_local_training_concurrent',
+  ('95000000-0000-4000-8000-' || pg_catalog.lpad('${index}', 12, '0'))::uuid,
+  ${payload},
+  5
+);
+reset role;`
+    );
+  }
+
+  writeFileSync(
+    concurrentTrainingPath,
+    String.raw`
+begin;
+set local role service_role;
+select public.submit_canonical_training_attempt(
+  'user_local_training_concurrent',
+  '95000000-0000-4000-8000-000000000005',
+  ${payload},
+  5
+);
+select pg_catalog.pg_sleep(1);
+commit;
+`,
+    "utf8"
+  );
+
+  const fifthAttempt = runPsqlFileAsync(
+    databaseName,
+    concurrentTrainingPath,
+    "reflab_training_last_weekly_slot"
+  );
+  await waitForActiveQuery(
+    databaseName,
+    "reflab_training_last_weekly_slot",
+    "pg_sleep"
+  );
+
+  let secondDistinctRejected = false;
+  try {
+    query(
+      databaseName,
+      String.raw`set role service_role;
+select public.submit_canonical_training_attempt(
+  'user_local_training_concurrent',
+  '95000000-0000-4000-8000-000000000006',
+  ${payload},
+  5
+);`
+    );
+  } catch (error) {
+    secondDistinctRejected = String(error).includes(
+      "Canonical weekly training limit reached"
+    );
+  }
+  await fifthAttempt;
+
+  if (!secondDistinctRejected) {
+    throw new Error(
+      "Concurrent distinct submissions did not serialize the final weekly slot."
+    );
+  }
+  if (
+    query(
+      databaseName,
+      String.raw`select pg_catalog.count(*)
+from public.attempts
+where user_id = 'user_local_training_concurrent'
+  and activity_type = 'video_training';`
+    ) !== "5"
+  ) {
+    throw new Error("Concurrent weekly limit did not leave exactly five attempts.");
+  }
+
+  query(
+    databaseName,
+    String.raw`delete from public.attempts
+where submission_id = '94000000-0000-4000-8000-000000000001';
+delete from public.attempts
+where user_id = 'user_local_training_concurrent';
+delete from public.user_subscriptions
+where user_id = 'user_local_training_concurrent';
+delete from public.user_global_roles
+where user_id = 'user_local_training_concurrent';
+delete from public.user_profiles
+where user_id = 'user_local_training_concurrent';
+delete from public.clips
+where id = '91000000-0000-4000-8000-000000000002';`
+  );
+}
+
+function assertTrainingAttemptSecurity(databaseName) {
+  const result = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select pg_catalog.json_build_object(
+  'policies', (
+    select pg_catalog.json_agg(
+      pg_catalog.json_build_array(
+        policy.policyname,
+        policy.cmd,
+        policy.roles,
+        policy.with_check
+      )
+      order by policy.policyname
+    )
+    from pg_catalog.pg_policies policy
+    where policy.policyname like 'training_attempt_%'
+  ),
+  'rpc_owner_safe', exists (
+    select 1
+    from pg_catalog.pg_proc function_row
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = function_row.pronamespace
+    join pg_catalog.pg_roles owner_role
+      on owner_role.oid = function_row.proowner
+    where namespace.nspname = 'public'
+      and function_row.proname = 'submit_canonical_training_attempt'
+      and owner_role.rolname = 'reflab_rls_owner'
+      and function_row.prosecdef
+      and function_row.proconfig = array['search_path=pg_catalog']
+  ),
+  'service_role_execute', pg_catalog.has_function_privilege(
+    'service_role',
+    'public.submit_canonical_training_attempt(text,uuid,jsonb,integer)',
+    'EXECUTE'
+  ),
+  'forbidden_execute',
+    pg_catalog.has_function_privilege(
+      'anon',
+      'public.submit_canonical_training_attempt(text,uuid,jsonb,integer)',
+      'EXECUTE'
+    )
+    or pg_catalog.has_function_privilege(
+      'authenticated',
+      'public.submit_canonical_training_attempt(text,uuid,jsonb,integer)',
+      'EXECUTE'
+    )
+    or exists (
+      select 1
+      from pg_catalog.pg_proc function_row,
+      lateral pg_catalog.aclexplode(
+        coalesce(
+          function_row.proacl,
+          pg_catalog.acldefault('f', function_row.proowner)
+        )
+      ) privilege
+      where function_row.oid =
+        'public.submit_canonical_training_attempt(text,uuid,jsonb,integer)'::pg_catalog.regprocedure
+        and privilege.grantee = 0
+        and privilege.privilege_type = 'EXECUTE'
+    ),
+  'unexpected_training_guc_functions', (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_proc function_row
+    join pg_catalog.pg_roles owner_role
+      on owner_role.oid = function_row.proowner
+    where owner_role.rolname = 'reflab_rls_owner'
+      and pg_catalog.strpos(
+        pg_catalog.lower(function_row.prosrc),
+        'reflab.training_'
+      ) > 0
+      and function_row.proname <> 'submit_canonical_training_attempt'
+  ),
+  'index_matches_non_exam_contract', exists (
+    select 1
+    from pg_catalog.pg_index index_row
+    join pg_catalog.pg_class index_relation
+      on index_relation.oid = index_row.indexrelid
+    where index_relation.relname =
+      'attempts_canonical_training_submission_unique'
+      and pg_catalog.pg_get_expr(
+        index_row.indpred,
+        index_row.indrelid
+      ) = '((exam_result_id IS NULL) AND (submission_id IS NOT NULL))'
+  ),
+  'owner_has_no_public_create', not pg_catalog.has_schema_privilege(
+    'reflab_rls_owner',
+    'public',
+    'CREATE'
+  )
+);`
+    )
+  );
+
+  const expectedPolicies = [
+    ["training_attempt_clip_read", "SELECT"],
+    ["training_attempt_existing_read", "SELECT"],
+    ["training_attempt_global_role_lock", "UPDATE"],
+    ["training_attempt_global_role_read", "SELECT"],
+    ["training_attempt_insert", "INSERT"],
+    ["training_attempt_institution_lock", "UPDATE"],
+    ["training_attempt_institution_read", "SELECT"],
+    ["training_attempt_institution_subscription_lock", "UPDATE"],
+    ["training_attempt_institution_subscription_read", "SELECT"],
+    ["training_attempt_marker_read", "SELECT"],
+    ["training_attempt_membership_lock", "UPDATE"],
+    ["training_attempt_membership_read", "SELECT"],
+    ["training_attempt_profile_read", "SELECT"],
+    ["training_attempt_subscription_lock", "UPDATE"],
+    ["training_attempt_subscription_read", "SELECT"],
+  ];
+  const policySummary = result.policies.map(
+    ([name, command, roles]) => [name, command, roles]
+  );
+  if (
+    JSON.stringify(policySummary) !==
+      JSON.stringify(
+        expectedPolicies.map(([name, command]) => [
+          name,
+          command,
+          ["reflab_rls_owner"],
+        ])
+      ) ||
+    result.policies
+      .filter(([, command]) => command === "UPDATE")
+      .some(([, , , withCheck]) => withCheck !== "false") ||
+    result.rpc_owner_safe !== true ||
+    result.service_role_execute !== true ||
+    result.forbidden_execute !== false ||
+    Number(result.unexpected_training_guc_functions) !== 0 ||
+    result.index_matches_non_exam_contract !== true ||
+    result.owner_has_no_public_create !== true
+  ) {
+    throw new Error("Canonical training policy or RPC isolation is invalid.");
+  }
+}
+
+function assertTrainingAttemptRollback(databaseName) {
+  const result = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select pg_catalog.json_build_object(
+  'column_absent', not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'attempts'
+      and column_name = 'canonical_payload_hash'
+  ),
+  'rpc_absent', pg_catalog.to_regprocedure(
+    'public.submit_canonical_training_attempt(text,uuid,jsonb,integer)'
+  ) is null,
+  'index_absent', pg_catalog.to_regclass(
+    'public.attempts_canonical_training_submission_unique'
+  ) is null,
+  'policies_absent', not exists (
+    select 1
+    from pg_catalog.pg_policies
+    where policyname like 'training_attempt_%'
+  ),
+  'rls_owner_safe', not pg_catalog.has_schema_privilege(
+    'reflab_rls_owner',
+    'public',
+    'CREATE'
+  )
+);`
+    )
+  );
+  if (Object.values(result).some((value) => value !== true)) {
+    throw new Error("Canonical training migration rollback left residual objects.");
   }
 }
 
@@ -1731,8 +2574,8 @@ select pg_catalog.json_build_object(
   const expected = {
     public_tables: 79,
     private_tables: 2,
-    functions: 26,
-    policies: 135,
+    functions: 27,
+    policies: 150,
     triggers: 82,
   };
 
@@ -1756,6 +2599,10 @@ select pg_catalog.json_build_object(
   );
   const superAdminIdentityMigrationSql = readFileSync(
     superAdminIdentityMigrationPath,
+    "utf8"
+  );
+  const trainingAttemptsMigrationSql = readFileSync(
+    trainingAttemptsMigrationPath,
     "utf8"
   );
   const explicitIndexCount =
@@ -1783,8 +2630,13 @@ select pg_catalog.json_build_object(
       superAdminIdentityMigrationSql.match(
         /^\s*create\s+(?:unique\s+)?index\s+/gim
       ) ?? []
+    ).length +
+    (
+      trainingAttemptsMigrationSql.match(
+        /^\s*create\s+(?:unique\s+)?index\s+/gim
+      ) ?? []
     ).length;
-  if (explicitIndexCount !== 110) {
+  if (explicitIndexCount !== 111) {
     throw new Error(
       `Unexpected explicit index count: ${explicitIndexCount}.`
     );

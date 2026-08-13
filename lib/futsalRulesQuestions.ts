@@ -1,4 +1,4 @@
-import { withQuestionDefaults, type RuleQuestion } from "@/lib/questionBank";
+import { withQuestionDefaults, type RuleQuestion } from "./questionBank.ts";
 
 const FUTSAL_SOURCE_URL =
   "https://digitalhub.fifa.com/m/7b1da24ec7a25f67/original/Futsal-Laws-of-the-Game-2024-2025.pdf";

@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useUser } from "@clerk/nextjs";
-import { insertAttemptSafely } from "@/lib/attemptPersistence";
-import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
 import type { Clip } from "@/lib/types";
-import { useSupabase } from "@/components/SupabaseProvider";
+import {
+  createTrainingSubmissionId,
+  submitTrainingAttempt,
+} from "@/lib/training/attemptClient";
 
 type VarDecision = "check_complete" | "recommend_ofr" | "factual_review";
 type Incident =
@@ -46,7 +47,6 @@ const incidentButtons: {
 ];
 
 export function VarExercise({ clip }: VarExerciseProps) {
-  const supabase = useSupabase();
   const { user } = useUser();
   const startedAtRef = useRef<number>(0);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
@@ -123,15 +123,6 @@ export function VarExercise({ clip }: VarExerciseProps) {
   async function submit() {
     if (!selectedIncident || !appStatus || !clearError || !varDecision || savingAttempt) return;
 
-    const computedScore = calculateVarScore({
-      selectedIncident,
-      appStatus,
-      clearError,
-      varDecision,
-      correctVarDecision,
-      communication,
-    });
-
     setSubmitted(true);
     setSaveMessage(null);
 
@@ -146,88 +137,26 @@ export function VarExercise({ clip }: VarExerciseProps) {
       1,
       Math.round((Date.now() - startedAtRef.current) / 1000)
     );
-    const incidentCorrect = safeCompare(selectedIncident, clip.incident_type);
-    const appCorrect = safeCompare(appStatus, clip.correct_app_status);
-    const clearErrorCorrect = safeCompare(clearError, clip.correct_clear_error);
-    const interventionCorrect = varDecision === correctVarDecision;
-    const factualCorrect =
-      varDecision === "factual_review" || correctVarDecision === "factual_review"
-        ? interventionCorrect
-        : undefined;
-
-    const feedback = buildVarFeedback({
-      score: computedScore,
-      correctVarDecision,
-      explanation: clip.explanation,
-    });
-
-    const primaryPayload = {
-      user_id: user.id,
-      sport_type: DEFAULT_SPORT_TYPE,
-      activity_type: "var_training",
-      clip_id: clip.id,
-      clip_title: clip.title,
-      module: "var_lab",
-      mode: "var",
-      topic: clip.topic ?? "VAR",
-      season: clip.season ?? "2026/27",
-      source_version: clip.source_version ?? "RefLab football_11 var training",
-      difficulty: clip.difficulty,
-      score: computedScore,
-      is_correct: computedScore >= 85,
-      selected_decision: translateVarDecision(varDecision),
-      correct_decision: translateVarDecision(correctVarDecision),
-      selected_restart: appStatus ? translateApp(appStatus) : null,
-      correct_restart: clip.correct_app_status ? translateApp(clip.correct_app_status) : null,
-      selected_discipline: finalDecision || null,
-      correct_discipline: null,
-      feedback,
-      app_correct: appCorrect,
-      ofr_correct:
-        varDecision === "recommend_ofr" || correctVarDecision === "recommend_ofr"
-          ? interventionCorrect
-          : undefined,
-      var_intervention_correct: interventionCorrect,
-      factual_vs_interpretative_correct: factualCorrect,
-      final_decision_correct: incidentCorrect ?? clearErrorCorrect,
-      protocol_score: computedScore,
-      time_spent_seconds: timeSpentSeconds,
-      created_at: new Date().toISOString(),
-    };
-
-    const fallbackPayload = {
-      user_id: user.id,
-      sport_type: DEFAULT_SPORT_TYPE,
-      activity_type: "var_training",
-      clip_title: clip.title,
-      foul: null,
-      restart: translateVarDecision(varDecision),
-      discipline: finalDecision || null,
-      var_review: varDecision !== "check_complete",
-      score: computedScore,
-      topic: clip.topic ?? "VAR",
-      season: clip.season ?? "2026/27",
-      source_version: clip.source_version ?? "RefLab football_11 var training",
-      difficulty: clip.difficulty,
-      technical_correct: incidentCorrect,
-      restart_correct: appCorrect,
-      discipline_correct: clearErrorCorrect,
-      disciplinary_correct: clearErrorCorrect,
-      var_correct: interventionCorrect,
-    };
-
-    const result = await insertAttemptSafely(supabase, primaryPayload, fallbackPayload);
-
-    if (result.saved) {
+    try {
+      await submitTrainingAttempt({
+        kind: "var_clip",
+        submissionId: createTrainingSubmissionId(),
+        clipId: clip.id,
+        answer: {
+          selectedIncident,
+          appStatus,
+          clearError,
+          varDecision,
+          finalDecision,
+          communication,
+        },
+        timeSpentSeconds,
+      });
+      setSaveMessage("Intento VAR guardado para Rendimiento.");
+    } catch (error) {
       setSaveMessage(
-        result.usedFallback
-          ? "Intento VAR guardado con la estructura actual de metricas."
-          : "Intento VAR guardado para Rendimiento."
-      );
-    } else {
-      setSaveMessage(
-        result.error
-          ? `No se pudo guardar el intento VAR: ${result.error}`
+        error instanceof Error
+          ? `No se pudo guardar el intento VAR: ${error.message}`
           : "No se pudo guardar el intento VAR."
       );
     }
@@ -519,31 +448,6 @@ function calculateVarScore({
 
 function isVarDecision(value?: string | null): value is VarDecision {
   return value === "check_complete" || value === "recommend_ofr" || value === "factual_review";
-}
-
-function safeCompare<T extends string>(selected: T | null, expected?: string | null) {
-  if (!expected) return undefined;
-  return selected === expected;
-}
-
-function buildVarFeedback({
-  score,
-  correctVarDecision,
-  explanation,
-}: {
-  score: number;
-  correctVarDecision: VarDecision;
-  explanation?: string | null;
-}) {
-  const level = score >= 85
-    ? "Aplicacion VAR solida."
-    : score >= 65
-      ? "Criterio VAR aceptable, con puntos a ajustar."
-      : "Revisar protocolo VAR y comunicacion.";
-
-  return `${level} Decision recomendada: ${translateVarDecision(correctVarDecision)}. ${
-    explanation ?? "Aplicar categoria revisable, APP, error claro y manifiesto y tipo de revision."
-  }`;
 }
 
 function translateIncident(value: Incident) {

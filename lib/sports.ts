@@ -1,13 +1,13 @@
 import {
   sportContentRegistry,
   type SportType,
-} from "@/lib/sports-content";
+} from "./sports-content/index.ts";
 import type {
   GoverningBody,
   SportContentDefinition,
   SportLibraryDefinition,
   SportTopicDefinition,
-} from "@/lib/sports-content/types";
+} from "./sports-content/types.ts";
 
 export type {
   GoverningBody,
