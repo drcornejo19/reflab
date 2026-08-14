@@ -143,6 +143,15 @@ export const disciplineDefinitions: Record<SportType, DisciplineExperience> = {
         iconKey: "decision",
       },
       {
+        title: "Videoanalisis",
+        category: "Audiovisual",
+        description:
+          "Analiza jugadas reales y entrena criterio tecnico, disciplinario y de reanudacion.",
+        href: "/training/video-analysis",
+        status: "Disponible",
+        iconKey: "video",
+      },
+      {
         title: "VAR Lab",
         category: "Protocolo",
         description:
@@ -177,15 +186,6 @@ export const disciplineDefinitions: Record<SportType, DisciplineExperience> = {
       },
     ],
     evaluationModules: [
-      {
-        title: "Videoanalisis",
-        category: "Audiovisual",
-        description:
-          "Evalua jugadas reales y entrena criterio tecnico, disciplinario y de reanudacion.",
-        href: "/training/video-analysis",
-        status: "Disponible",
-        iconKey: "video",
-      },
       {
         title: "Examen arbitral",
         category: "Decision",
@@ -314,15 +314,6 @@ export const disciplineDefinitions: Record<SportType, DisciplineExperience> = {
       },
     ],
     evaluationModules: [
-      {
-        title: "Videoanalisis de futsal",
-        category: "Audiovisual",
-        description:
-          "Resuelve clips reales con trazabilidad tecnica, disciplinaria y procedimental propia de futsal.",
-        href: "/futsal/video-analysis",
-        status: "Disponible",
-        iconKey: "video",
-      },
       {
         title: "Examen de reglas FIFA Futsal",
         category: "Reglas",
