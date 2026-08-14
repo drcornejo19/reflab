@@ -1,5 +1,5 @@
-import { getPublicRankingName, resolveRefCardId } from "@/lib/refCard";
-import { DEFAULT_SPORT_TYPE, normalizeSportType, type SportType } from "@/lib/sports";
+import { getPublicRankingName, resolveRefCardId } from "./refCard.ts";
+import { DEFAULT_SPORT_TYPE, normalizeSportType, type SportType } from "./sports.ts";
 
 export type PerformanceSource = "training" | "exam" | "rules_exam";
 export type ModuleKey = "decision" | "video" | "var" | "english" | "communication" | "preparation";
@@ -11,6 +11,8 @@ export type AttemptRecord = {
   sport_type?: SportType | null;
   activity_type?: string | null;
   ref_card_id?: string | null;
+  exam_result_id?: string | null;
+  submission_id?: string | null;
   clip_id?: string | null;
   clip_title?: string | null;
   module?: string | null;
@@ -78,8 +80,10 @@ export type ExamAnswerRecord = {
   score?: number | null;
 };
 export type ExamResultRecord = {
-  id?: string; user_id?: string | null; total_questions?: number | null; total_score?: number | null;
+  id?: string; user_id?: string | null; exam_session_id?: string | null; submission_id?: string | null;
+  payload_hash?: string | null; total_questions?: number | null; total_score?: number | null;
   avg_score?: number | null; correct_count?: number | null; details?: ExamAnswerRecord[] | null; created_at?: string | null;
+  submitted_at?: string | null;
   sport_type?: SportType | null; activity_type?: string | null; season?: string | null; source_version?: string | null;
 };
 export type RulesAnswerRecord = {

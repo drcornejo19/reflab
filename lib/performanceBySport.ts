@@ -8,9 +8,9 @@ import {
   type RulesExamResultRecord,
   type SummaryMetric,
   type TopicMetric,
-} from "@/lib/performance";
-import { getDisciplineAction, getDisciplineRoute } from "@/lib/discipline";
-import { getRadarAxesForSport, type MetricFieldKey } from "@/lib/sportMetrics";
+} from "./performance.ts";
+import { getDisciplineAction, getDisciplineRoute } from "./discipline.ts";
+import { getRadarAxesForSport, type MetricFieldKey } from "./sportMetrics.ts";
 import {
   DEFAULT_SPORT_TYPE,
   getSportLabel,
@@ -18,7 +18,7 @@ import {
   normalizeSportTopic,
   normalizeSportType,
   type SportType,
-} from "@/lib/sports";
+} from "./sports.ts";
 
 export type SportCriterionKey =
   | "technical"

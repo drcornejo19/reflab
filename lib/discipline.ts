@@ -3,8 +3,8 @@ import {
   SPORT_TYPES,
   isSportType,
   type SportType,
-} from "@/lib/sports";
-import { FUTSAL_RF_LOGO_SRC, RF_LOGO_SRC } from "@/lib/brand";
+} from "./sports.ts";
+import { FUTSAL_RF_LOGO_SRC, RF_LOGO_SRC } from "./brand.ts";
 
 export const DISCIPLINE_STORAGE_KEY = "reflab.selectedDiscipline";
 export const DISCIPLINE_COOKIE_KEY = "reflab_selected_discipline";

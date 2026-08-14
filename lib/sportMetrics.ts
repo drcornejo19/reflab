@@ -1,4 +1,4 @@
-import type { SportType } from "@/lib/sports";
+import type { SportType } from "./sports.ts";
 
 export type MetricFieldKey =
   | "technical_correct"
