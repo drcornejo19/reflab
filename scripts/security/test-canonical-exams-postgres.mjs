@@ -348,8 +348,8 @@ begin
   end if;
 
   failure_manifest := pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-    'source_item_type', 'manual',
-    'source_item_id', '70000000-0000-4000-8000-000000000001',
+    'source_item_type', 'rule_question',
+    'source_item_id', 'late-failure-rule-question-1',
     'occurrence_id', '70000000-0000-4000-8000-000000000001',
     'position', 1,
     'source_version', 'local-test-v1'
@@ -373,8 +373,8 @@ begin
   );
   failure_attempts := pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
     'occurrence_id', '70000000-0000-4000-8000-000000000001',
-    'source_item_type', 'manual',
-    'source_item_id', '70000000-0000-4000-8000-000000000001',
+    'source_item_type', 'rule_question',
+    'source_item_id', 'late-failure-rule-question-1',
     'score', 100,
     'max_score', 100,
     'is_correct', true,
@@ -417,6 +417,152 @@ begin
 end
 $canonical_exam_test$;
 
+do $canonical_rules_exam_test$
+declare
+  legacy_rules_count bigint := (select pg_catalog.count(*) from public.rules_exam_results);
+  football_manifest jsonb;
+  football_attempts jsonb;
+  football_result jsonb;
+  futsal_manifest jsonb;
+  futsal_attempts jsonb;
+  futsal_result jsonb;
+begin
+  football_manifest := pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+    'source_item_type', 'rule_question',
+    'source_item_id', 'football-rule-local-1',
+    'occurrence_id', '74000000-0000-4000-8000-000000000001',
+    'position', 1,
+    'source_version', 'football-rules-local-v1'
+  ));
+  insert into public.referee_exam_sessions (
+    id, user_id, submission_id, context_type, sport_type, activity_type,
+    season, source_version, item_manifest, manifest_hash, item_count, status, expires_at
+  ) values (
+    '74100000-0000-4000-8000-000000000001',
+    'user_dev_referee_a',
+    '74200000-0000-4000-8000-000000000001',
+    'individual', 'football_11', 'referee_exam', 'local', 'football-rules-local-v1',
+    football_manifest,
+    pg_catalog.encode(
+      extensions.digest(
+        pg_catalog.convert_to(reflab_private.canonical_jsonb_text(football_manifest), 'UTF8'),
+        'sha256'
+      ),
+      'hex'
+    ),
+    1, 'active', pg_catalog.now() + interval '1 hour'
+  );
+  football_attempts := pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+    'occurrence_id', '74000000-0000-4000-8000-000000000001',
+    'source_item_type', 'rule_question',
+    'source_item_id', 'football-rule-local-1',
+    'topic', 'VAR',
+    'rule_reference', 'VAR Protocol',
+    'selected_decision', 'Correcta',
+    'correct_decision', 'Correcta',
+    'score', 1,
+    'max_score', 1,
+    'is_correct', true,
+    'technical_correct', true,
+    'var_correct', true
+  ));
+  football_result := public.submit_referee_exam(
+    'user_dev_referee_a',
+    '74100000-0000-4000-8000-000000000001',
+    '74200000-0000-4000-8000-000000000001',
+    pg_catalog.encode(
+      extensions.digest(
+        pg_catalog.convert_to(reflab_private.canonical_jsonb_text(football_attempts), 'UTF8'),
+        'sha256'
+      ),
+      'hex'
+    ),
+    football_attempts
+  );
+
+  futsal_manifest := pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+    'source_item_type', 'rule_question',
+    'source_item_id', 'futsal-rule-local-1',
+    'occurrence_id', '75000000-0000-4000-8000-000000000001',
+    'position', 1,
+    'source_version', 'futsal-rules-local-v1'
+  ));
+  insert into public.referee_exam_sessions (
+    id, user_id, submission_id, context_type, sport_type, activity_type,
+    season, source_version, item_manifest, manifest_hash, item_count, status, expires_at
+  ) values (
+    '75100000-0000-4000-8000-000000000001',
+    'user_dev_referee_a',
+    '75200000-0000-4000-8000-000000000001',
+    'individual', 'futsal', 'referee_exam', 'local', 'futsal-rules-local-v1',
+    futsal_manifest,
+    pg_catalog.encode(
+      extensions.digest(
+        pg_catalog.convert_to(reflab_private.canonical_jsonb_text(futsal_manifest), 'UTF8'),
+        'sha256'
+      ),
+      'hex'
+    ),
+    1, 'active', pg_catalog.now() + interval '1 hour'
+  );
+  futsal_attempts := pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+    'occurrence_id', '75000000-0000-4000-8000-000000000001',
+    'source_item_type', 'rule_question',
+    'source_item_id', 'futsal-rule-local-1',
+    'topic', 'Faltas tacticas',
+    'rule_reference', 'Law 13',
+    'selected_decision', 'Incorrecta',
+    'correct_decision', 'Correcta',
+    'score', 0,
+    'max_score', 1,
+    'is_correct', false,
+    'technical_correct', false,
+    'accumulated_foul_correct', false
+  ));
+  futsal_result := public.submit_referee_exam(
+    'user_dev_referee_a',
+    '75100000-0000-4000-8000-000000000001',
+    '75200000-0000-4000-8000-000000000001',
+    pg_catalog.encode(
+      extensions.digest(
+        pg_catalog.convert_to(reflab_private.canonical_jsonb_text(futsal_attempts), 'UTF8'),
+        'sha256'
+      ),
+      'hex'
+    ),
+    futsal_attempts
+  );
+
+  if football_result->>'avg_score' <> '100.00'
+     or futsal_result->>'avg_score' <> '0.00'
+     or (select pg_catalog.count(*) from public.exam_results result
+         where result.exam_session_id in (
+           '74100000-0000-4000-8000-000000000001',
+           '75100000-0000-4000-8000-000000000001'
+         )) <> 2
+     or (select pg_catalog.count(*) from public.attempts attempt
+         where attempt.exam_result_id in (
+           (football_result->>'exam_result_id')::uuid,
+           (futsal_result->>'exam_result_id')::uuid
+         )
+           and attempt.source_item_type = 'rule_question') <> 2
+     or exists (
+       select 1
+       from public.attempts attempt
+       where attempt.exam_result_id in (
+         (football_result->>'exam_result_id')::uuid,
+         (futsal_result->>'exam_result_id')::uuid
+       ) and (
+         attempt.user_id <> 'user_dev_referee_a'
+         or attempt.exam_result_id is null
+       )
+     )
+     or (select pg_catalog.count(*) from public.rules_exam_results) <> legacy_rules_count then
+    raise exception 'canonical rules exam persistence invariants failed';
+  end if;
+end
+$canonical_rules_exam_test$;
+
 reset role;
 rollback;
 `;
@@ -427,8 +573,8 @@ function concurrencySetupSql() {
 do $setup$
 declare
   manifest jsonb := pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-    'source_item_type', 'manual',
-    'source_item_id', '80000000-0000-4000-8000-000000000001',
+    'source_item_type', 'rule_question',
+    'source_item_id', 'concurrent-rule-question-1',
     'occurrence_id', '80000000-0000-4000-8000-000000000001',
     'position', 1,
     'source_version', 'local-concurrency-v1'
@@ -460,8 +606,8 @@ $setup$;
 function concurrentPayload() {
   return String.raw`pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
     'occurrence_id', '80000000-0000-4000-8000-000000000001',
-    'source_item_type', 'manual',
-    'source_item_id', '80000000-0000-4000-8000-000000000001',
+    'source_item_type', 'rule_question',
+    'source_item_id', 'concurrent-rule-question-1',
     'score', 100,
     'max_score', 100,
     'is_correct', true
