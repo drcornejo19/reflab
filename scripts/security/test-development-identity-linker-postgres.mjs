@@ -64,6 +64,12 @@ const trainingAttemptsMigrationPath = resolve(
   "migrations",
   "202608130001_canonical_training_attempts.sql"
 );
+const communicationFeedbackMigrationPath = resolve(
+  repositoryRoot,
+  "supabase",
+  "migrations",
+  "202608150001_canonical_communication_feedback.sql"
+);
 const temporaryRoot = mkdtempSync(
   join(tmpdir(), "reflab-identity-linker-postgres-")
 );
@@ -115,6 +121,14 @@ const rollbackTrainingMigrationPath = join(
   temporaryRoot,
   "canonical-training-rollback.sql"
 );
+const communicationBehaviorPath = join(
+  temporaryRoot,
+  "canonical-communication-feedback-behavior.sql"
+);
+const concurrentCommunicationPath = join(
+  temporaryRoot,
+  "canonical-communication-feedback-concurrent.sql"
+);
 const port = await reservePort();
 const connectionEnvironment = {
   ...process.env,
@@ -148,6 +162,11 @@ try {
   writeFileSync(bootstrapPath, bootstrapSql(), "utf8");
   writeFileSync(behaviorPath, behaviorSql(), "utf8");
   writeFileSync(trainingBehaviorPath, trainingBehaviorSql(), "utf8");
+  writeFileSync(
+    communicationBehaviorPath,
+    communicationFeedbackBehaviorSql(),
+    "utf8"
+  );
 
   createDatabase("reflab_identity_linker_test");
   applyBootstrapAndBaseline("reflab_identity_linker_test");
@@ -184,12 +203,25 @@ try {
     "after canonical training attempts migration"
   );
   assertTrainingAttemptSecurity("reflab_identity_linker_test");
+  applySqlFile(
+    "reflab_identity_linker_test",
+    communicationFeedbackMigrationPath
+  );
+  assertNoPublicCreatePrivilege(
+    "reflab_identity_linker_test",
+    "after canonical communication feedback migration"
+  );
+  assertCommunicationFeedbackSecurity("reflab_identity_linker_test");
   assertRlsOwnerPolicyIsolation("reflab_identity_linker_test");
   await assertIdentityLinkConcurrency("reflab_identity_linker_test");
   applySqlFile("reflab_identity_linker_test", behaviorPath);
   await assertAdminAccessConcurrency("reflab_identity_linker_test");
   applySqlFile("reflab_identity_linker_test", trainingBehaviorPath);
   await assertTrainingAttemptConcurrency("reflab_identity_linker_test");
+  applySqlFile("reflab_identity_linker_test", communicationBehaviorPath);
+  await assertCommunicationFeedbackConcurrency(
+    "reflab_identity_linker_test"
+  );
   assertCanonicalStructure("reflab_identity_linker_test");
 
   createDatabase("reflab_identity_linker_rollback");
@@ -631,6 +663,314 @@ rollback;`
   ) {
     throw new Error("Identity concurrency test left residual rows.");
   }
+}
+
+function communicationFeedbackBehaviorSql() {
+  return String.raw`
+begin;
+
+insert into public.clips (
+  id, sport_type, title, video_url, topic, difficulty, mode,
+  correct_foul, correct_restart, correct_discipline, correct_var,
+  is_active, status
+)
+values (
+  '96000000-0000-4000-8000-000000000001',
+  'football_11',
+  'Local canonical communication clip',
+  'https://development.invalid/communication.mp4',
+  'Dispute',
+  'basic',
+  'field',
+  true,
+  'Tiro libre directo',
+  'Sin sancion',
+  false,
+  true,
+  'published'
+);
+
+create function public.local_fail_communication_attempt()
+returns trigger
+language plpgsql
+set search_path = pg_catalog
+as $late_failure$
+begin
+  if new.submission_id = '96000000-0000-4000-8000-000000000099' then
+    raise exception 'intentional late communication persistence failure';
+  end if;
+  return new;
+end
+$late_failure$;
+
+create trigger local_fail_communication_attempt
+after insert on public.attempts
+for each row execute function public.local_fail_communication_attempt();
+
+set local role service_role;
+
+do $communication_behavior$
+declare
+  payload jsonb := '{
+    "sport_type":"football_11",
+    "activity_type":"english_communication_feedback",
+    "clip_id":"96000000-0000-4000-8000-000000000001",
+    "mode":"ifab_english",
+    "answer_text":"The referee should stop play and award a direct free kick.",
+    "feedback_language":"en",
+    "has_voice_recording":false,
+    "oral_evaluable":false,
+    "feedback":"Clear decision with appropriate IFAB terminology.",
+    "scores":{"terminology":8,"clarity":7,"precision":9,"structure":8,"vocabulary":7,"grammar":8,"global":8},
+    "global_label":"solid",
+    "model_answer":"Stop play and award a direct free kick.",
+    "human_review_reason":null,
+    "confidence":{"label":"high","score":0.95,"reasons":[],"requiresHumanReview":false},
+    "evidence":[],
+    "coach_run_id":"96000000-0000-4000-8000-000000000010"
+  }'::jsonb;
+  created_result jsonb;
+  replay_result jsonb;
+  persisted_attempt public.attempts%rowtype;
+  rejected boolean;
+begin
+  created_result := public.submit_canonical_communication_feedback(
+    'user_dev_referee_a',
+    '96000000-0000-4000-8000-000000000011',
+    pg_catalog.repeat('a', 64),
+    payload
+  );
+  if created_result->>'status' <> 'created' then
+    raise exception 'canonical communication attempt was not created';
+  end if;
+
+  replay_result := public.submit_canonical_communication_feedback(
+    'user_dev_referee_a',
+    '96000000-0000-4000-8000-000000000011',
+    pg_catalog.repeat('a', 64),
+    payload
+  );
+  if replay_result->>'status' <> 'already_recorded'
+     or replay_result->>'attempt_id' <> created_result->>'attempt_id' then
+    raise exception 'canonical communication replay was not idempotent';
+  end if;
+
+  select attempt.* into persisted_attempt
+  from public.attempts attempt
+  where attempt.submission_id = '96000000-0000-4000-8000-000000000011';
+
+  if persisted_attempt.user_id <> 'user_dev_referee_a'
+     or persisted_attempt.exam_result_id is not null
+     or persisted_attempt.score is not null
+     or persisted_attempt.source_item_type <> 'communication_feedback'
+     or persisted_attempt.activity_type <> 'english_communication_feedback'
+     or persisted_attempt.vocabulary_score <> 70
+     or persisted_attempt.clarity_score <> 70
+     or persisted_attempt.terminology_score <> 80
+     or persisted_attempt.grammar_score <> 80
+     or persisted_attempt.technical_accuracy_score <> 90
+     or persisted_attempt.structure_score <> 80
+     or persisted_attempt.criterion_result->>'kind'
+       <> 'canonical_communication_feedback' then
+    raise exception 'canonical communication persistence contract is invalid';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.submit_canonical_communication_feedback(
+      'user_dev_referee_a',
+      '96000000-0000-4000-8000-000000000011',
+      pg_catalog.repeat('b', 64),
+      payload
+    );
+  exception when unique_violation then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'conflicting communication replay was accepted';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.submit_canonical_communication_feedback(
+      'user_dev_referee_a',
+      '96000000-0000-4000-8000-000000000012',
+      pg_catalog.repeat('c', 64),
+      payload || '{"user_id":"attacker"}'::jsonb
+    );
+  exception when invalid_parameter_value then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'client identity field was accepted by communication RPC';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.submit_canonical_communication_feedback(
+      'user_dev_referee_a',
+      '96000000-0000-4000-8000-000000000013',
+      pg_catalog.repeat('d', 64),
+      payload || pg_catalog.jsonb_build_object(
+        'answer_text', null,
+        'has_voice_recording', true,
+        'scores', pg_catalog.jsonb_build_object(
+          'terminology', 8, 'clarity', null, 'precision', null,
+          'structure', null, 'vocabulary', null, 'grammar', null,
+          'global', null
+        )
+      )
+    );
+  exception when invalid_parameter_value then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'unverified audio received an oral score';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.submit_canonical_communication_feedback(
+      'user_dev_referee_a',
+      '96000000-0000-4000-8000-000000000099',
+      pg_catalog.repeat('e', 64),
+      payload
+    );
+  exception when raise_exception then
+    if sqlerrm = 'intentional late communication persistence failure' then
+      rejected := true;
+    else
+      raise;
+    end if;
+  end;
+  if not rejected or exists (
+    select 1 from public.attempts
+    where submission_id = '96000000-0000-4000-8000-000000000099'
+  ) then
+    raise exception 'late communication failure did not roll back completely';
+  end if;
+
+  if exists (select 1 from public.user_roles)
+     or exists (
+       select 1 from public.user_global_roles where source = 'automatic_default'
+     )
+     or exists (
+       select 1 from public.user_subscriptions where source = 'automatic_default'
+     ) then
+    raise exception 'communication feedback created legacy access rows';
+  end if;
+end
+$communication_behavior$;
+
+reset role;
+rollback;
+`;
+}
+
+async function assertCommunicationFeedbackConcurrency(databaseName) {
+  query(
+    databaseName,
+    String.raw`insert into public.clips (
+  id, sport_type, title, video_url, topic, difficulty, mode,
+  correct_foul, correct_restart, correct_discipline, correct_var,
+  is_active, status
+)
+values (
+  '96000000-0000-4000-8000-000000000002',
+  'football_11',
+  'Concurrent communication clip',
+  'https://development.invalid/communication-concurrent.mp4',
+  'Dispute',
+  'basic',
+  'field',
+  true,
+  'Tiro libre directo',
+  'Sin sancion',
+  false,
+  true,
+  'published'
+);`
+  );
+
+  const payload = String.raw`'{
+    "sport_type":"football_11",
+    "activity_type":"english_communication_feedback",
+    "clip_id":"96000000-0000-4000-8000-000000000002",
+    "mode":"ifab_english",
+    "answer_text":"Concurrent canonical answer.",
+    "feedback_language":"en",
+    "has_voice_recording":false,
+    "oral_evaluable":false,
+    "feedback":"Concurrent canonical feedback.",
+    "scores":{"terminology":8,"clarity":8,"precision":8,"structure":8,"vocabulary":8,"grammar":8,"global":8},
+    "global_label":"solid",
+    "model_answer":null,
+    "human_review_reason":null,
+    "confidence":{"label":"high","score":0.95,"reasons":[],"requiresHumanReview":false},
+    "evidence":[],
+    "coach_run_id":"96000000-0000-4000-8000-000000000020"
+  }'::jsonb`;
+
+  writeFileSync(
+    concurrentCommunicationPath,
+    String.raw`begin;
+set local role service_role;
+select public.submit_canonical_communication_feedback(
+  'user_dev_referee_a',
+  '96000000-0000-4000-8000-000000000021',
+  pg_catalog.repeat('f', 64),
+  ${payload}
+);
+select pg_catalog.pg_sleep(1);
+commit;
+`,
+    "utf8"
+  );
+
+  const first = runPsqlFileAsync(
+    databaseName,
+    concurrentCommunicationPath,
+    "reflab_communication_same_submission"
+  );
+  await waitForActiveQuery(
+    databaseName,
+    "reflab_communication_same_submission",
+    "pg_sleep"
+  );
+  const second = query(
+    databaseName,
+    String.raw`set role service_role;
+select public.submit_canonical_communication_feedback(
+  'user_dev_referee_a',
+  '96000000-0000-4000-8000-000000000021',
+  pg_catalog.repeat('f', 64),
+  ${payload}
+);
+reset role;`
+  );
+  await first;
+
+  if (!second.includes("already_recorded")) {
+    throw new Error("Concurrent communication replay was not idempotent.");
+  }
+  if (
+    query(
+      databaseName,
+      String.raw`select pg_catalog.count(*) from public.attempts
+where submission_id = '96000000-0000-4000-8000-000000000021'
+  and exam_result_id is null;`
+    ) !== "1"
+  ) {
+    throw new Error("Concurrent communication calls created duplicate attempts.");
+  }
+
+  query(
+    databaseName,
+    String.raw`delete from public.attempts
+where submission_id = '96000000-0000-4000-8000-000000000021';
+delete from public.clips
+where id = '96000000-0000-4000-8000-000000000002';`
+  );
 }
 
 function trainingBehaviorSql() {
@@ -1244,6 +1584,90 @@ where id = '91000000-0000-4000-8000-000000000002';`
   );
 }
 
+function assertCommunicationFeedbackSecurity(databaseName) {
+  const result = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select pg_catalog.json_build_object(
+  'rpc_owner_safe', exists (
+    select 1
+    from pg_catalog.pg_proc function_row
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = function_row.pronamespace
+    join pg_catalog.pg_roles owner_role
+      on owner_role.oid = function_row.proowner
+    where namespace.nspname = 'public'
+      and function_row.proname = 'submit_canonical_communication_feedback'
+      and owner_role.rolname = 'reflab_rls_owner'
+      and function_row.prosecdef
+      and function_row.proconfig = array['search_path=pg_catalog']
+  ),
+  'service_role_execute', pg_catalog.has_function_privilege(
+    'service_role',
+    'public.submit_canonical_communication_feedback(text,uuid,text,jsonb)',
+    'EXECUTE'
+  ),
+  'forbidden_execute',
+    pg_catalog.has_function_privilege(
+      'anon',
+      'public.submit_canonical_communication_feedback(text,uuid,text,jsonb)',
+      'EXECUTE'
+    )
+    or pg_catalog.has_function_privilege(
+      'authenticated',
+      'public.submit_canonical_communication_feedback(text,uuid,text,jsonb)',
+      'EXECUTE'
+    )
+    or exists (
+      select 1
+      from pg_catalog.pg_proc function_row,
+      lateral pg_catalog.aclexplode(
+        coalesce(
+          function_row.proacl,
+          pg_catalog.acldefault('f', function_row.proowner)
+        )
+      ) privilege
+      where function_row.oid =
+        'public.submit_canonical_communication_feedback(text,uuid,text,jsonb)'::pg_catalog.regprocedure
+        and privilege.grantee = 0
+        and privilege.privilege_type = 'EXECUTE'
+    ),
+  'source_contract_present', exists (
+    select 1
+    from pg_catalog.pg_constraint constraint_row
+    where constraint_row.conrelid = 'public.attempts'::pg_catalog.regclass
+      and constraint_row.conname = 'attempts_source_type_check'
+      and pg_catalog.strpos(
+        pg_catalog.pg_get_constraintdef(constraint_row.oid),
+        'communication_feedback'
+      ) > 0
+  ),
+  'training_policy_count', (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_policies policy
+    where policy.policyname like 'training_attempt_%'
+  ),
+  'owner_has_no_public_create', not pg_catalog.has_schema_privilege(
+    'reflab_rls_owner',
+    'public',
+    'CREATE'
+  )
+);`
+    )
+  );
+
+  if (
+    result.rpc_owner_safe !== true ||
+    result.service_role_execute !== true ||
+    result.forbidden_execute !== false ||
+    result.source_contract_present !== true ||
+    Number(result.training_policy_count) !== 15 ||
+    result.owner_has_no_public_create !== true
+  ) {
+    throw new Error("Canonical communication RPC isolation is invalid.");
+  }
+}
+
 function assertTrainingAttemptSecurity(databaseName) {
   const result = JSON.parse(
     query(
@@ -1315,7 +1739,10 @@ function assertTrainingAttemptSecurity(databaseName) {
         pg_catalog.lower(function_row.prosrc),
         'reflab.training_'
       ) > 0
-      and function_row.proname <> 'submit_canonical_training_attempt'
+      and function_row.proname not in (
+        'submit_canonical_training_attempt',
+        'submit_canonical_communication_feedback'
+      )
   ),
   'index_matches_non_exam_contract', exists (
     select 1
@@ -2574,7 +3001,7 @@ select pg_catalog.json_build_object(
   const expected = {
     public_tables: 79,
     private_tables: 2,
-    functions: 27,
+    functions: 28,
     policies: 150,
     triggers: 82,
   };
@@ -2605,6 +3032,10 @@ select pg_catalog.json_build_object(
     trainingAttemptsMigrationPath,
     "utf8"
   );
+  const communicationFeedbackMigrationSql = readFileSync(
+    communicationFeedbackMigrationPath,
+    "utf8"
+  );
   const explicitIndexCount =
     (
       baselineSql.match(
@@ -2633,6 +3064,11 @@ select pg_catalog.json_build_object(
     ).length +
     (
       trainingAttemptsMigrationSql.match(
+        /^\s*create\s+(?:unique\s+)?index\s+/gim
+      ) ?? []
+    ).length +
+    (
+      communicationFeedbackMigrationSql.match(
         /^\s*create\s+(?:unique\s+)?index\s+/gim
       ) ?? []
     ).length;

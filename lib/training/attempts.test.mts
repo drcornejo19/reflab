@@ -368,7 +368,9 @@ test("authorized training components no longer write attempts directly", () => {
     english.includes('submitTrainingAttempt({\n        kind: "ifab_trivia"'),
     true
   );
-  assert.match(english, /insertAttemptSafely/);
+  assert.doesNotMatch(english, /insertAttemptSafely|attemptPersistence/);
+  assert.doesNotMatch(english, /\.from\(["']attempts["']\)/);
+  assert.match(english, /fetch\(["']\/api\/english-feedback["']/);
 });
 
 test("training migration is server-only, transactional, and concurrency-safe", () => {
