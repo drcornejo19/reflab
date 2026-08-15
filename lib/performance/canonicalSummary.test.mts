@@ -12,6 +12,11 @@ import {
   buildCanonicalPerformanceSummary,
   loadOptionalRanking,
 } from "./canonicalSummaryModel.ts";
+import {
+  buildSportPerformanceDataset,
+  getSportRadarData,
+  getSportTopicPerformance,
+} from "../performanceBySport.ts";
 
 const sportType = "football_11" as const;
 const canonicalAccess = {
@@ -218,6 +223,118 @@ test("foreign results, foreign attempts, and orphan attempts are excluded", () =
     ),
     true
   );
+});
+
+test("official topic snapshots remain eligible without a current clip", () => {
+  const historicalAttempt = {
+    ...officialAttempts[0],
+    topic: "Disputas",
+    clip_id: null,
+    technical_correct: true,
+    disciplinary_correct: true,
+  };
+  const currentAttempt = {
+    ...officialAttempts[1],
+    topic: "Dispute",
+    clip_id: "d3f00000-0000-4000-8000-000000000001",
+    score: 25,
+    is_correct: false,
+    technical_correct: false,
+    restart_correct: false,
+    disciplinary_correct: false,
+  };
+  const result = buildCanonicalPerformanceSummary({
+    attempts: [historicalAttempt, currentAttempt],
+    examResults,
+    sportType,
+    canonicalUserId: canonicalAccess.userId,
+  });
+
+  assert.equal(result.summary.avgScore, 62.5);
+  assert.equal(result.topics.length, 1);
+  assert.deepEqual(
+    result.topics[0] && {
+      topic: result.topics[0].topic,
+      attempts: result.topics[0].attempts,
+      correct: result.topics[0].correct,
+      errors: result.topics[0].errors,
+      accuracy: result.topics[0].accuracy,
+      avgScore: result.topics[0].avgScore,
+      lastScore: result.topics[0].lastScore,
+    },
+    {
+      topic: "Disputas",
+      attempts: 2,
+      correct: 1,
+      errors: 1,
+      accuracy: 50,
+      avgScore: 62.5,
+      lastScore: 25,
+    }
+  );
+  const disputeAxis = result.radarAxes.find((axis) => axis.key === "disputes");
+  assert.deepEqual(
+    disputeAxis && {
+      attempts: disputeAxis.attempts,
+      measurements: disputeAxis.measurements,
+      accuracy: disputeAxis.accuracy,
+    },
+    { attempts: 2, measurements: 4, accuracy: 50 }
+  );
+  assert.equal(
+    result.radarAxes
+      .filter((axis) => axis.key !== "disputes")
+      .every((axis) => axis.attempts === 0 && axis.accuracy === null),
+    true
+  );
+});
+
+test("unknown and orphan official topics never become radar eligible", () => {
+  const validResultId = examResults[0].id;
+  const dataset = buildSportPerformanceDataset({
+    attempts: [
+      {
+        ...officialAttempts[0],
+        topic: "Arbitrary browser topic",
+      },
+      {
+        ...officialAttempts[0],
+        id: "orphan-official-attempt",
+        exam_result_id: "10000000-0000-4000-8000-000000000097",
+        topic: "Dispute",
+      },
+    ],
+    examResults: [],
+    rulesExamResults: [],
+    clips: [],
+    sportType,
+    validatedOfficialExamResultIds: new Set([validResultId]),
+  });
+
+  assert.equal(dataset.items[0]?.topicValid, false);
+  assert.equal(dataset.items[1]?.topicValid, false);
+  assert.deepEqual(getSportTopicPerformance(dataset.items, sportType), []);
+  assert.equal(
+    getSportRadarData(dataset.items, sportType).every(
+      (axis) => axis.attempts === 0 && axis.accuracy === null
+    ),
+    true
+  );
+});
+
+test("training attempts retain the current clip-backed radar validation", () => {
+  const dataset = buildSportPerformanceDataset({
+    attempts: [{ ...trainingAttempt, topic: "Dispute" }],
+    examResults: [],
+    rulesExamResults: [],
+    clips: [],
+    sportType,
+    validatedOfficialExamResultIds: new Set(),
+  });
+
+  assert.equal(dataset.items[0]?.topic, "Disputas");
+  assert.equal(dataset.items[0]?.topicValid, false);
+  assert.deepEqual(getSportTopicPerformance(dataset.items, sportType), []);
 });
 
 test("canonical loader resolves the external subject before all reads", async () => {

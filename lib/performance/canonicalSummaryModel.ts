@@ -63,6 +63,7 @@ export function buildCanonicalPerformanceSummary({
     rulesExamResults: [],
     clips: [],
     sportType,
+    validatedOfficialExamResultIds: officialResultIds,
   });
   const baseSummary = getSportPerformanceSummary(
     dataset.items,
