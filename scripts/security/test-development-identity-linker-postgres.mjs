@@ -70,6 +70,12 @@ const communicationFeedbackMigrationPath = resolve(
   "migrations",
   "202608150001_canonical_communication_feedback.sql"
 );
+const coachRateLimitMigrationPath = resolve(
+  repositoryRoot,
+  "supabase",
+  "migrations",
+  "202608200001_canonical_coach_rate_limit.sql"
+);
 const temporaryRoot = mkdtempSync(
   join(tmpdir(), "reflab-identity-linker-postgres-")
 );
@@ -129,6 +135,18 @@ const concurrentCommunicationPath = join(
   temporaryRoot,
   "canonical-communication-feedback-concurrent.sql"
 );
+const coachRateLimitBehaviorPath = join(
+  temporaryRoot,
+  "canonical-coach-rate-limit-behavior.sql"
+);
+const concurrentCoachRateLimitPath = join(
+  temporaryRoot,
+  "canonical-coach-rate-limit-concurrent.sql"
+);
+const rollbackCoachRateLimitMigrationPath = join(
+  temporaryRoot,
+  "canonical-coach-rate-limit-rollback.sql"
+);
 const port = await reservePort();
 const connectionEnvironment = {
   ...process.env,
@@ -165,6 +183,11 @@ try {
   writeFileSync(
     communicationBehaviorPath,
     communicationFeedbackBehaviorSql(),
+    "utf8"
+  );
+  writeFileSync(
+    coachRateLimitBehaviorPath,
+    coachRateLimitBehaviorSql(),
     "utf8"
   );
 
@@ -212,6 +235,23 @@ try {
     "after canonical communication feedback migration"
   );
   assertCommunicationFeedbackSecurity("reflab_identity_linker_test");
+  applySqlFile(
+    "reflab_identity_linker_test",
+    coachRateLimitMigrationPath
+  );
+  assertNoPublicCreatePrivilege(
+    "reflab_identity_linker_test",
+    "after canonical Coach rate-limit migration"
+  );
+  assertCoachRateLimitSecurity("reflab_identity_linker_test");
+  assertCoachRateLimitForbiddenExecution(
+    "reflab_identity_linker_test",
+    "anon"
+  );
+  assertCoachRateLimitForbiddenExecution(
+    "reflab_identity_linker_test",
+    "authenticated"
+  );
   assertRlsOwnerPolicyIsolation("reflab_identity_linker_test");
   await assertIdentityLinkConcurrency("reflab_identity_linker_test");
   applySqlFile("reflab_identity_linker_test", behaviorPath);
@@ -222,6 +262,8 @@ try {
   await assertCommunicationFeedbackConcurrency(
     "reflab_identity_linker_test"
   );
+  applySqlFile("reflab_identity_linker_test", coachRateLimitBehaviorPath);
+  await assertCoachRateLimitConcurrency("reflab_identity_linker_test");
   assertCanonicalStructure("reflab_identity_linker_test");
 
   createDatabase("reflab_identity_linker_rollback");
@@ -350,6 +392,25 @@ try {
   );
   assertTrainingAttemptRollback("reflab_training_attempts_rollback");
 
+  createDatabase("reflab_coach_rate_limit_rollback");
+  applyBootstrapAndBaseline("reflab_coach_rate_limit_rollback");
+  applySqlFile("reflab_coach_rate_limit_rollback", seedPath);
+  applyCanonicalMigrationsThroughCommunication(
+    "reflab_coach_rate_limit_rollback"
+  );
+  writeFileSync(
+    rollbackCoachRateLimitMigrationPath,
+    migrationWithRollback(
+      readFileSync(coachRateLimitMigrationPath, "utf8")
+    ),
+    "utf8"
+  );
+  applySqlFile(
+    "reflab_coach_rate_limit_rollback",
+    rollbackCoachRateLimitMigrationPath
+  );
+  assertCoachRateLimitRollback("reflab_coach_rate_limit_rollback");
+
   console.log(
     "Development identity linker PostgreSQL test passed in an isolated local cluster."
   );
@@ -388,6 +449,19 @@ function createDatabase(databaseName) {
 function applyBootstrapAndBaseline(databaseName) {
   applySqlFile(databaseName, bootstrapPath);
   applySqlFile(databaseName, baselinePath);
+}
+
+function applyCanonicalMigrationsThroughCommunication(databaseName) {
+  for (const filePath of [
+    migrationPath,
+    resolutionMigrationPath,
+    adminAccessMigrationPath,
+    superAdminIdentityMigrationPath,
+    trainingAttemptsMigrationPath,
+    communicationFeedbackMigrationPath,
+  ]) {
+    applySqlFile(databaseName, filePath);
+  }
 }
 
 function applySqlFile(databaseName, filePath) {
@@ -970,6 +1044,259 @@ where submission_id = '96000000-0000-4000-8000-000000000021'
 where submission_id = '96000000-0000-4000-8000-000000000021';
 delete from public.clips
 where id = '96000000-0000-4000-8000-000000000002';`
+  );
+}
+
+function coachRateLimitBehaviorSql() {
+  return String.raw`
+begin;
+set local role service_role;
+
+do $coach_rate_limit_behavior$
+declare
+  result_row record;
+  rejected boolean;
+begin
+  select * into result_row
+  from public.consume_coach_rate_limit(
+    'user_rate_a',
+    'technical_feedback',
+    3,
+    600
+  );
+  if not result_row.allowed or result_row.remaining <> 2 then
+    raise exception 'first Coach rate-limit call did not create an allowed bucket';
+  end if;
+
+  select * into result_row
+  from public.consume_coach_rate_limit(
+    'user_rate_a',
+    'technical_feedback',
+    3,
+    600
+  );
+  if not result_row.allowed or result_row.remaining <> 1 then
+    raise exception 'second Coach rate-limit call returned an invalid remainder';
+  end if;
+
+  select * into result_row
+  from public.consume_coach_rate_limit(
+    'user_rate_a',
+    'technical_feedback',
+    3,
+    600
+  );
+  if not result_row.allowed or result_row.remaining <> 0 then
+    raise exception 'third Coach rate-limit call returned an invalid remainder';
+  end if;
+
+  select * into result_row
+  from public.consume_coach_rate_limit(
+    'user_rate_a',
+    'technical_feedback',
+    3,
+    600
+  );
+  if result_row.allowed
+     or result_row.remaining <> 0
+     or result_row.retry_after_seconds <= 0 then
+    raise exception 'Coach rate limit did not reject the over-limit call';
+  end if;
+
+  if (
+    select rate_bucket.request_count
+    from public.coach_rate_limit_buckets rate_bucket
+    where rate_bucket.user_id = 'user_rate_a'
+      and rate_bucket.feature = 'technical_feedback'
+  ) <> 3 then
+    raise exception 'rejected Coach call changed the persisted request count';
+  end if;
+
+  update public.coach_rate_limit_buckets rate_bucket
+  set window_started_at = pg_catalog.now() - pg_catalog.make_interval(secs => 601)
+  where rate_bucket.user_id = 'user_rate_a'
+    and rate_bucket.feature = 'technical_feedback';
+
+  select * into result_row
+  from public.consume_coach_rate_limit(
+    'user_rate_a',
+    'technical_feedback',
+    3,
+    600
+  );
+  if not result_row.allowed
+     or result_row.remaining <> 2
+     or result_row.retry_after_seconds <> 600
+     or (
+       select rate_bucket.request_count
+       from public.coach_rate_limit_buckets rate_bucket
+       where rate_bucket.user_id = 'user_rate_a'
+         and rate_bucket.feature = 'technical_feedback'
+     ) <> 1 then
+    raise exception 'expired Coach rate-limit window did not reset';
+  end if;
+
+  perform public.consume_coach_rate_limit(
+    'user_rate_b',
+    'technical_feedback',
+    2,
+    600
+  );
+  perform public.consume_coach_rate_limit(
+    'user_rate_a',
+    'var_feedback',
+    2,
+    600
+  );
+
+  if (
+    select pg_catalog.count(*)
+    from public.coach_rate_limit_buckets rate_bucket
+    where (rate_bucket.user_id, rate_bucket.feature) in (
+      ('user_rate_a', 'technical_feedback'),
+      ('user_rate_b', 'technical_feedback'),
+      ('user_rate_a', 'var_feedback')
+    )
+  ) <> 3 then
+    raise exception 'Coach rate-limit buckets are not isolated by user and feature';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.consume_coach_rate_limit('', 'var_feedback', 1, 60);
+  exception when sqlstate '22023' then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'blank Coach rate-limit user was accepted';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.consume_coach_rate_limit('user_rate_a', null, 1, 60);
+  exception when sqlstate '22023' then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'null Coach rate-limit feature was accepted';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.consume_coach_rate_limit(
+      'user_rate_a',
+      'var_feedback',
+      0,
+      60
+    );
+  exception when sqlstate '22023' then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'invalid Coach request limit was accepted';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.consume_coach_rate_limit(
+      'user_rate_a',
+      'var_feedback',
+      1,
+      null
+    );
+  exception when sqlstate '22023' then
+    rejected := true;
+  end;
+  if not rejected then
+    raise exception 'invalid Coach rate window was accepted';
+  end if;
+
+  if exists (select 1 from public.user_roles)
+     or exists (
+       select 1 from public.user_global_roles where source = 'automatic_default'
+     )
+     or exists (
+       select 1 from public.user_subscriptions where source = 'automatic_default'
+     ) then
+    raise exception 'Coach rate limiter created legacy access rows';
+  end if;
+end
+$coach_rate_limit_behavior$;
+
+reset role;
+rollback;
+`;
+}
+
+async function assertCoachRateLimitConcurrency(databaseName) {
+  writeFileSync(
+    concurrentCoachRateLimitPath,
+    String.raw`\pset tuples_only on
+\pset format unaligned
+begin;
+set local role service_role;
+select allowed
+from public.consume_coach_rate_limit(
+  'user_rate_concurrent',
+  'coach_conversation',
+  5,
+  600
+);
+commit;
+`,
+    "utf8"
+  );
+
+  const outputs = await Promise.all(
+    Array.from({ length: 12 }, (_, index) =>
+      runPsqlFileAsync(
+        databaseName,
+        concurrentCoachRateLimitPath,
+        `reflab_coach_rate_limit_${index}`
+      )
+    )
+  );
+  const decisions = outputs.flatMap((output) =>
+    output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line === "t" || line === "f")
+  );
+
+  if (
+    decisions.length !== 12 ||
+    decisions.filter((decision) => decision === "t").length !== 5 ||
+    decisions.filter((decision) => decision === "f").length !== 7
+  ) {
+    throw new Error(
+      `Concurrent Coach rate limit returned invalid decisions: ${decisions.join(",")}.`
+    );
+  }
+
+  const persisted = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select pg_catalog.json_build_object(
+  'bucket_count', pg_catalog.count(*),
+  'request_count', pg_catalog.max(rate_bucket.request_count)
+)
+from public.coach_rate_limit_buckets rate_bucket
+where rate_bucket.user_id = 'user_rate_concurrent'
+  and rate_bucket.feature = 'coach_conversation';`
+    )
+  );
+  if (
+    Number(persisted.bucket_count) !== 1 ||
+    Number(persisted.request_count) !== 5
+  ) {
+    throw new Error("Concurrent Coach calls exceeded the logical limit or duplicated a bucket.");
+  }
+
+  query(
+    databaseName,
+    String.raw`delete from public.coach_rate_limit_buckets
+where user_id = 'user_rate_concurrent'
+  and feature = 'coach_conversation';`
   );
 }
 
@@ -1584,6 +1911,144 @@ where id = '91000000-0000-4000-8000-000000000002';`
   );
 }
 
+function assertCoachRateLimitSecurity(databaseName) {
+  const result = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select pg_catalog.json_build_object(
+  'rpc_owner_safe', exists (
+    select 1
+    from pg_catalog.pg_proc function_row
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = function_row.pronamespace
+    join pg_catalog.pg_roles owner_role
+      on owner_role.oid = function_row.proowner
+    where namespace.nspname = 'public'
+      and function_row.proname = 'consume_coach_rate_limit'
+      and pg_catalog.pg_get_function_identity_arguments(function_row.oid)
+        = 'p_user_id text, p_feature text, p_request_limit integer, p_window_seconds integer'
+      and pg_catalog.pg_get_function_result(function_row.oid)
+        = 'TABLE(allowed boolean, remaining integer, retry_after_seconds integer)'
+      and owner_role.rolname = 'reflab_rls_owner'
+      and not function_row.prosecdef
+      and function_row.proconfig = array['search_path=pg_catalog']
+  ),
+  'service_role_execute', pg_catalog.has_function_privilege(
+    'service_role',
+    'public.consume_coach_rate_limit(text,text,integer,integer)',
+    'EXECUTE'
+  ),
+  'forbidden_execute',
+    pg_catalog.has_function_privilege(
+      'anon',
+      'public.consume_coach_rate_limit(text,text,integer,integer)',
+      'EXECUTE'
+    )
+    or pg_catalog.has_function_privilege(
+      'authenticated',
+      'public.consume_coach_rate_limit(text,text,integer,integer)',
+      'EXECUTE'
+    )
+    or exists (
+      select 1
+      from pg_catalog.pg_proc function_row,
+      lateral pg_catalog.aclexplode(
+        coalesce(
+          function_row.proacl,
+          pg_catalog.acldefault('f', function_row.proowner)
+        )
+      ) privilege
+      where function_row.oid =
+        'public.consume_coach_rate_limit(text,text,integer,integer)'::pg_catalog.regprocedure
+        and privilege.grantee = 0
+        and privilege.privilege_type = 'EXECUTE'
+    ),
+  'service_role_table_access',
+    pg_catalog.has_table_privilege(
+      'service_role',
+      'public.coach_rate_limit_buckets',
+      'SELECT'
+    )
+    and pg_catalog.has_table_privilege(
+      'service_role',
+      'public.coach_rate_limit_buckets',
+      'INSERT'
+    )
+    and pg_catalog.has_table_privilege(
+      'service_role',
+      'public.coach_rate_limit_buckets',
+      'UPDATE'
+    )
+    and exists (
+      select 1
+      from pg_catalog.pg_roles role
+      where role.rolname = 'service_role'
+        and role.rolbypassrls
+    ),
+  'owner_has_no_table_access',
+    not pg_catalog.has_table_privilege(
+      'reflab_rls_owner',
+      'public.coach_rate_limit_buckets',
+      'SELECT'
+    )
+    and not pg_catalog.has_table_privilege(
+      'reflab_rls_owner',
+      'public.coach_rate_limit_buckets',
+      'INSERT'
+    )
+    and not pg_catalog.has_table_privilege(
+      'reflab_rls_owner',
+      'public.coach_rate_limit_buckets',
+      'UPDATE'
+    ),
+  'owner_has_no_public_create', not pg_catalog.has_schema_privilege(
+    'reflab_rls_owner',
+    'public',
+    'CREATE'
+  )
+);`
+    )
+  );
+
+  if (
+    result.rpc_owner_safe !== true ||
+    result.service_role_execute !== true ||
+    result.forbidden_execute !== false ||
+    result.service_role_table_access !== true ||
+    result.owner_has_no_table_access !== true ||
+    result.owner_has_no_public_create !== true
+  ) {
+    throw new Error("Canonical Coach rate-limit RPC isolation is invalid.");
+  }
+}
+
+function assertCoachRateLimitForbiddenExecution(databaseName, roleName) {
+  let rejected = false;
+  try {
+    query(
+      databaseName,
+      String.raw`set role ${roleName};
+select * from public.consume_coach_rate_limit(
+  'user_forbidden',
+  'technical_feedback',
+  1,
+  60
+);`
+    );
+  } catch (error) {
+    const diagnostic = `${error?.stderr ?? ""}`;
+    if (/permission denied for function consume_coach_rate_limit/i.test(diagnostic)) {
+      rejected = true;
+    } else {
+      throw error;
+    }
+  }
+
+  if (!rejected) {
+    throw new Error(`${roleName} executed the canonical Coach rate-limit RPC.`);
+  }
+}
+
 function assertCommunicationFeedbackSecurity(databaseName) {
   const result = JSON.parse(
     query(
@@ -1844,6 +2309,73 @@ function assertTrainingAttemptRollback(databaseName) {
   }
 }
 
+function assertCoachRateLimitRollback(databaseName) {
+  const result = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select pg_catalog.json_build_object(
+  'rpc_absent', pg_catalog.to_regprocedure(
+    'public.consume_coach_rate_limit(text,text,integer,integer)'
+  ) is null,
+  'bucket_table_present', pg_catalog.to_regclass(
+    'public.coach_rate_limit_buckets'
+  ) is not null,
+  'bucket_rows_unchanged', not exists (
+    select 1 from public.coach_rate_limit_buckets
+  ),
+  'function_count', (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_proc function_row
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = function_row.pronamespace
+    where namespace.nspname in ('public', 'reflab_private', 'reflab_meta')
+  ),
+  'policy_count', (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_policies policy
+    where policy.schemaname in ('public', 'reflab_private', 'reflab_meta')
+       or (
+         policy.schemaname = 'storage'
+         and policy.tablename = 'objects'
+       )
+  ),
+  'owner_has_no_public_create', not pg_catalog.has_schema_privilege(
+    'reflab_rls_owner',
+    'public',
+    'CREATE'
+  ),
+  'owner_has_no_table_access',
+    not pg_catalog.has_table_privilege(
+      'reflab_rls_owner',
+      'public.coach_rate_limit_buckets',
+      'SELECT'
+    )
+    and not pg_catalog.has_table_privilege(
+      'reflab_rls_owner',
+      'public.coach_rate_limit_buckets',
+      'INSERT'
+    )
+    and not pg_catalog.has_table_privilege(
+      'reflab_rls_owner',
+      'public.coach_rate_limit_buckets',
+      'UPDATE'
+    )
+);`
+    )
+  );
+  if (
+    result.rpc_absent !== true ||
+    result.bucket_table_present !== true ||
+    result.bucket_rows_unchanged !== true ||
+    Number(result.function_count) !== 28 ||
+    Number(result.policy_count) !== 150 ||
+    result.owner_has_no_public_create !== true ||
+    result.owner_has_no_table_access !== true
+  ) {
+    throw new Error("Canonical Coach rate-limit rollback left residual objects.");
+  }
+}
+
 async function startConcurrentIdentityCall(
   databaseName,
   applicationName,
@@ -2051,7 +2583,7 @@ function runPsqlFileAsync(databaseName, filePath, applicationName) {
     });
     child.once("exit", (code) => {
       clearTimeout(timeout);
-      if (code === 0) resolvePromise();
+      if (code === 0) resolvePromise(stdout);
       else rejectPromise(new Error(`Concurrent PostgreSQL process failed: ${stdout}${stderr}`));
     });
   });
@@ -3001,7 +3533,7 @@ select pg_catalog.json_build_object(
   const expected = {
     public_tables: 79,
     private_tables: 2,
-    functions: 28,
+    functions: 29,
     policies: 150,
     triggers: 82,
   };
@@ -3034,6 +3566,10 @@ select pg_catalog.json_build_object(
   );
   const communicationFeedbackMigrationSql = readFileSync(
     communicationFeedbackMigrationPath,
+    "utf8"
+  );
+  const coachRateLimitMigrationSql = readFileSync(
+    coachRateLimitMigrationPath,
     "utf8"
   );
   const explicitIndexCount =
@@ -3069,6 +3605,11 @@ select pg_catalog.json_build_object(
     ).length +
     (
       communicationFeedbackMigrationSql.match(
+        /^\s*create\s+(?:unique\s+)?index\s+/gim
+      ) ?? []
+    ).length +
+    (
+      coachRateLimitMigrationSql.match(
         /^\s*create\s+(?:unique\s+)?index\s+/gim
       ) ?? []
     ).length;

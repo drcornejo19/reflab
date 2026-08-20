@@ -17,6 +17,7 @@
     "test:exams:postgres": "node scripts/security/test-canonical-exams-postgres.mjs",
     "test:admin-users:postgres": "node scripts/security/test-development-identity-linker-postgres.mjs",
     "test:communication-feedback:postgres": "node scripts/security/test-development-identity-linker-postgres.mjs",
+    "test:coach-rate-limit:postgres": "node scripts/security/test-development-identity-linker-postgres.mjs",
     "prepare:baseline-validation": "node scripts/security/prepare-baseline-validation.mjs",
     "preflight:baseline-validation": "node scripts/security/preflight-baseline-project.mjs",
     "test:security": "node scripts/security/verify-phase1-anon.mjs",
