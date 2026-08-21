@@ -139,7 +139,14 @@ export function EnglishExercise() {
   }
 
   async function evaluate() {
-    if (activeMode === "trivia" || (!answer.trim() && !audioBlob) || loadingAi) return;
+    if (
+      activeMode === "trivia" ||
+      (!answer.trim() && !audioBlob) ||
+      loadingAi ||
+      !currentClip
+    ) {
+      return;
+    }
 
     setLoadingAi(true);
     setFeedback(null);
@@ -153,9 +160,9 @@ export function EnglishExercise() {
           activeMode === "spanish"
             ? "decision_explanation_es"
             : "ifab_english",
-        clipId: currentClip?.id,
+        clipId: currentClip.id,
         sportType: DEFAULT_SPORT_TYPE,
-        answer,
+        answer: answer.trim(),
         hasVoiceRecording: Boolean(audioBlob),
         feedbackLanguage,
       };

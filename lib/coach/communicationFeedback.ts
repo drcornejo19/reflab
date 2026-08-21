@@ -455,7 +455,11 @@ function requireText(value: unknown, maxLength: number) {
 
 function optionalTrimmedText(value: unknown, maxLength: number) {
   if (value === null || value === undefined || value === "") return null;
-  return requireText(value, maxLength);
+  if (typeof value !== "string") throw invalidRequest();
+
+  const normalized = value.trim();
+  if (!normalized || normalized.length > maxLength) throw invalidRequest();
+  return normalized;
 }
 
 function requireUuid(value: unknown) {

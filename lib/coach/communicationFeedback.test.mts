@@ -175,6 +175,83 @@ test("canonical input hashing is deterministic and semantic changes conflict", (
   );
 });
 
+test("communication input normalizes surrounding spaces and line breaks", () => {
+  const padded = parseCommunicationFeedbackInput(
+    input({ answer: "  The defender committed a careless challenge.  " })
+  );
+  const multiline = parseCommunicationFeedbackInput(
+    input({ answer: "\n\tThe defender committed a careless challenge.\r\n" })
+  );
+  const canonical = parseCommunicationFeedbackInput(input());
+
+  assert.equal(padded.answer, canonical.answer);
+  assert.equal(multiline.answer, canonical.answer);
+  assert.equal(
+    hashCanonicalCommunicationInput(padded),
+    hashCanonicalCommunicationInput(canonical)
+  );
+});
+
+test("communication input rejects text containing only whitespace", () => {
+  assert.throws(
+    () =>
+      parseCommunicationFeedbackInput(
+        input({ answer: " \n\t ", hasVoiceRecording: true })
+      ),
+    (error: unknown) =>
+      error instanceof CommunicationFeedbackError &&
+      error.code === "invalid_communication_feedback" &&
+      error.status === 400
+  );
+});
+
+test("a replay differing only by answer whitespace remains idempotent", async () => {
+  const canonical = parseCommunicationFeedbackInput(input());
+  let modelCalls = 0;
+  let writes = 0;
+  const harness = dependencies({
+    findExisting: async () => ({
+      id: attemptId,
+      activity_type: "english_communication_feedback",
+      source_item_type: "communication_feedback",
+      canonical_payload_hash: hashCanonicalCommunicationInput(canonical),
+      feedback: generated().value.feedback,
+      criterion_result: rpcResult({
+        p_user_id: "user_dev_referee_a",
+        p_submission_id: submissionId,
+        p_payload_hash: hashCanonicalCommunicationInput(canonical),
+        p_feedback: {
+          ...generated().value,
+          scores: generated().value.scores,
+          global_label: generated().value.scores.globalLabel,
+          model_answer: generated().value.scores.modelAnswer,
+          confidence,
+          evidence: [reference],
+          coach_run_id: runId,
+        },
+      }).criterion_result,
+    }),
+    generate: async () => {
+      modelCalls += 1;
+      return generated();
+    },
+    persist: async () => {
+      writes += 1;
+      return null;
+    },
+  });
+
+  const result = await submitCanonicalCommunicationFeedback(
+    "user_dev_referee_a",
+    input({ answer: "  The defender committed a careless challenge.\n" }),
+    harness.value
+  );
+
+  assert.equal(result.status, "already_recorded");
+  assert.equal(modelCalls, 0);
+  assert.equal(writes, 0);
+});
+
 test("an identical replay returns stored feedback without model or persistence", async () => {
   const parsed = parseCommunicationFeedbackInput(input());
   let evidenceReads = 0;
@@ -356,6 +433,9 @@ test("EnglishExercise uses the canonical endpoint and leaves trivia unchanged", 
   assert.doesNotMatch(client, /insertAttemptSafely|attemptPersistence|user\.id/);
   assert.doesNotMatch(client, /\.from\(["']attempts["']\)/);
   assert.match(client, /submissionId,[\s\S]+?\/api\/english-feedback/);
+  assert.match(client, /!currentClip[\s\S]+?return;[\s\S]+?fetch\(["']\/api\/english-feedback["']/);
+  assert.match(client, /clipId:\s*currentClip\.id/);
+  assert.match(client, /answer:\s*answer\.trim\(\)/);
   assert.match(client, /kind:\s*"ifab_trivia"/);
   assert.match(client, /submitTrainingAttempt/);
   assert.match(route, /prepareCoachRequest\(request, FEATURE\)/);
