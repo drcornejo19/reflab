@@ -17,6 +17,7 @@ const institutionalGetRoutes = [
   "app/api/institution/metrics/route.ts",
   "app/api/institution/notifications/route.ts",
   "app/api/institution/overview/route.ts",
+  "app/api/institution/invitations/route.ts",
   "app/api/institution/reports/route.ts",
   "app/api/institution/reports/export/route.ts",
   "app/api/institution/videos/route.ts",
@@ -59,8 +60,8 @@ async function collectTypeScriptFiles(directory: string): Promise<string[]> {
   return files;
 }
 
-test("all 13 institutional GET handlers are free of direct writes and reconciliation", async () => {
-  assert.equal(institutionalGetRoutes.length, 13);
+test("all 14 institutional GET handlers are free of direct writes and reconciliation", async () => {
+  assert.equal(institutionalGetRoutes.length, 14);
 
   for (const relativePath of institutionalGetRoutes) {
     const getHandler = extractExportedGet(await readRepositoryFile(relativePath));

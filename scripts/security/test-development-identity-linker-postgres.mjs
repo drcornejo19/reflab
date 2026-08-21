@@ -76,6 +76,12 @@ const coachRateLimitMigrationPath = resolve(
   "migrations",
   "202608200001_canonical_coach_rate_limit.sql"
 );
+const institutionInvitationMigrationPath = resolve(
+  repositoryRoot,
+  "supabase",
+  "migrations",
+  "202608210001_canonical_institution_invitation_acceptance.sql"
+);
 const temporaryRoot = mkdtempSync(
   join(tmpdir(), "reflab-identity-linker-postgres-")
 );
@@ -147,6 +153,22 @@ const rollbackCoachRateLimitMigrationPath = join(
   temporaryRoot,
   "canonical-coach-rate-limit-rollback.sql"
 );
+const institutionInvitationBehaviorPath = join(
+  temporaryRoot,
+  "canonical-institution-invitation-behavior.sql"
+);
+const concurrentInstitutionInvitationPath = join(
+  temporaryRoot,
+  "canonical-institution-invitation-concurrent.sql"
+);
+const concurrentInstitutionInvitationSecondPath = join(
+  temporaryRoot,
+  "canonical-institution-invitation-concurrent-second.sql"
+);
+const rollbackInstitutionInvitationMigrationPath = join(
+  temporaryRoot,
+  "canonical-institution-invitation-rollback.sql"
+);
 const port = await reservePort();
 const connectionEnvironment = {
   ...process.env,
@@ -188,6 +210,11 @@ try {
   writeFileSync(
     coachRateLimitBehaviorPath,
     coachRateLimitBehaviorSql(),
+    "utf8"
+  );
+  writeFileSync(
+    institutionInvitationBehaviorPath,
+    institutionInvitationBehaviorSql(),
     "utf8"
   );
 
@@ -252,6 +279,23 @@ try {
     "reflab_identity_linker_test",
     "authenticated"
   );
+  applySqlFile(
+    "reflab_identity_linker_test",
+    institutionInvitationMigrationPath
+  );
+  assertNoPublicCreatePrivilege(
+    "reflab_identity_linker_test",
+    "after canonical institution invitation migration"
+  );
+  assertInstitutionInvitationSecurity("reflab_identity_linker_test");
+  assertInstitutionInvitationForbiddenExecution(
+    "reflab_identity_linker_test",
+    "anon"
+  );
+  assertInstitutionInvitationForbiddenExecution(
+    "reflab_identity_linker_test",
+    "authenticated"
+  );
   assertRlsOwnerPolicyIsolation("reflab_identity_linker_test");
   await assertIdentityLinkConcurrency("reflab_identity_linker_test");
   applySqlFile("reflab_identity_linker_test", behaviorPath);
@@ -264,6 +308,13 @@ try {
   );
   applySqlFile("reflab_identity_linker_test", coachRateLimitBehaviorPath);
   await assertCoachRateLimitConcurrency("reflab_identity_linker_test");
+  applySqlFile(
+    "reflab_identity_linker_test",
+    institutionInvitationBehaviorPath
+  );
+  await assertInstitutionInvitationConcurrency(
+    "reflab_identity_linker_test"
+  );
   assertCanonicalStructure("reflab_identity_linker_test");
 
   createDatabase("reflab_identity_linker_rollback");
@@ -411,6 +462,27 @@ try {
   );
   assertCoachRateLimitRollback("reflab_coach_rate_limit_rollback");
 
+  createDatabase("reflab_institution_invitation_rollback");
+  applyBootstrapAndBaseline("reflab_institution_invitation_rollback");
+  applySqlFile("reflab_institution_invitation_rollback", seedPath);
+  applyCanonicalMigrationsThroughCoachRateLimit(
+    "reflab_institution_invitation_rollback"
+  );
+  writeFileSync(
+    rollbackInstitutionInvitationMigrationPath,
+    migrationWithRollback(
+      readFileSync(institutionInvitationMigrationPath, "utf8")
+    ),
+    "utf8"
+  );
+  applySqlFile(
+    "reflab_institution_invitation_rollback",
+    rollbackInstitutionInvitationMigrationPath
+  );
+  assertInstitutionInvitationRollback(
+    "reflab_institution_invitation_rollback"
+  );
+
   console.log(
     "Development identity linker PostgreSQL test passed in an isolated local cluster."
   );
@@ -462,6 +534,11 @@ function applyCanonicalMigrationsThroughCommunication(databaseName) {
   ]) {
     applySqlFile(databaseName, filePath);
   }
+}
+
+function applyCanonicalMigrationsThroughCoachRateLimit(databaseName) {
+  applyCanonicalMigrationsThroughCommunication(databaseName);
+  applySqlFile(databaseName, coachRateLimitMigrationPath);
 }
 
 function applySqlFile(databaseName, filePath) {
@@ -1300,6 +1377,381 @@ where user_id = 'user_rate_concurrent'
   );
 }
 
+function institutionInvitationBehaviorSql() {
+  return String.raw`
+begin;
+
+insert into public.user_profiles (user_id, email, reflab_name)
+values
+  ('user_invitation_direct', 'direct@example.test', 'Direct Invitee'),
+  ('user_invitation_merge', 'merge@example.test', 'Merge Invitee'),
+  ('user_invitation_suspended', 'suspended@example.test', 'Suspended Invitee'),
+  ('user_invitation_revoked_old', 'old@example.test', 'Old Invitee'),
+  ('user_invitation_revoked_new', 'new@example.test', 'New Invitee'),
+  ('user_invitation_audit', 'audit@example.test', 'Audit Invitee'),
+  ('user_invitation_other', 'other@example.test', 'Other Invitee');
+
+insert into public.institution_groups (
+  id, institution_id, name, group_type, sport_type, status
+)
+values (
+  '97000000-0000-4000-8000-000000000100',
+  '30000000-0000-4000-8000-000000000001',
+  'Invitation merge local group',
+  'training',
+  'football_11',
+  'active'
+);
+
+insert into public.institution_memberships (
+  id, institution_id, user_id, status, primary_sport, invited_at,
+  revoked_at, suspended_at, metadata
+)
+values
+  (
+    '97000000-0000-4000-8000-000000000001',
+    '30000000-0000-4000-8000-000000000001',
+    'invitation:direct', 'invited', 'football_11', pg_catalog.now(),
+    null, null, '{"email":"direct@example.test"}'::jsonb
+  ),
+  (
+    '97000000-0000-4000-8000-000000000010',
+    '30000000-0000-4000-8000-000000000001',
+    'user_invitation_merge', 'active', 'football_11', null,
+    null, null, '{}'::jsonb
+  ),
+  (
+    '97000000-0000-4000-8000-000000000011',
+    '30000000-0000-4000-8000-000000000001',
+    'invitation:merge', 'invited', 'football_11', pg_catalog.now(),
+    null, null, '{"email":"merge@example.test"}'::jsonb
+  ),
+  (
+    '97000000-0000-4000-8000-000000000020',
+    '30000000-0000-4000-8000-000000000001',
+    'user_invitation_suspended', 'suspended', 'football_11', null,
+    null, pg_catalog.now(), '{}'::jsonb
+  ),
+  (
+    '97000000-0000-4000-8000-000000000021',
+    '30000000-0000-4000-8000-000000000001',
+    'invitation:suspended', 'invited', 'football_11', pg_catalog.now(),
+    null, null, '{"email":"suspended@example.test"}'::jsonb
+  ),
+  (
+    '97000000-0000-4000-8000-000000000030',
+    '30000000-0000-4000-8000-000000000001',
+    'user_invitation_revoked_old', 'revoked', 'football_11', null,
+    pg_catalog.now(), null, '{}'::jsonb
+  ),
+  (
+    '97000000-0000-4000-8000-000000000031',
+    '30000000-0000-4000-8000-000000000001',
+    'invitation:revoked-old', 'invited', 'football_11',
+    pg_catalog.now() - interval '1 day', null, null,
+    '{"email":"old@example.test"}'::jsonb
+  ),
+  (
+    '97000000-0000-4000-8000-000000000040',
+    '30000000-0000-4000-8000-000000000001',
+    'user_invitation_revoked_new', 'revoked', 'football_11', null,
+    pg_catalog.now() - interval '2 days', null, '{}'::jsonb
+  ),
+  (
+    '97000000-0000-4000-8000-000000000041',
+    '30000000-0000-4000-8000-000000000001',
+    'invitation:revoked-new', 'invited', 'football_11', pg_catalog.now(),
+    null, null, '{"email":"new@example.test"}'::jsonb
+  ),
+  (
+    '97000000-0000-4000-8000-000000000050',
+    '30000000-0000-4000-8000-000000000001',
+    'invitation:foreign', 'invited', 'football_11', pg_catalog.now(),
+    null, null, '{"email":"foreign@example.test"}'::jsonb
+  ),
+  (
+    '97000000-0000-4000-8000-000000000060',
+    '30000000-0000-4000-8000-000000000001',
+    'invitation:no-profile', 'invited', 'football_11', pg_catalog.now(),
+    null, null, '{"email":"missing@example.test"}'::jsonb
+  ),
+  (
+    '97000000-0000-4000-8000-000000000070',
+    '30000000-0000-4000-8000-000000000001',
+    'invitation:audit', 'invited', 'football_11', pg_catalog.now(),
+    null, null, '{"email":"audit@example.test"}'::jsonb
+  );
+
+insert into public.institution_membership_roles (
+  institution_id, membership_id, role_id
+)
+select
+  '30000000-0000-4000-8000-000000000001',
+  assignment.membership_id,
+  role.id
+from (
+  values
+    ('97000000-0000-4000-8000-000000000010'::uuid, 'referee'::text),
+    ('97000000-0000-4000-8000-000000000011'::uuid, 'referee'::text),
+    ('97000000-0000-4000-8000-000000000011'::uuid, 'instructor'::text)
+) assignment(membership_id, role_key)
+join public.institution_roles role
+  on role.institution_id is null
+ and role.role_key = assignment.role_key;
+
+insert into public.institution_group_memberships (
+  institution_id, group_id, membership_id, group_role, status
+)
+values
+  (
+    '30000000-0000-4000-8000-000000000001',
+    '50000000-0000-4000-8000-000000000001',
+    '97000000-0000-4000-8000-000000000010',
+    'participant', 'active'
+  ),
+  (
+    '30000000-0000-4000-8000-000000000001',
+    '50000000-0000-4000-8000-000000000001',
+    '97000000-0000-4000-8000-000000000011',
+    'participant', 'active'
+  ),
+  (
+    '30000000-0000-4000-8000-000000000001',
+    '97000000-0000-4000-8000-000000000100',
+    '97000000-0000-4000-8000-000000000011',
+    'participant', 'active'
+  );
+
+set local role service_role;
+
+do $institution_invitation_behavior$
+declare
+  result_row record;
+  rejected boolean;
+  audit_count integer;
+begin
+  select * into result_row
+  from public.accept_canonical_institution_invitation(
+    'user_invitation_direct',
+    '97000000-0000-4000-8000-000000000001',
+    array[' DIRECT@EXAMPLE.TEST ', 'direct@example.test']
+  );
+  if result_row.status <> 'accepted'
+     or result_row.institution_id <> '30000000-0000-4000-8000-000000000001'
+     or result_row.membership_id <> '97000000-0000-4000-8000-000000000001'
+     or result_row.roles_added <> 0
+     or result_row.groups_added <> 0 then
+    raise exception 'new invitation acceptance returned an invalid result';
+  end if;
+
+  if not exists (
+    select 1 from public.institution_memberships membership
+    where membership.id = result_row.membership_id
+      and membership.user_id = 'user_invitation_direct'
+      and membership.status = 'active'
+      and membership.metadata->>'original_invitation_membership_id'
+        = '97000000-0000-4000-8000-000000000001'
+  ) then
+    raise exception 'temporary invitation row was not reused canonically';
+  end if;
+
+  select pg_catalog.count(*) into audit_count
+  from public.institution_audit_logs audit
+  where audit.action = 'member.invitation_accepted'
+    and audit.entity_id = '97000000-0000-4000-8000-000000000001';
+  if audit_count <> 1 then
+    raise exception 'new acceptance did not create exactly one audit row';
+  end if;
+
+  select * into result_row
+  from public.accept_canonical_institution_invitation(
+    'user_invitation_direct',
+    '97000000-0000-4000-8000-000000000001',
+    array['direct@example.test']
+  );
+  if result_row.status <> 'already_accepted'
+     or result_row.roles_added <> 0
+     or result_row.groups_added <> 0 then
+    raise exception 'invitation replay was not idempotent';
+  end if;
+  if (
+    select pg_catalog.count(*)
+    from public.institution_audit_logs audit
+    where audit.action = 'member.invitation_accepted'
+      and audit.entity_id = '97000000-0000-4000-8000-000000000001'
+  ) <> 1 then
+    raise exception 'invitation replay duplicated audit';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.accept_canonical_institution_invitation(
+      'user_invitation_other',
+      '97000000-0000-4000-8000-000000000001',
+      array['other@example.test']
+    );
+  exception when sqlstate '42501' then rejected := true;
+  end;
+  if not rejected then
+    raise exception 'another user accepted a known invitation UUID';
+  end if;
+
+  select * into result_row
+  from public.accept_canonical_institution_invitation(
+    'user_invitation_merge',
+    '97000000-0000-4000-8000-000000000011',
+    array['merge@example.test']
+  );
+  if result_row.status <> 'accepted'
+     or result_row.membership_id <> '97000000-0000-4000-8000-000000000010'
+     or result_row.roles_added <> 1
+     or result_row.groups_added <> 1 then
+    raise exception 'active membership merge did not copy unique roles and groups';
+  end if;
+  if (
+    select pg_catalog.count(*)
+    from public.institution_membership_roles role
+    where role.membership_id = '97000000-0000-4000-8000-000000000010'
+  ) <> 2 or (
+    select pg_catalog.count(*)
+    from public.institution_group_memberships group_membership
+    where group_membership.membership_id = '97000000-0000-4000-8000-000000000010'
+  ) <> 2 then
+    raise exception 'merged role or group rows were duplicated';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.accept_canonical_institution_invitation(
+      'user_invitation_suspended',
+      '97000000-0000-4000-8000-000000000021',
+      array['suspended@example.test']
+    );
+  exception when sqlstate '55000' then rejected := true;
+  end;
+  if not rejected then
+    raise exception 'suspended membership was reactivated';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.accept_canonical_institution_invitation(
+      'user_invitation_revoked_old',
+      '97000000-0000-4000-8000-000000000031',
+      array['old@example.test']
+    );
+  exception when sqlstate '55000' then rejected := true;
+  end;
+  if not rejected then
+    raise exception 'invitation older than revocation reactivated membership';
+  end if;
+
+  perform public.accept_canonical_institution_invitation(
+    'user_invitation_revoked_new',
+    '97000000-0000-4000-8000-000000000041',
+    array['new@example.test']
+  );
+  if not exists (
+    select 1 from public.institution_memberships membership
+    where membership.id = '97000000-0000-4000-8000-000000000040'
+      and membership.status = 'active'
+      and membership.revoked_at is null
+  ) then
+    raise exception 'invitation newer than revocation did not reactivate membership';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.accept_canonical_institution_invitation(
+      'user_invitation_other',
+      '97000000-0000-4000-8000-000000000050',
+      array['other@example.test']
+    );
+  exception when sqlstate '42501' then rejected := true;
+  end;
+  if not rejected then
+    raise exception 'foreign verified email accepted an invitation';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.accept_canonical_institution_invitation(
+      'user_invitation_missing_profile',
+      '97000000-0000-4000-8000-000000000060',
+      array['missing@example.test']
+    );
+  exception when sqlstate '55000' then rejected := true;
+  end;
+  if not rejected then
+    raise exception 'missing canonical profile was provisioned or accepted';
+  end if;
+
+  rejected := false;
+  begin
+    perform public.accept_canonical_institution_invitation(
+      'user_invitation_other',
+      '97000000-0000-4000-8000-000000000050',
+      array['not-an-email']
+    );
+  exception when sqlstate '22023' then rejected := true;
+  end;
+  if not rejected then
+    raise exception 'invalid verified email input was accepted';
+  end if;
+
+  if exists (select 1 from public.user_roles)
+     or exists (
+       select 1 from public.user_global_roles where source = 'automatic_default'
+     )
+     or exists (
+       select 1 from public.user_subscriptions where source = 'automatic_default'
+     ) then
+    raise exception 'institution invitation acceptance touched legacy access';
+  end if;
+end
+$institution_invitation_behavior$;
+
+reset role;
+
+alter table public.institution_audit_logs
+  add constraint institution_audit_logs_local_invitation_failure
+  check (entity_id <> '97000000-0000-4000-8000-000000000070');
+
+set local role service_role;
+do $institution_invitation_audit_failure$
+declare
+  rejected boolean := false;
+begin
+  begin
+    perform public.accept_canonical_institution_invitation(
+      'user_invitation_audit',
+      '97000000-0000-4000-8000-000000000070',
+      array['audit@example.test']
+    );
+  exception when check_violation then rejected := true;
+  end;
+  if not rejected then
+    raise exception 'forced invitation audit failure did not reject';
+  end if;
+  if not exists (
+    select 1 from public.institution_memberships membership
+    where membership.id = '97000000-0000-4000-8000-000000000070'
+      and membership.status = 'invited'
+      and membership.user_id = 'invitation:audit'
+  ) then
+    raise exception 'audit failure did not rollback invitation mutation';
+  end if;
+end
+$institution_invitation_audit_failure$;
+reset role;
+
+alter table public.institution_audit_logs
+  drop constraint institution_audit_logs_local_invitation_failure;
+
+rollback;
+`;
+}
+
 function trainingBehaviorSql() {
   return String.raw`
 begin;
@@ -1909,6 +2361,356 @@ where user_id = 'user_local_training_concurrent';
 delete from public.clips
 where id = '91000000-0000-4000-8000-000000000002';`
   );
+}
+
+async function assertInstitutionInvitationConcurrency(databaseName) {
+  query(
+    databaseName,
+    String.raw`
+insert into public.user_profiles (user_id, email, reflab_name)
+values
+  ('user_invitation_concurrent', 'concurrent@example.test', 'Concurrent Invitee'),
+  ('user_invitation_dual', 'dual@example.test', 'Dual Invitee');
+
+insert into public.institution_memberships (
+  id, institution_id, user_id, status, primary_sport, invited_at, metadata
+)
+values
+  (
+    '98000000-0000-4000-8000-000000000001',
+    '30000000-0000-4000-8000-000000000001',
+    'invitation:concurrent', 'invited', 'football_11', pg_catalog.now(),
+    '{"email":"concurrent@example.test"}'::jsonb
+  ),
+  (
+    '98000000-0000-4000-8000-000000000010',
+    '30000000-0000-4000-8000-000000000001',
+    'invitation:dual-a', 'invited', 'football_11', pg_catalog.now(),
+    '{"email":"dual@example.test"}'::jsonb
+  ),
+  (
+    '98000000-0000-4000-8000-000000000011',
+    '30000000-0000-4000-8000-000000000001',
+    'invitation:dual-b', 'invited', 'futsal', pg_catalog.now(),
+    '{"email":"dual@example.test"}'::jsonb
+  );`
+  );
+
+  writeFileSync(
+    concurrentInstitutionInvitationPath,
+    String.raw`\pset tuples_only on
+\pset format unaligned
+begin;
+set local role service_role;
+select status
+from public.accept_canonical_institution_invitation(
+  'user_invitation_concurrent',
+  '98000000-0000-4000-8000-000000000001',
+  array['concurrent@example.test']
+);
+commit;
+`,
+    "utf8"
+  );
+
+  const sameInvitationOutputs = await Promise.all([
+    runPsqlFileAsync(
+      databaseName,
+      concurrentInstitutionInvitationPath,
+      "reflab_institution_invitation_same_a"
+    ),
+    runPsqlFileAsync(
+      databaseName,
+      concurrentInstitutionInvitationPath,
+      "reflab_institution_invitation_same_b"
+    ),
+  ]);
+  const sameInvitationStatuses = sameInvitationOutputs.flatMap((output) =>
+    output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line === "accepted" || line === "already_accepted")
+  );
+  if (
+    sameInvitationStatuses.length !== 2 ||
+    sameInvitationStatuses.filter((status) => status === "accepted").length !== 1 ||
+    sameInvitationStatuses.filter((status) => status === "already_accepted").length !== 1
+  ) {
+    throw new Error(
+      `Concurrent same-invitation results were invalid: ${sameInvitationStatuses.join(",")}.`
+    );
+  }
+
+  const sameInvitationState = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select pg_catalog.json_build_object(
+  'active_memberships', (
+    select pg_catalog.count(*) from public.institution_memberships membership
+    where membership.institution_id = '30000000-0000-4000-8000-000000000001'
+      and membership.user_id = 'user_invitation_concurrent'
+      and membership.status = 'active'
+  ),
+  'audits', (
+    select pg_catalog.count(*) from public.institution_audit_logs audit
+    where audit.action = 'member.invitation_accepted'
+      and audit.entity_id = '98000000-0000-4000-8000-000000000001'
+  )
+);`
+    )
+  );
+  if (
+    Number(sameInvitationState.active_memberships) !== 1 ||
+    Number(sameInvitationState.audits) !== 1
+  ) {
+    throw new Error("Concurrent replay duplicated membership or audit state.");
+  }
+
+  writeFileSync(
+    concurrentInstitutionInvitationPath,
+    String.raw`\pset tuples_only on
+\pset format unaligned
+begin;
+set local role service_role;
+select status
+from public.accept_canonical_institution_invitation(
+  'user_invitation_dual',
+  '98000000-0000-4000-8000-000000000010',
+  array['dual@example.test']
+);
+commit;
+`,
+    "utf8"
+  );
+  writeFileSync(
+    concurrentInstitutionInvitationSecondPath,
+    String.raw`\pset tuples_only on
+\pset format unaligned
+begin;
+set local role service_role;
+select status
+from public.accept_canonical_institution_invitation(
+  'user_invitation_dual',
+  '98000000-0000-4000-8000-000000000011',
+  array['dual@example.test']
+);
+commit;
+`,
+    "utf8"
+  );
+
+  const dualOutputs = await Promise.all([
+    runPsqlFileAsync(
+      databaseName,
+      concurrentInstitutionInvitationPath,
+      "reflab_institution_invitation_dual_a"
+    ),
+    runPsqlFileAsync(
+      databaseName,
+      concurrentInstitutionInvitationSecondPath,
+      "reflab_institution_invitation_dual_b"
+    ),
+  ]);
+  const dualStatuses = dualOutputs.flatMap((output) =>
+    output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line === "accepted" || line === "already_accepted")
+  );
+  if (
+    dualStatuses.length !== 2 ||
+    dualStatuses.some((status) => status !== "accepted")
+  ) {
+    throw new Error(
+      `Concurrent dual-invitation results were invalid: ${dualStatuses.join(",")}.`
+    );
+  }
+
+  const dualState = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select pg_catalog.json_build_object(
+  'canonical_memberships', (
+    select pg_catalog.count(*) from public.institution_memberships membership
+    where membership.institution_id = '30000000-0000-4000-8000-000000000001'
+      and membership.user_id = 'user_invitation_dual'
+      and membership.status = 'active'
+  ),
+  'accepted_sources', (
+    select pg_catalog.count(*) from public.institution_memberships membership
+    where membership.id in (
+      '98000000-0000-4000-8000-000000000010',
+      '98000000-0000-4000-8000-000000000011'
+    )
+      and membership.metadata->>'accepted_by_user_id' = 'user_invitation_dual'
+  ),
+  'audits', (
+    select pg_catalog.count(*) from public.institution_audit_logs audit
+    where audit.action = 'member.invitation_accepted'
+      and audit.entity_id in (
+        '98000000-0000-4000-8000-000000000010',
+        '98000000-0000-4000-8000-000000000011'
+      )
+  )
+);`
+    )
+  );
+  if (
+    Number(dualState.canonical_memberships) !== 1 ||
+    Number(dualState.accepted_sources) !== 2 ||
+    Number(dualState.audits) !== 2
+  ) {
+    throw new Error("Concurrent dual invitations left inconsistent state.");
+  }
+
+  query(
+    databaseName,
+    String.raw`delete from public.institution_audit_logs
+where action = 'member.invitation_accepted'
+  and entity_id like '98000000-%';
+delete from public.institution_memberships
+where id in (
+  '98000000-0000-4000-8000-000000000001',
+  '98000000-0000-4000-8000-000000000010',
+  '98000000-0000-4000-8000-000000000011'
+);
+delete from public.user_profiles
+where user_id in ('user_invitation_concurrent', 'user_invitation_dual');`
+  );
+}
+
+function assertInstitutionInvitationSecurity(databaseName) {
+  const result = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select pg_catalog.json_build_object(
+  'rpc_safe', exists (
+    select 1
+    from pg_catalog.pg_proc function_row
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = function_row.pronamespace
+    join pg_catalog.pg_roles owner_role
+      on owner_role.oid = function_row.proowner
+    where namespace.nspname = 'public'
+      and function_row.proname = 'accept_canonical_institution_invitation'
+      and pg_catalog.pg_get_function_identity_arguments(function_row.oid)
+        = 'p_user_id text, p_invitation_membership_id uuid, p_verified_emails text[]'
+      and owner_role.rolname = 'reflab_rls_owner'
+      and not function_row.prosecdef
+      and function_row.proconfig = array['search_path=pg_catalog']
+      and pg_catalog.strpos(pg_catalog.lower(function_row.prosrc), 'execute ') = 0
+  ),
+  'service_role_execute', pg_catalog.has_function_privilege(
+    'service_role',
+    'public.accept_canonical_institution_invitation(text,uuid,text[])',
+    'EXECUTE'
+  ),
+  'forbidden_execute',
+    pg_catalog.has_function_privilege(
+      'anon',
+      'public.accept_canonical_institution_invitation(text,uuid,text[])',
+      'EXECUTE'
+    )
+    or pg_catalog.has_function_privilege(
+      'authenticated',
+      'public.accept_canonical_institution_invitation(text,uuid,text[])',
+      'EXECUTE'
+    )
+    or exists (
+      select 1
+      from pg_catalog.pg_proc function_row,
+      lateral pg_catalog.aclexplode(
+        coalesce(
+          function_row.proacl,
+          pg_catalog.acldefault('f', function_row.proowner)
+        )
+      ) privilege
+      where function_row.oid =
+        'public.accept_canonical_institution_invitation(text,uuid,text[])'::pg_catalog.regprocedure
+        and privilege.grantee = 0
+        and privilege.privilege_type = 'EXECUTE'
+    ),
+  'service_role_table_access',
+    pg_catalog.has_table_privilege('service_role', 'public.user_profiles', 'SELECT')
+    and pg_catalog.has_table_privilege('service_role', 'public.institution_memberships', 'SELECT,UPDATE')
+    and pg_catalog.has_table_privilege('service_role', 'public.institution_membership_roles', 'SELECT,INSERT')
+    and pg_catalog.has_table_privilege('service_role', 'public.institution_group_memberships', 'SELECT,INSERT')
+    and pg_catalog.has_table_privilege('service_role', 'public.institution_audit_logs', 'INSERT'),
+  'policy_count', (
+    select pg_catalog.count(*) from pg_catalog.pg_policies policy
+    where policy.schemaname in ('public', 'reflab_private', 'reflab_meta')
+       or (policy.schemaname = 'storage' and policy.tablename = 'objects')
+  ),
+  'owner_has_no_create', not pg_catalog.has_schema_privilege(
+    'reflab_rls_owner', 'public', 'CREATE'
+  )
+);`
+    )
+  );
+
+  if (
+    result.rpc_safe !== true ||
+    result.service_role_execute !== true ||
+    result.forbidden_execute !== false ||
+    result.service_role_table_access !== true ||
+    Number(result.policy_count) !== 150 ||
+    result.owner_has_no_create !== true
+  ) {
+    throw new Error("Canonical institution invitation RPC security is invalid.");
+  }
+}
+
+function assertInstitutionInvitationForbiddenExecution(databaseName, roleName) {
+  let rejected = false;
+  try {
+    query(
+      databaseName,
+      String.raw`set role ${roleName};
+select * from public.accept_canonical_institution_invitation(
+  'user_forbidden',
+  '99000000-0000-4000-8000-000000000001',
+  array['forbidden@example.test']
+);`
+    );
+  } catch (error) {
+    const diagnostic = `${error?.stderr ?? ""}`;
+    if (/permission denied for function accept_canonical_institution_invitation/i.test(diagnostic)) {
+      rejected = true;
+    } else {
+      throw error;
+    }
+  }
+  if (!rejected) {
+    throw new Error(`${roleName} executed the institution invitation RPC.`);
+  }
+}
+
+function assertInstitutionInvitationRollback(databaseName) {
+  const result = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select pg_catalog.json_build_object(
+  'rpc_absent', pg_catalog.to_regprocedure(
+    'public.accept_canonical_institution_invitation(text,uuid,text[])'
+  ) is null,
+  'policy_count', (
+    select pg_catalog.count(*) from pg_catalog.pg_policies policy
+    where policy.schemaname in ('public', 'reflab_private', 'reflab_meta')
+       or (policy.schemaname = 'storage' and policy.tablename = 'objects')
+  ),
+  'owner_has_no_create', not pg_catalog.has_schema_privilege(
+    'reflab_rls_owner', 'public', 'CREATE'
+  )
+);`
+    )
+  );
+  if (
+    result.rpc_absent !== true ||
+    Number(result.policy_count) !== 150 ||
+    result.owner_has_no_create !== true
+  ) {
+    throw new Error("Institution invitation migration rollback left residue.");
+  }
 }
 
 function assertCoachRateLimitSecurity(databaseName) {
@@ -3533,7 +4335,7 @@ select pg_catalog.json_build_object(
   const expected = {
     public_tables: 79,
     private_tables: 2,
-    functions: 29,
+    functions: 30,
     policies: 150,
     triggers: 82,
   };
@@ -3570,6 +4372,10 @@ select pg_catalog.json_build_object(
   );
   const coachRateLimitMigrationSql = readFileSync(
     coachRateLimitMigrationPath,
+    "utf8"
+  );
+  const institutionInvitationMigrationSql = readFileSync(
+    institutionInvitationMigrationPath,
     "utf8"
   );
   const explicitIndexCount =
@@ -3610,6 +4416,11 @@ select pg_catalog.json_build_object(
     ).length +
     (
       coachRateLimitMigrationSql.match(
+        /^\s*create\s+(?:unique\s+)?index\s+/gim
+      ) ?? []
+    ).length +
+    (
+      institutionInvitationMigrationSql.match(
         /^\s*create\s+(?:unique\s+)?index\s+/gim
       ) ?? []
     ).length;
