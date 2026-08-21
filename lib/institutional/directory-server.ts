@@ -11,6 +11,7 @@ import {
   requireInstitutionPermission,
   type InstitutionAuthorization,
 } from "@/lib/institutional/server";
+import { resolveInstitutionalInviteeIdentity } from "@/lib/institutional/institutionalIdentity";
 import {
   isInstitutionGroupRole,
   isInstitutionGroupType,
@@ -434,8 +435,17 @@ export async function inviteInstitutionMember(
   let invitationId: string | null = null;
 
   if (existingUser) {
-    userId = existingUser.id;
-    status = "active";
+    const identity = await resolveInstitutionalInviteeIdentity(
+      access.supabase,
+      existingUser.id
+    );
+    if (identity.kind === "linked") {
+      userId = identity.userId;
+      status = "active";
+    } else {
+      userId = `invitation:${crypto.randomUUID()}`;
+      status = "invited";
+    }
   } else {
     const invitation = await clerk.invitations.createInvitation({
       emailAddress: email,
@@ -533,24 +543,6 @@ export async function inviteInstitutionMember(
     throw roleError;
   }
 
-  if (existingUser) {
-    const { data: profile } = await access.supabase
-      .from("user_profiles")
-      .select("user_id")
-      .eq("user_id", existingUser.id)
-      .maybeSingle();
-    if (!profile) {
-      await access.supabase.from("user_profiles").insert({
-        user_id: existingUser.id,
-        email,
-        reflab_name: input.displayName,
-        first_name: existingUser.firstName,
-        last_name: existingUser.lastName,
-        avatar_url: existingUser.imageUrl,
-      });
-    }
-  }
-
   await writeAuditLog(access, {
     action: status === "invited" ? "member.invited" : "member.added",
     entityType: "institution_membership",
@@ -568,7 +560,7 @@ export async function inviteInstitutionMember(
     id: membership.id,
     userId: membership.user_id,
     status: normalizeMembershipStatus(membership.status),
-    invitationSent: status === "invited",
+    invitationSent: Boolean(invitationId),
   };
 }
 

@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { IdentityLinkRequiredError } from "../access/server.ts";
-import { resolveInstitutionalActorUserId } from "./institutionalIdentity.ts";
+import {
+  isCanonicalInstitutionSuperAdmin,
+  resolveInstitutionalActorUserId,
+  resolveInstitutionalInviteeIdentity,
+} from "./institutionalIdentity.ts";
 
 test("a linked Clerk subject resolves to the canonical institutional actor", async () => {
   const result = await resolveInstitutionalActorUserId(
@@ -55,6 +59,48 @@ test("non-Development identity behavior remains unchanged", async () => {
   );
 
   assert.equal(result, "normal_user_id");
+});
+
+test("institutional super admin is granted only by the canonical global role", () => {
+  assert.equal(isCanonicalInstitutionSuperAdmin("super_admin"), true);
+  assert.equal(isCanonicalInstitutionSuperAdmin("video_admin"), false);
+  assert.equal(isCanonicalInstitutionSuperAdmin("referee"), false);
+  assert.equal(isCanonicalInstitutionSuperAdmin(null), false);
+});
+
+test("linked Clerk invitee resolves to the canonical user id", async () => {
+  let receivedSubject: string | null = null;
+  const identity = await resolveInstitutionalInviteeIdentity(
+    {} as never,
+    "clerk_subject_linked",
+    {
+      async resolveCanonicalUserId(_supabase, clerkSubject) {
+        receivedSubject = clerkSubject;
+        return "user_dev_referee_a";
+      },
+    }
+  );
+
+  assert.deepEqual(identity, {
+    kind: "linked",
+    userId: "user_dev_referee_a",
+  });
+  assert.equal(receivedSubject, "clerk_subject_linked");
+});
+
+test("unlinked Development Clerk invitee remains pending without exposing its subject", async () => {
+  const identity = await resolveInstitutionalInviteeIdentity(
+    {} as never,
+    "clerk_subject_unlinked",
+    {
+      async resolveCanonicalUserId() {
+        throw new IdentityLinkRequiredError();
+      },
+    }
+  );
+
+  assert.deepEqual(identity, { kind: "pending" });
+  assert.equal("userId" in identity, false);
 });
 
 test("institutional authorization and actor writes share the canonical identity", async () => {

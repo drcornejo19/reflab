@@ -1,6 +1,6 @@
 import "server-only";
 
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import { IdentityLinkRequiredError } from "@/lib/access/server";
@@ -31,7 +31,10 @@ import {
   requireAuthorizedInstitutionContext,
   selectActiveInstitutionContext,
 } from "@/lib/institutional/tenantIsolation";
-import { resolveInstitutionalActorUserId } from "@/lib/institutional/institutionalIdentity";
+import {
+  isCanonicalInstitutionSuperAdmin,
+  resolveInstitutionalActorUserId,
+} from "@/lib/institutional/institutionalIdentity";
 
 export { selectActiveInstitutionContext };
 
@@ -427,20 +430,17 @@ async function loadInstitutionAccess(
   userId: string,
   supabase: SupabaseAdminClient
 ): Promise<InstitutionAccessSnapshot> {
-  await reconcilePendingMemberships(userId, supabase);
-
-  const { data: systemRoleData, error: systemRoleError } = await supabase
-    .from("user_roles")
-    .select("role")
+  const { data: globalRoleData, error: globalRoleError } = await supabase
+    .from("user_global_roles")
+    .select("role_key")
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (systemRoleError) {
-    throw new InstitutionAccessError(systemRoleError.message);
+  if (globalRoleError) {
+    throw new InstitutionAccessError(globalRoleError.message);
   }
 
-  const systemRole = String(systemRoleData?.role ?? "");
-  const isSuperAdmin = systemRole === "super_admin" || systemRole === "video_admin";
+  const isSuperAdmin = isCanonicalInstitutionSuperAdmin(globalRoleData?.role_key);
   const membershipRows = await fetchRows(
     supabase
       .from("institution_memberships")
@@ -598,146 +598,6 @@ async function loadInstitutionAccess(
     contexts,
     isSuperAdmin,
   };
-}
-
-async function reconcilePendingMemberships(
-  userId: string,
-  supabase: SupabaseAdminClient
-) {
-  const { data: pendingProbe, error: pendingProbeError } = await supabase
-    .from("institution_memberships")
-    .select("id")
-    .eq("status", "invited")
-    .like("user_id", "invitation:%")
-    .limit(1);
-
-  if (pendingProbeError || !pendingProbe?.length) return;
-
-  try {
-    const clerk = await clerkClient();
-    const user = await clerk.users.getUser(userId);
-    const emails = user.emailAddresses
-      .map((item) => item.emailAddress.trim().toLowerCase())
-      .filter(Boolean);
-
-    for (const email of emails) {
-      const { data: pendingRows, error: pendingError } = await supabase
-        .from("institution_memberships")
-        .select("id,institution_id,metadata")
-        .eq("status", "invited")
-        .like("user_id", "invitation:%")
-        .contains("metadata", { email });
-
-      if (pendingError) continue;
-
-      for (const pending of pendingRows ?? []) {
-        const now = new Date().toISOString();
-        const { data: existing } = await supabase
-          .from("institution_memberships")
-          .select("id")
-          .eq("institution_id", pending.institution_id)
-          .eq("user_id", userId)
-          .maybeSingle();
-
-        if (existing?.id) {
-          await mergePendingMembership(
-            supabase,
-            pending.id,
-            existing.id,
-            pending.institution_id
-          );
-          await supabase
-            .from("institution_memberships")
-            .update({
-              status: "revoked",
-              revoked_at: now,
-              metadata: {
-                ...asRecord(pending.metadata),
-                reconciled_to_membership_id: existing.id,
-              },
-            })
-            .eq("id", pending.id);
-        } else {
-          await supabase
-            .from("institution_memberships")
-            .update({
-              user_id: userId,
-              status: "active",
-              joined_at: now,
-              metadata: {
-                ...asRecord(pending.metadata),
-                accepted_at: now,
-              },
-            })
-            .eq("id", pending.id)
-            .eq("status", "invited");
-        }
-      }
-    }
-
-    const { data: existingProfile } = await supabase
-      .from("user_profiles")
-      .select("user_id")
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (!existingProfile) {
-      const primaryEmail =
-        user.primaryEmailAddress?.emailAddress ?? emails[0] ?? null;
-      await supabase.from("user_profiles").insert({
-        user_id: userId,
-        email: primaryEmail,
-        first_name: user.firstName,
-        last_name: user.lastName,
-        avatar_url: user.imageUrl,
-      });
-    }
-  } catch {
-    // Invitation reconciliation is best-effort and must not block sign-in.
-  }
-}
-
-async function mergePendingMembership(
-  supabase: SupabaseAdminClient,
-  pendingMembershipId: string,
-  activeMembershipId: string,
-  institutionId: string
-) {
-  const { data: pendingRoles } = await supabase
-    .from("institution_membership_roles")
-    .select("role_id,assigned_by_user_id")
-    .eq("membership_id", pendingMembershipId);
-
-  if (pendingRoles?.length) {
-    await supabase.from("institution_membership_roles").upsert(
-      pendingRoles.map((row) => ({
-        institution_id: institutionId,
-        membership_id: activeMembershipId,
-        role_id: row.role_id,
-        assigned_by_user_id: row.assigned_by_user_id,
-      })),
-      { onConflict: "membership_id,role_id", ignoreDuplicates: true }
-    );
-  }
-
-  const { data: pendingGroups } = await supabase
-    .from("institution_group_memberships")
-    .select("group_id,group_role,status,joined_at")
-    .eq("membership_id", pendingMembershipId)
-    .neq("status", "removed");
-
-  if (pendingGroups?.length) {
-    await supabase.from("institution_group_memberships").upsert(
-      pendingGroups.map((row) => ({
-        institution_id: institutionId,
-        group_id: row.group_id,
-        membership_id: activeMembershipId,
-        group_role: row.group_role,
-        status: row.status,
-        joined_at: row.joined_at,
-      })),
-      { onConflict: "group_id,membership_id", ignoreDuplicates: true }
-    );
-  }
 }
 
 function normalizeMembership(
@@ -931,12 +791,6 @@ function getProfileDisplayName(profile: UnknownRow, fallback: string) {
 
 function stringOrNull(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function asRecord(value: unknown): UnknownRow {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as UnknownRow)
-    : {};
 }
 
 function numberOrZero(value: unknown) {
