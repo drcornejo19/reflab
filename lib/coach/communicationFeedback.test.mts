@@ -52,7 +52,7 @@ const reference = {
   reviewedAt: null,
 };
 
-function generated() {
+function generated(confidenceScore = confidence.score) {
   return {
     runId,
     value: {
@@ -70,7 +70,7 @@ function generated() {
       },
       humanReviewReason: null,
     },
-    confidence,
+    confidence: { ...confidence, score: confidenceScore },
     evidence: [reference],
   };
 }
@@ -129,6 +129,106 @@ test("communication feedback persists only the canonical user", async () => {
   assert.equal("score" in harness.calls[0].p_feedback, false);
   assert.equal("exam_result_id" in harness.calls[0].p_feedback, false);
   assert.equal(harness.calls[0].p_feedback.oral_evaluable, false);
+});
+
+test("created and already-recorded results accept canonical confidence scores", async () => {
+  const createdHarness = dependencies({
+    generate: async () => generated(65),
+  });
+  const created = await submitCanonicalCommunicationFeedback(
+    "user_dev_referee_a",
+    input(),
+    createdHarness.value
+  );
+  assert.equal(created.status, "created");
+  assert.equal(created.confidence.score, 65);
+
+  const alreadyRecordedHarness = dependencies({
+    generate: async () => generated(65),
+    persist: async (parameters) => rpcResult(parameters, "already_recorded"),
+  });
+  const alreadyRecorded = await submitCanonicalCommunicationFeedback(
+    "user_dev_referee_a",
+    input(),
+    alreadyRecordedHarness.value
+  );
+  assert.equal(alreadyRecorded.status, "already_recorded");
+  assert.equal(alreadyRecorded.confidence.score, 65);
+});
+
+test("persisted confidence accepts the complete canonical scale", async () => {
+  for (const confidenceScore of [92, 35, 20, 0, 100, 1]) {
+    const harness = dependencies({
+      generate: async () => generated(confidenceScore),
+    });
+    const result = await submitCanonicalCommunicationFeedback(
+      "user_dev_referee_a",
+      input(),
+      harness.value
+    );
+    assert.equal(result.confidence.score, confidenceScore);
+  }
+});
+
+test("invalid persisted confidence is an internal error, never a request error", async () => {
+  for (const confidenceScore of [-1, 101]) {
+    const harness = dependencies({
+      generate: async () => generated(confidenceScore),
+    });
+    await assert.rejects(
+      submitCanonicalCommunicationFeedback(
+        "user_dev_referee_a",
+        input(),
+        harness.value
+      ),
+      (error: unknown) =>
+        error instanceof CommunicationFeedbackError &&
+        error.code === "communication_feedback_unavailable" &&
+        error.status === 500
+    );
+  }
+});
+
+test("an incompatible persisted result is an internal error", async () => {
+  const harness = dependencies({
+    persist: async () => ({
+      status: "created",
+      attempt_id: attemptId,
+      feedback: "Stored feedback",
+      criterion_result: {},
+    }),
+  });
+  await assert.rejects(
+    submitCanonicalCommunicationFeedback(
+      "user_dev_referee_a",
+      input(),
+      harness.value
+    ),
+    (error: unknown) =>
+      error instanceof CommunicationFeedbackError &&
+      error.code === "communication_feedback_unavailable" &&
+      error.status === 500
+  );
+});
+
+test("persistence validation errors are not reported as request errors", async () => {
+  const harness = dependencies({
+    persist: async () => {
+      throw { code: "22023", message: "private persistence validation detail" };
+    },
+  });
+  await assert.rejects(
+    submitCanonicalCommunicationFeedback(
+      "user_dev_referee_a",
+      input(),
+      harness.value
+    ),
+    (error: unknown) =>
+      error instanceof CommunicationFeedbackError &&
+      error.code === "communication_feedback_unavailable" &&
+      error.status === 500 &&
+      !error.publicMessage.includes("persistence")
+  );
 });
 
 test("the browser cannot provide identity, scores, feedback, or derived metadata", async () => {

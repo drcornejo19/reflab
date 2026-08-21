@@ -313,20 +313,24 @@ function replayStoredCommunication(
   ) {
     throw submissionConflict();
   }
-  return decodeStoredResult(attempt.id, attempt.feedback, attempt.criterion_result);
+  return decodePersistedCommunicationResult(() =>
+    decodeStoredResult(attempt.id, attempt.feedback, attempt.criterion_result)
+  );
 }
 
 function parsePersistedResult(value: unknown): CanonicalCommunicationResult {
-  const record = requireRecord(value);
-  if (record.status !== "created" && record.status !== "already_recorded") {
-    throw databaseUnavailable({ message: "Invalid communication RPC status" });
-  }
-  const result = decodeStoredResult(
-    requireText(record.attempt_id, 36),
-    typeof record.feedback === "string" ? record.feedback : null,
-    record.criterion_result
-  );
-  return { ...result, status: record.status };
+  return decodePersistedCommunicationResult(() => {
+    const record = requireRecord(value);
+    if (record.status !== "created" && record.status !== "already_recorded") {
+      throw databaseUnavailable({ message: "Invalid communication RPC status" });
+    }
+    const result = decodeStoredResult(
+      requireText(record.attempt_id, 36),
+      typeof record.feedback === "string" ? record.feedback : null,
+      record.criterion_result
+    );
+    return { ...result, status: record.status };
+  });
 }
 
 function decodeStoredResult(
@@ -362,7 +366,7 @@ function decodeStoredResult(
         "medium",
         "human_review",
       ]) as CoachConfidence["label"],
-      score: requireFiniteNumber(confidence.score, 0, 1),
+      score: requireFiniteNumber(confidence.score, 0, 100),
       reasons: Array.isArray(confidence.reasons)
         ? confidence.reasons.filter((item): item is string => typeof item === "string")
         : [],
@@ -374,10 +378,27 @@ function decodeStoredResult(
   };
 }
 
+function decodePersistedCommunicationResult<T>(decode: () => T): T {
+  try {
+    return decode();
+  } catch (error) {
+    if (
+      error instanceof CommunicationFeedbackError &&
+      error.code === "communication_feedback_unavailable"
+    ) {
+      throw error;
+    }
+    throw databaseUnavailable({
+      code: "invalid_persisted_communication",
+      message: "Invalid persisted communication result",
+    });
+  }
+}
+
 function classifyPersistenceError(error: unknown) {
   const diagnostic = sanitizeDiagnostic(error);
   if (diagnostic.code === "23505") return submissionConflict();
-  if (diagnostic.code === "22023") return invalidRequest();
+  if (diagnostic.code === "22023") return databaseUnavailable(diagnostic);
   if (diagnostic.code === "P0002") {
     return new CommunicationFeedbackError(
       "canonical_communication_unavailable",
