@@ -13,6 +13,7 @@ const isPublicRoute = createRouteMatcher([
 
 const DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINK_PATH =
   "/api/development/super-admin-identity-link";
+const RANKING_API_PATH = "/api/ranking";
 
 const isProtectedDevelopmentIdentityLinkRoute = createRouteMatcher([
   "/api/development/identity-link",
@@ -22,6 +23,10 @@ export default clerkMiddleware(async (auth, req) => {
   if (
     req.nextUrl.pathname === DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINK_PATH
   ) {
+    return;
+  }
+
+  if (req.nextUrl.pathname === RANKING_API_PATH) {
     return;
   }
 

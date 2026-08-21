@@ -441,12 +441,36 @@ test("ranking failures never fail the official performance model", async () => {
       })
   );
 
-  assert.deepEqual(timeout, { ranking: [], unavailable: true });
-  assert.deepEqual(networkFailure, { ranking: [], unavailable: true });
-  assert.deepEqual(redirect, { ranking: [], unavailable: true });
-  assert.deepEqual(unauthorized, { ranking: [], unavailable: true });
-  assert.deepEqual(serverFailure, { ranking: [], unavailable: true });
-  assert.deepEqual(invalidJson, { ranking: [], unavailable: true });
+  const unavailable = { rows: [], selfPosition: null, unavailable: true };
+  assert.deepEqual(timeout, unavailable);
+  assert.deepEqual(networkFailure, unavailable);
+  assert.deepEqual(redirect, unavailable);
+  assert.deepEqual(unauthorized, unavailable);
+  assert.deepEqual(serverFailure, unavailable);
+  assert.deepEqual(invalidJson, unavailable);
+});
+
+test("optional ranking consumes the server-computed canonical self position", async () => {
+  const selfPosition = {
+    position: 2,
+    displayName: "Tu posicion",
+    refCardId: "RF-DEV-A",
+    averageScore: 62.5,
+    bestScore: 100,
+    evaluations: 2,
+    lastEvaluationAt: "2026-08-20T00:00:00.000Z",
+    isCurrentUser: true,
+  };
+  const result = await loadOptionalRanking(
+    sportType,
+    async () => Response.json({ rows: [selfPosition], selfPosition })
+  );
+
+  assert.deepEqual(result, {
+    rows: [selfPosition],
+    selfPosition,
+    unavailable: false,
+  });
 });
 
 test("active pages and server reader enforce the canonical read-only contract", () => {

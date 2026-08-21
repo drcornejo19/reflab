@@ -1,4 +1,3 @@
-import { getPublicRankingName, resolveRefCardId } from "./refCard.ts";
 import { DEFAULT_SPORT_TYPE, normalizeSportType, type SportType } from "./sports.ts";
 
 export type PerformanceSource = "training" | "exam" | "rules_exam";
@@ -97,14 +96,6 @@ export type RulesExamResultRecord = {
   details?: RulesAnswerRecord[] | null; topic_performance?: unknown[] | null; created_at?: string | null;
   sport_type?: SportType | null; activity_type?: string | null; season?: string | null; source_version?: string | null;
 };
-export type RankingProfileRecord = {
-  user_id?: string | null;
-  ref_card_id?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-  ranking_display_name?: string | null;
-  show_real_name_in_ranking?: boolean | null;
-};
 export type PerformanceItem = {
   id: string; source: PerformanceSource; module: ModuleKey; modeLabel: string; date: string;
   title: string; topic: string; rawTopic: string; difficulty?: string | null; score: number | null;
@@ -125,7 +116,6 @@ export type ModulePerformance = { key: ModuleKey; title: string; description: st
 export type EvolutionData = { historicalAverage: number | null; lastAverage: number | null; previousAverage: number | null; variation: number | null; trend: string; weeklyCount: number; monthlyCount: number; bestScore: number | null; worstScore: number | null; regularity: string; series: PerformanceSession[]; };
 export type PerformanceSummary = { hasData: boolean; avgScore: number | null; totalAttempts: number; totalTrainings: number; totalEvaluations: number; bestScore: number | null; lastScore: number | null; strongestTopic?: TopicMetric; weakestTopic?: TopicMetric; strongestCriterion?: CriterionMetric; weakestCriterion?: CriterionMetric; recommendedModule: string; status: string; sampleNote: string; metrics: SummaryMetric[]; };
 export type RecommendedPlan = { diagnosis: string; priority1: string; priority2: string; nextStep: string; reason: string; href: string; };
-export type RankingRow = { userId: string; position: number; name: string; refCardId: string; attempts: number; trainings: number; tests: number; avgScore: number; bestScore: number; lastAttempt: string; };
 export type RadarMetric = {
   key: string;
   label: string;
@@ -616,47 +606,6 @@ export function getRecommendedPlan(summary: PerformanceSummary): RecommendedPlan
   if (weakCriterion?.key === "var" || weakTopic?.topic === "VAR") return { diagnosis: "El patron mas debil aparece relacionado con criterio VAR.", priority1: "Practicar protocolo VAR, APP y error claro y obvio.", priority2: "Separar factual vs interpretativo.", nextStep: "Abrir VAR Lab.", reason: "El VAR exige una capa de decision distinta a la lectura de campo.", href: "/training/var" };
   if ((summary.avgScore ?? 0) >= 85) return { diagnosis: "El rendimiento general es alto con los datos disponibles.", priority1: "Subir dificultad.", priority2: "Usar simulaciones cronometradas o examenes formales.", nextStep: "Rendir una evaluacion completa.", reason: "Cuando el promedio es alto, el crecimiento viene por presion, volumen y dificultad.", href: "/evaluations" };
   return { diagnosis: weakTopic ? `El topico que mas conviene reforzar es ${weakTopic.topic}.` : "El sistema detecta una oportunidad general de mejora.", priority1: weakTopic ? `Entrenar ${weakTopic.topic}.` : "Entrenar con clips.", priority2: weakCriterion ? `Cuidar especialmente ${weakCriterion.label.toLowerCase()}.` : "Completar ejercicios de distintos topicos.", nextStep: "Completar una serie corta de 5 clips.", reason: "El plan se basa en la debilidad real mas marcada de tu actividad.", href: "/training/decision" };
-}
-
-export function getRankingRows(
-  attempts: AttemptRecord[],
-  currentUserId?: string | null,
-  profiles: RankingProfileRecord[] = [],
-  sportType: SportType = DEFAULT_SPORT_TYPE
-): RankingRow[] {
-  const profileMap = new Map(
-    profiles
-      .filter((profile) => profile.user_id)
-      .map((profile) => [profile.user_id as string, profile])
-  );
-  const grouped = groupBy(
-    attempts.filter(
-      (attempt) =>
-        attempt.user_id &&
-        normalizeSportType(attempt.sport_type) === sportType &&
-        isNumber(cleanScore(attempt.score))
-    ),
-    (attempt) => attempt.user_id as string
-  );
-  const rows = Array.from(grouped.entries()).map(([userId, userAttempts]) => {
-    const scores = userAttempts.map((attempt) => cleanScore(attempt.score)).filter(isNumber);
-    const sorted = sortByDateDesc(userAttempts);
-    const profile = profileMap.get(userId);
-    const tests = userAttempts.filter((attempt) => ["exam", "rules_exam"].includes(String(attempt.mode ?? ""))).length;
-    return {
-      userId,
-      position: 0,
-      name: getPublicRankingName(userId, profile, currentUserId),
-      refCardId: resolveRefCardId(userId, profile),
-      attempts: scores.length,
-      trainings: Math.max(0, scores.length - tests),
-      tests,
-      avgScore: average(scores) ?? 0,
-      bestScore: scores.length ? Math.max(...scores) : 0,
-      lastAttempt: sorted[0]?.created_at ?? "",
-    };
-  });
-  return rows.sort((a, b) => b.avgScore !== a.avgScore ? b.avgScore - a.avgScore : b.bestScore !== a.bestScore ? b.bestScore - a.bestScore : b.attempts - a.attempts).map((row, index) => ({ ...row, position: index + 1 }));
 }
 export function formatScore(value: number | null | undefined) {
   return isNumber(value) ? `${value}/100` : "Sin datos";

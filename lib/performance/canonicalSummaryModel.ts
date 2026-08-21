@@ -14,8 +14,8 @@ import {
   type AttemptRecord,
   type ExamResultRecord,
   type PerformanceSession,
-  type RankingRow,
 } from "../performance.ts";
+import type { RankingResponse } from "../ranking/types.ts";
 import type { SportType } from "../sports.ts";
 
 export type CanonicalPerformanceRecords = {
@@ -90,7 +90,7 @@ export function buildCanonicalPerformanceSummary({
 export async function loadOptionalRanking(
   sportType: SportType,
   fetcher: typeof fetch = fetch
-): Promise<{ ranking: RankingRow[]; unavailable: boolean }> {
+): Promise<RankingResponse & { unavailable: boolean }> {
   try {
     const response = await fetcher(
       `/api/ranking?sport=${encodeURIComponent(sportType)}`,
@@ -100,15 +100,22 @@ export async function loadOptionalRanking(
       }
     );
     if (!response.ok || response.redirected) {
-      return { ranking: [], unavailable: true };
+      return { rows: [], selfPosition: null, unavailable: true };
     }
-    const payload = (await response.json()) as { ranking?: unknown };
-    if (!Array.isArray(payload.ranking)) {
-      return { ranking: [], unavailable: true };
+    const payload = (await response.json()) as {
+      rows?: unknown;
+      selfPosition?: unknown;
+    };
+    if (!Array.isArray(payload.rows)) {
+      return { rows: [], selfPosition: null, unavailable: true };
     }
-    return { ranking: payload.ranking as RankingRow[], unavailable: false };
+    return {
+      rows: payload.rows as RankingResponse["rows"],
+      selfPosition: (payload.selfPosition ?? null) as RankingResponse["selfPosition"],
+      unavailable: false,
+    };
   } catch {
-    return { ranking: [], unavailable: true };
+    return { rows: [], selfPosition: null, unavailable: true };
   }
 }
 

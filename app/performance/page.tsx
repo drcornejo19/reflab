@@ -53,10 +53,10 @@ import {
   formatPercent,
   formatScore,
   type EvolutionData,
-  type RankingRow,
   type SummaryMetric,
   type TopicMetric,
 } from "@/lib/performance";
+import type { RankingRow } from "@/lib/ranking/types";
 import { useUserRole } from "@/lib/useUserRole";
 
 export const dynamic = "force-dynamic";
@@ -137,6 +137,7 @@ function PerformancePageContent() {
     null
   );
   const [ranking, setRanking] = useState<RankingRow[]>([]);
+  const [currentRanking, setCurrentRanking] = useState<RankingRow | null>(null);
   const [rankingUnavailable, setRankingUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -208,13 +209,15 @@ function PerformancePageContent() {
     async function loadRanking() {
       if (!isLoaded || !user) {
         setRanking([]);
+        setCurrentRanking(null);
         setRankingUnavailable(false);
         return;
       }
 
       const result = await loadOptionalRanking(sportType);
       if (!active) return;
-      setRanking(result.ranking);
+      setRanking(result.rows);
+      setCurrentRanking(result.selfPosition);
       setRankingUnavailable(result.unavailable);
     }
 
@@ -246,7 +249,6 @@ function PerformancePageContent() {
     () => getSportRecommendedPlan(summary, sportType),
     [summary, sportType]
   );
-  const currentRanking = undefined;
 
   const history = useMemo(() => {
     return performance.history.filter((item) => {
@@ -702,7 +704,7 @@ function PrimaryAnalysisView({
   setHistoryMode: (value: HistoryMode) => void;
   setHistoryResult: (value: HistoryResult) => void;
   ranking: RankingRow[];
-  currentRanking?: RankingRow;
+  currentRanking: RankingRow | null;
   rankingUnavailable: boolean;
   sportType: SportType;
 }) {
@@ -1229,7 +1231,7 @@ function RankingPanel({
   sportType,
 }: {
   ranking: RankingRow[];
-  currentRanking?: RankingRow;
+  currentRanking: RankingRow | null;
   unavailable: boolean;
   sportType: SportType;
 }) {
@@ -1237,7 +1239,7 @@ function RankingPanel({
     <Panel
       eyebrow="Ranking"
       title="Comparacion comunitaria"
-      description="El ranking se calcula separado del analisis personal y usa intentos reales de entrenamiento disponibles."
+      description="El ranking compara exclusivamente evaluaciones oficiales de la disciplina seleccionada."
       icon={Trophy}
     >
       {unavailable ? (
@@ -1250,21 +1252,21 @@ function RankingPanel({
             <p className="text-xs font-black uppercase tracking-[0.25em] text-[var(--accent)]">Tu posicion</p>
             <p className="mt-2 text-4xl font-black">{currentRanking ? `#${currentRanking.position}` : "Sin datos"}</p>
             <p className="mt-2 text-sm text-zinc-300">
-              {currentRanking ? `${currentRanking.avgScore}/100 promedio - RefCard ${currentRanking.refCardId}` : "Completa entrenamientos para aparecer en el ranking."}
+              {currentRanking ? `${currentRanking.averageScore}/100 promedio - RefCard ${currentRanking.refCardId}` : "Completa evaluaciones oficiales para aparecer en el ranking."}
             </p>
           </div>
 
           <div className="mt-4 space-y-2">
             {ranking.slice(0, 6).map((row) => (
-              <div key={row.userId} className="grid min-w-0 grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:gap-3">
+              <div key={`${row.position}-${row.refCardId}`} className="grid min-w-0 grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:gap-3">
                 <p className="font-black text-[var(--accent)]">#{row.position}</p>
                 <div>
-                  <p className="font-black text-white">{row.name}</p>
-                  <p className="text-xs text-zinc-500">RefCard {row.refCardId} - Ultima actividad: {formatDate(row.lastAttempt)}</p>
+                  <p className="font-black text-white">{row.displayName}</p>
+                  <p className="text-xs text-zinc-500">RefCard {row.refCardId} - Ultima evaluacion: {formatDate(row.lastEvaluationAt)}</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-black text-white">{row.avgScore}</p>
-                  <p className="text-xs text-zinc-500">{row.tests} eval. / {row.trainings} ent.</p>
+                  <p className="font-black text-white">{row.averageScore}</p>
+                  <p className="text-xs text-zinc-500">{row.evaluations} evaluaciones</p>
                 </div>
               </div>
             ))}
