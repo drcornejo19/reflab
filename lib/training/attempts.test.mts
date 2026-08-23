@@ -337,6 +337,10 @@ test("API sources are side-effect-free before the canonical RPC", () => {
     assert.doesNotMatch(source, /automatic_default/);
   }
   assert.match(server, /provisionMissing:\s*false/);
+  assert.match(
+    server,
+    /\.eq\("activity_type",\s*"video_training"\)\s*\.is\("exam_result_id",\s*null\)/
+  );
   assert.doesNotMatch(route, /user_id|canonicalUserId|externalSubject/);
   assert.match(route, /executeTrainingAttemptRequest/);
   assert.match(usageRoute, /executeTrainingUsageRequest/);

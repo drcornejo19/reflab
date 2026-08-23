@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSuperAdminAccess } from "@/lib/adminAuthorization";
+import { requireSuperAdminReadAccess } from "@/lib/adminAuthorization";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +88,7 @@ const topicDictionary: Record<string, string> = {
 const coreTopics = ["VAR", "Fuera de juego", "Manos", "Disputas", "Faltas tacticas"];
 
 export async function GET() {
-  const access = await requireSuperAdminAccess();
+  const access = await requireSuperAdminReadAccess();
   if (access.response) return access.response;
 
   try {

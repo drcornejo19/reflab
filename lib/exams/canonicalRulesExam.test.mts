@@ -562,7 +562,7 @@ test("rules clients and endpoints contain no legacy browser persistence or ident
   assert.match(serverHelper, /provisionMissing: false/);
   assert.match(serverHelper, /source_item_type: "rule_question"/);
   assert.match(serverHelper, /supabase\.rpc\("submit_referee_exam", parameters\)/);
-  assert.doesNotMatch(serverHelper, /from\("rules_exam_results"\)\s*\.insert|user_roles|automatic_default/);
+  assert.doesNotMatch(serverHelper, /rules_exam_results|user_roles|automatic_default/);
   assert.doesNotMatch(
     activeSources,
     /from\(\s*["']rules_exam_results["']\s*\)\s*\.(?:insert|update|upsert|delete)/

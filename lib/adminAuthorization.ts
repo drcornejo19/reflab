@@ -80,7 +80,9 @@ export async function requireSuperAdminAccess() {
 
   try {
     const supabase = createSupabaseAdminClient();
-    const accessSnapshot = await loadAccessSnapshot(supabase, userId);
+    const accessSnapshot = await loadAccessSnapshot(supabase, userId, {
+      provisionMissing: false,
+    });
     const canonicalUserId = accessSnapshot.userId;
 
     if (accessSnapshot.globalRole === "super_admin") {

@@ -324,21 +324,13 @@ function createCanonicalExamDependencies(): CanonicalExamDependencies {
     loadAccess: (externalSubject) =>
       loadAccessSnapshot(supabase, externalSubject, { provisionMissing: false }),
     countWeeklyExams: async (userId, weekStart) => {
-      const [videoExams, rulesExams] = await Promise.all([
-        supabase
-          .from("exam_results")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .gte("created_at", weekStart.toISOString()),
-        supabase
-          .from("rules_exam_results")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .gte("created_at", weekStart.toISOString()),
-      ]);
-      if (videoExams.error) throw videoExams.error;
-      if (rulesExams.error) throw rulesExams.error;
-      return (videoExams.count ?? 0) + (rulesExams.count ?? 0);
+      const { count, error } = await supabase
+        .from("exam_results")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .gte("created_at", weekStart.toISOString());
+      if (error) throw error;
+      return count ?? 0;
     },
     listAvailableClips: async (sportType) => {
       const { data, error } = await supabase

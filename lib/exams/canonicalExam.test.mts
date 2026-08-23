@@ -316,7 +316,7 @@ test("ExamClient has no legacy browser-side exam persistence", () => {
   assert.match(helper, /provisionMissing: false/);
   assert.match(helper, /createSupabaseAdminClient\(\)/);
   assert.match(helper, /supabase\.rpc\("submit_referee_exam", parameters\)/);
-  assert.doesNotMatch(helper, /ensureUserRecords|user_roles|automatic_default/);
+  assert.doesNotMatch(helper, /ensureUserRecords|rules_exam_results|user_roles|automatic_default/);
   assert.match(
     baseline,
     /revoke all on function public\.submit_referee_exam\(text, uuid, uuid, text, jsonb\)\s+from public, anon, authenticated;/

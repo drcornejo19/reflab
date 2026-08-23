@@ -6,40 +6,19 @@ import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
-import { useSupabase } from "@/components/SupabaseProvider";
 import { getDisciplineDefinition } from "@/lib/discipline";
 import {
-  buildSportPerformanceDataset,
   formatPercent,
   formatScore,
-  getSportCriterionPerformance,
-  getSportPerformanceSummary,
-  getSportTopicPerformance,
   type SportCriterionMetric,
 } from "@/lib/performanceBySport";
 import {
-  type AttemptRecord,
-  type ExamResultRecord,
-  type PerformanceClipRecord,
-  type RulesExamResultRecord,
-} from "@/lib/performance";
+  buildCanonicalPerformanceSummary,
+  type CanonicalPerformanceSummaryModel,
+} from "@/lib/performance/canonicalSummaryModel";
 import { useUserRole } from "@/lib/useUserRole";
 
 export const dynamic = "force-dynamic";
-
-type StatsData = {
-  attempts: AttemptRecord[];
-  examResults: ExamResultRecord[];
-  rulesResults: RulesExamResultRecord[];
-  clips: PerformanceClipRecord[];
-};
-
-const emptyData: StatsData = {
-  attempts: [],
-  examResults: [],
-  rulesResults: [],
-  clips: [],
-};
 
 export default function StatsPage() {
   return (
@@ -50,86 +29,108 @@ export default function StatsPage() {
 }
 
 function StatsPageContent() {
-  const supabase = useSupabase();
   const { user, isLoaded } = useUser();
   const { currentDiscipline: sportType } = useDiscipline();
   const { isPro, loadingRole } = useUserRole();
   const theme = getDisciplineDefinition(sportType).theme;
-  const [data, setData] = useState<StatsData>(emptyData);
+  const [data, setData] = useState<CanonicalPerformanceSummaryModel | null>(null);
+  const [weeklyTrainingUsed, setWeeklyTrainingUsed] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadStats() {
       if (!isLoaded) return;
 
       if (!user) {
-        setData(emptyData);
+        setData(null);
+        setWeeklyTrainingUsed(0);
         setLoading(false);
         return;
       }
 
-      const [attemptsRes, examsRes, rulesRes, clipsRes] = await Promise.all([
-        supabase
-          .from("attempts")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("exam_results")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("rules_exam_results")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase.from("clips").select("*"),
-      ]);
-
-      setData({
-        attempts: (attemptsRes.data ?? []) as AttemptRecord[],
-        examResults: (examsRes.data ?? []) as ExamResultRecord[],
-        rulesResults: rulesRes.error ? [] : ((rulesRes.data ?? []) as RulesExamResultRecord[]),
-        clips: clipsRes.error ? [] : ((clipsRes.data ?? []) as PerformanceClipRecord[]),
-      });
-
-      setLoading(false);
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const [performanceResponse, usageResponse] = await Promise.all([
+          fetch(
+            `/api/performance/summary?sportType=${encodeURIComponent(sportType)}`,
+            { cache: "no-store" }
+          ),
+          fetch(
+            `/api/training/usage?sportType=${encodeURIComponent(sportType)}`,
+            { cache: "no-store" }
+          ).catch(() => null),
+        ]);
+        if (!performanceResponse.ok) {
+          const payload = (await performanceResponse.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(
+            payload?.error === "identity_link_required"
+              ? "Tu identidad debe estar vinculada para consultar estadisticas."
+              : "No se pudieron cargar las metricas oficiales."
+          );
+        }
+        const payload = (await performanceResponse.json()) as {
+          performance?: CanonicalPerformanceSummaryModel;
+        };
+        setData(payload.performance ?? null);
+        if (usageResponse?.ok) {
+          const usagePayload = (await usageResponse.json()) as {
+            usage?: { weeklyUsed?: number };
+          };
+          setWeeklyTrainingUsed(usagePayload.usage?.weeklyUsed ?? 0);
+        } else {
+          setWeeklyTrainingUsed(0);
+        }
+      } catch (error) {
+        setData(null);
+        setWeeklyTrainingUsed(0);
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : "No se pudieron cargar las metricas oficiales."
+        );
+      } finally {
+        setLoading(false);
+      }
     }
 
     void loadStats();
-  }, [isLoaded, supabase, user]);
+  }, [isLoaded, sportType, user]);
 
-  const dataset = useMemo(
+  const emptyData = useMemo(
     () =>
-      buildSportPerformanceDataset({
-        attempts: data.attempts,
-        examResults: data.examResults,
-        rulesExamResults: data.rulesResults,
-        clips: data.clips,
+      buildCanonicalPerformanceSummary({
+        attempts: [],
+        examResults: [],
         sportType,
+        canonicalUserId: null,
       }),
-    [data.attempts, data.examResults, data.rulesResults, data.clips, sportType]
+    [sportType]
   );
-  const summary = useMemo(
-    () => getSportPerformanceSummary(dataset.items, dataset.sessions, sportType),
-    [dataset.items, dataset.sessions, sportType]
-  );
-  const topics = useMemo(
-    () => getSportTopicPerformance(dataset.items, sportType).slice(0, 5),
-    [dataset.items, sportType]
-  );
-  const criteria = useMemo(
-    () => getSportCriterionPerformance(dataset.items, sportType),
-    [dataset.items, sportType]
-  );
-  const recentItems = useMemo(() => dataset.items.slice(0, 5), [dataset.items]);
+  const performance = data?.sportType === sportType ? data : emptyData;
+  const summary = performance.summary;
+  const topics = useMemo(() => performance.topics.slice(0, 5), [performance.topics]);
+  const criteria = performance.criteria;
+  const recentItems = useMemo(() => performance.history.slice(0, 5), [performance.history]);
 
   if (loading || loadingRole) {
     return (
       <AppShell>
         <div className="rounded-3xl border border-white/10 bg-[#0b131b] p-4 text-zinc-400">
           Cargando estadisticas...
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <AppShell>
+        <div className="rounded-3xl border border-red-500/25 bg-red-500/10 p-4 text-red-200">
+          {loadError}
         </div>
       </AppShell>
     );
@@ -149,15 +150,15 @@ function StatsPageContent() {
             </p>
             <h1 className="mt-2 text-2xl font-black md:text-3xl">Estadisticas basicas</h1>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              Vista resumida de {summary.totalAttempts} registros reales para la disciplina seleccionada.
+              Vista resumida de evaluaciones oficiales y uso semanal de Entrenamiento.
             </p>
           </header>
 
           <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <StatCard title="Promedio" value={formatScore(summary.avgScore)} />
-            <StatCard title="Intentos" value={summary.totalAttempts} />
+            <StatCard title="Intentos oficiales" value={summary.totalAttempts} />
             <StatCard title="Evaluaciones" value={summary.totalEvaluations} />
-            <StatCard title="Mejor score" value={formatScore(summary.bestScore)} />
+            <StatCard title="Entrenamiento semanal" value={weeklyTrainingUsed} />
           </section>
 
           <ProUpgradeCard
@@ -189,8 +190,8 @@ function StatsPageContent() {
 
         <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <StatCard title="Promedio" value={formatScore(summary.avgScore)} />
-          <StatCard title="Intentos" value={summary.totalAttempts} />
-          <StatCard title="Entrenamientos" value={summary.totalTrainings} />
+          <StatCard title="Intentos oficiales" value={summary.totalAttempts} />
+          <StatCard title="Entrenamiento semanal" value={weeklyTrainingUsed} />
           <StatCard title="Evaluaciones" value={summary.totalEvaluations} />
         </section>
 

@@ -276,8 +276,10 @@ async function getWeakTopic(
 ) {
   const { data, error } = await supabase
     .from("attempts")
-    .select("topic, score")
+    .select("topic,score,exam_result_id,exam_results!inner(id,user_id)")
     .eq("user_id", userId)
+    .eq("exam_results.user_id", userId)
+    .not("exam_result_id", "is", null)
     .not("topic", "is", null)
     .not("score", "is", null)
     .limit(500);

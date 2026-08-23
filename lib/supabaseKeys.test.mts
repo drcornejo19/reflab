@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
 import { createAuthenticatedSupabaseClient } from "./supabaseAuthenticated.ts";
@@ -91,7 +91,8 @@ test("active code contains no legacy Supabase key names or JWT parsing", () => {
     .split("\0")
     .filter((file) =>
       /^(?:app|lib|scripts)\//.test(file) &&
-      !/\.test\.m?[jt]s$/.test(file)
+      !/\.test\.m?[jt]s$/.test(file) &&
+      existsSync(resolve(repositoryRoot, file))
     );
 
   for (const file of tracked) {

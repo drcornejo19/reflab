@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireSuperAdminAccess } from "@/lib/adminAuthorization";
+import {
+  requireSuperAdminAccess,
+  requireSuperAdminReadAccess,
+} from "@/lib/adminAuthorization";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +18,7 @@ const leadStatuses = [
 type LeadStatus = (typeof leadStatuses)[number];
 
 export async function GET() {
-  const access = await requireSuperAdminAccess();
+  const access = await requireSuperAdminReadAccess();
   if (access.response) return access.response;
 
   const { data, error } = await access.supabase

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireSuperAdminAccess } from "@/lib/adminAuthorization";
+import {
+  requireSuperAdminAccess,
+  requireSuperAdminReadAccess,
+} from "@/lib/adminAuthorization";
 import type { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import {
   getGoverningBodyForSport,
@@ -26,7 +29,7 @@ const allowedStatuses = new Set([
 ]);
 
 export async function GET() {
-  const access = await requireSuperAdminAccess();
+  const access = await requireSuperAdminReadAccess();
   if (access.response) return access.response;
 
   const { data, error } = await access.supabase

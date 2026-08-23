@@ -221,21 +221,13 @@ function createCanonicalRulesExamDependencies(): RulesExamDependencies {
     loadAccess: (externalSubject) =>
       loadAccessSnapshot(supabase, externalSubject, { provisionMissing: false }),
     countWeeklyExams: async (userId, weekStart) => {
-      const [official, legacyRules] = await Promise.all([
-        supabase
-          .from("exam_results")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .gte("created_at", weekStart.toISOString()),
-        supabase
-          .from("rules_exam_results")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .gte("created_at", weekStart.toISOString()),
-      ]);
-      if (official.error) throw official.error;
-      if (legacyRules.error) throw legacyRules.error;
-      return (official.count ?? 0) + (legacyRules.count ?? 0);
+      const { count, error } = await supabase
+        .from("exam_results")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .gte("created_at", weekStart.toISOString());
+      if (error) throw error;
+      return count ?? 0;
     },
     loadCatalog: async (sportType) => getServerRulesCatalog(sportType),
     loadOpenSession: async (userId, sportType, sourceVersion, now) => {

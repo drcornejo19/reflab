@@ -483,11 +483,30 @@ test("active pages and server reader enforce the canonical read-only contract", 
     path.join(root, "app/dashboard/page.tsx"),
     "utf8"
   );
+  const profilePage = fs.readFileSync(
+    path.join(root, "app/profile/page.tsx"),
+    "utf8"
+  );
+  const statsPage = fs.readFileSync(
+    path.join(root, "app/stats/page.tsx"),
+    "utf8"
+  );
+  const mobileDashboardPage = fs.readFileSync(
+    path.join(root, "app/mobile-dashboard/page.tsx"),
+    "utf8"
+  );
   const serverReader = fs.readFileSync(
     path.join(root, "lib/performance/canonicalSummary.ts"),
     "utf8"
   );
-  const combinedPages = `${performancePage}\n${dashboardPage}`;
+  const canonicalPages = [
+    performancePage,
+    dashboardPage,
+    profilePage,
+    statsPage,
+    mobileDashboardPage,
+  ];
+  const combinedPages = canonicalPages.join("\n");
 
   assert.equal(combinedPages.includes("useSupabase"), false);
   assert.equal(combinedPages.includes('.from("attempts")'), false);
@@ -495,12 +514,18 @@ test("active pages and server reader enforce the canonical read-only contract", 
   assert.equal(combinedPages.includes("currentRanking = ranking.find"), false);
   assert.equal(performancePage.includes("Promise.all"), false);
   assert.equal(
-    [performancePage, dashboardPage].every((source) =>
+    canonicalPages.every((source) =>
       source.includes("/api/performance/summary")
     ),
     true
   );
-  assert.equal(dashboardPage.includes("/api/training/usage"), true);
+  assert.equal(
+    [dashboardPage, profilePage, statsPage, mobileDashboardPage].every((source) =>
+      source.includes("/api/training/usage")
+    ),
+    true
+  );
+  assert.doesNotMatch(combinedPages, /rules_exam_results|\.from\("exam_results"\)/);
   assert.match(serverReader, /provisionMissing:\s*false/);
   assert.match(serverReader, /\.not\("exam_result_id",\s*"is",\s*null\)/);
   assert.equal(serverReader.includes('from("user_roles")'), false);

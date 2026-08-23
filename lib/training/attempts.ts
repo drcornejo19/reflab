@@ -258,6 +258,7 @@ function createTrainingUsageDependencies(): TrainingUsageDependencies {
         .eq("user_id", userId)
         .eq("sport_type", sportType)
         .eq("activity_type", "video_training")
+        .is("exam_result_id", null)
         .gte("created_at", weekStart.toISOString());
 
       if (error) throw error;

@@ -17,6 +17,14 @@ const adminUsersWriteSource = read("lib/admin/usersWrite.ts");
 const adminAuthorizationSource = read("lib/adminAuthorization.ts");
 const userRecordsSource = read("lib/reflabUserRecords.ts");
 const profileReaderSource = read("lib/profile/getProfile.ts");
+const profileReadHelperSource = profileReaderSource.slice(
+  profileReaderSource.indexOf("export async function getProfilePayload"),
+  profileReaderSource.indexOf("export async function updateProfilePayload")
+);
+const profilePatchHelperSource = profileReaderSource.slice(
+  profileReaderSource.indexOf("export async function updateProfilePayload"),
+  profileReaderSource.indexOf("export async function createProfileGetResponse")
+);
 const avatarUploadSource = read("lib/profile/avatarUpload.ts");
 const instrumentationSource = read("instrumentation.ts");
 const profileGetSource = profileRouteSource.slice(
@@ -71,7 +79,7 @@ test("incomplete or production-mixed Development configuration fails closed", ()
   );
 });
 
-test("profile GET is canonical and side-effect free while PATCH remains unchanged", () => {
+test("profile GET is read-only and PATCH updates only an existing canonical profile", () => {
   assert.match(profileGetSource, /getProfilePayload\(/);
   assert.doesNotMatch(profileGetSource, /ensureUserRecords/);
   assert.doesNotMatch(
@@ -80,20 +88,24 @@ test("profile GET is canonical and side-effect free while PATCH remains unchange
   );
   assert.match(profileGetSource, /createProfileGetResponse/);
 
-  assert.match(profileReaderSource, /loadAccessSnapshot\([\s\S]*?provisionMissing:\s*false/);
-  assert.match(profileReaderSource, /\.from\("user_profiles"\)/);
-  assert.match(profileReaderSource, /\.eq\("user_id", access\.userId\)/);
-  assert.doesNotMatch(profileReaderSource, /\.from\("user_roles"\)/);
+  assert.match(profileReadHelperSource, /loadAccessSnapshot\([\s\S]*?provisionMissing:\s*false/);
+  assert.match(profileReadHelperSource, /\.from\("user_profiles"\)/);
+  assert.match(profileReadHelperSource, /\.eq\("user_id", access\.userId\)/);
+  assert.doesNotMatch(profileReadHelperSource, /\.from\("user_roles"\)/);
   assert.doesNotMatch(
-    profileReaderSource,
+    profileReadHelperSource,
     /\.(?:insert|upsert|update|delete)\s*\(/
   );
   assert.match(profileReaderSource, /sanitizeProfileGetError/);
   assert.match(profileReaderSource, /status:\s*409/);
 
-  assert.match(
-    profilePatchSource,
-    /ensureUserRecords\([\s\S]*?accessSnapshot\.userId/
+  assert.match(profilePatchSource, /createProfilePatchResponse/);
+  assert.match(profilePatchSource, /updateProfilePayload/);
+  assert.match(profilePatchHelperSource, /provisionMissing:\s*false/);
+  assert.match(profilePatchHelperSource, /\.from\("user_profiles"\)[\s\S]*?\.update\(/);
+  assert.doesNotMatch(
+    `${profilePatchSource}\n${profilePatchHelperSource}`,
+    /ensureUserRecords|user_roles|user_subscriptions|user_global_roles|automatic_default|\.insert\(|\.upsert\(/
   );
   assert.match(avatarRouteSource, /uploadCanonicalAvatar\(/);
   assert.doesNotMatch(avatarRouteSource, /ensureUserRecords|user_roles/);
@@ -130,11 +142,8 @@ test("administration resolves canonical identity without provisioning", () => {
   );
 });
 
-test("ensureUserRecords cannot derive a database identity from Clerk", () => {
-  assert.match(
-    userRecordsSource,
-    /ensureUserRecords\([\s\S]*?canonicalUserId: string,[\s\S]*?clerkUser/
-  );
+test("legacy profile provisioning helpers are removed", () => {
+  assert.doesNotMatch(userRecordsSource, /ensureUserRecords|upsertUserRole|upsertUserProfile|user_roles/);
   assert.doesNotMatch(userRecordsSource, /\.eq\("user_id", clerkUser\.id\)/);
   assert.doesNotMatch(userRecordsSource, /user_id:\s*clerkUser\.id/);
 });
