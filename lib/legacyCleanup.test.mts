@@ -114,7 +114,7 @@ test("dead persistence helpers are removed and legacy reads stay explicitly scop
   );
   assert.deepEqual(
     legacyRoleConsumers.map((file) => path.relative(root, file).replaceAll("\\", "/")),
-    ["lib/matches/server.ts"]
+    []
   );
 });
 

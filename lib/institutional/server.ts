@@ -426,7 +426,7 @@ export async function getInstitutionOverview(
   };
 }
 
-async function loadInstitutionAccess(
+export async function loadInstitutionAccess(
   userId: string,
   supabase: SupabaseAdminClient
 ): Promise<InstitutionAccessSnapshot> {
