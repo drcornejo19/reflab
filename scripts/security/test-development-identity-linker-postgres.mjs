@@ -82,6 +82,12 @@ const institutionInvitationMigrationPath = resolve(
   "migrations",
   "202608210001_canonical_institution_invitation_acceptance.sql"
 );
+const institutionCatalogMigrationPath = resolve(
+  repositoryRoot,
+  "supabase",
+  "migrations",
+  "202608240001_canonical_institution_catalog_alignment.sql"
+);
 const temporaryRoot = mkdtempSync(
   join(tmpdir(), "reflab-identity-linker-postgres-")
 );
@@ -168,6 +174,10 @@ const concurrentInstitutionInvitationSecondPath = join(
 const rollbackInstitutionInvitationMigrationPath = join(
   temporaryRoot,
   "canonical-institution-invitation-rollback.sql"
+);
+const rollbackInstitutionCatalogMigrationPath = join(
+  temporaryRoot,
+  "canonical-institution-catalog-rollback.sql"
 );
 const port = await reservePort();
 const connectionEnvironment = {
@@ -295,6 +305,30 @@ try {
   assertInstitutionInvitationForbiddenExecution(
     "reflab_identity_linker_test",
     "authenticated"
+  );
+  const institutionCatalogProtectedSnapshot =
+    snapshotInstitutionCatalogProtectedData("reflab_identity_linker_test");
+  applySqlFile(
+    "reflab_identity_linker_test",
+    institutionCatalogMigrationPath
+  );
+  assertNoPublicCreatePrivilege(
+    "reflab_identity_linker_test",
+    "after canonical institution catalog migration"
+  );
+  assertInstitutionCatalogAlignment("reflab_identity_linker_test");
+  assertInstitutionCatalogProtectedData(
+    "reflab_identity_linker_test",
+    institutionCatalogProtectedSnapshot
+  );
+  applySqlFile(
+    "reflab_identity_linker_test",
+    institutionCatalogMigrationPath
+  );
+  assertInstitutionCatalogAlignment("reflab_identity_linker_test");
+  assertInstitutionCatalogProtectedData(
+    "reflab_identity_linker_test",
+    institutionCatalogProtectedSnapshot
   );
   assertRlsOwnerPolicyIsolation("reflab_identity_linker_test");
   await assertIdentityLinkConcurrency("reflab_identity_linker_test");
@@ -483,6 +517,30 @@ try {
     "reflab_institution_invitation_rollback"
   );
 
+  createDatabase("reflab_institution_catalog_rollback");
+  applyBootstrapAndBaseline("reflab_institution_catalog_rollback");
+  applySqlFile("reflab_institution_catalog_rollback", seedPath);
+  applyCanonicalMigrationsThroughInstitutionInvitation(
+    "reflab_institution_catalog_rollback"
+  );
+  const rollbackProtectedSnapshot = snapshotInstitutionCatalogProtectedData(
+    "reflab_institution_catalog_rollback"
+  );
+  writeFileSync(
+    rollbackInstitutionCatalogMigrationPath,
+    migrationWithRollback(readFileSync(institutionCatalogMigrationPath, "utf8")),
+    "utf8"
+  );
+  applySqlFile(
+    "reflab_institution_catalog_rollback",
+    rollbackInstitutionCatalogMigrationPath
+  );
+  assertInstitutionCatalogRollback("reflab_institution_catalog_rollback");
+  assertInstitutionCatalogProtectedData(
+    "reflab_institution_catalog_rollback",
+    rollbackProtectedSnapshot
+  );
+
   console.log(
     "Development identity linker PostgreSQL test passed in an isolated local cluster."
   );
@@ -539,6 +597,11 @@ function applyCanonicalMigrationsThroughCommunication(databaseName) {
 function applyCanonicalMigrationsThroughCoachRateLimit(databaseName) {
   applyCanonicalMigrationsThroughCommunication(databaseName);
   applySqlFile(databaseName, coachRateLimitMigrationPath);
+}
+
+function applyCanonicalMigrationsThroughInstitutionInvitation(databaseName) {
+  applyCanonicalMigrationsThroughCoachRateLimit(databaseName);
+  applySqlFile(databaseName, institutionInvitationMigrationPath);
 }
 
 function applySqlFile(databaseName, filePath) {
@@ -2713,6 +2776,228 @@ function assertInstitutionInvitationRollback(databaseName) {
   }
 }
 
+function institutionCatalogExpectedMatrix() {
+  return {
+    institution_admin: [
+      "institution.read", "institution.manage", "members.read", "members.manage",
+      "members.invite", "roles.read", "roles.manage", "groups.read",
+      "groups.manage", "content.read", "content.manage", "content.publish",
+      "assessments.read", "assessments.take", "assessments.manage",
+      "assessments.grade", "metrics.read_own", "metrics.read_individual",
+      "metrics.read_aggregate", "reports.read", "reports.export",
+      "notifications.read", "notifications.send", "matches.read",
+      "matches.manage", "audit.read", "demo.switch",
+    ],
+    technical_coordinator: [
+      "institution.read", "members.read", "groups.read", "groups.manage",
+      "content.read", "content.manage", "assessments.read",
+      "assessments.manage", "assessments.grade", "metrics.read_individual",
+      "metrics.read_aggregate", "reports.read", "notifications.read",
+      "notifications.send", "matches.read", "matches.manage",
+    ],
+    instructor: [
+      "institution.read", "members.read", "groups.read", "content.read",
+      "content.manage", "assessments.read", "assessments.manage",
+      "assessments.grade", "metrics.read_individual", "notifications.read",
+    ],
+    evaluator: [
+      "institution.read", "groups.read", "assessments.read",
+      "assessments.grade", "metrics.read_individual",
+    ],
+    content_manager: [
+      "institution.read", "content.read", "content.manage", "content.publish",
+    ],
+    student: [
+      "institution.read", "content.read", "assessments.read",
+      "assessments.take", "metrics.read_own", "notifications.read",
+    ],
+    referee: [
+      "institution.read", "content.read", "assessments.read",
+      "assessments.take", "metrics.read_own", "notifications.read",
+      "matches.read",
+    ],
+    invited_referee: [
+      "institution.read", "content.read", "assessments.read", "assessments.take",
+    ],
+    observer: [
+      "institution.read", "groups.read", "metrics.read_aggregate", "reports.read",
+    ],
+    read_only: [
+      "institution.read", "content.read", "assessments.read", "notifications.read",
+    ],
+  };
+}
+
+function snapshotInstitutionCatalogProtectedData(databaseName) {
+  return query(
+    databaseName,
+    String.raw`select pg_catalog.json_build_object(
+  'memberships', (
+    select coalesce(
+      pg_catalog.jsonb_agg(pg_catalog.to_jsonb(membership) order by membership.id),
+      '[]'::jsonb
+    )
+    from public.institution_memberships membership
+  ),
+  'overrides', (
+    select coalesce(
+      pg_catalog.jsonb_agg(pg_catalog.to_jsonb(override_row) order by override_row.id),
+      '[]'::jsonb
+    )
+    from public.institution_membership_permission_overrides override_row
+  ),
+  'global_roles', (
+    select coalesce(
+      pg_catalog.jsonb_agg(pg_catalog.to_jsonb(global_role) order by global_role.user_id),
+      '[]'::jsonb
+    )
+    from public.user_global_roles global_role
+  ),
+  'legacy_roles', (
+    select coalesce(
+      pg_catalog.jsonb_agg(pg_catalog.to_jsonb(legacy_role) order by legacy_role.user_id),
+      '[]'::jsonb
+    )
+    from public.user_roles legacy_role
+  )
+);`
+  );
+}
+
+function assertInstitutionCatalogProtectedData(databaseName, expectedSnapshot) {
+  const actualSnapshot = snapshotInstitutionCatalogProtectedData(databaseName);
+  if (actualSnapshot !== expectedSnapshot) {
+    throw new Error("Institution catalog migration changed protected user data.");
+  }
+}
+
+function assertInstitutionCatalogAlignment(databaseName) {
+  const counts = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select pg_catalog.json_build_object(
+  'permissions', (select pg_catalog.count(*) from public.institution_permissions),
+  'system_roles', (
+    select pg_catalog.count(*) from public.institution_roles where institution_id is null
+  ),
+  'system_relations', (
+    select pg_catalog.count(*)
+    from public.institution_role_permissions role_permission
+    join public.institution_roles role on role.id = role_permission.role_id
+    where role.institution_id is null
+  ),
+  'legacy_roles', (select pg_catalog.count(*) from public.user_roles),
+  'automatic_defaults', (
+    (select pg_catalog.count(*) from public.user_global_roles where source = 'automatic_default')
+    +
+    (select pg_catalog.count(*) from public.user_subscriptions where source = 'automatic_default')
+  ),
+  'deferred_roles', (
+    select pg_catalog.count(*) from public.institution_roles
+    where institution_id is null
+      and role_key in ('physical_trainer', 'institution_psychologist')
+  ),
+  'legacy_institution_roles', (
+    select pg_catalog.count(*) from public.institution_roles
+    where institution_id is null
+      and role_key in (
+        'super_admin', 'video_admin', 'institutional_instructor',
+        'institutional_student', 'individual_referee'
+      )
+  )
+);`
+    )
+  );
+
+  if (
+    Number(counts.permissions) !== 27 ||
+    Number(counts.system_roles) !== 10 ||
+    Number(counts.system_relations) !== 87 ||
+    Number(counts.legacy_roles) !== 0 ||
+    Number(counts.automatic_defaults) !== 0 ||
+    Number(counts.deferred_roles) !== 0 ||
+    Number(counts.legacy_institution_roles) !== 0
+  ) {
+    throw new Error(`Institution catalog counts are invalid: ${JSON.stringify(counts)}`);
+  }
+
+  const actualMatrix = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select pg_catalog.json_object_agg(role_key, permission_keys order by role_key)
+from (
+  select
+    role.role_key,
+    pg_catalog.json_agg(permission.permission_key order by permission.permission_key) as permission_keys
+  from public.institution_roles role
+  join public.institution_role_permissions role_permission
+    on role_permission.role_id = role.id
+  join public.institution_permissions permission
+    on permission.id = role_permission.permission_id
+  where role.institution_id is null
+  group by role.role_key
+) matrix;`
+    )
+  );
+  const expectedMatrix = institutionCatalogExpectedMatrix();
+
+  if (
+    JSON.stringify(Object.keys(actualMatrix).sort()) !==
+    JSON.stringify(Object.keys(expectedMatrix).sort())
+  ) {
+    throw new Error("Institution catalog role keys do not match runtime.");
+  }
+  for (const [role, permissions] of Object.entries(expectedMatrix)) {
+    const actualPermissions = [...(actualMatrix[role] ?? [])].sort();
+    const expectedPermissions = [...permissions].sort();
+    if (JSON.stringify(actualPermissions) !== JSON.stringify(expectedPermissions)) {
+      throw new Error(`Institution catalog permissions differ for ${role}.`);
+    }
+  }
+}
+
+function assertInstitutionCatalogRollback(databaseName) {
+  const result = JSON.parse(
+    query(
+      databaseName,
+      String.raw`select pg_catalog.json_build_object(
+  'permissions', (select pg_catalog.count(*) from public.institution_permissions),
+  'system_roles', (
+    select pg_catalog.count(*) from public.institution_roles where institution_id is null
+  ),
+  'system_relations', (
+    select pg_catalog.count(*)
+    from public.institution_role_permissions role_permission
+    join public.institution_roles role on role.id = role_permission.role_id
+    where role.institution_id is null
+  ),
+  'new_permissions', (
+    select pg_catalog.count(*) from public.institution_permissions
+    where permission_key in ('matches.read', 'matches.manage', 'demo.switch')
+  ),
+  'new_roles', (
+    select pg_catalog.count(*) from public.institution_roles
+    where institution_id is null
+      and role_key in (
+        'technical_coordinator', 'evaluator', 'content_manager', 'student',
+        'invited_referee', 'observer', 'read_only'
+      )
+  )
+);`
+    )
+  );
+
+  if (
+    Number(result.permissions) !== 24 ||
+    Number(result.system_roles) !== 3 ||
+    Number(result.system_relations) !== 41 ||
+    Number(result.new_permissions) !== 0 ||
+    Number(result.new_roles) !== 0
+  ) {
+    throw new Error("Institution catalog migration rollback left residue.");
+  }
+}
+
 function assertCoachRateLimitSecurity(databaseName) {
   const result = JSON.parse(
     query(
@@ -4378,6 +4663,10 @@ select pg_catalog.json_build_object(
     institutionInvitationMigrationPath,
     "utf8"
   );
+  const institutionCatalogMigrationSql = readFileSync(
+    institutionCatalogMigrationPath,
+    "utf8"
+  );
   const explicitIndexCount =
     (
       baselineSql.match(
@@ -4421,6 +4710,11 @@ select pg_catalog.json_build_object(
     ).length +
     (
       institutionInvitationMigrationSql.match(
+        /^\s*create\s+(?:unique\s+)?index\s+/gim
+      ) ?? []
+    ).length +
+    (
+      institutionCatalogMigrationSql.match(
         /^\s*create\s+(?:unique\s+)?index\s+/gim
       ) ?? []
     ).length;
