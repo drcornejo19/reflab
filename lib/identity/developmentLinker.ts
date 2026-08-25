@@ -3,6 +3,7 @@ import "server-only";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createSupabaseAdminClient } from "../supabaseAdmin.ts";
 import {
+  assertCanonicalIdentityEnvironmentAtStartup,
   DEVELOPMENT_SUPABASE_PROJECT_REF,
   DevelopmentIdentityLinkerConfigurationError,
   FORBIDDEN_PRODUCTION_PROJECT_REF,
@@ -10,6 +11,7 @@ import {
 } from "./developmentIdentityEnvironment.ts";
 
 export {
+  assertCanonicalIdentityEnvironmentAtStartup,
   DEVELOPMENT_SUPABASE_PROJECT_REF,
   DevelopmentIdentityLinkerConfigurationError,
   FORBIDDEN_PRODUCTION_PROJECT_REF,
@@ -71,12 +73,6 @@ export class DevelopmentIdentityLinkerRpcError extends Error {
   }
 }
 
-export function assertCanonicalIdentityEnvironmentAtStartup(
-  environment: NodeJS.ProcessEnv = process.env
-) {
-  return requiresCanonicalDevelopmentIdentity(environment);
-}
-
 export function assertDevelopmentIdentityLinkerEnvironment(
   environment: NodeJS.ProcessEnv = process.env
 ) {
@@ -86,13 +82,26 @@ export function assertDevelopmentIdentityLinkerEnvironment(
   );
   const configuredSecret =
     environment.DEVELOPMENT_IDENTITY_LINK_SECRET ?? "";
+  let developmentTarget = false;
+
+  try {
+    developmentTarget = requiresCanonicalDevelopmentIdentity(environment);
+  } catch {
+    throw new DevelopmentIdentityLinkerConfigurationError();
+  }
 
   if (
-    !assertCanonicalIdentityEnvironmentAtStartup(environment) ||
+    !developmentTarget ||
     enabled !== "true" ||
     nodeEnvironment === "production" ||
+    normalized(environment.APP_ENV) !== "development" ||
+    normalized(environment.CLERK_ENV) !== "development" ||
+    normalized(environment.SUPABASE_ENV) !== "development" ||
     configuredSecret.length < MINIMUM_DEVELOPMENT_SECRET_LENGTH ||
-    !environment.SUPABASE_SECRET_KEY
+    !environment.SUPABASE_SECRET_KEY ||
+    Boolean(environment.VERCEL?.trim()) ||
+    Boolean(environment.VERCEL_ENV?.trim()) ||
+    Boolean(environment.VERCEL_URL?.trim())
   ) {
     throw new DevelopmentIdentityLinkerConfigurationError();
   }

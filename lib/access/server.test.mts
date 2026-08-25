@@ -3,14 +3,15 @@ import test from "node:test";
 import {
   IDENTITY_LINK_REQUIRED,
   IdentityLinkRequiredError,
-  ensureCanonicalAccessRecords,
   loadAccessSnapshot,
+  resolveCanonicalAccessUserId,
 } from "./server.ts";
 import {
+  CanonicalDataEnvironmentConfigurationError,
   DEVELOPMENT_SUPABASE_PROJECT_REF,
-  DevelopmentIdentityLinkerConfigurationError,
   FORBIDDEN_PRODUCTION_PROJECT_REF,
-} from "../identity/developmentLinker.ts";
+  ProductionCanonicalIdentityUnavailableError,
+} from "../identity/developmentIdentityEnvironment.ts";
 
 type GlobalRoleRecord = {
   role_key: string;
@@ -35,6 +36,7 @@ function developmentEnvironment(
     APP_ENV: "development",
     CLERK_ENV: "development",
     NODE_ENV: "development",
+    REFLAB_DATA_ENV: "development",
     SUPABASE_ENV: "development",
     SUPABASE_PROJECT_REF: DEVELOPMENT_SUPABASE_PROJECT_REF,
     NEXT_PUBLIC_SUPABASE_URL:
@@ -47,15 +49,21 @@ function developmentEnvironment(
   };
 }
 
-function normalEnvironment(): NodeJS.ProcessEnv {
+function productionEnvironment(
+  overrides: Partial<NodeJS.ProcessEnv> = {}
+): NodeJS.ProcessEnv {
   return {
-    APP_ENV: "test",
-    CLERK_ENV: "test",
-    NODE_ENV: "test",
-    SUPABASE_ENV: "test",
-    SUPABASE_PROJECT_REF: "synthetic-non-development-ref",
-    NEXT_PUBLIC_SUPABASE_URL: "https://synthetic-non-development.supabase.co",
+    APP_ENV: "production",
+    CLERK_ENV: "production",
+    NODE_ENV: "production",
+    REFLAB_DATA_ENV: "production",
+    SUPABASE_ENV: "production",
+    SUPABASE_PROJECT_REF: FORBIDDEN_PRODUCTION_PROJECT_REF,
+    NEXT_PUBLIC_SUPABASE_URL:
+      `https://${FORBIDDEN_PRODUCTION_PROJECT_REF}.supabase.co`,
+    VERCEL_ENV: "production",
     ENABLE_DEVELOPMENT_IDENTITY_LINKER: "false",
+    ...overrides,
   };
 }
 
@@ -125,7 +133,7 @@ test("Development subject without a link requires identity linking and performs 
 
   await assert.rejects(
     () =>
-      ensureCanonicalAccessRecords(
+      resolveCanonicalAccessUserId(
         fake.client as never,
         "user_clerk_unlinked",
         {
@@ -145,47 +153,30 @@ test("Development subject without a link requires identity linking and performs 
   assert.deepEqual(fake.writes, []);
 });
 
-test("a linked Development subject reuses the synthetic canonical records", async () => {
-  const fake = createAccessClient({
-    globalRoles: {
-      user_dev_referee_a: { role_key: "referee" },
-    },
-    subscriptions: {
-      user_dev_referee_a: {
-        plan_key: "basic",
-        status: "active",
-        starts_at: "2026-07-27T00:00:00.000Z",
-        ends_at: null,
-      },
-    },
-  });
-
-  const result = await ensureCanonicalAccessRecords(
+test("a linked Development subject resolves to the canonical user", async () => {
+  const fake = createAccessClient();
+  const result = await resolveCanonicalAccessUserId(
     fake.client as never,
     "user_clerk_linked",
     {
       environment: developmentEnvironment(),
-      resolveLinkedIdentity: async (subject) => {
+      resolveLinkedIdentity: async (subject: string) => {
         assert.equal(subject, "user_clerk_linked");
         return "user_dev_referee_a";
       },
     }
   );
 
-  assert.equal(result.userId, "user_dev_referee_a");
-  assert.equal(result.globalRole.role_key, "referee");
-  assert.equal(result.subscription.plan_key, "basic");
+  assert.equal(result, "user_dev_referee_a");
   assert.deepEqual(fake.writes, []);
-  assert.ok(
-    fake.reads.every((read) => read.userId === "user_dev_referee_a")
-  );
+  assert.deepEqual(fake.reads, []);
 });
 
 test("a disabled linker endpoint does not disable canonical Development identity resolution", async () => {
   const fake = createAccessClient();
   await assert.rejects(
     () =>
-      ensureCanonicalAccessRecords(
+      resolveCanonicalAccessUserId(
         fake.client as never,
         "user_clerk_unlinked",
         {
@@ -202,61 +193,59 @@ test("a disabled linker endpoint does not disable canonical Development identity
   assert.deepEqual(fake.writes, []);
 });
 
-test("a non-Development project preserves automatic provisioning for a new user", async () => {
+test("local production-mode builds still resolve Development data links", async () => {
   const fake = createAccessClient();
-  const result = await ensureCanonicalAccessRecords(
+  const result = await resolveCanonicalAccessUserId(
     fake.client as never,
-    "user_normal_new",
-    { environment: normalEnvironment() }
-  );
-
-  assert.equal(result.userId, "user_normal_new");
-  assert.deepEqual(
-    fake.writes.map((write) => ({
-      table: write.table,
-      userId: write.payload.user_id,
-      source: write.payload.source,
-    })),
-    [
-      {
-        table: "user_global_roles",
-        userId: "user_normal_new",
-        source: "automatic_default",
-      },
-      {
-        table: "user_subscriptions",
-        userId: "user_normal_new",
-        source: "automatic_default",
-      },
-    ]
-  );
-});
-
-test("existing normal users keep their records without duplicate writes", async () => {
-  const fake = createAccessClient({
-    globalRoles: {
-      user_normal_existing: { role_key: "referee" },
-    },
-    subscriptions: {
-      user_normal_existing: {
-        plan_key: "pro",
-        status: "active",
-        starts_at: "2026-07-01T00:00:00.000Z",
-        ends_at: null,
-      },
-    },
-  });
-
-  const result = await ensureCanonicalAccessRecords(
-    fake.client as never,
-    "user_normal_existing",
+    "user_clerk_local_build",
     {
-      environment: normalEnvironment(),
+      environment: developmentEnvironment({ NODE_ENV: "production" }),
+      resolveLinkedIdentity: async () => "user_dev_referee_a",
     }
   );
 
-  assert.equal(result.userId, "user_normal_existing");
-  assert.equal(result.subscription.plan_key, "pro");
+  assert.equal(result, "user_dev_referee_a");
+  assert.deepEqual(fake.writes, []);
+});
+
+test("Vercel Preview resolves Development data links", async () => {
+  const fake = createAccessClient();
+  const result = await resolveCanonicalAccessUserId(
+    fake.client as never,
+    "user_clerk_preview",
+    {
+      environment: developmentEnvironment({
+        NODE_ENV: "production",
+        VERCEL_ENV: "preview",
+      }),
+      resolveLinkedIdentity: async () => "user_dev_referee_a",
+    }
+  );
+
+  assert.equal(result, "user_dev_referee_a");
+  assert.deepEqual(fake.writes, []);
+});
+
+test("an unlinked Vercel Preview subject fails before access reads or writes", async () => {
+  const fake = createAccessClient();
+
+  await assert.rejects(
+    () =>
+      resolveCanonicalAccessUserId(
+        fake.client as never,
+        "user_clerk_preview_unlinked",
+        {
+          environment: developmentEnvironment({
+            NODE_ENV: "production",
+            VERCEL_ENV: "preview",
+          }),
+          resolveLinkedIdentity: async () => null,
+        }
+      ),
+    IdentityLinkRequiredError
+  );
+
+  assert.deepEqual(fake.reads, []);
   assert.deepEqual(fake.writes, []);
 });
 
@@ -266,39 +255,55 @@ test("read-only access snapshots never provision missing canonical records", asy
   await assert.rejects(
     () =>
       loadAccessSnapshot(fake.client as never, "user_normal_missing", {
-        environment: normalEnvironment(),
+        environment: developmentEnvironment(),
         provisionMissing: false,
+        resolveLinkedIdentity: async () => "user_dev_missing",
       }),
     /Canonical access records are missing/
   );
 
   assert.deepEqual(fake.writes, []);
   assert.deepEqual(fake.reads, [
-    { table: "user_global_roles", userId: "user_normal_missing" },
-    { table: "user_subscriptions", userId: "user_normal_missing" },
+    { table: "user_global_roles", userId: "user_dev_missing" },
+    { table: "user_subscriptions", userId: "user_dev_missing" },
   ]);
 });
 
-test("production cannot activate Development identity resolution", async () => {
+test("Production target validation succeeds but identity resolution remains blocked", async () => {
+  const fake = createAccessClient();
+  let resolverCalled = false;
+
+  await assert.rejects(
+    () =>
+      resolveCanonicalAccessUserId(
+        fake.client as never,
+        "user_production",
+        {
+          environment: productionEnvironment(),
+          resolveLinkedIdentity: async () => {
+            resolverCalled = true;
+            return "user_production_canonical";
+          },
+        }
+      ),
+    ProductionCanonicalIdentityUnavailableError
+  );
+
+  assert.equal(resolverCalled, false);
+  assert.deepEqual(fake.reads, []);
+  assert.deepEqual(fake.writes, []);
+});
+
+test("Preview cannot target Production data", async () => {
   const fake = createAccessClient();
 
   await assert.rejects(
     () =>
-      ensureCanonicalAccessRecords(
-        fake.client as never,
-        "user_production",
-        {
-          environment: developmentEnvironment({
-            APP_ENV: "production",
-            SUPABASE_ENV: "production",
-            SUPABASE_PROJECT_REF: FORBIDDEN_PRODUCTION_PROJECT_REF,
-            NEXT_PUBLIC_SUPABASE_URL:
-              `https://${FORBIDDEN_PRODUCTION_PROJECT_REF}.supabase.co`,
-          }),
-          resolveLinkedIdentity: async () => "user_dev_referee_a",
-        }
-      ),
-    DevelopmentIdentityLinkerConfigurationError
+      resolveCanonicalAccessUserId(fake.client as never, "user_preview", {
+        environment: productionEnvironment({ VERCEL_ENV: "preview" }),
+        resolveLinkedIdentity: async () => "never_called",
+      }),
+    CanonicalDataEnvironmentConfigurationError
   );
 
   assert.deepEqual(fake.reads, []);

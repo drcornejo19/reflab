@@ -47,18 +47,19 @@ test("an unlinked Development subject fails before institutional writes", async 
   assert.equal(downstreamWrites, 0);
 });
 
-test("non-Development identity behavior remains unchanged", async () => {
+test("institutional identity delegates to canonical resolution without a subject fallback", async () => {
   const result = await resolveInstitutionalActorUserId(
     {} as never,
-    "normal_user_id",
+    "user_clerk_external",
     {
       async resolveCanonicalUserId(_supabase, externalUserId) {
-        return externalUserId;
+        assert.equal(externalUserId, "user_clerk_external");
+        return "user_canonical_referee";
       },
     }
   );
 
-  assert.equal(result, "normal_user_id");
+  assert.equal(result, "user_canonical_referee");
 });
 
 test("institutional super admin is granted only by the canonical global role", () => {

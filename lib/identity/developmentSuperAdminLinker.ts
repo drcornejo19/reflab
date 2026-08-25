@@ -92,11 +92,21 @@ export function assertDevelopmentSuperAdminIdentityLinkerEnvironment(
   const clerkPublishableKey =
     environment.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
   const clerkSecretKey = environment.CLERK_SECRET_KEY ?? "";
+  let developmentTarget = false;
+
+  try {
+    developmentTarget = requiresCanonicalDevelopmentIdentity(environment);
+  } catch {
+    throw new DevelopmentIdentityLinkerConfigurationError();
+  }
 
   if (
-    !requiresCanonicalDevelopmentIdentity(environment) ||
+    !developmentTarget ||
     enabled !== "true" ||
     normalized(environment.NODE_ENV) !== "development" ||
+    normalized(environment.APP_ENV) !== "development" ||
+    normalized(environment.CLERK_ENV) !== "development" ||
+    normalized(environment.SUPABASE_ENV) !== "development" ||
     !clerkPublishableKey.startsWith("pk_test_") ||
     !clerkSecretKey.startsWith("sk_test_") ||
     configuredSecret.length < MINIMUM_DEVELOPMENT_SECRET_LENGTH ||

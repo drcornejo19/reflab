@@ -74,6 +74,7 @@ function developmentEnvironment(
     APP_ENV: "development",
     CLERK_ENV: "development",
     NODE_ENV: "development",
+    REFLAB_DATA_ENV: "development",
     SUPABASE_ENV: "development",
     SUPABASE_PROJECT_REF: DEVELOPMENT_SUPABASE_PROJECT_REF,
     NEXT_PUBLIC_SUPABASE_URL:
@@ -182,6 +183,16 @@ test("the linker blocks non-development and production targets", () => {
     () =>
       assertDevelopmentIdentityLinkerEnvironment(
         developmentEnvironment({ NODE_ENV: "production" })
+      ),
+    DevelopmentIdentityLinkerConfigurationError
+  );
+  assert.throws(
+    () =>
+      assertDevelopmentIdentityLinkerEnvironment(
+        developmentEnvironment({
+          NODE_ENV: "production",
+          VERCEL_ENV: "preview",
+        })
       ),
     DevelopmentIdentityLinkerConfigurationError
   );

@@ -4,10 +4,13 @@ import { dirname, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  CanonicalDataEnvironmentConfigurationError,
   DEVELOPMENT_SUPABASE_PROJECT_REF,
-  DevelopmentIdentityLinkerConfigurationError,
+  PRODUCTION_SUPABASE_PROJECT_REF,
+  ProductionCanonicalIdentityUnavailableError,
   assertCanonicalIdentityEnvironmentAtStartup,
-} from "./developmentLinker.ts";
+  validateCanonicalDataEnvironment,
+} from "./developmentIdentityEnvironment.ts";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const profileRouteSource = read("app/api/profile/route.ts");
@@ -27,6 +30,7 @@ const profilePatchHelperSource = profileReaderSource.slice(
 );
 const avatarUploadSource = read("lib/profile/avatarUpload.ts");
 const instrumentationSource = read("instrumentation.ts");
+const accessServerSource = read("lib/access/server.ts");
 const profileGetSource = profileRouteSource.slice(
   profileRouteSource.indexOf("export async function GET"),
   profileRouteSource.indexOf("export async function PATCH")
@@ -46,6 +50,7 @@ function developmentEnvironment(
     APP_ENV: "development",
     CLERK_ENV: "development",
     NODE_ENV: "development",
+    REFLAB_DATA_ENV: "development",
     SUPABASE_ENV: "development",
     SUPABASE_PROJECT_REF: DEVELOPMENT_SUPABASE_PROJECT_REF,
     NEXT_PUBLIC_SUPABASE_URL:
@@ -55,27 +60,104 @@ function developmentEnvironment(
   };
 }
 
+function productionEnvironment(
+  overrides: Partial<NodeJS.ProcessEnv> = {}
+): NodeJS.ProcessEnv {
+  return {
+    NODE_ENV: "production",
+    REFLAB_DATA_ENV: "production",
+    SUPABASE_PROJECT_REF: PRODUCTION_SUPABASE_PROJECT_REF,
+    NEXT_PUBLIC_SUPABASE_URL:
+      `https://${PRODUCTION_SUPABASE_PROJECT_REF}.supabase.co`,
+    VERCEL_ENV: "production",
+    ...overrides,
+  };
+}
+
 test("Development identity resolution is mandatory even when the linker endpoint is disabled", () => {
-  assert.equal(
-    assertCanonicalIdentityEnvironmentAtStartup(developmentEnvironment()),
-    true
+  const policy = assertCanonicalIdentityEnvironmentAtStartup(
+    developmentEnvironment()
+  );
+  assert.equal(policy.dataEnvironment, "development");
+  assert.equal(policy.deploymentEnvironment, "local");
+  assert.equal(policy.projectRef, DEVELOPMENT_SUPABASE_PROJECT_REF);
+});
+
+test("NODE_ENV, APP_ENV, and the linker flag do not select the data identity policy", () => {
+  const cases: Array<Partial<NodeJS.ProcessEnv>> = [
+    { NODE_ENV: "production" },
+    { APP_ENV: "production" },
+    { ENABLE_DEVELOPMENT_IDENTITY_LINKER: "true" },
+  ];
+
+  for (const overrides of cases) {
+    const policy = assertCanonicalIdentityEnvironmentAtStartup(
+      developmentEnvironment(overrides)
+    );
+    assert.equal(policy.dataEnvironment, "development");
+  }
+});
+
+test("Vercel Preview can use the exact Development data target", () => {
+  const policy = assertCanonicalIdentityEnvironmentAtStartup(
+    developmentEnvironment({
+      NODE_ENV: "production",
+      VERCEL_ENV: "preview",
+    })
+  );
+  assert.equal(policy.dataEnvironment, "development");
+  assert.equal(policy.deploymentEnvironment, "preview");
+});
+
+test("missing, unknown, contradictory, and cross-environment targets fail closed", () => {
+  const invalidEnvironments = [
+    developmentEnvironment({ REFLAB_DATA_ENV: undefined }),
+    developmentEnvironment({ REFLAB_DATA_ENV: "staging" }),
+    developmentEnvironment({ SUPABASE_PROJECT_REF: "unknown-project" }),
+    developmentEnvironment({
+      NEXT_PUBLIC_SUPABASE_URL:
+        `https://${PRODUCTION_SUPABASE_PROJECT_REF}.supabase.co`,
+    }),
+    productionEnvironment({ VERCEL_ENV: "preview" }),
+    developmentEnvironment({ VERCEL_ENV: "production" }),
+  ];
+
+  for (const environment of invalidEnvironments) {
+    assert.throws(
+      () => assertCanonicalIdentityEnvironmentAtStartup(environment),
+      CanonicalDataEnvironmentConfigurationError
+    );
+  }
+});
+
+test("configuration errors never expose refs, URLs, or credentials", () => {
+  const sensitiveUrl = "https://user:secret@unknown-project.supabase.co";
+
+  assert.throws(
+    () =>
+      assertCanonicalIdentityEnvironmentAtStartup(
+        developmentEnvironment({
+          SUPABASE_PROJECT_REF: "unknown-project",
+          NEXT_PUBLIC_SUPABASE_URL: sensitiveUrl,
+        })
+      ),
+    (error: unknown) => {
+      assert.ok(error instanceof CanonicalDataEnvironmentConfigurationError);
+      assert.doesNotMatch(error.message, /unknown-project|secret|https?:/i);
+      return true;
+    }
   );
 });
 
-test("incomplete or production-mixed Development configuration fails closed", () => {
+test("Production target validation is exact but Production identity remains blocked", () => {
+  const policy = validateCanonicalDataEnvironment(productionEnvironment());
+  assert.equal(policy.dataEnvironment, "production");
+  assert.equal(policy.deploymentEnvironment, "production");
+  assert.equal(policy.projectRef, PRODUCTION_SUPABASE_PROJECT_REF);
+
   assert.throws(
-    () =>
-      assertCanonicalIdentityEnvironmentAtStartup(
-        developmentEnvironment({ CLERK_ENV: undefined })
-      ),
-    DevelopmentIdentityLinkerConfigurationError
-  );
-  assert.throws(
-    () =>
-      assertCanonicalIdentityEnvironmentAtStartup(
-        developmentEnvironment({ NODE_ENV: "production" })
-      ),
-    DevelopmentIdentityLinkerConfigurationError
+    () => assertCanonicalIdentityEnvironmentAtStartup(productionEnvironment()),
+    ProductionCanonicalIdentityUnavailableError
   );
 });
 
@@ -148,12 +230,39 @@ test("legacy profile provisioning helpers are removed", () => {
   assert.doesNotMatch(userRecordsSource, /user_id:\s*clerkUser\.id/);
 });
 
-test("the startup hook validates canonical Development configuration", () => {
+test("startup and request-time identity use the same canonical data policy", () => {
   assert.match(instrumentationSource, /NEXT_RUNTIME !== "nodejs"/);
   assert.match(
     instrumentationSource,
-    /requiresCanonicalDevelopmentIdentity\(process\.env\)/
+    /assertCanonicalIdentityEnvironmentAtStartup\(process\.env\)/
   );
   assert.match(instrumentationSource, /developmentIdentityEnvironment/);
   assert.doesNotMatch(instrumentationSource, /developmentLinker/);
+  assert.match(accessServerSource, /requireCanonicalIdentityPolicy\(environment\)/);
+  assert.doesNotMatch(accessServerSource, /return externalUserId/);
+  assert.doesNotMatch(accessServerSource, /automatic_default|user_roles/);
+});
+
+test("the canonical data policy covers every modern identity caller", () => {
+  const callers = [
+    "lib/profile/getProfile.ts",
+    "lib/adminAuthorization.ts",
+    "lib/training/attempts.ts",
+    "lib/exams/canonicalExam.ts",
+    "lib/exams/canonicalRulesExam.ts",
+    "lib/coach/security.ts",
+    "lib/performance/canonicalSummary.ts",
+    "lib/ranking/canonicalRanking.ts",
+    "lib/matches/access.ts",
+    "app/api/psychology/route.ts",
+    "app/api/notifications/preferences/route.ts",
+    "lib/institutional/institutionalIdentity.ts",
+  ];
+
+  for (const caller of callers) {
+    assert.match(
+      read(caller),
+      /loadAccessSnapshot|requireCanonicalRequestIdentity|resolveCanonicalAccessUserId/
+    );
+  }
 });

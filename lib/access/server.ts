@@ -10,7 +10,7 @@ import type {
   AccessSource,
   CanonicalPlanKey,
 } from "./types.ts";
-import { requiresCanonicalDevelopmentIdentity } from "../identity/developmentIdentityEnvironment.ts";
+import { requireCanonicalIdentityPolicy } from "../identity/developmentIdentityEnvironment.ts";
 import { resolveCapabilityKeys } from "./resolveCapabilities.ts";
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
@@ -35,7 +35,7 @@ type CanonicalAccessRecords = {
 type CanonicalAccessOptions = {
   environment?: NodeJS.ProcessEnv;
   resolveLinkedIdentity?: (externalSubject: string) => Promise<string | null>;
-  provisionMissing?: boolean;
+  provisionMissing?: false;
 };
 
 type IdentityResolutionRpcClient = {
@@ -77,11 +77,13 @@ export async function loadAccessSnapshot(
 export async function loadCanonicalAccessSnapshot(
   supabase: AdminClient,
   userId: string,
-  options: Pick<CanonicalAccessOptions, "provisionMissing"> = {}
+  _options: Pick<CanonicalAccessOptions, "provisionMissing"> = {}
 ): Promise<AccessSnapshot> {
-  const accessRecords = options.provisionMissing === false
-    ? await requireCanonicalAccessRecordsForUserId(supabase, userId)
-    : await ensureCanonicalAccessRecordsForUserId(supabase, userId);
+  void _options;
+  const accessRecords = await requireCanonicalAccessRecordsForUserId(
+    supabase,
+    userId
+  );
   const membershipResult = await supabase
     .from("institution_memberships")
     .select("institution_id,status")
@@ -178,19 +180,6 @@ export async function loadCanonicalAccessSnapshot(
   };
 }
 
-export async function ensureCanonicalAccessRecords(
-  supabase: AdminClient,
-  externalUserId: string,
-  options: CanonicalAccessOptions = {}
-): Promise<CanonicalAccessRecords> {
-  const userId = await resolveCanonicalAccessUserId(
-    supabase,
-    externalUserId,
-    options
-  );
-  return ensureCanonicalAccessRecordsForUserId(supabase, userId);
-}
-
 async function requireCanonicalAccessRecordsForUserId(
   supabase: AdminClient,
   userId: string
@@ -208,77 +197,13 @@ async function requireCanonicalAccessRecordsForUserId(
   };
 }
 
-async function ensureCanonicalAccessRecordsForUserId(
-  supabase: AdminClient,
-  userId: string
-): Promise<CanonicalAccessRecords> {
-  let state = await loadCanonicalAccessRecords(supabase, userId);
-  const writes: Array<PromiseLike<unknown>> = [];
-
-  if (!state.globalRole) {
-    writes.push(
-      supabase.from("user_global_roles").upsert(
-        {
-          user_id: userId,
-          role_key: "referee",
-          source: "automatic_default",
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id", ignoreDuplicates: true }
-      )
-    );
-  }
-
-  if (!state.subscription) {
-    writes.push(
-      supabase.from("user_subscriptions").upsert(
-        {
-          user_id: userId,
-          plan_key: "basic",
-          status: "active",
-          source: "automatic_default",
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id", ignoreDuplicates: true }
-      )
-    );
-  }
-
-  const results = await Promise.all(writes);
-  const failedResult = results.find(
-    (result) =>
-      typeof result === "object" &&
-      result !== null &&
-      "error" in result &&
-      Boolean((result as { error?: unknown }).error)
-  ) as { error?: unknown } | undefined;
-
-  if (failedResult?.error) throw failedResult.error;
-
-  if (writes.length > 0) {
-    state = await loadCanonicalAccessRecords(supabase, userId);
-  }
-
-  if (!state.globalRole || !state.subscription) {
-    throw new Error("Canonical access provisioning did not complete.");
-  }
-
-  return {
-    userId,
-    globalRole: state.globalRole,
-    subscription: state.subscription,
-  };
-}
-
 export async function resolveCanonicalAccessUserId(
   supabase: AdminClient,
   externalUserId: string,
   options: CanonicalAccessOptions = {}
 ) {
   const environment = options.environment ?? process.env;
-  if (!requiresCanonicalDevelopmentIdentity(environment)) {
-    return externalUserId;
-  }
+  requireCanonicalIdentityPolicy(environment);
 
   const resolveLinkedIdentity =
     options.resolveLinkedIdentity ??
