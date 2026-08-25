@@ -53,7 +53,6 @@ function clip(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
-
 function body(overrides: Record<string, unknown> = {}) {
   const value: Record<string, unknown> = { ...clip() };
   delete value.id;
@@ -247,9 +246,12 @@ test("Admin Clips has no legacy authority or provisioning", () => {
 
 test("Admin Clips auth bypass is exact and returns handler JSON", () => {
   const proxy = read("proxy.ts");
-  assert.match(proxy, /ADMIN_CLIPS_API_PATH = "\/api\/admin\/clips"/);
-  assert.match(proxy, /adminClipItemPath\.test\(req\.nextUrl\.pathname\)/);
-  assert.doesNotMatch(proxy, /createRouteMatcher\(\["\/api\/admin\/clips\(\.\*\)"\]\)/);
+  const manifest = read("lib/auth/apiAuthBoundary.ts");
+  assert.match(manifest, /selfAuthorized\("\/api\/admin\/clips"/);
+  assert.match(manifest, /"\/api\/admin\/clips\/\[clipId\]"/);
+  assert.match(manifest, /UUID_SEGMENT/);
+  assert.match(proxy, /classifyApiAuthPath\(req\.nextUrl\.pathname\)/);
+  assert.doesNotMatch(proxy, /\/api\/admin\/clips\(\.\*\)/);
   const authorization = read("lib/adminAuthorization.ts");
   assert.match(authorization, /error: "Unauthorized"[\s\S]*?status: 401/);
   assert.match(authorization, /error\.code[\s\S]*?status: 409/);

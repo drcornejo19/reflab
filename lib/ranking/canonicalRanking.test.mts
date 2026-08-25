@@ -295,9 +295,13 @@ test("ranking reads are side-effect free and use no legacy sources", () => {
 
 test("proxy bypasses only the exact ranking API while Clerk remains active", () => {
   const proxy = fs.readFileSync(path.join(process.cwd(), "proxy.ts"), "utf8");
+  const manifest = fs.readFileSync(
+    path.join(process.cwd(), "lib/auth/apiAuthBoundary.ts"),
+    "utf8"
+  );
 
-  assert.match(proxy, /const RANKING_API_PATH = "\/api\/ranking"/);
-  assert.match(proxy, /req\.nextUrl\.pathname === RANKING_API_PATH/);
+  assert.match(manifest, /selfAuthorized\("\/api\/ranking", "ranking"\)/);
+  assert.match(proxy, /classifyApiAuthPath\(req\.nextUrl\.pathname\)/);
   assert.equal(proxy.includes('createRouteMatcher(["/api/ranking(.*)"])'), false);
   assert.match(proxy, /if \(!isPublicRoute\(req\)\) \{\s*await auth\.protect\(\)/);
 });

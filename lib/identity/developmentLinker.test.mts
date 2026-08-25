@@ -451,12 +451,16 @@ test("the route derives identity exclusively from Clerk auth", () => {
 });
 
 test("Clerk protects the identity route without a same-origin proxy", () => {
-  assert.match(proxySource, /\/api\/development\/identity-link/);
-  assert.match(
-    proxySource,
-    /isProtectedDevelopmentIdentityLinkRoute\(req\)/
+  const manifestSource = readFileSync(
+    resolve(repositoryRoot, "lib", "auth", "apiAuthBoundary.ts"),
+    "utf8"
   );
-  assert.match(proxySource, /\"\/\(api\|trpc\)\(\.\*\)\"/);
+  assert.match(
+    manifestSource,
+    /classified\("\/api\/development\/identity-link", "proxy_protected"\)/
+  );
+  assert.match(proxySource, /apiRoute\?\.category === "proxy_protected"/);
+  assert.match(proxySource, /"\/\(api\|trpc\)\(\.\*\)"/);
   assert.doesNotMatch(
     proxySource,
     /\bfetch\s*\(|NextResponse\.(?:rewrite|redirect)|localhost:3000|127\.0\.0\.1:3000/i

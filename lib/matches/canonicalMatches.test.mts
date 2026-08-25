@@ -323,12 +323,22 @@ test("recommended plan includes only attempts linked to official results", () =>
   assert.doesNotMatch(plan, /communication_feedback/);
 });
 
-test("Matches API bypass is scoped to API routes while pages remain protected", () => {
+test("Matches API bypass is scoped to exact API routes while pages remain protected", () => {
   const proxy = read("proxy.ts");
+  const manifest = read("lib/auth/apiAuthBoundary.ts");
   const providers = read("app/api/matches/providers/route.ts");
-  assert.match(proxy, /createRouteMatcher\(\["\/api\/matches\(\.\*\)"\]\)/);
-  assert.match(proxy, /if \(isMatchesApiRoute\(req\)\) \{\s*return;\s*\}/);
-  assert.doesNotMatch(proxy, /createRouteMatcher\(\["\/matches/);
+  for (const route of [
+    "/api/matches/providers",
+    "/api/matches/catalog",
+    "/api/matches/catalog/sync",
+    "/api/matches/appointments",
+  ]) {
+    assert.match(manifest, new RegExp(JSON.stringify(route)));
+  }
+  assert.match(manifest, /\/api\/matches\/appointments\/\[appointmentId\]/);
+  assert.match(proxy, /classifyApiAuthPath\(req\.nextUrl\.pathname\)/);
+  assert.doesNotMatch(proxy, /\/api\/matches\(\.\*\)/);
+  assert.doesNotMatch(manifest, /selfAuthorized\("\/matches/);
   assert.match(providers, /requireMatchesActor\(\)/);
   assert.match(providers, /getMatchesAccessError/);
 });

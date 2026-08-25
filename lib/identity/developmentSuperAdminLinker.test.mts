@@ -474,36 +474,18 @@ test("the route derives the subject only from Clerk auth", () => {
   assert.doesNotMatch(linkerSource, /console\.(?:log|warn|error)/);
 });
 
-test("Clerk middleware defers auth only for the exact Super Admin link route", () => {
-  const configuredPath = proxySource.match(
-    /const DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINK_PATH\s*=\s*\n?\s*"([^"]+)";/
-  )?.[1];
-  assert.equal(
-    configuredPath,
-    "/api/development/super-admin-identity-link"
+test("Clerk middleware defers auth through the exact API manifest", () => {
+  const manifestSource = read("lib/auth/apiAuthBoundary.ts");
+  assert.match(
+    manifestSource,
+    /selfAuthorized\("\/api\/development\/super-admin-identity-link"[\s\S]*?"development_super_admin_linker"/
   );
+  assert.match(proxySource, /classifyApiAuthPath\(req\.nextUrl\.pathname\)/);
+  assert.match(proxySource, /apiRoute\?\.category === "self_authorized"/);
   assert.match(
     proxySource,
-    /req\.nextUrl\.pathname\s*===\s*DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINK_PATH/
+    /apiRoute\?\.category === "proxy_protected"[\s\S]*?auth\.protect\(\)/
   );
-  assert.match(
-    proxySource,
-    /if \(!isPublicRoute\(req\)\) \{[\s\S]*?await auth\.protect\(\);/
-  );
-  assert.match(
-    proxySource,
-    /isProtectedDevelopmentIdentityLinkRoute\(req\)[\s\S]*?await auth\.protect\(\)/
-  );
-
-  const bypassesProtect = (pathname: string) => pathname === configuredPath;
-  assert.equal(bypassesProtect(configuredPath), true);
-  assert.equal(bypassesProtect(`${configuredPath}/nested`), false);
-  assert.equal(bypassesProtect(`${configuredPath}-similar`), false);
-  assert.equal(
-    bypassesProtect("/api/development/identity-link"),
-    false
-  );
-  assert.equal(bypassesProtect("/api/profile"), false);
   assert.doesNotMatch(
     proxySource,
     /\bfetch\s*\(|NextResponse\.(?:rewrite|redirect)|localhost:3000|127\.0\.0\.1:3000/i

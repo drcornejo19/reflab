@@ -95,7 +95,6 @@ test("the shared resolver is read-only and cannot provision defaults", () => {
   assert.match(source, /loadAccessSnapshot[\s\S]*provisionMissing: false/);
   assert.doesNotMatch(source, /ensureUserRecords|automatic_default|user_roles/);
 });
-
 test("Ref Performance reads and writes only the canonical identity", () => {
   const source = read("app/api/ref-performance/route.ts");
   assert.match(source, /requireCanonicalRequestIdentity\(\)/);
@@ -313,7 +312,8 @@ test("activity and streak remain general signals rather than performance", () =>
 });
 
 test("only exact interactive APIs bypass Clerk redirects", () => {
-  const source = read("proxy.ts");
+  const proxy = read("proxy.ts");
+  const manifest = read("lib/auth/apiAuthBoundary.ts");
   for (const route of [
     "/api/ref-performance",
     "/api/psychology",
@@ -321,10 +321,11 @@ test("only exact interactive APIs bypass Clerk redirects", () => {
     "/api/notifications/register-token",
     "/api/notifications/send",
   ]) {
-    assert.match(source, new RegExp(JSON.stringify(route)));
+    assert.match(manifest, new RegExp(JSON.stringify(route)));
   }
-  assert.match(source, /canonicalSelfAuthApiPaths\.has\(req\.nextUrl\.pathname\)/);
-  assert.doesNotMatch(source, /api\/ref-performance\(\.\*\)|api\/psychology\(\.\*\)/);
+  assert.match(proxy, /classifyApiAuthPath\(req\.nextUrl\.pathname\)/);
+  assert.match(proxy, /apiRoute\?\.category === "self_authorized"/);
+  assert.doesNotMatch(proxy, /api\/ref-performance\(\.\*\)|api\/psychology\(\.\*\)/);
 });
 
 test("automatic scheduled delivery stays disabled until POST scheduling exists", () => {
