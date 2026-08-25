@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { IdentityLinkRequiredError } from "../access/server.ts";
+import { normalizeGlobalRole } from "../access/catalog.ts";
 import type { AccessSnapshot } from "../access/types.ts";
 import {
   buildCanonicalRanking,
@@ -211,6 +212,27 @@ test("Basic without ref_performance is rejected before ranking records", async (
     loadCanonicalGlobalRanking("clerk-subject", football, {
       loadAccess: async () =>
         access({
+          individualPlan: "basic",
+          effectiveIndividualPlan: "basic",
+          capabilities: [],
+        }),
+      loadOfficialRecords: async () => {
+        reads += 1;
+        return { examResults: [], profiles: [] };
+      },
+    }),
+    { message: "ranking_forbidden" }
+  );
+  assert.equal(reads, 0);
+});
+
+test("legacy video_admin cannot authorize the privileged ranking read", async () => {
+  let reads = 0;
+  await assert.rejects(
+    loadCanonicalGlobalRanking("clerk-subject", football, {
+      loadAccess: async () =>
+        access({
+          globalRole: normalizeGlobalRole("video_admin"),
           individualPlan: "basic",
           effectiveIndividualPlan: "basic",
           capabilities: [],

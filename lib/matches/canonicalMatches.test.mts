@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { IdentityLinkRequiredError } from "../access/server.ts";
+import { normalizeGlobalRole } from "../access/catalog.ts";
 import type { AccessSnapshot } from "../access/types.ts";
 import type {
   InstitutionAccessSnapshot,
@@ -212,6 +213,29 @@ test("canonical super admin has Matches capabilities without legacy roles", asyn
   assert.doesNotMatch(
     read("lib/matches/canonicalActor.ts"),
     /video_admin|institutional_instructor|user_roles/
+  );
+});
+
+test("legacy video_admin cannot bypass Matches capabilities", async () => {
+  const legacyAccess = access();
+  legacyAccess.globalRole = normalizeGlobalRole("video_admin");
+  const deps = dependencies({
+    clerkSubject: "clerk_legacy_admin",
+    access: legacyAccess,
+    contexts: [context("A", [])],
+  });
+
+  await assert.rejects(
+    authorize(
+      {
+        requestedInstitutionId: "A",
+        requireInstitutionPermission: "matches.manage",
+      },
+      deps
+    ),
+    (error: unknown) =>
+      error instanceof MatchesAccessError &&
+      error.code === "matches_manage_forbidden"
   );
 });
 

@@ -5,9 +5,7 @@ import type {
 } from "@/lib/access/types";
 
 export function normalizeGlobalRole(value?: string | null): GlobalRoleKey {
-  return value === "super_admin" || value === "video_admin"
-    ? "super_admin"
-    : "referee";
+  return value === "super_admin" ? "super_admin" : "referee";
 }
 
 export function normalizeIndividualPlan(

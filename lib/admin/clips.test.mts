@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { IdentityLinkRequiredError } from "../access/server.ts";
+import { normalizeGlobalRole } from "../access/catalog.ts";
 import {
   AdminClipError,
   createAdminClip,
@@ -86,7 +87,10 @@ test("non-Super Admin and video_admin are forbidden", async () => {
     await assert.rejects(
       authorizeCanonicalAdminUsersRead({} as never, "clerk_subject", {
         async loadActorAccess() {
-          return { userId: "user_dev_referee_a", globalRole: role } as never;
+          return {
+            userId: "user_dev_referee_a",
+            globalRole: normalizeGlobalRole(role),
+          } as never;
         },
       }),
       AdminUsersForbiddenError
