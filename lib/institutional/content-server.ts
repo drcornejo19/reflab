@@ -6,7 +6,15 @@ import {
   requireInstitutionPermission,
   type InstitutionAuthorization,
 } from "@/lib/institutional/server";
-import { writeInstitutionAuditLog } from "@/lib/institutional/audit-server";
+import {
+  removeInstitutionStorageObject,
+  writeInstitutionAuditLog,
+} from "@/lib/institutional/audit-server";
+import {
+  INSTITUTIONAL_CONTENT_BUCKET,
+  requireInstitutionContentStoragePath,
+  requireInstitutionContentUploadPath,
+} from "@/lib/institutional/contentStorage";
 import {
   isInstitutionContentStatus,
   isInstitutionContentType,
@@ -134,6 +142,14 @@ export async function createInstitutionContent(
   );
   assertInstitutionWriteAllowed(authorization);
   validateContentInput(authorization, input);
+  const storagePath = input.storagePath
+    ? requireInstitutionContentUploadPath({
+        storagePath: input.storagePath,
+        institutionId: authorization.context.institution.id,
+        canonicalUserId: authorization.userId,
+      })
+    : null;
+  await assertStoragePathIsUnreferenced(authorization, storagePath);
 
   const now = new Date().toISOString();
   const { data, error } = await authorization.supabase
@@ -154,7 +170,7 @@ export async function createInstitutionContent(
       valid_until: input.validUntil,
       source_name: input.sourceName,
       source_url: input.sourceUrl,
-      storage_path: input.storagePath,
+      storage_path: storagePath,
       visibility: input.visibility,
       status: input.status,
       version: input.version,
@@ -166,6 +182,7 @@ export async function createInstitutionContent(
     .single();
 
   if (error || !data) {
+    await removeInstitutionStorageObject(authorization.supabase, storagePath);
     throw new InstitutionAccessError(
       error?.message ?? "No se pudo guardar el contenido."
     );
@@ -223,6 +240,27 @@ export async function updateInstitutionContent(
     throw new InstitutionAccessError("El contenido no existe.", 404);
   }
 
+  const existingStoragePath = nullableText(existing.storage_path);
+  const authorizedExistingStoragePath = existingStoragePath
+    ? requireInstitutionContentStoragePath(
+        existingStoragePath,
+        authorization.context.institution.id
+      )
+    : null;
+  const hasNewUpload = Boolean(
+    input.storagePath && input.storagePath !== authorizedExistingStoragePath
+  );
+  const storagePath = hasNewUpload
+    ? requireInstitutionContentUploadPath({
+        storagePath: input.storagePath as string,
+        institutionId: authorization.context.institution.id,
+        canonicalUserId: authorization.userId,
+      })
+    : authorizedExistingStoragePath;
+  if (hasNewUpload) {
+    await assertStoragePathIsUnreferenced(authorization, storagePath);
+  }
+
   const now = new Date().toISOString();
   const publishedAt =
     input.status === "published"
@@ -246,7 +284,7 @@ export async function updateInstitutionContent(
       valid_until: input.validUntil,
       source_name: input.sourceName,
       source_url: input.sourceUrl,
-      storage_path: input.storagePath ?? existing.storage_path,
+      storage_path: storagePath,
       visibility: input.visibility,
       status: input.status,
       version: input.version,
@@ -261,6 +299,9 @@ export async function updateInstitutionContent(
     .single();
 
   if (error || !data) {
+    if (hasNewUpload) {
+      await removeInstitutionStorageObject(authorization.supabase, storagePath);
+    }
     throw new InstitutionAccessError(
       error?.message ?? "No se pudo actualizar el contenido."
     );
@@ -369,6 +410,28 @@ export function validateContentInput(
   }
 }
 
+async function assertStoragePathIsUnreferenced(
+  authorization: InstitutionAuthorization,
+  storagePath: string | null
+) {
+  if (!storagePath) return;
+  const { data, error } = await authorization.supabase
+    .from("institution_contents")
+    .select("id")
+    .eq("institution_id", authorization.context.institution.id)
+    .eq("storage_path", storagePath)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new InstitutionAccessError(error.message);
+  if (data) {
+    throw new InstitutionAccessError(
+      "El archivo ya esta asociado a otro contenido.",
+      409
+    );
+  }
+}
+
 async function replaceContentAssignments(
   authorization: InstitutionAuthorization,
   contentId: string,
@@ -422,12 +485,18 @@ export async function normalizeContentRecord(
   includeAccessUrl = false
 ): Promise<InstitutionContentRecord> {
   const firstAssignment = assignmentRows[0];
-  const storagePath = nullableText(row.storage_path);
+  const rawStoragePath = nullableText(row.storage_path);
+  const storagePath = rawStoragePath
+    ? requireInstitutionContentStoragePath(
+        rawStoragePath,
+        authorization.context.institution.id
+      )
+    : null;
   let accessUrl: string | null = null;
 
   if (includeAccessUrl && storagePath) {
     const { data } = await authorization.supabase.storage
-      .from("institutional-content")
+      .from(INSTITUTIONAL_CONTENT_BUCKET)
       .createSignedUrl(storagePath, 3600);
     accessUrl = data?.signedUrl ?? null;
   }

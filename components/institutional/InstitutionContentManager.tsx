@@ -294,6 +294,7 @@ export function InstitutionContentManager() {
       .from(upload.bucket)
       .uploadToSignedUrl(upload.path, upload.token, selectedFile, {
         contentType: selectedFile.type,
+        upsert: false,
       });
     if (uploadError) throw new Error(uploadError.message);
     return upload.path;

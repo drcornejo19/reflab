@@ -1,6 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { InstitutionalContentStorageError } from "@/lib/institutional/contentStorage";
 import { InstitutionAccessError } from "@/lib/institutional/server";
 
 export function institutionalJson(body: unknown, status = 200) {
@@ -15,6 +16,9 @@ export function institutionalErrorResponse(
   fallback: string
 ) {
   if (error instanceof InstitutionAccessError) {
+    return institutionalJson({ error: error.message }, error.status);
+  }
+  if (error instanceof InstitutionalContentStorageError) {
     return institutionalJson({ error: error.message }, error.status);
   }
   console.error(fallback, error);

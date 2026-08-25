@@ -6,6 +6,7 @@ import {
   requireInstitutionPermission,
   type InstitutionAuthorization,
 } from "@/lib/institutional/server";
+import { requireInstitutionContentStoragePath } from "@/lib/institutional/contentStorage";
 import { writeInstitutionAuditLog } from "@/lib/institutional/audit-server";
 import {
   loadContentWorkspace,
@@ -521,7 +522,7 @@ async function replaceAssessmentItems(
       topic: nullableText(content.topic),
       ruleReference: nullableText(content.rule_reference),
       sourceUrl: nullableText(content.source_url),
-      storagePath: nullableText(content.storage_path),
+      storagePath: contentStoragePath(authorization, content.storage_path),
       metadata: asRecord(content.metadata),
       version: positiveInteger(content.version, 1),
     },
@@ -535,6 +536,19 @@ async function replaceAssessmentItems(
     .select(ITEM_SELECT);
   if (error) throw new InstitutionAccessError(error.message);
   return (data ?? []) as UnknownRow[];
+}
+
+function contentStoragePath(
+  authorization: InstitutionAuthorization,
+  value: unknown
+) {
+  const storagePath = nullableText(value);
+  return storagePath
+    ? requireInstitutionContentStoragePath(
+        storagePath,
+        authorization.context.institution.id
+      )
+    : null;
 }
 
 async function replaceAssessmentAssignments(

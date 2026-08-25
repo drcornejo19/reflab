@@ -283,7 +283,7 @@ test("stored paths remain compatible with canonical signed reads", async () => {
   for (const source of [contentServer, learningServer]) {
     assert.match(
       source,
-      /\.from\("institutional-content"\)[\s\S]*?\.createSignedUrl\(storagePath/
+      /requireInstitutionContentStoragePath[\s\S]*?\.from\(INSTITUTIONAL_CONTENT_BUCKET\)[\s\S]*?\.createSignedUrl\(storagePath/
     );
   }
 });
