@@ -1,20 +1,19 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
+import { requireCanonicalRequestIdentity } from "@/lib/identity/canonicalRequestIdentity";
 import {
   getUserNotificationPreferences,
   upsertUserNotificationPreferences,
 } from "@/lib/notificationServer";
+import {
+  NotificationTokenOwnershipError,
+  registerCanonicalNotificationToken,
+} from "@/lib/notifications/tokenOwnership";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const session = await auth();
-  const userId = session.userId;
-
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const identity = await requireCanonicalRequestIdentity();
+  if (identity.response) return identity.response;
 
   try {
     const body = (await request.json()) as {
@@ -37,10 +36,8 @@ export async function POST(request: Request) {
     }
 
     const now = new Date().toISOString();
-    const supabase = createSupabaseAdminClient();
     const platform = detectPlatform(request.headers.get("user-agent"));
     console.info("[RefLab Push] token_registration_requested", {
-      userId,
       platform,
       isStandalone: Boolean(body.diagnostics?.isStandalone),
       permission: body.diagnostics?.permission ?? "unknown",
@@ -48,49 +45,49 @@ export async function POST(request: Request) {
       hasServiceWorker: Boolean(body.diagnostics?.hasServiceWorker),
       tokenFingerprint: tokenFingerprint(token),
     });
-    const { error } = await supabase.from("notification_tokens").upsert(
+    const registration = await registerCanonicalNotificationToken(
+      identity.supabase,
+      identity.canonicalUserId,
       {
-        user_id: userId,
         token,
         provider: "fcm",
-        user_agent: request.headers.get("user-agent"),
-        enabled: true,
-        last_seen_at: now,
-        updated_at: now,
-      },
-      { onConflict: "token" }
+        userAgent: request.headers.get("user-agent"),
+        lastSeenAt: now,
+      }
     );
 
-    if (error) {
-      console.error("[RefLab Push] token_registration_failed", {
-        userId,
-        platform,
-        code: error.code,
-        message: error.message,
-      });
-      return NextResponse.json(
-        {
-          error: "No se pudo registrar el dispositivo para notificaciones.",
-          technical: error.message,
-        },
-        { status: 500 }
-      );
-    }
-
-    const preferences = await getUserNotificationPreferences(supabase, userId);
-    await upsertUserNotificationPreferences(supabase, userId, {
+    const preferences = await getUserNotificationPreferences(
+      identity.supabase,
+      identity.canonicalUserId
+    );
+    await upsertUserNotificationPreferences(
+      identity.supabase,
+      identity.canonicalUserId,
+      {
       ...preferences,
       pushEnabled: true,
-    });
+      }
+    );
 
     console.info("[RefLab Push] token_registration_succeeded", {
-      userId,
       platform,
+      status: registration.status,
       tokenFingerprint: tokenFingerprint(token),
     });
 
-    return NextResponse.json({ success: true, platform });
+    return NextResponse.json({
+      success: true,
+      platform,
+      status: registration.status,
+    });
   } catch (error) {
+    if (error instanceof NotificationTokenOwnershipError) {
+      return NextResponse.json(
+        { error: error.code },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json(
       {
         error: "No se pudo activar las notificaciones.",

@@ -1,6 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
+import { requireCanonicalRequestIdentity } from "@/lib/identity/canonicalRequestIdentity";
 import {
   isSmartNotificationType,
   type SmartNotification,
@@ -11,12 +10,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const session = await auth();
-  const userId = session.userId;
-
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const identity = await requireCanonicalRequestIdentity();
+  if (identity.response) return identity.response;
 
   try {
     const body = (await request.json()) as {
@@ -31,10 +26,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createSupabaseAdminClient();
     const result = await sendSmartNotificationToUser(
-      supabase,
-      userId,
+      identity.supabase,
+      identity.canonicalUserId,
       body.type,
       body.overrides
     );

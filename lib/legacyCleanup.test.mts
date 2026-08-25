@@ -40,14 +40,17 @@ test("modern exam and training limits use canonical record boundaries", () => {
 });
 
 test("scheduled weak-topic analysis accepts only attempts linked to official results", () => {
-  const source = read("app/api/notifications/scheduled/route.ts");
+  const source = read("lib/notifications/scheduled.ts");
   const weakTopic = source.slice(
     source.indexOf("async function getWeakTopic"),
     source.indexOf("async function getTrainingStreakDays")
   );
 
   assert.match(weakTopic, /exam_results!inner\(id,user_id\)/);
-  assert.match(weakTopic, /\.eq\("exam_results\.user_id",\s*userId\)/);
+  assert.match(
+    weakTopic,
+    /\.eq\("exam_results\.user_id",\s*canonicalUserId\)/
+  );
   assert.match(weakTopic, /\.not\("exam_result_id",\s*"is",\s*null\)/);
 });
 

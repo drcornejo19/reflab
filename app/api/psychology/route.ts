@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { requireCanonicalRequestIdentity } from "@/lib/identity/canonicalRequestIdentity";
 import {
   buildPsychologyInterfaceData,
   type PsychologyCheckinRecord,
@@ -176,24 +176,24 @@ type ExerciseFeedback = {
 };
 
 export async function GET() {
-  const userId = await getClerkUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const identity = await requireCanonicalRequestIdentity();
+  if (identity.response) return identity.response;
 
   try {
-    const supabase = createSupabaseAdminClient();
-    return NextResponse.json(await loadPsychologyData(supabase, userId));
+    return NextResponse.json(
+      await loadPsychologyData(
+        identity.supabase,
+        identity.canonicalUserId
+      )
+    );
   } catch (error) {
     return psychologyErrorResponse(error);
   }
 }
 
 export async function POST(request: Request) {
-  const userId = await getClerkUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const identity = await requireCanonicalRequestIdentity();
+  if (identity.response) return identity.response;
 
   let body: { action?: string; payload?: PsychologyInput | WellbeingInput | ExerciseInput };
   try {
@@ -203,7 +203,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabase = createSupabaseAdminClient();
+    const supabase = identity.supabase;
+    const canonicalUserId = identity.canonicalUserId;
 
     if (body.action === "save_exercise") {
       const payload = normalizeExerciseInput(
@@ -214,7 +215,7 @@ export async function POST(request: Request) {
 
       const { error } = await supabase.from("psychology_exercise_sessions").insert([
         {
-          user_id: userId,
+          user_id: canonicalUserId,
           module_slug: payload.module_slug,
           appointment_id: payload.appointment_id,
           fixture_id: payload.fixture_id,
@@ -247,7 +248,7 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         message: "Ejercicio psicologico guardado.",
-        ...(await loadPsychologyData(supabase, userId)),
+        ...(await loadPsychologyData(supabase, canonicalUserId)),
       });
     }
 
@@ -261,7 +262,7 @@ export async function POST(request: Request) {
 
       const { error } = await supabase.from("psychology_wellbeing_assessments").insert([
         {
-          user_id: userId,
+          user_id: canonicalUserId,
           module_slug: payload.module_slug,
           week_start: now.slice(0, 10),
           week_context: payload.week_context,
@@ -291,7 +292,7 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         message: "Evaluacion semanal de bienestar guardada.",
-        ...(await loadPsychologyData(supabase, userId)),
+        ...(await loadPsychologyData(supabase, canonicalUserId)),
       });
     }
 
@@ -306,7 +307,7 @@ export async function POST(request: Request) {
 
     const { error } = await supabase.from("psychology_checkins").insert([
       {
-        user_id: userId,
+        user_id: canonicalUserId,
         module_slug: payload.module_slug,
         appointment_id: payload.appointment_id,
         fixture_id: payload.fixture_id,
@@ -352,7 +353,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       message: "Check-in psicologico guardado.",
-      ...(await loadPsychologyData(supabase, userId)),
+      ...(await loadPsychologyData(supabase, canonicalUserId)),
     });
   } catch (error) {
     if (error instanceof PsychologyPayloadValidationError) {
@@ -363,29 +364,24 @@ export async function POST(request: Request) {
   }
 }
 
-async function getClerkUserId() {
-  const session = await auth();
-  return session.userId;
-}
-
-async function loadPsychologyData(supabase: ReturnType<typeof createSupabaseAdminClient>, userId: string) {
+async function loadPsychologyData(supabase: ReturnType<typeof createSupabaseAdminClient>, canonicalUserId: string) {
   const [checkinsRes, wellbeingRes, exercisesRes] = await Promise.all([
     supabase
       .from("psychology_checkins")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", canonicalUserId)
       .order("created_at", { ascending: false })
       .limit(40),
     supabase
       .from("psychology_wellbeing_assessments")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", canonicalUserId)
       .order("created_at", { ascending: false })
       .limit(20),
     supabase
       .from("psychology_exercise_sessions")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", canonicalUserId)
       .order("created_at", { ascending: false })
       .limit(30),
   ]);

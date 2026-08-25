@@ -9,12 +9,20 @@ const isPublicRoute = createRouteMatcher([
   "/sign-up(.*)",
   "/api/institutional-leads",
   "/api/notifications/scheduled",
+  "/api/notifications/scheduled/run",
 ]);
 
 const DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINK_PATH =
   "/api/development/super-admin-identity-link";
 const RANKING_API_PATH = "/api/ranking";
 const isMatchesApiRoute = createRouteMatcher(["/api/matches(.*)"]);
+const canonicalSelfAuthApiPaths = new Set([
+  "/api/ref-performance",
+  "/api/psychology",
+  "/api/notifications/preferences",
+  "/api/notifications/register-token",
+  "/api/notifications/send",
+]);
 
 const isProtectedDevelopmentIdentityLinkRoute = createRouteMatcher([
   "/api/development/identity-link",
@@ -32,6 +40,10 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   if (isMatchesApiRoute(req)) {
+    return;
+  }
+
+  if (canonicalSelfAuthApiPaths.has(req.nextUrl.pathname)) {
     return;
   }
 

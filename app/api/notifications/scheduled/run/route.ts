@@ -2,35 +2,43 @@ import { NextResponse } from "next/server";
 import {
   buildScheduledNotificationPlan,
   requireScheduledJobSecret,
+  runScheduledNotificationPlan,
   summarizeScheduledNotificationPlan,
 } from "@/lib/notifications/scheduled";
+import { sendSmartNotificationToUser } from "@/lib/notificationServer";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   const unauthorized = requireScheduledJobSecret(request);
   if (unauthorized) return unauthorized;
 
   try {
     const supabase = createSupabaseAdminClient();
     const plan = await buildScheduledNotificationPlan(supabase);
+    const results = await runScheduledNotificationPlan(
+      supabase,
+      plan,
+      sendSmartNotificationToUser
+    );
+
     return NextResponse.json({
       success: true,
-      mode: "preview",
-      writesPlanned: false,
+      mode: "run",
       ...summarizeScheduledNotificationPlan(plan),
+      results,
     });
   } catch (error) {
     console.error(
-      "Scheduled notification preview failed",
+      "Scheduled notification run failed",
       sanitizeDiagnostic(error)
     );
     return NextResponse.json(
       {
-        error: "scheduled_notification_preview_unavailable",
-        message: "No se pudo calcular el preview de notificaciones.",
+        error: "scheduled_notification_run_failed",
+        message: "No se pudieron ejecutar las notificaciones programadas.",
       },
       { status: 500 }
     );
