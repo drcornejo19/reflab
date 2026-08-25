@@ -3,15 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
-import { Loader2, Pencil, RefreshCw, Save, Trash2 } from "lucide-react";
+import { Archive, Loader2, Pencil, RefreshCw, Save } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { useSupabase } from "@/components/SupabaseProvider";
 import {
-  deleteClipById,
-  getClips,
-  insertClipDecision,
   normalizeClipDecision,
-  updateClipDecision,
   validateClipDecision,
   type ClipDecisionPayload,
 } from "@/lib/clips";
@@ -40,6 +35,8 @@ import {
 type ClipWithDetails = Clip & {
   sub_type?: string | null;
   decision_detail?: string | null;
+  is_active?: boolean | null;
+  status?: "draft" | "published" | "archived" | null;
 };
 
 type VideoAnswerValue = string | boolean | null;
@@ -67,6 +64,8 @@ type AdminFormState = {
   language: string;
   reviewedAt: string;
   analysisAnswers: Record<string, VideoAnswerValue>;
+  status: "draft" | "published" | "archived";
+  isActive: boolean;
 };
 
 const footballTopicOptions = [
@@ -175,14 +174,15 @@ function createInitialForm(sportType: SportType = "football_11"): AdminFormState
     language: "es",
     reviewedAt: "",
     analysisAnswers: {},
+    status: "published",
+    isActive: true,
   };
 }
 
 export default function AdminClipsPage() {
-  const supabase = useSupabase();
   const router = useRouter();
   const { user, isLoaded } = useUser();
-  const { isVideoAdmin, loadingRole } = useUserRole();
+  const { isSuperAdmin, loadingRole } = useUserRole();
   const [clips, setClips] = useState<ClipWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -215,29 +215,33 @@ export default function AdminClipsPage() {
   }, [isLoaded, router, user]);
 
   useEffect(() => {
-    if (!loadingRole && isLoaded && user && !isVideoAdmin) {
+    if (!loadingRole && isLoaded && user && !isSuperAdmin) {
       router.replace("/dashboard");
     }
-  }, [isLoaded, isVideoAdmin, loadingRole, router, user]);
+  }, [isLoaded, isSuperAdmin, loadingRole, router, user]);
 
   const loadClips = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await getClips(supabase);
-
-    if (error) {
-      console.error(error);
+    try {
+      const response = await fetch("/api/admin/clips", { cache: "no-store" });
+      const data = (await response.json()) as {
+        clips?: ClipWithDetails[];
+        message?: string;
+      };
+      if (!response.ok) throw new Error(data.message ?? "No se pudieron cargar los clips.");
+      setClips(data.clips ?? []);
+    } catch (error) {
+      console.error("[admin.clips.load]", error instanceof Error ? error.message : "unknown error");
       setClips([]);
-    } else {
-      setClips((data ?? []) as ClipWithDetails[]);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
-    if (!isLoaded || loadingRole || !user || !isVideoAdmin) return;
+    if (!isLoaded || loadingRole || !user || !isSuperAdmin) return;
     void loadClips();
-  }, [isLoaded, isVideoAdmin, loadClips, loadingRole, user]);
+  }, [isLoaded, isSuperAdmin, loadClips, loadingRole, user]);
 
   function updateForm<Key extends keyof AdminFormState>(
     key: Key,
@@ -283,6 +287,8 @@ export default function AdminClipsPage() {
       language: clip.language ?? "es",
       reviewedAt: clip.reviewed_at ? clip.reviewed_at.slice(0, 10) : "",
       analysisAnswers: normalizeAnswerRecord(clip.analysis_answers),
+      status: clip.status ?? "published",
+      isActive: clip.is_active !== false,
     });
   }
 
@@ -342,38 +348,32 @@ export default function AdminClipsPage() {
     const validation = validateClipDecision(payload);
 
     if (!validation.valid) {
-      const proceed = confirm(
-        `Hay una posible inconsistencia tecnica:\n\n${validation.messages
-          .map((message) => `- ${message}`)
-          .join("\n")}\n\nGuardar de todos modos?`
-      );
-
-      if (!proceed) {
-        setSaving(false);
-        return;
-      }
+      alert(validation.messages.join("\n"));
+      setSaving(false);
+      return;
     }
 
-    if (editingClipId) {
-      const { data, error } = await updateClipDecision(
-        supabase,
-        editingClipId,
-        payload
-      );
-
-      if (error || !data) {
-        alert(error?.message ?? "No se pudo confirmar el guardado del clip.");
-        setSaving(false);
-        return;
+    const endpoint = editingClipId
+      ? `/api/admin/clips/${editingClipId}`
+      : "/api/admin/clips";
+    try {
+      const response = await fetch(endpoint, {
+        method: editingClipId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...payload,
+          status: form.status,
+          is_active: form.isActive,
+        }),
+      });
+      const result = (await response.json()) as { message?: string };
+      if (!response.ok) {
+        throw new Error(result.message ?? "No se pudo confirmar el guardado del clip.");
       }
-    } else {
-      const { error } = await insertClipDecision(supabase, payload);
-
-      if (error) {
-        alert(error.message);
-        setSaving(false);
-        return;
-      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "No se pudo guardar el clip.");
+      setSaving(false);
+      return;
     }
 
     resetForm();
@@ -383,12 +383,17 @@ export default function AdminClipsPage() {
   }
 
   async function removeClip(id: string) {
-    const confirmed = confirm("Eliminar este clip?");
+    const confirmed = confirm("Desactivar y archivar este clip?");
     if (!confirmed) return;
 
-    const { error } = await deleteClipById(supabase, id);
-    if (error) {
-      alert(error.message);
+    try {
+      const response = await fetch(`/api/admin/clips/${id}`, { method: "DELETE" });
+      const result = (await response.json()) as { message?: string };
+      if (!response.ok) {
+        throw new Error(result.message ?? "No se pudo desactivar el clip.");
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "No se pudo desactivar el clip.");
       return;
     }
 
@@ -405,7 +410,7 @@ export default function AdminClipsPage() {
     );
   }
 
-  if (!user || !isVideoAdmin) return null;
+  if (!user || !isSuperAdmin) return null;
 
   return (
     <AppShell>
@@ -478,6 +483,31 @@ export default function AdminClipsPage() {
                     className={`${inputClass} opacity-80`}
                   />
                 </Field>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Estado editorial" required>
+                  <select
+                    value={form.status}
+                    onChange={(event) =>
+                      updateForm(
+                        "status",
+                        event.target.value as AdminFormState["status"]
+                      )
+                    }
+                    className={inputClass}
+                  >
+                    <option value="draft" className="bg-[#0b131b]">Borrador</option>
+                    <option value="published" className="bg-[#0b131b]">Publicado</option>
+                    <option value="archived" className="bg-[#0b131b]">Archivado</option>
+                  </select>
+                </Field>
+
+                <BooleanSelect
+                  label="Clip activo"
+                  value={form.isActive}
+                  onChange={(value) => updateForm("isActive", value)}
+                />
               </div>
 
               <Field label="Titulo">
@@ -833,6 +863,8 @@ export default function AdminClipsPage() {
                           <Chip label={clip.topic || "Sin topico"} />
                           {clip.season ? <Chip label={clip.season} /> : null}
                           {clip.mode ? <Chip label={clip.mode} /> : null}
+                          <Chip label={clip.status ?? "published"} />
+                          {clip.is_active === false ? <Chip label="Inactivo" /> : null}
                         </div>
                         <h3 className="mt-3 break-words text-lg font-black">
                           {clip.title}
@@ -855,9 +887,9 @@ export default function AdminClipsPage() {
                           type="button"
                           onClick={() => removeClip(clip.id)}
                           className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 transition hover:bg-red-500/15"
-                          title="Eliminar clip"
+                          title="Desactivar clip"
                         >
-                          <Trash2 size={16} />
+                          <Archive size={16} />
                         </button>
                       </div>
                     </div>

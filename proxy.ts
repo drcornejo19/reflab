@@ -15,6 +15,9 @@ const isPublicRoute = createRouteMatcher([
 const DEVELOPMENT_SUPER_ADMIN_IDENTITY_LINK_PATH =
   "/api/development/super-admin-identity-link";
 const RANKING_API_PATH = "/api/ranking";
+const ADMIN_CLIPS_API_PATH = "/api/admin/clips";
+const adminClipItemPath =
+  /^\/api\/admin\/clips\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isMatchesApiRoute = createRouteMatcher(["/api/matches(.*)"]);
 const canonicalSelfAuthApiPaths = new Set([
   "/api/ref-performance",
@@ -36,6 +39,13 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   if (req.nextUrl.pathname === RANKING_API_PATH) {
+    return;
+  }
+
+  if (
+    req.nextUrl.pathname === ADMIN_CLIPS_API_PATH ||
+    adminClipItemPath.test(req.nextUrl.pathname)
+  ) {
     return;
   }
 

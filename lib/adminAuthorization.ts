@@ -14,6 +14,10 @@ import {
 } from "@/lib/admin/usersRead";
 
 export async function requireSuperAdminReadAccess() {
+  return requireStrictSuperAdminAccess();
+}
+
+export async function requireStrictSuperAdminAccess() {
   const session = await auth();
   const userId = session.userId;
 
@@ -50,13 +54,10 @@ export async function requireSuperAdminReadAccess() {
     }
 
     const diagnostic = sanitizeAdminUsersReadError(error);
-    console.error("[admin.users.authorization]", diagnostic);
+    console.error("[admin.authorization]", diagnostic);
     return {
       response: NextResponse.json(
-        {
-          error: "No se pudo validar el acceso administrativo.",
-          technical: diagnostic.message,
-        },
+        { error: "No se pudo validar el acceso administrativo." },
         { status: 500 }
       ),
       supabase: null as never,
