@@ -1,9 +1,9 @@
 import { updateInstitutionAssessment } from "@/lib/institutional/assessment-server";
-import { parseAssessmentInput } from "@/app/api/institution/assessments/route";
 import {
   institutionalErrorResponse,
   institutionalJson,
   nullableText,
+  parseAssessmentInput,
 } from "@/lib/institutional/http";
 import { requireInstitutionUserId } from "@/lib/institutional/server";
 
