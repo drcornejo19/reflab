@@ -1,5 +1,8 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { classifyApiAuthPath } from "@/lib/auth/apiAuthBoundary";
+import { resolveClerkAuthorizedParties } from "@/lib/auth/clerkAuthorizedParties";
+
+const clerkAuthorizedParties = resolveClerkAuthorizedParties(process.env);
 
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -10,25 +13,28 @@ const isPublicRoute = createRouteMatcher([
   "/sign-up(.*)",
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
-  const apiRoute = classifyApiAuthPath(req.nextUrl.pathname);
-  if (
-    apiRoute?.category === "self_authorized" ||
-    apiRoute?.category === "public" ||
-    apiRoute?.category === "internal"
-  ) {
-    return;
-  }
+export default clerkMiddleware(
+  async (auth, req) => {
+    const apiRoute = classifyApiAuthPath(req.nextUrl.pathname);
+    if (
+      apiRoute?.category === "self_authorized" ||
+      apiRoute?.category === "public" ||
+      apiRoute?.category === "internal"
+    ) {
+      return;
+    }
 
-  if (apiRoute?.category === "proxy_protected") {
-    await auth.protect();
-    return;
-  }
+    if (apiRoute?.category === "proxy_protected") {
+      await auth.protect();
+      return;
+    }
 
-  if (!isPublicRoute(req)) {
-    await auth.protect();
-  }
-});
+    if (!isPublicRoute(req)) {
+      await auth.protect();
+    }
+  },
+  { authorizedParties: clerkAuthorizedParties }
+);
 
 export const config = {
   matcher: [
