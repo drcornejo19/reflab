@@ -11,6 +11,11 @@ import {
   TrainingAttemptError,
   type TrainingAttemptDependencies,
 } from "./attempts.ts";
+import {
+  submitCanonicalVarAttempt,
+  type TrainingAttemptInput,
+  type TrainingAttemptResult,
+} from "./attemptClient.ts";
 
 const root = process.cwd();
 const canonicalAccess = {
@@ -352,6 +357,92 @@ test("VAR accepts normalized text and persists the canonical values", async () =
   assert.equal(payload.score, 100);
 });
 
+test("canonical VAR result returns the server score and persisted feedback", async () => {
+  const harness = dependencies({
+    loadClip: async () => ({
+      ...varClip,
+      incident_type: "possible_penalty",
+    }),
+    submitRpc: async (parameters) => ({
+      status: "created",
+      attempt_id: "33333333-3333-4333-8333-333333333338",
+      score: (parameters.p_attempt as Record<string, unknown>).score,
+      weekly_used: null,
+    }),
+  });
+
+  const result = await submitCanonicalTrainingAttempt(
+    "subject",
+    varInput(),
+    harness.value
+  );
+
+  assert.equal(result.score, 85);
+  assert.equal(
+    result.feedback,
+    "Resultado VAR 85/100. Decision esperada: Recomendar OFR."
+  );
+});
+
+test("VAR presentation always uses the score from the successful response", async () => {
+  const input = varInput() as Extract<
+    TrainingAttemptInput,
+    { kind: "var_clip" }
+  >;
+
+  for (const score of [85, 100]) {
+    const response: TrainingAttemptResult = {
+      status: "created",
+      attemptId: `33333333-3333-4333-8333-3333333333${score === 85 ? "85" : "00"}`,
+      score,
+      weeklyUsed: null,
+      feedback: `Resultado VAR ${score}/100.`,
+    };
+    const presentation = await submitCanonicalVarAttempt(
+      input,
+      async () => response
+    );
+
+    assert.strictEqual(presentation.result, response);
+    assert.equal(presentation.score, score);
+    assert.equal(presentation.feedback, response.feedback);
+  }
+});
+
+test("failed VAR submission cannot produce a successful final presentation", async () => {
+  const input = varInput() as Extract<
+    TrainingAttemptInput,
+    { kind: "var_clip" }
+  >;
+  let presentation = null;
+
+  await assert.rejects(async () => {
+    presentation = await submitCanonicalVarAttempt(input, async () => {
+      throw new Error("network failure");
+    });
+  }, /network failure/);
+
+  assert.equal(presentation, null);
+});
+
+test("VAR presentation rejects a successful response without a canonical score", async () => {
+  const input = varInput() as Extract<
+    TrainingAttemptInput,
+    { kind: "var_clip" }
+  >;
+
+  await assert.rejects(
+    submitCanonicalVarAttempt(input, async () => ({
+      status: "created",
+      attemptId: "33333333-3333-4333-8333-333333333339",
+      score: null,
+      weeklyUsed: null,
+      feedback: null,
+    })),
+    /score VAR valido/
+  );
+});
+
 test("VAR trims surrounding spaces and newlines while preserving internal whitespace", async () => {
   const harness = dependencies({ loadClip: async () => varClip });
   await submitCanonicalTrainingAttempt(
@@ -484,7 +575,11 @@ test("authorized training components no longer write attempts directly", () => {
     const source = fs.readFileSync(path.join(root, file), "utf8");
     assert.doesNotMatch(source, /insertAttemptSafely/);
     assert.doesNotMatch(source, /\.from\(["']attempts["']\)/);
-    assert.match(source, /submitTrainingAttempt/);
+    if (file === "components/VarExercise.tsx") {
+      assert.match(source, /submitCanonicalVarAttempt/);
+    } else {
+      assert.match(source, /submitTrainingAttempt/);
+    }
   }
 
   const varExercise = fs.readFileSync(
@@ -493,6 +588,13 @@ test("authorized training components no longer write attempts directly", () => {
   );
   assert.match(varExercise, /finalDecision:\s*finalDecision\.trim\(\)/);
   assert.match(varExercise, /communication:\s*communication\.trim\(\)/);
+  assert.match(varExercise, /const presentation = await submitCanonicalVarAttempt/);
+  assert.match(varExercise, /setCanonicalPresentation\(presentation\)/);
+  assert.match(varExercise, /\{canonicalPresentation\.score\}/);
+  assert.match(varExercise, /canonicalPresentation\.feedback/);
+  assert.match(varExercise, /role="alert"/);
+  assert.doesNotMatch(varExercise, /setSubmitted\(|calculateVarScore/);
+  assert.doesNotMatch(varExercise, /Intento VAR guardado para Rendimiento/);
 
   const english = fs.readFileSync(
     path.join(root, "components/EnglishExercise.tsx"),

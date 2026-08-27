@@ -5,7 +5,8 @@ import { useUser } from "@clerk/nextjs";
 import type { Clip } from "@/lib/types";
 import {
   createTrainingSubmissionId,
-  submitTrainingAttempt,
+  submitCanonicalVarAttempt,
+  type CanonicalVarAttemptPresentation,
 } from "@/lib/training/attemptClient";
 
 type VarDecision = "check_complete" | "recommend_ofr" | "factual_review";
@@ -55,9 +56,10 @@ export function VarExercise({ clip }: VarExerciseProps) {
   const [varDecision, setVarDecision] = useState<VarDecision | null>(null);
   const [finalDecision, setFinalDecision] = useState("");
   const [communication, setCommunication] = useState("");
-  const [submitted, setSubmitted] = useState(false);
   const [savingAttempt, setSavingAttempt] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [canonicalPresentation, setCanonicalPresentation] =
+    useState<CanonicalVarAttemptPresentation | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     startedAtRef.current = Date.now();
@@ -85,49 +87,13 @@ export function VarExercise({ clip }: VarExerciseProps) {
     return "Aplica minima interferencia, maximo beneficio.";
   }, [selectedIncident, clearError]);
 
-  const suggestedDecision: VarDecision = useMemo(() => {
-    if (clearError === "no") return "check_complete";
-
-    if (selectedIncident === "possible_offside" || selectedIncident === "ball_out") {
-      return "factual_review";
-    }
-
-    if (
-      selectedIncident === "possible_penalty" ||
-      selectedIncident === "possible_red_card" ||
-      selectedIncident === "app_offence" ||
-      selectedIncident === "possible_goal"
-    ) {
-      return "recommend_ofr";
-    }
-
-    return "check_complete";
-  }, [selectedIncident, clearError]);
-
-  const correctVarDecision = useMemo(() => {
-    return isVarDecision(clip.correct_var_decision) ? clip.correct_var_decision : suggestedDecision;
-  }, [clip.correct_var_decision, suggestedDecision]);
-
-  const score = useMemo(() => {
-    if (!submitted) return null;
-    return calculateVarScore({
-      selectedIncident,
-      appStatus,
-      clearError,
-      varDecision,
-      correctVarDecision,
-      communication,
-    });
-  }, [submitted, selectedIncident, appStatus, clearError, varDecision, correctVarDecision, communication]);
-
   async function submit() {
     if (!selectedIncident || !appStatus || !clearError || !varDecision || savingAttempt) return;
 
-    setSubmitted(true);
-    setSaveMessage(null);
+    setSubmitError(null);
 
     if (!user) {
-      setSaveMessage("Intento evaluado. Inicia sesion para guardar metricas VAR.");
+      setSubmitError("Inicia sesion para guardar el intento VAR.");
       return;
     }
 
@@ -138,7 +104,7 @@ export function VarExercise({ clip }: VarExerciseProps) {
       Math.round((Date.now() - startedAtRef.current) / 1000)
     );
     try {
-      await submitTrainingAttempt({
+      const presentation = await submitCanonicalVarAttempt({
         kind: "var_clip",
         submissionId: createTrainingSubmissionId(),
         clipId: clip.id,
@@ -152,16 +118,17 @@ export function VarExercise({ clip }: VarExerciseProps) {
         },
         timeSpentSeconds,
       });
-      setSaveMessage("Intento VAR guardado para Rendimiento.");
+      setCanonicalPresentation(presentation);
     } catch (error) {
-      setSaveMessage(
+      setCanonicalPresentation(null);
+      setSubmitError(
         error instanceof Error
           ? `No se pudo guardar el intento VAR: ${error.message}`
           : "No se pudo guardar el intento VAR."
       );
+    } finally {
+      setSavingAttempt(false);
     }
-
-    setSavingAttempt(false);
   }
 
   function reset() {
@@ -171,13 +138,13 @@ export function VarExercise({ clip }: VarExerciseProps) {
     setVarDecision(null);
     setFinalDecision("");
     setCommunication("");
-    setSubmitted(false);
     setSavingAttempt(false);
-    setSaveMessage(null);
+    setCanonicalPresentation(null);
+    setSubmitError(null);
     startedAtRef.current = Date.now();
   }
 
-  if (submitted && score !== null) {
+  if (canonicalPresentation) {
     return (
       <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
         <section className="rounded-[26px] border border-[#6fc11f]/30 bg-[#07130b] p-7 shadow-2xl">
@@ -186,32 +153,27 @@ export function VarExercise({ clip }: VarExerciseProps) {
           </p>
 
           <h2 className="mt-5 text-7xl font-black text-white">
-            {score}
+            {canonicalPresentation.score}
             <span className="text-2xl text-zinc-500">/100</span>
           </h2>
 
           <p className="mt-3 text-2xl font-black text-[#6fc11f]">
-            {score >= 85
+            {canonicalPresentation.score >= 85
               ? "Nivel VOR avanzado"
-              : score >= 65
+              : canonicalPresentation.score >= 65
                 ? "Criterio aceptable"
                 : "Revision debil"}
           </p>
 
-          {saveMessage && (
-            <div className="mt-5 rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4 text-sm font-bold text-[#b7ff8a]">
-              {saveMessage}
-            </div>
-          )}
+          <div className="mt-5 rounded-2xl border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-4 text-sm font-bold text-[#b7ff8a]">
+            {canonicalPresentation.message}
+          </div>
 
           <div className="mt-6 rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-zinc-300">
-            <p className="font-black text-white">Decision recomendada:</p>
-            <p className="mt-1 text-[#6fc11f]">{translateVarDecision(correctVarDecision)}</p>
-
-            <p className="mt-4 font-black text-white">Fundamento:</p>
+            <p className="font-black text-white">Feedback canonico:</p>
             <p className="mt-1">
-              {clip.explanation ||
-                "Aplicar protocolo VAR: categoria revisable, APP, error claro y manifiesto y tipo de revision."}
+              {canonicalPresentation.feedback ||
+                "Intento VAR guardado sin feedback adicional."}
             </p>
           </div>
 
@@ -347,6 +309,12 @@ export function VarExercise({ clip }: VarExerciseProps) {
             />
           </Panel>
 
+          {submitError && (
+            <div role="alert" className="rounded-xl border border-red-400/30 bg-red-400/10 p-3 text-sm font-bold text-red-200">
+              {submitError}
+            </div>
+          )}
+
           <button
             onClick={submit}
             disabled={!selectedIncident || !appStatus || !clearError || !varDecision || savingAttempt}
@@ -418,36 +386,6 @@ function ReviewLine({ label, value }: { label: string; value: string }) {
       <p className="mt-1 font-bold text-white">{value}</p>
     </div>
   );
-}
-
-function calculateVarScore({
-  selectedIncident,
-  appStatus,
-  clearError,
-  varDecision,
-  correctVarDecision,
-  communication,
-}: {
-  selectedIncident: Incident | null;
-  appStatus: AppStatus | null;
-  clearError: ClearError | null;
-  varDecision: VarDecision | null;
-  correctVarDecision: VarDecision;
-  communication: string;
-}) {
-  let value = 0;
-
-  if (selectedIncident) value += 15;
-  if (appStatus) value += 15;
-  if (clearError) value += 20;
-  if (varDecision === correctVarDecision) value += 30;
-  if (communication.trim().length >= 30) value += 20;
-
-  return value;
-}
-
-function isVarDecision(value?: string | null): value is VarDecision {
-  return value === "check_complete" || value === "recommend_ofr" || value === "factual_review";
 }
 
 function translateIncident(value: Incident) {

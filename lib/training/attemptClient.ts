@@ -55,6 +55,14 @@ export type TrainingAttemptResult = {
   attemptId: string;
   score: number | null;
   weeklyUsed: number | null;
+  feedback: string | null;
+};
+
+export type CanonicalVarAttemptPresentation = {
+  result: TrainingAttemptResult;
+  score: number;
+  feedback: string | null;
+  message: string;
 };
 
 export async function submitTrainingAttempt(input: TrainingAttemptInput) {
@@ -73,6 +81,34 @@ export async function submitTrainingAttempt(input: TrainingAttemptInput) {
   }
 
   return payload.result;
+}
+
+export async function submitCanonicalVarAttempt(
+  input: Extract<TrainingAttemptInput, { kind: "var_clip" }>,
+  submitAttempt: (
+    input: Extract<TrainingAttemptInput, { kind: "var_clip" }>
+  ) => Promise<TrainingAttemptResult> = submitTrainingAttempt
+): Promise<CanonicalVarAttemptPresentation> {
+  const result = await submitAttempt(input);
+
+  if (
+    typeof result.score !== "number" ||
+    !Number.isFinite(result.score) ||
+    result.score < 0 ||
+    result.score > 100
+  ) {
+    throw new Error("El servidor no devolvio un score VAR valido.");
+  }
+
+  return {
+    result,
+    score: result.score,
+    feedback: result.feedback,
+    message:
+      result.status === "created"
+        ? "Intento VAR guardado en Entrenamiento."
+        : "Intento VAR ya registrado.",
+  };
 }
 
 export async function loadTrainingUsage(sportType: "football_11" | "futsal") {

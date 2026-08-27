@@ -180,7 +180,7 @@ export async function submitCanonicalTrainingAttempt(
     throw classifyTrainingRpcError(error);
   }
 
-  return parseRpcResult(rawResult);
+  return parseRpcResult(rawResult, payload.feedback);
 }
 
 export async function getCanonicalTrainingUsage(
@@ -744,7 +744,10 @@ function parseTrainingAttemptInput(value: unknown): TrainingAttemptInput {
   }
 }
 
-function parseRpcResult(value: unknown): TrainingAttemptResult {
+function parseRpcResult(
+  value: unknown,
+  canonicalFeedback: unknown
+): TrainingAttemptResult {
   const record = requireRecord(value);
   if (record.status !== "created" && record.status !== "already_recorded") {
     throw new Error("Canonical training RPC returned an invalid status.");
@@ -758,6 +761,8 @@ function parseRpcResult(value: unknown): TrainingAttemptResult {
     score: typeof record.score === "number" ? record.score : null,
     weeklyUsed:
       typeof record.weekly_used === "number" ? record.weekly_used : null,
+    feedback:
+      typeof canonicalFeedback === "string" ? canonicalFeedback : null,
   };
 }
 
