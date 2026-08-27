@@ -678,8 +678,10 @@ function parseTrainingAttemptInput(value: unknown): TrainingAttemptInput {
           appStatus: cleanRequiredText(answer.appStatus, 80),
           clearError: cleanRequiredText(answer.clearError, 80),
           varDecision: cleanRequiredText(answer.varDecision, 80),
-          finalDecision: cleanOptionalText(answer.finalDecision, 500) ?? undefined,
-          communication: cleanOptionalText(answer.communication, 2000) ?? undefined,
+          finalDecision:
+            cleanTrimmedOptionalText(answer.finalDecision, 500) ?? undefined,
+          communication:
+            cleanTrimmedOptionalText(answer.communication, 2000) ?? undefined,
         },
         timeSpentSeconds: optionalInteger(record.timeSpentSeconds, 0, 86400),
       };
@@ -812,6 +814,15 @@ function cleanRequiredText(value: unknown, maxLength: number) {
 function cleanOptionalText(value: unknown, maxLength: number) {
   if (value === undefined || value === null || value === "") return null;
   return cleanRequiredText(value, maxLength);
+}
+
+function cleanTrimmedOptionalText(value: unknown, maxLength: number) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") throw invalidPayload();
+
+  const normalized = value.trim();
+  if (!normalized || normalized.length > maxLength) throw invalidPayload();
+  return normalized;
 }
 
 function requireInteger(value: unknown, min: number, max: number) {

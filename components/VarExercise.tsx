@@ -147,8 +147,8 @@ export function VarExercise({ clip }: VarExerciseProps) {
           appStatus,
           clearError,
           varDecision,
-          finalDecision,
-          communication,
+          finalDecision: finalDecision.trim(),
+          communication: communication.trim(),
         },
         timeSpentSeconds,
       });

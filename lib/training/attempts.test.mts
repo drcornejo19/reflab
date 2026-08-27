@@ -46,6 +46,33 @@ const clip = {
   analysis_answers: null,
 };
 
+const varClip = {
+  ...clip,
+  id: "11111111-1111-4111-8111-111111111112",
+  title: "Synthetic VAR clip",
+  topic: "VAR",
+  mode: "var",
+  incident_type: "possible_goal",
+  correct_clear_error: "yes",
+  correct_app_status: "same_app",
+  correct_var_decision: "recommend_ofr",
+};
+
+const futsalClip = {
+  ...clip,
+  id: "11111111-1111-4111-8111-111111111113",
+  sport_type: "futsal" as const,
+  title: "Synthetic futsal clip",
+  topic: "Dispute",
+  mode: "training",
+  analysis_answers: {
+    technical_decision: true,
+    restart: "Tiro libre directo",
+    disciplinary_action: "Sin sancion",
+    infringement_type: "carga_imprudente",
+  },
+};
+
 function fieldInput(extra: Record<string, unknown> = {}) {
   return {
     kind: "field_clip",
@@ -57,6 +84,40 @@ function fieldInput(extra: Record<string, unknown> = {}) {
       discipline: "Sin sancion",
     },
     ...extra,
+  };
+}
+
+function varInput(answer: Record<string, unknown> = {}) {
+  return {
+    kind: "var_clip",
+    submissionId: "22222222-2222-4222-8222-222222222223",
+    clipId: varClip.id,
+    answer: {
+      selectedIncident: "possible_goal",
+      appStatus: "same_app",
+      clearError: "yes",
+      varDecision: "recommend_ofr",
+      finalDecision: "Anular el gol",
+      communication: "Recomiendo OFR por infraccion en la APP previa al gol.",
+      ...answer,
+    },
+    timeSpentSeconds: 84,
+  };
+}
+
+function futsalInput() {
+  return {
+    kind: "futsal_video",
+    submissionId: "22222222-2222-4222-8222-222222222224",
+    clipId: futsalClip.id,
+    answers: {
+      technical_decision: true,
+      restart: "Tiro libre directo",
+      disciplinary_action: "Sin sancion",
+      infringement_type: "carga_imprudente",
+    },
+    justification: "Decision reglamentaria",
+    timeSpentSeconds: 42,
   };
 }
 
@@ -282,6 +343,68 @@ test("server recomputes a manipulated field score from canonical answers", async
   assert.equal((harness.calls[0].p_attempt as Record<string, unknown>).score, 25);
 });
 
+test("VAR accepts normalized text and persists the canonical values", async () => {
+  const harness = dependencies({ loadClip: async () => varClip });
+  await submitCanonicalTrainingAttempt("subject", varInput(), harness.value);
+
+  const payload = harness.calls[0].p_attempt as Record<string, unknown>;
+  assert.equal(payload.selected_discipline, "Anular el gol");
+  assert.equal(payload.score, 100);
+});
+
+test("VAR trims surrounding spaces and newlines while preserving internal whitespace", async () => {
+  const harness = dependencies({ loadClip: async () => varClip });
+  await submitCanonicalTrainingAttempt(
+    "subject",
+    varInput({
+      finalDecision: "  Anular  el gol  ",
+      communication:
+        "\n  Recomiendo  OFR por infraccion en la APP previa al gol.  \r\n",
+    }),
+    harness.value
+  );
+
+  const payload = harness.calls[0].p_attempt as Record<string, unknown>;
+  assert.equal(payload.selected_discipline, "Anular  el gol");
+  assert.equal(payload.score, 100);
+  assert.equal(JSON.stringify(payload).includes("\n  Recomiendo"), false);
+});
+
+test("VAR rejects empty or below-minimum trimmed text and invalid text types", async () => {
+  for (const answer of [
+    { finalDecision: "" },
+    { communication: "" },
+    { finalDecision: " \r\n " },
+    { communication: " \n " },
+    { finalDecision: 42 },
+    { communication: false },
+  ]) {
+    const harness = dependencies({ loadClip: async () => varClip });
+    await assert.rejects(
+      submitCanonicalTrainingAttempt("subject", varInput(answer), harness.value),
+      (error: unknown) =>
+        error instanceof TrainingAttemptError &&
+        error.code === "invalid_training_attempt" &&
+        error.status === 400
+    );
+    assert.equal(harness.calls.length, 0);
+  }
+});
+
+test("field football and futsal video attempts keep their existing contracts", async () => {
+  const fieldHarness = dependencies();
+  await submitCanonicalTrainingAttempt("subject", fieldInput(), fieldHarness.value);
+  assert.equal(fieldHarness.calls.length, 1);
+
+  const futsalHarness = dependencies({ loadClip: async () => futsalClip });
+  await submitCanonicalTrainingAttempt("subject", futsalInput(), futsalHarness.value);
+  assert.equal(futsalHarness.calls.length, 1);
+  assert.equal(
+    (futsalHarness.calls[0].p_attempt as Record<string, unknown>).score,
+    100
+  );
+});
+
 test("weekly usage is canonical and informative only", async () => {
   const calls: string[] = [];
   const usage = await getCanonicalTrainingUsage("raw-subject", "futsal", {
@@ -363,6 +486,13 @@ test("authorized training components no longer write attempts directly", () => {
     assert.doesNotMatch(source, /\.from\(["']attempts["']\)/);
     assert.match(source, /submitTrainingAttempt/);
   }
+
+  const varExercise = fs.readFileSync(
+    path.join(root, "components/VarExercise.tsx"),
+    "utf8"
+  );
+  assert.match(varExercise, /finalDecision:\s*finalDecision\.trim\(\)/);
+  assert.match(varExercise, /communication:\s*communication\.trim\(\)/);
 
   const english = fs.readFileSync(
     path.join(root, "components/EnglishExercise.tsx"),
