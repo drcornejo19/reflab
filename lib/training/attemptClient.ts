@@ -58,10 +58,13 @@ export type TrainingAttemptResult = {
   feedback: string | null;
 };
 
-export type CanonicalVarAttemptPresentation = {
+export type CanonicalScoredAttemptPresentation = {
   result: TrainingAttemptResult;
   score: number;
   feedback: string | null;
+};
+
+export type CanonicalVarAttemptPresentation = CanonicalScoredAttemptPresentation & {
   message: string;
 };
 
@@ -89,6 +92,57 @@ export async function submitCanonicalVarAttempt(
     input: Extract<TrainingAttemptInput, { kind: "var_clip" }>
   ) => Promise<TrainingAttemptResult> = submitTrainingAttempt
 ): Promise<CanonicalVarAttemptPresentation> {
+  const presentation = await submitCanonicalScoredAttempt(
+    input,
+    submitAttempt,
+    "El servidor no devolvio un score VAR valido."
+  );
+
+  return {
+    ...presentation,
+    message:
+      presentation.result.status === "created"
+        ? "Intento VAR guardado en Entrenamiento."
+        : "Intento VAR ya registrado.",
+  };
+}
+
+export async function submitCanonicalFieldAttempt(
+  input: Extract<TrainingAttemptInput, { kind: "field_clip" }>,
+  submitAttempt: (
+    input: Extract<TrainingAttemptInput, { kind: "field_clip" }>
+  ) => Promise<TrainingAttemptResult> = submitTrainingAttempt
+) {
+  return submitCanonicalScoredAttempt(
+    input,
+    submitAttempt,
+    "El servidor no devolvio un score de campo valido."
+  );
+}
+
+export async function submitCanonicalFutsalVideoAttempt(
+  input: Extract<TrainingAttemptInput, { kind: "futsal_video" }>,
+  submitAttempt: (
+    input: Extract<TrainingAttemptInput, { kind: "futsal_video" }>
+  ) => Promise<TrainingAttemptResult> = submitTrainingAttempt
+) {
+  return submitCanonicalScoredAttempt(
+    input,
+    submitAttempt,
+    "El servidor no devolvio un score de futsal valido."
+  );
+}
+
+async function submitCanonicalScoredAttempt<
+  TInput extends Extract<
+    TrainingAttemptInput,
+    { kind: "field_clip" | "futsal_video" | "var_clip" }
+  >,
+>(
+  input: TInput,
+  submitAttempt: (input: TInput) => Promise<TrainingAttemptResult>,
+  invalidScoreMessage: string
+): Promise<CanonicalScoredAttemptPresentation> {
   const result = await submitAttempt(input);
 
   if (
@@ -97,17 +151,13 @@ export async function submitCanonicalVarAttempt(
     result.score < 0 ||
     result.score > 100
   ) {
-    throw new Error("El servidor no devolvio un score VAR valido.");
+    throw new Error(invalidScoreMessage);
   }
 
   return {
     result,
     score: result.score,
     feedback: result.feedback,
-    message:
-      result.status === "created"
-        ? "Intento VAR guardado en Entrenamiento."
-        : "Intento VAR ya registrado.",
   };
 }
 

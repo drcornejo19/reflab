@@ -6,7 +6,6 @@ import { getTrainingClips, type ClipRecord } from "@/lib/clips";
 import { getSportTopics, normalizeSportTopicKey } from "@/lib/sports";
 import { FREE_WEEKLY_CLIP_LIMIT } from "@/lib/subscription";
 import {
-  evaluateVideoAnswers,
   normalizeVideoAnswerMap,
   type VideoAnswerMap,
   type VideoAnswerValue,
@@ -21,7 +20,8 @@ import { useSupabase } from "@/components/SupabaseProvider";
 import {
   createTrainingSubmissionId,
   loadTrainingUsage,
-  submitTrainingAttempt,
+  submitCanonicalFutsalVideoAttempt,
+  type CanonicalScoredAttemptPresentation,
 } from "@/lib/training/attemptClient";
 
 type FutsalClip = ClipRecord & {
@@ -234,11 +234,11 @@ function FutsalVideoExercise({
   const { isPro, loadingRole } = useUserRole();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const schema = getVideoTopicSchema("futsal", clip.topic);
-  const expectedAnswers = normalizeVideoAnswerMap(clip.analysis_answers);
 
   const [answers, setAnswers] = useState<VideoAnswerMap>({});
   const [justification, setJustification] = useState("");
-  const [result, setResult] = useState<ReturnType<typeof evaluateVideoAnswers> | null>(null);
+  const [result, setResult] =
+    useState<CanonicalScoredAttemptPresentation | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [weeklyClipCount, setWeeklyClipCount] = useState(0);
@@ -305,32 +305,8 @@ function FutsalVideoExercise({
             <span className="text-2xl text-zinc-400">/100</span>
           </h3>
           <p className="mt-3 text-sm leading-6 text-zinc-300">
-            {result.correctCount} aciertos sobre {result.totalScored} criterios
-            puntuables.
+            {result.feedback ?? "Intento de Futsal guardado correctamente."}
           </p>
-
-          <div className="mt-6 space-y-3">
-            {result.fieldResults
-              .filter((field) => field.scored)
-              .map((field) => (
-                <div
-                  key={field.key}
-                  className={`rounded-2xl border p-4 ${
-                    field.correct
-                      ? "border-[#16b8ff]/25 bg-[#16b8ff]/8"
-                      : "border-red-400/20 bg-red-500/5"
-                  }`}
-                >
-                  <p className="font-black">{field.label}</p>
-                  <p className="mt-2 text-sm leading-6 text-zinc-300">
-                    Tu respuesta: <strong>{formatAnswerValue(field.actual)}</strong>
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-zinc-400">
-                    Correcta: <strong>{formatAnswerValue(field.expected)}</strong>
-                  </p>
-                </div>
-              ))}
-          </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <button
@@ -516,8 +492,6 @@ function FutsalVideoExercise({
           onClick={async () => {
             if (!schema || !canSubmit || saving) return;
 
-            const evaluation = evaluateVideoAnswers(schema, expectedAnswers, answers);
-
             if (!user) {
               setSaveError("Tenes que iniciar sesion para guardar el intento.");
               return;
@@ -527,13 +501,14 @@ function FutsalVideoExercise({
             setSaveError(null);
 
             try {
-              await submitTrainingAttempt({
+              const presentation = await submitCanonicalFutsalVideoAttempt({
                 kind: "futsal_video",
                 submissionId: createTrainingSubmissionId(),
                 clipId: clip.id,
                 answers,
                 justification,
               });
+              setResult(presentation);
             } catch (error) {
               setSaveError(
                 error instanceof Error
@@ -549,7 +524,6 @@ function FutsalVideoExercise({
             }
 
             setSaving(false);
-            setResult(evaluation);
           }}
           className="w-full rounded-2xl bg-[#16b8ff] px-5 py-4 font-black text-black transition hover:bg-[#31b8ff] disabled:cursor-not-allowed disabled:opacity-40"
         >
@@ -633,13 +607,6 @@ function coerceOptionValue(value: string) {
   if (value === "true") return true;
   if (value === "false") return false;
   return value;
-}
-
-function formatAnswerValue(value: VideoAnswerValue) {
-  if (value === true) return "Si";
-  if (value === false) return "No";
-  if (typeof value === "string" && value.length > 0) return labelFromValue(value);
-  return "Sin dato";
 }
 
 function labelFromValue(value?: string | null) {

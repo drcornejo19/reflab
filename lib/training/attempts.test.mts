@@ -3,6 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { IdentityLinkRequiredError } from "../access/server.ts";
+import { calculateScore } from "../scoring.ts";
+import { evaluateVideoAnswers, normalizeVideoAnswerMap } from "../videoAnalysisEngine.ts";
+import { getVideoTopicSchema } from "../videoAnalysisSchemas.ts";
 import {
   executeTrainingAttemptRequest,
   executeTrainingUsageRequest,
@@ -12,6 +15,8 @@ import {
   type TrainingAttemptDependencies,
 } from "./attempts.ts";
 import {
+  submitCanonicalFieldAttempt,
+  submitCanonicalFutsalVideoAttempt,
   submitCanonicalVarAttempt,
   type TrainingAttemptInput,
   type TrainingAttemptResult,
@@ -443,6 +448,115 @@ test("VAR presentation rejects a successful response without a canonical score",
   );
 });
 
+test("Football presentation replaces a local 100 with the canonical server score", async () => {
+  const input = fieldInput() as Extract<
+    TrainingAttemptInput,
+    { kind: "field_clip" }
+  >;
+  const localScore = calculateScore(
+    { ...input.answer, var: clip.correct_var },
+    {
+      foul: clip.correct_foul,
+      restart: clip.correct_restart,
+      discipline: clip.correct_discipline,
+      var: clip.correct_var,
+    }
+  );
+  const response: TrainingAttemptResult = {
+    status: "created",
+    attemptId: "33333333-3333-4333-8333-333333333375",
+    score: 75,
+    weeklyUsed: 1,
+    feedback: "Feedback canonico de campo.",
+  };
+  const presentation = await submitCanonicalFieldAttempt(
+    input,
+    async () => response
+  );
+
+  assert.equal(localScore, 100);
+  assert.equal(presentation.score, 75);
+  assert.equal(presentation.feedback, response.feedback);
+  assert.strictEqual(presentation.result, response);
+});
+
+test("Football presentation preserves a canonical server score of 100", async () => {
+  const input = fieldInput() as Extract<
+    TrainingAttemptInput,
+    { kind: "field_clip" }
+  >;
+  const response: TrainingAttemptResult = {
+    status: "already_recorded",
+    attemptId: "33333333-3333-4333-8333-333333333300",
+    score: 100,
+    weeklyUsed: 1,
+    feedback: "Feedback recuperado.",
+  };
+  const presentation = await submitCanonicalFieldAttempt(
+    input,
+    async () => response
+  );
+
+  assert.equal(presentation.score, 100);
+  assert.equal(presentation.feedback, "Feedback recuperado.");
+  assert.strictEqual(presentation.result, response);
+});
+
+test("Futsal presentation replaces the local evaluation with the canonical response", async () => {
+  const input = futsalInput() as Extract<
+    TrainingAttemptInput,
+    { kind: "futsal_video" }
+  >;
+  const schema = getVideoTopicSchema("futsal", futsalClip.topic);
+  assert.ok(schema);
+  const localEvaluation = evaluateVideoAnswers(
+    schema,
+    normalizeVideoAnswerMap(futsalClip.analysis_answers),
+    normalizeVideoAnswerMap(input.answers)
+  );
+  const response: TrainingAttemptResult = {
+    status: "created",
+    attemptId: "33333333-3333-4333-8333-333333333360",
+    score: 60,
+    weeklyUsed: 1,
+    feedback: "Videoanalisis futsal: 60/100",
+  };
+  const presentation = await submitCanonicalFutsalVideoAttempt(
+    input,
+    async () => response
+  );
+
+  assert.equal(localEvaluation.score, 100);
+  assert.equal(presentation.score, 60);
+  assert.equal(presentation.feedback, response.feedback);
+  assert.strictEqual(presentation.result, response);
+});
+
+test("failed field and futsal submissions cannot create final presentations", async () => {
+  let fieldPresentation = null;
+  let futsalPresentation = null;
+
+  await assert.rejects(async () => {
+    fieldPresentation = await submitCanonicalFieldAttempt(
+      fieldInput() as Extract<TrainingAttemptInput, { kind: "field_clip" }>,
+      async () => {
+        throw new Error("field network failure");
+      }
+    );
+  }, /field network failure/);
+  await assert.rejects(async () => {
+    futsalPresentation = await submitCanonicalFutsalVideoAttempt(
+      futsalInput() as Extract<TrainingAttemptInput, { kind: "futsal_video" }>,
+      async () => {
+        throw new Error("futsal network failure");
+      }
+    );
+  }, /futsal network failure/);
+
+  assert.equal(fieldPresentation, null);
+  assert.equal(futsalPresentation, null);
+});
+
 test("VAR trims surrounding spaces and newlines while preserving internal whitespace", async () => {
   const harness = dependencies({ loadClip: async () => varClip });
   await submitCanonicalTrainingAttempt(
@@ -577,6 +691,10 @@ test("authorized training components no longer write attempts directly", () => {
     assert.doesNotMatch(source, /\.from\(["']attempts["']\)/);
     if (file === "components/VarExercise.tsx") {
       assert.match(source, /submitCanonicalVarAttempt/);
+    } else if (file === "components/ClipExercise.tsx") {
+      assert.match(source, /submitCanonicalFieldAttempt/);
+    } else if (file === "components/FutsalVideoAnalysisClient.tsx") {
+      assert.match(source, /submitCanonicalFutsalVideoAttempt/);
     } else {
       assert.match(source, /submitTrainingAttempt/);
     }
@@ -595,6 +713,29 @@ test("authorized training components no longer write attempts directly", () => {
   assert.match(varExercise, /role="alert"/);
   assert.doesNotMatch(varExercise, /setSubmitted\(|calculateVarScore/);
   assert.doesNotMatch(varExercise, /Intento VAR guardado para Rendimiento/);
+
+  const fieldExercise = fs.readFileSync(
+    path.join(root, "components/ClipExercise.tsx"),
+    "utf8"
+  );
+  assert.match(fieldExercise, /const presentation = await submitCanonicalFieldAttempt/);
+  assert.match(fieldExercise, /setResult\(presentation\)/);
+  assert.match(fieldExercise, /\{result\.score\}/);
+  assert.match(fieldExercise, /result\.feedback/);
+  assert.doesNotMatch(fieldExercise, /setResult\(score\)/);
+
+  const futsalExercise = fs.readFileSync(
+    path.join(root, "components/FutsalVideoAnalysisClient.tsx"),
+    "utf8"
+  );
+  assert.match(
+    futsalExercise,
+    /const presentation = await submitCanonicalFutsalVideoAttempt/
+  );
+  assert.match(futsalExercise, /setResult\(presentation\)/);
+  assert.match(futsalExercise, /\{result\.score\}/);
+  assert.match(futsalExercise, /result\.feedback/);
+  assert.doesNotMatch(futsalExercise, /setResult\(evaluation\)/);
 
   const english = fs.readFileSync(
     path.join(root, "components/EnglishExercise.tsx"),

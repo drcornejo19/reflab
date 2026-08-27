@@ -12,7 +12,8 @@ import { useUserRole } from "@/lib/useUserRole";
 import {
   createTrainingSubmissionId,
   loadTrainingUsage,
-  submitTrainingAttempt,
+  submitCanonicalFieldAttempt,
+  type CanonicalScoredAttemptPresentation,
 } from "@/lib/training/attemptClient";
 
 type ExamAnswer = {
@@ -97,7 +98,8 @@ export function ClipExercise({
   const [restart, setRestart] = useState(() => initialDecisionState.restart);
   const [discipline, setDiscipline] = useState(() => initialDecisionState.discipline);
   const [justification, setJustification] = useState("");
-  const [result, setResult] = useState<number | null>(null);
+  const [result, setResult] =
+    useState<CanonicalScoredAttemptPresentation | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
@@ -245,12 +247,13 @@ export function ClipExercise({
     setAiFeedback(null);
 
     try {
-      await submitTrainingAttempt({
+      const presentation = await submitCanonicalFieldAttempt({
         kind: "field_clip",
         submissionId: createTrainingSubmissionId(),
         clipId: typedClip.id,
         answer: { foul, restart, discipline },
       });
+      setResult(presentation);
     } catch (error) {
       setSaveError(
         error instanceof Error ? error.message : "No se pudo guardar el intento."
@@ -259,7 +262,6 @@ export function ClipExercise({
       return;
     }
 
-    setResult(score);
     if (!isPro) setWeeklyClipCount((prev) => prev + 1);
     setIsSaving(false);
 
@@ -322,14 +324,14 @@ export function ClipExercise({
           </p>
 
           <h2 className="mt-5 text-7xl font-black leading-none text-[#6fc11f]">
-            {result}
+            {result.score}
             <span className="text-2xl text-zinc-400">/100</span>
           </h2>
 
           <p className="mt-2 text-2xl font-black">
-            {result >= 85
+            {result.score >= 85
               ? "¡Excelente!"
-              : result >= 60
+              : result.score >= 60
                 ? "Buen intento"
                 : "A revisar"}
           </p>
@@ -392,6 +394,15 @@ export function ClipExercise({
               </div>
             )}
           </div>
+
+          {result.feedback && (
+            <div className="rounded-[22px] border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-5">
+              <h3 className="font-black text-[#b7ff8a]">Feedback del intento</h3>
+              <p className="mt-3 text-sm leading-6 text-zinc-300">
+                {result.feedback}
+              </p>
+            </div>
+          )}
         </section>
       </div>
     );
