@@ -16,25 +16,73 @@ import { baseInventoryQueries, buildIdentityQueries, buildSqlBatch, compareInven
 import { buildGateReport, connectionCredentialBlockers } from "./gates.mjs";
 import { assertReadOnlyBatch, assertReadOnlySql } from "./sql-safety.mjs";
 import { buildConditionalInventory, classifyMigrationHistory, executeReadOnlyBatch, runProductionPreflight } from "./run.mjs";
-import { authorizeProductionPreflightTarget } from "./target.mjs";
+import {
+  authorizeProductionPreflightTarget,
+  PRODUCTION_PREFLIGHT_ROLE,
+  PRODUCTION_SESSION_POOLER_HOST,
+} from "./target.mjs";
 
 const productionEnvironment = {
   ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT: "true",
   REFLAB_PRODUCTION_PREFLIGHT_PROJECT_REF: PRODUCTION_PROJECT_REF,
-  REFLAB_PRODUCTION_PREFLIGHT_DB_URL: `postgresql://readonly:secret@db.${PRODUCTION_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require`,
+  REFLAB_PRODUCTION_PREFLIGHT_DB_URL: `postgresql://${PRODUCTION_PREFLIGHT_ROLE}:secret@db.${PRODUCTION_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require`,
 };
 
-test("target guard accepts only the exact Production database host", () => {
+const poolerEnvironment = {
+  ...productionEnvironment,
+  REFLAB_PRODUCTION_PREFLIGHT_DB_URL: `postgresql://${PRODUCTION_PREFLIGHT_ROLE}.${PRODUCTION_PROJECT_REF}:secret@${PRODUCTION_SESSION_POOLER_HOST}:5432/postgres?sslmode=require`,
+};
+
+test("target guard keeps accepting the exact direct Production host", () => {
   const result = authorizeProductionPreflightTarget(productionEnvironment);
   assert.equal(result.projectRef, PRODUCTION_PROJECT_REF);
   assert.equal(result.host, `db.${PRODUCTION_PROJECT_REF}.supabase.co`);
+  assert.equal(result.connectionEnvironment.PGUSER, PRODUCTION_PREFLIGHT_ROLE);
   assert.equal(result.connectionEnvironment.PGSSLMODE, "require");
 });
 
-test("target guard fails closed for missing opt-in, unknown hosts and any Development reference", () => {
+test("target guard accepts the exact Production IPv4 Session pooler", () => {
+  const result = authorizeProductionPreflightTarget(poolerEnvironment);
+  assert.equal(result.projectRef, PRODUCTION_PROJECT_REF);
+  assert.equal(result.host, PRODUCTION_SESSION_POOLER_HOST);
+  assert.equal(result.connectionEnvironment.PGPORT, "5432");
+  assert.equal(result.connectionEnvironment.PGDATABASE, "postgres");
+  assert.equal(result.connectionEnvironment.PGUSER, `${PRODUCTION_PREFLIGHT_ROLE}.${PRODUCTION_PROJECT_REF}`);
+  assert.equal(result.connectionEnvironment.PGSSLMODE, "require");
+});
+
+test("target guard rejects postgres-prefixed Production hosts", () => {
+  const url = `postgresql://${PRODUCTION_PREFLIGHT_ROLE}:secret@postgres.${PRODUCTION_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require`;
+  assert.throws(() => authorizeProductionPreflightTarget({ ...productionEnvironment, REFLAB_PRODUCTION_PREFLIGHT_DB_URL: url }), /allowlisted host/);
+});
+
+test("target guard rejects every Development project reference", () => {
+  assert.throws(() => authorizeProductionPreflightTarget({ ...poolerEnvironment, UNRELATED_VALUE: DEVELOPMENT_PROJECT_REF }), /Development project reference/);
+});
+
+test("target guard rejects another pooler or region", () => {
+  const url = poolerEnvironment.REFLAB_PRODUCTION_PREFLIGHT_DB_URL.replace(PRODUCTION_SESSION_POOLER_HOST, "aws-0-us-east-1.pooler.supabase.com");
+  assert.throws(() => authorizeProductionPreflightTarget({ ...poolerEnvironment, REFLAB_PRODUCTION_PREFLIGHT_DB_URL: url }), /allowlisted host/);
+});
+
+test("target guard rejects transaction pooler port 6543", () => {
+  const url = poolerEnvironment.REFLAB_PRODUCTION_PREFLIGHT_DB_URL.replace(":5432/postgres", ":6543/postgres");
+  assert.throws(() => authorizeProductionPreflightTarget({ ...poolerEnvironment, REFLAB_PRODUCTION_PREFLIGHT_DB_URL: url }), /allowlisted host/);
+});
+
+test("target guard rejects a pooler username without the Production project ref", () => {
+  const url = poolerEnvironment.REFLAB_PRODUCTION_PREFLIGHT_DB_URL.replace(`${PRODUCTION_PREFLIGHT_ROLE}.${PRODUCTION_PROJECT_REF}`, PRODUCTION_PREFLIGHT_ROLE);
+  assert.throws(() => authorizeProductionPreflightTarget({ ...poolerEnvironment, REFLAB_PRODUCTION_PREFLIGHT_DB_URL: url }), /allowlisted host/);
+});
+
+test("target guard rejects a pooler username for another role", () => {
+  const url = poolerEnvironment.REFLAB_PRODUCTION_PREFLIGHT_DB_URL.replace(PRODUCTION_PREFLIGHT_ROLE, "another_role");
+  assert.throws(() => authorizeProductionPreflightTarget({ ...poolerEnvironment, REFLAB_PRODUCTION_PREFLIGHT_DB_URL: url }), /allowlisted host/);
+});
+
+test("target guard remains fail-closed for missing opt-in and unknown hosts", () => {
   assert.throws(() => authorizeProductionPreflightTarget({}), /opt-in/);
-  assert.throws(() => authorizeProductionPreflightTarget({ ...productionEnvironment, REFLAB_PRODUCTION_PREFLIGHT_DB_URL: "postgresql://readonly:secret@example.com/postgres?sslmode=require" }), /allowlisted host/);
-  assert.throws(() => authorizeProductionPreflightTarget({ ...productionEnvironment, UNRELATED_VALUE: DEVELOPMENT_PROJECT_REF }), /Development project reference/);
+  assert.throws(() => authorizeProductionPreflightTarget({ ...productionEnvironment, REFLAB_PRODUCTION_PREFLIGHT_DB_URL: `postgresql://${PRODUCTION_PREFLIGHT_ROLE}:secret@example.com:5432/postgres?sslmode=require` }), /allowlisted host/);
 });
 
 test("an unauthorized target aborts before psql can be started", () => {

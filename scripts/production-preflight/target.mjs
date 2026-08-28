@@ -4,6 +4,9 @@ export const PREFLIGHT_OPT_IN = "ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT";
 export const PREFLIGHT_PROJECT_REF = "REFLAB_PRODUCTION_PREFLIGHT_PROJECT_REF";
 export const PREFLIGHT_DATABASE_URL = "REFLAB_PRODUCTION_PREFLIGHT_DB_URL";
 
+export const PRODUCTION_PREFLIGHT_ROLE = "reflab_prod_preflight_ro";
+export const PRODUCTION_SESSION_POOLER_HOST = "aws-1-sa-east-1.pooler.supabase.com";
+
 export function authorizeProductionPreflightTarget(environment = process.env) {
   const values = Object.values(environment).filter((value) => typeof value === "string");
   if (values.some((value) => value.includes(DEVELOPMENT_PROJECT_REF))) {
@@ -24,15 +27,27 @@ export function authorizeProductionPreflightTarget(environment = process.env) {
     throw new Error("Production preflight database URL is invalid.");
   }
 
-  const allowedHost = `db.${PRODUCTION_PROJECT_REF}.supabase.co`;
+  const directHost = `db.${PRODUCTION_PROJECT_REF}.supabase.co`;
+  const targetProfiles = new Map([
+    [directHost, {
+      ports: new Set(["", "5432"]),
+      username: PRODUCTION_PREFLIGHT_ROLE,
+    }],
+    [PRODUCTION_SESSION_POOLER_HOST, {
+      ports: new Set(["5432"]),
+      username: `${PRODUCTION_PREFLIGHT_ROLE}.${PRODUCTION_PROJECT_REF}`,
+    }],
+  ]);
+  const normalizedHost = parsed.hostname.toLowerCase();
+  const targetProfile = targetProfiles.get(normalizedHost);
   const allowedParameters = new Set(["sslmode"]);
   if (
     !["postgres:", "postgresql:"].includes(parsed.protocol) ||
-    parsed.hostname.toLowerCase() !== allowedHost ||
-    !["", "5432"].includes(parsed.port) ||
+    !targetProfile ||
+    !targetProfile.ports.has(parsed.port) ||
     parsed.pathname !== "/postgres" ||
     parsed.hash ||
-    !parsed.username ||
+    parsed.username !== targetProfile.username ||
     !parsed.password ||
     [...parsed.searchParams.keys()].some((key) => !allowedParameters.has(key)) ||
     parsed.searchParams.get("sslmode") !== "require"
@@ -42,12 +57,12 @@ export function authorizeProductionPreflightTarget(environment = process.env) {
 
   return {
     projectRef: PRODUCTION_PROJECT_REF,
-    host: allowedHost,
+    host: normalizedHost,
     connectionEnvironment: {
-      PGHOST: allowedHost,
+      PGHOST: normalizedHost,
       PGPORT: parsed.port || "5432",
       PGDATABASE: "postgres",
-      PGUSER: decodeURIComponent(parsed.username),
+      PGUSER: targetProfile.username,
       PGPASSWORD: decodeURIComponent(parsed.password),
       PGSSLMODE: "require",
     },

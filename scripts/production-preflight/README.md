@@ -2,7 +2,8 @@
 
 This harness inventories Production without applying migrations or changing data.
 It is deliberately disabled unless the caller supplies an explicit opt-in, the
-exact Production project ref, and a direct database URL for the allowlisted host.
+exact Production project ref, and a database URL matching one of the two exact
+allowlisted Production targets.
 
 ## Safety model
 
@@ -35,10 +36,18 @@ Use a clean process environment containing only:
 
 - `ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT=true`
 - `REFLAB_PRODUCTION_PREFLIGHT_PROJECT_REF=<exact Production ref>`
-- `REFLAB_PRODUCTION_PREFLIGHT_DB_URL=<direct read-only PostgreSQL URL with sslmode=require>`
+- `REFLAB_PRODUCTION_PREFLIGHT_DB_URL=<allowlisted read-only PostgreSQL URL with sslmode=require>`
 
 The database account must itself be read-only. The transaction guard is a second
 barrier, not a substitute for least-privilege credentials.
+
+The URL must use exactly one of these target forms:
+
+- Direct host: `db.<Production ref>.supabase.co`, port `5432` (explicit or
+  implicit), database `postgres`, and user `reflab_prod_preflight_ro`.
+- IPv4 Session pooler: `aws-1-sa-east-1.pooler.supabase.com`, explicit port
+  `5432`, database `postgres`, and user
+  `reflab_prod_preflight_ro.<Production ref>`.
 
 ## Local validation
 
