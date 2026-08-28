@@ -43,7 +43,13 @@ export function parseJsonResults(output) {
       const bytes = Buffer.from(encoded, "base64");
       if (bytes.toString("base64") !== encoded) throw new Error("non-canonical base64");
       const parsed = JSON.parse(utf8Decoder.decode(bytes));
-      if (parsed?.query !== queryId || !Object.hasOwn(parsed ?? {}, "payload")) throw new Error("invalid envelope");
+      if (
+        parsed?.query !== queryId ||
+        parsed?.payload_row_count !== 1 ||
+        !Object.hasOwn(parsed ?? {}, "payload")
+      ) {
+        throw new Error("invalid envelope");
+      }
       if (results.has(queryId)) throw new Error("duplicate query result");
 
       const payload = queryId === "function_inventory"

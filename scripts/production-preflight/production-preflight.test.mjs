@@ -19,12 +19,13 @@ import {
   buildIdentityQueries,
   buildSqlBatch,
   compareInventoryWithManifest,
+  jsonQuery,
   READ_ONLY_GUARD_QUERY_ID,
   RESULT_FRAME_PREFIX,
   semanticQueries,
 } from "./queries.mjs";
 import { buildGateReport, connectionCredentialBlockers } from "./gates.mjs";
-import { assertReadOnlyBatch, assertReadOnlySql } from "./sql-safety.mjs";
+import { assertReadOnlyBatch, assertReadOnlySql, maskSqlCommentsAndStrings } from "./sql-safety.mjs";
 import {
   buildConditionalInventory,
   classifyMigrationHistory,
@@ -50,12 +51,38 @@ const poolerEnvironment = {
   REFLAB_PRODUCTION_PREFLIGHT_DB_URL: `postgresql://${PRODUCTION_PREFLIGHT_ROLE}.${PRODUCTION_PROJECT_REF}:secret@${PRODUCTION_SESSION_POOLER_HOST}:5432/postgres?sslmode=require`,
 };
 
-const resultFrameLine = (query, payload) => {
-  const envelope = JSON.stringify({ query, payload });
+const resultFrameLine = (query, payload, payloadRowCount = 1) => {
+  const envelope = JSON.stringify({ query, payload_row_count: payloadRowCount, payload });
   return `${RESULT_FRAME_PREFIX}\t${query}\t${Buffer.from(envelope, "utf8").toString("base64")}`;
 };
 
 const readOnlyGuardLine = (payload = "on") => resultFrameLine(READ_ONLY_GUARD_QUERY_ID, payload);
+
+function hasTopLevelKeyword(sql, keyword) {
+  const masked = maskSqlCommentsAndStrings(sql);
+  let depth = 0;
+  let found = false;
+  for (let index = 0; index < masked.length; index += 1) {
+    if (masked[index] === "(") {
+      depth += 1;
+      continue;
+    }
+    if (masked[index] === ")") {
+      depth -= 1;
+      assert.ok(depth >= 0, "SQL payload has unbalanced parentheses");
+      continue;
+    }
+    if (depth !== 0) continue;
+    const candidate = masked.slice(index, index + keyword.length);
+    const previous = masked[index - 1] ?? " ";
+    const next = masked[index + keyword.length] ?? " ";
+    if (candidate.toLowerCase() === keyword.toLowerCase() && !/[a-z0-9_]/i.test(previous) && !/[a-z0-9_]/i.test(next)) {
+      found = true;
+    }
+  }
+  assert.equal(depth, 0, "SQL payload has unbalanced parentheses");
+  return found;
+}
 
 test("target guard keeps accepting the exact direct Production host", () => {
   const result = authorizeProductionPreflightTarget(productionEnvironment);
@@ -133,9 +160,76 @@ test("generated SQL is wrapped, time-limited and restricted to the read-only all
   assert.match(sql, /lock_timeout = '2s'/);
 });
 
+test("jsonQuery wraps every payload form as an independent scalar query", () => {
+  const examples = [
+    jsonQuery("literal_payload", "pg_catalog.json_build_object('value', 'ok')"),
+    jsonQuery(
+      "from_payload",
+      "pg_catalog.json_build_object('rows', count(*)) from public.example_rows"
+    ),
+    jsonQuery(
+      "join_payload",
+      "pg_catalog.json_build_object('rows', count(*)) from public.example_rows a join public.example_links b on b.id = a.id"
+    ),
+    jsonQuery(
+      "subquery_payload",
+      "pg_catalog.json_build_object('rows', (select count(*) from public.example_rows))"
+    ),
+    jsonQuery(
+      "cte_payload",
+      "coalesce((with sample as (select 1 as value) select pg_catalog.json_agg(value) from sample), '[]'::json)"
+    ),
+  ];
+
+  for (const query of examples) {
+    assert.ok(
+      query.sql.includes(`from (select ${query.payloadSql}) payload_rows(payload_value)`),
+      `${query.id} is not wrapped as an independent payload query`
+    );
+    assert.equal(query.sql.includes(`'payload', ${query.payloadSql}`), false);
+    assert.match(query.sql, /'payload_row_count', count\(\*\)/i);
+    assert.match(query.sql, /'payload', \(pg_catalog\.json_agg\(payload_rows\.payload_value\) -> 0\)/i);
+    assert.doesNotThrow(() => assertReadOnlySql(query.sql));
+  }
+});
+
+test("all current semantic and identity queries use the same scalar payload wrapper", () => {
+  const identityQueries = [
+    ...buildIdentityQueries({ includeLinks: false }),
+    ...buildIdentityQueries({ includeLinks: true }),
+  ];
+  const queries = [...baseInventoryQueries, ...semanticQueries, ...identityQueries];
+  for (const query of queries) {
+    assert.doesNotThrow(() => assertReadOnlySql(query.sql), `${query.id} is not valid read-only SQL`);
+    hasTopLevelKeyword(query.payloadSql, "from");
+    assert.ok(
+      query.sql.includes(`from (select ${query.payloadSql}) payload_rows(payload_value)`),
+      `${query.id} bypasses jsonQuery scalar framing`
+    );
+    assert.equal(
+      query.sql.includes(`'payload', ${query.payloadSql}`),
+      false,
+      `${query.id} retains the invalid direct payload pattern`
+    );
+  }
+
+  const topLevelFromSemanticIds = semanticQueries
+    .filter((query) => hasTopLevelKeyword(query.payloadSql, "from"))
+    .map((query) => query.id);
+  assert.deepEqual(topLevelFromSemanticIds, [
+    "identity_link_structure",
+    "attempt_semantics",
+    "exam_integrity",
+    "matches_tenant_integrity",
+    "fixture_creator_identity",
+  ]);
+  assert.ok(identityQueries.every((query) => /\)\s+from\s+/i.test(query.payloadSql)));
+});
+
 test("read-only guard is parseable and contains no constant-folding failure expression", () => {
   const sql = buildSqlBatch([]);
-  assert.match(sql, /pg_catalog\.encode\(pg_catalog\.convert_to\(pg_catalog\.json_build_object\('query', 'read_only_guard', 'payload', pg_catalog\.current_setting\('transaction_read_only'\)\)::text, 'UTF8'\), 'base64'\)/i);
+  assert.match(sql, /'query', 'read_only_guard',[\s\S]*'payload_row_count', count\(\*\),[\s\S]*'payload', \(pg_catalog\.json_agg\(payload_rows\.payload_value\) -> 0\)/i);
+  assert.match(sql, /from \(select pg_catalog\.current_setting\('transaction_read_only'\)\) payload_rows\(payload_value\)/i);
   assert.match(sql, /pg_catalog\.translate\([\s\S]*pg_catalog\.chr\(10\) \|\| pg_catalog\.chr\(13\)/i);
   assert.doesNotMatch(sql, /\bpgcrypto\b|\bdigest\s*\(/i);
   assert.doesNotMatch(sql, /\/\s*0\b|\bcase\b|\braise\b|\bpg_sleep\b/i);
@@ -182,6 +276,21 @@ test("framed transport preserves multiline, CRLF, quotes, backslashes, Unicode a
   const results = parseJsonResults(`${output}\n`);
   assert.deepEqual(results.get("first_payload"), firstPayload);
   assert.deepEqual(results.get("second_payload"), secondPayload);
+});
+
+test("framed transport fails closed unless each payload query returned exactly one row", () => {
+  for (const rowCount of [0, 2]) {
+    let error;
+    assert.throws(() => {
+      try {
+        parseJsonResults(resultFrameLine("row_count_guard", "SENSITIVE_PAYLOAD", rowCount));
+      } catch (caught) {
+        error = caught;
+        throw caught;
+      }
+    }, /invalid result frame for query row_count_guard/);
+    assert.doesNotMatch(error.message, /SENSITIVE_PAYLOAD/);
+  }
 });
 
 test("large function inventory is framed, hashed exactly and discarded before reporting", () => {

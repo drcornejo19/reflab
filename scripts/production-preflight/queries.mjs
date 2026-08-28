@@ -17,11 +17,18 @@ import {
 
 export const RESULT_FRAME_PREFIX = "REFLAB_PREFLIGHT_V1";
 
-const jsonQuery = (id, payloadSql, requires = {}) => {
-  const envelopeSql = `pg_catalog.json_build_object('query', '${id}', 'payload', ${payloadSql})::text`;
+export const jsonQuery = (id, payloadSql, requires = {}) => {
+  const payloadQuerySql = `select ${payloadSql}`;
+  const envelopeSql = `(select pg_catalog.json_build_object(
+        'query', '${id}',
+        'payload_row_count', count(*),
+        'payload', (pg_catalog.json_agg(payload_rows.payload_value) -> 0)
+      )::text
+      from (${payloadQuerySql}) payload_rows(payload_value))`;
   return {
     id,
     requires,
+    payloadSql,
     sql: `select '${RESULT_FRAME_PREFIX}' || pg_catalog.chr(9) || '${id}' || pg_catalog.chr(9) ||
       pg_catalog.translate(
         pg_catalog.encode(pg_catalog.convert_to(${envelopeSql}, 'UTF8'), 'base64'),
