@@ -25,6 +25,11 @@ allowlisted Production targets.
 - The `psql` subprocess receives only operating-system launch variables and the
   six explicit `PG*` connection fields. Inherited `PGOPTIONS`, service files,
   passfiles, and application environment values are never forwarded.
+- Query results use versioned Base64 frames with CR/LF removed in SQL. The runner
+  validates and decodes each complete envelope under an explicit 64 MiB buffer;
+  malformed or oversized output aborts without echoing raw payloads.
+- Function bodies are normalized and hashed immediately after decoding, then
+  discarded before inventory comparison or report construction.
 - Reports contain object names and aggregate counts, never Clerk subjects, emails,
   names, Storage paths, notification tokens, database credentials, or function
   bodies. Function and policy content is compared through SHA-256 fingerprints.

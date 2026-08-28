@@ -15,11 +15,21 @@ import {
   normalizeTriggerDefinition,
 } from "./canonical-contracts.mjs";
 
-const jsonQuery = (id, payloadSql, requires = {}) => ({
-  id,
-  requires,
-  sql: `select pg_catalog.json_build_object('query', '${id}', 'payload', ${payloadSql})::text`,
-});
+export const RESULT_FRAME_PREFIX = "REFLAB_PREFLIGHT_V1";
+
+const jsonQuery = (id, payloadSql, requires = {}) => {
+  const envelopeSql = `pg_catalog.json_build_object('query', '${id}', 'payload', ${payloadSql})::text`;
+  return {
+    id,
+    requires,
+    sql: `select '${RESULT_FRAME_PREFIX}' || pg_catalog.chr(9) || '${id}' || pg_catalog.chr(9) ||
+      pg_catalog.translate(
+        pg_catalog.encode(pg_catalog.convert_to(${envelopeSql}, 'UTF8'), 'base64'),
+        pg_catalog.chr(10) || pg_catalog.chr(13),
+        ''
+      )`,
+  };
+};
 
 export const READ_ONLY_GUARD_QUERY_ID = "read_only_guard";
 
@@ -690,6 +700,7 @@ function compareInventoryLegacy(results) {
 }
 
 const sha256 = (value) => createHash("sha256").update(value, "utf8").digest("hex");
+export const hashFunctionSource = (value) => sha256(normalizeFunctionSource(value));
 const policyKey = (entry) => `${entry.schema_name ?? entry.schema}.${entry.table_name ?? entry.table}.${entry.policy_name ?? entry.name}`;
 const tableKey = (entry) => `${entry.schema_name}.${entry.table_name}`;
 const searchPathValue = (value) => String(value ?? "").replace(/^search_path=/, "").trim();
@@ -898,7 +909,7 @@ export function compareInventoryWithManifest(results) {
     .flatMap((expected) => {
       const actual = functionBySignature.get(expected.signature);
       if (!actual) return [];
-      const actualSourceHash = sha256(normalizeFunctionSource(actual.source_definition));
+      const actualSourceHash = actual.source_hash ?? hashFunctionSource(actual.source_definition);
       const matches = actual.security === expected.security &&
         searchPathValue(actual.search_path) === expected.search_path &&
         actual.owner === expected.owner && actualSourceHash === expected.sourceHash;

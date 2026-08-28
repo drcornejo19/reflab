@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import { readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
@@ -18,11 +20,19 @@ import {
   buildSqlBatch,
   compareInventoryWithManifest,
   READ_ONLY_GUARD_QUERY_ID,
+  RESULT_FRAME_PREFIX,
   semanticQueries,
 } from "./queries.mjs";
 import { buildGateReport, connectionCredentialBlockers } from "./gates.mjs";
 import { assertReadOnlyBatch, assertReadOnlySql } from "./sql-safety.mjs";
-import { buildConditionalInventory, classifyMigrationHistory, executeReadOnlyBatch, runProductionPreflight } from "./run.mjs";
+import {
+  buildConditionalInventory,
+  classifyMigrationHistory,
+  executeReadOnlyBatch,
+  parseJsonResults,
+  PREFLIGHT_MAX_BUFFER_BYTES,
+  runProductionPreflight,
+} from "./run.mjs";
 import {
   authorizeProductionPreflightTarget,
   PRODUCTION_PREFLIGHT_ROLE,
@@ -40,10 +50,12 @@ const poolerEnvironment = {
   REFLAB_PRODUCTION_PREFLIGHT_DB_URL: `postgresql://${PRODUCTION_PREFLIGHT_ROLE}.${PRODUCTION_PROJECT_REF}:secret@${PRODUCTION_SESSION_POOLER_HOST}:5432/postgres?sslmode=require`,
 };
 
-const readOnlyGuardLine = (payload = "on") => JSON.stringify({
-  query: READ_ONLY_GUARD_QUERY_ID,
-  payload,
-});
+const resultFrameLine = (query, payload) => {
+  const envelope = JSON.stringify({ query, payload });
+  return `${RESULT_FRAME_PREFIX}\t${query}\t${Buffer.from(envelope, "utf8").toString("base64")}`;
+};
+
+const readOnlyGuardLine = (payload = "on") => resultFrameLine(READ_ONLY_GUARD_QUERY_ID, payload);
 
 test("target guard keeps accepting the exact direct Production host", () => {
   const result = authorizeProductionPreflightTarget(productionEnvironment);
@@ -123,7 +135,9 @@ test("generated SQL is wrapped, time-limited and restricted to the read-only all
 
 test("read-only guard is parseable and contains no constant-folding failure expression", () => {
   const sql = buildSqlBatch([]);
-  assert.match(sql, /^select pg_catalog\.json_build_object\('query', 'read_only_guard', 'payload', pg_catalog\.current_setting\('transaction_read_only'\)\)::text;$/im);
+  assert.match(sql, /pg_catalog\.encode\(pg_catalog\.convert_to\(pg_catalog\.json_build_object\('query', 'read_only_guard', 'payload', pg_catalog\.current_setting\('transaction_read_only'\)\)::text, 'UTF8'\), 'base64'\)/i);
+  assert.match(sql, /pg_catalog\.translate\([\s\S]*pg_catalog\.chr\(10\) \|\| pg_catalog\.chr\(13\)/i);
+  assert.doesNotMatch(sql, /\bpgcrypto\b|\bdigest\s*\(/i);
   assert.doesNotMatch(sql, /\/\s*0\b|\bcase\b|\braise\b|\bpg_sleep\b/i);
 
   const accepted = executeReadOnlyBatch(sql, {}, {
@@ -155,6 +169,114 @@ test("a failed base read-only gate aborts before the semantic phase", () => {
   assert.equal(spawnCount, 1);
 });
 
+test("framed transport preserves multiline, CRLF, quotes, backslashes, Unicode and concatenated results", () => {
+  const firstPayload = {
+    text: "first line\nsecond line\r\n\"quoted\" \\path árbitro ⚽",
+  };
+  const secondPayload = ["línea uno", { nested: "雪\\nfin" }];
+  const output = [
+    "unframed psql noise",
+    resultFrameLine("first_payload", firstPayload),
+    resultFrameLine("second_payload", secondPayload),
+  ].join("\r\n");
+  const results = parseJsonResults(`${output}\n`);
+  assert.deepEqual(results.get("first_payload"), firstPayload);
+  assert.deepEqual(results.get("second_payload"), secondPayload);
+});
+
+test("large function inventory is framed, hashed exactly and discarded before reporting", () => {
+  const sourceDefinition = `BEGIN\r\n${"x".repeat(2 * 1024 * 1024)}\nRETURN '\"árbitro\\ruta\"';\nEND`;
+  const output = [
+    readOnlyGuardLine(),
+    resultFrameLine("function_inventory", [{ signature: "public.large()", source_definition: sourceDefinition }]),
+  ].join("\n");
+  const results = parseJsonResults(output);
+  const entry = results.get("function_inventory")[0];
+  const expectedHash = createHash("sha256").update(sourceDefinition.replace(/\r\n/g, "\n").trim(), "utf8").digest("hex");
+  assert.equal(entry.source_hash, expectedHash);
+  assert.equal(Object.hasOwn(entry, "source_definition"), false);
+});
+
+test("function contract comparison uses the exact internal source hash", () => {
+  const expected = canonicalObjectManifest.functions.find((entry) => entry.scope === "shared");
+  const actual = {
+    signature: expected.signature,
+    security: expected.security,
+    owner: expected.owner,
+    search_path: `search_path=${expected.search_path}`,
+    source_hash: expected.sourceHash,
+  };
+  const results = new Map([
+    ["catalog_gate", { tables: canonicalObjectManifest.tables, columns: [] }],
+    ["function_inventory", [actual]],
+  ]);
+  const matching = compareInventoryWithManifest(results).functionContractDrift;
+  assert.equal(matching.some((entry) => entry.signature === expected.signature), false);
+
+  actual.source_hash = "0".repeat(64);
+  const drifted = compareInventoryWithManifest(results).functionContractDrift;
+  assert.equal(drifted.some((entry) => entry.signature === expected.signature), true);
+});
+
+test("corrupt framing aborts without exposing payload and before semantic execution", () => {
+  const sensitiveBody = "SENSITIVE_FUNCTION_BODY_SHOULD_NEVER_APPEAR";
+  const truncatedJson = `{"query":"function_inventory","payload":[{"source_definition":"${sensitiveBody}`;
+  const corruptFrame = `${RESULT_FRAME_PREFIX}\tfunction_inventory\t${Buffer.from(truncatedJson, "utf8").toString("base64")}`;
+  let parseError;
+  assert.throws(() => {
+    try {
+      parseJsonResults(corruptFrame);
+    } catch (error) {
+      parseError = error;
+      throw error;
+    }
+  }, /invalid result frame for query function_inventory/);
+  assert.doesNotMatch(parseError.message, new RegExp(sensitiveBody));
+
+  let spawnCount = 0;
+  let runError;
+  assert.throws(() => {
+    try {
+      runProductionPreflight(productionEnvironment, {
+        spawn() {
+          spawnCount += 1;
+          return { status: 0, stdout: `${readOnlyGuardLine()}\n${corruptFrame}\n`, stderr: "" };
+        },
+        writeReport() {},
+      });
+    } catch (error) {
+      runError = error;
+      throw error;
+    }
+  }, /invalid result frame for query function_inventory/);
+  assert.doesNotMatch(runError.message, new RegExp(sensitiveBody));
+  assert.equal(spawnCount, 1);
+});
+
+test("spawnSync uses an explicit buffer and sanitizes overflow failures", () => {
+  const sensitiveOutput = "SENSITIVE_TRUNCATED_FUNCTION_OUTPUT";
+  let configuredMaxBuffer;
+  let overflowError;
+  assert.throws(() => {
+    try {
+      executeReadOnlyBatch(buildSqlBatch([]), {}, {
+        spawn(_command, _args, options) {
+          configuredMaxBuffer = options.maxBuffer;
+          const overflow = new Error(`maxBuffer exceeded: ${sensitiveOutput}`);
+          overflow.code = "ENOBUFS";
+          return { status: null, error: overflow, stdout: sensitiveOutput, stderr: "" };
+        },
+      });
+    } catch (error) {
+      overflowError = error;
+      throw error;
+    }
+  }, /database output exceeded the safe buffer limit/);
+  assert.equal(configuredMaxBuffer, PREFLIGHT_MAX_BUFFER_BYTES);
+  assert.ok(configuredMaxBuffer >= 16 * 1024 * 1024);
+  assert.doesNotMatch(overflowError.message, new RegExp(sensitiveOutput));
+});
+
 test("both runner phases independently enforce a read-only transaction before inventory", () => {
   const batches = [];
   const outputs = [
@@ -163,7 +285,7 @@ test("both runner phases independently enforce a read-only transaction before in
       { query: "catalog_gate", payload: { tables: [], columns: [] } },
       { query: "connection_role_security", payload: { rolname: "preflight_reader", rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false } },
       { query: "connection_effective_writes", payload: { schemas_with_create: [], tables_with_dml: [], sequences_with_write: [] } },
-    ].map((entry) => JSON.stringify(entry)).join("\n"),
+    ].map((entry) => resultFrameLine(entry.query, entry.payload)).join("\n"),
     readOnlyGuardLine(),
   ];
   runProductionPreflight(productionEnvironment, {
@@ -578,7 +700,7 @@ test("the report never emits function bodies", () => {
       { query: "connection_role_security", payload: { rolname: "preflight_reader", rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false } },
       { query: "connection_effective_writes", payload: { schemas_with_create: [], tables_with_dml: [], sequences_with_write: [] } },
       { query: "function_inventory", payload: [{ signature: "public.example()", source_definition: "secret function body" }] },
-    ].map((entry) => JSON.stringify(entry)).join("\n"),
+    ].map((entry) => resultFrameLine(entry.query, entry.payload)).join("\n"),
     readOnlyGuardLine(),
   ];
   let reportText = "";
