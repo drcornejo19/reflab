@@ -15,6 +15,14 @@ import {
   submitCanonicalFieldAttempt,
   type CanonicalScoredAttemptPresentation,
 } from "@/lib/training/attemptClient";
+import {
+  createFieldAiFeedbackRequest,
+  isSameFieldFeedbackContext,
+  isSameFieldFeedbackRequest,
+  type FieldFeedbackContext,
+  type FieldFeedbackPayload,
+  type FieldFeedbackRequestIdentity,
+} from "@/lib/training/fieldFeedbackClient";
 
 type ExamAnswer = {
   clipId: string;
@@ -106,6 +114,21 @@ export function ClipExercise({
   const [loadingAi, setLoadingAi] = useState(false);
   const [playCount, setPlayCount] = useState(() => getSavedClipPlayCount(typedClip.id));
   const [weeklyClipCount, setWeeklyClipCount] = useState(0);
+  const savingAttemptRef = useRef(false);
+  const mountedRef = useRef(true);
+  const activeAttemptIdRef = useRef<string | null>(null);
+  const activeAiRequestRef = useRef<{
+    context: FieldFeedbackRequestIdentity;
+    request: ReturnType<typeof createFieldAiFeedbackRequest>;
+  } | null>(null);
+  const currentFeedbackContextRef = useRef<FieldFeedbackContext>({
+    clipId: typedClip.id,
+    topic: typedClip.topic,
+  });
+  currentFeedbackContextRef.current = {
+    clipId: typedClip.id,
+    topic: typedClip.topic,
+  };
 
   const isOffside = typedClip.topic === "Offside";
   const isVarClip = typedClip.topic === "VAR";
@@ -147,6 +170,17 @@ export function ClipExercise({
   }, [isPro, typedClip.sport_type, user]);
 
   useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      activeAttemptIdRef.current = null;
+      activeAiRequestRef.current?.request.abort();
+      activeAiRequestRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
     const savedCount = Number(
       localStorage.getItem(`clip-plays-${typedClip.id}`) ?? "0"
     );
@@ -158,8 +192,8 @@ export function ClipExercise({
       videoRef.current.pause();
       videoRef.current.currentTime = 0;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- The reset only needs to react to clip identity changes.
-  }, [typedClip.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Reset only when the clip scoring context changes.
+  }, [typedClip.id, typedClip.topic]);
 
   useEffect(() => {
     if (typedClip.topic === "Offside" && typedClip.sub_type === "no_offside") {
@@ -202,7 +236,7 @@ export function ClipExercise({
   }
 
   async function submit() {
-    if (!canSubmit || isSaving) return;
+    if (!canSubmit || isSaving || savingAttemptRef.current) return;
 
     if (freeClipLimitReached) {
       setSaveError("Has completado tus clips gratuitos de esta semana. Desbloquea RefLab Pro para seguir entrenando sin limites.");
@@ -241,9 +275,14 @@ export function ClipExercise({
       return;
     }
 
+    savingAttemptRef.current = true;
     setIsSaving(true);
     setSaveError(null);
+    invalidateAiFeedback();
     setAiFeedback(null);
+
+    const submissionContext = currentFeedbackContextRef.current;
+    let persistedPresentation: CanonicalScoredAttemptPresentation | null = null;
 
     try {
       const presentation = await submitCanonicalFieldAttempt({
@@ -252,48 +291,86 @@ export function ClipExercise({
         clipId: typedClip.id,
         answer: { foul, restart, discipline },
       });
-      setResult(presentation);
-    } catch (error) {
-      setSaveError(
-        error instanceof Error ? error.message : "No se pudo guardar el intento."
-      );
-      setIsSaving(false);
-      return;
-    }
 
-    if (!isPro) setWeeklyClipCount((prev) => prev + 1);
-    setIsSaving(false);
-
-    try {
-      setLoadingAi(true);
-
-      const aiRes = await fetch("/api/ai-feedback", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          clipId: typedClip.id,
-          sportType: DEFAULT_SPORT_TYPE,
-          userAnswer,
-          justification,
-          feedbackLanguage: getBrowserFeedbackLanguage(),
-        }),
-      });
-
-      const aiData = await aiRes.json();
-
-      if (!aiRes.ok) {
-        setAiFeedback("No se pudo generar el feedback IA.");
-      } else {
-        setAiFeedback(aiData.feedback ?? "Sin feedback IA disponible.");
+      if (
+        !mountedRef.current ||
+        !isSameFieldFeedbackContext(
+          submissionContext,
+          currentFeedbackContextRef.current
+        )
+      ) {
+        return;
       }
+
+      activeAttemptIdRef.current = presentation.result.attemptId;
+      persistedPresentation = presentation;
+      setResult(presentation);
+      if (!isPro) setWeeklyClipCount((prev) => prev + 1);
     } catch (error) {
-      console.error("Error generando feedback IA:", error);
-      setAiFeedback("No se pudo generar el feedback IA.");
+      if (mountedRef.current) {
+        setSaveError(
+          error instanceof Error ? error.message : "No se pudo guardar el intento."
+        );
+      }
+      return;
     } finally {
-      setLoadingAi(false);
+      savingAttemptRef.current = false;
+      if (mountedRef.current) setIsSaving(false);
     }
+
+    startAiFeedback(persistedPresentation.result.attemptId, {
+      clipId: typedClip.id,
+      sportType: DEFAULT_SPORT_TYPE,
+      userAnswer,
+      justification,
+      feedbackLanguage: getBrowserFeedbackLanguage(),
+    });
+  }
+
+  function startAiFeedback(attemptId: string, payload: FieldFeedbackPayload) {
+    const context = {
+      attemptId,
+      ...currentFeedbackContextRef.current,
+    };
+    const request = createFieldAiFeedbackRequest(payload);
+
+    activeAttemptIdRef.current = attemptId;
+    activeAiRequestRef.current?.request.abort();
+    activeAiRequestRef.current = { context, request };
+    setLoadingAi(true);
+
+    void request.promise
+      .then((outcome) => {
+        if (!isCurrentAiFeedbackRequest(context, request)) return;
+        setAiFeedback(outcome.feedback);
+      })
+      .finally(() => {
+        if (!isCurrentAiFeedbackRequest(context, request)) return;
+        activeAiRequestRef.current = null;
+        setLoadingAi(false);
+      });
+  }
+
+  function isCurrentAiFeedbackRequest(
+    context: FieldFeedbackRequestIdentity,
+    request: ReturnType<typeof createFieldAiFeedbackRequest>
+  ) {
+    const activeRequest = activeAiRequestRef.current;
+
+    return (
+      mountedRef.current &&
+      activeAttemptIdRef.current === context.attemptId &&
+      activeRequest?.request === request &&
+      isSameFieldFeedbackRequest(context, activeRequest.context) &&
+      isSameFieldFeedbackContext(context, currentFeedbackContextRef.current)
+    );
+  }
+
+  function invalidateAiFeedback() {
+    activeAttemptIdRef.current = null;
+    activeAiRequestRef.current?.request.abort();
+    activeAiRequestRef.current = null;
+    setLoadingAi(false);
   }
 
   function reset(resetVideoCount = false) {
@@ -306,7 +383,7 @@ export function ClipExercise({
     setResult(null);
     setSaveError(null);
     setAiFeedback(null);
-    setLoadingAi(false);
+    invalidateAiFeedback();
 
     if (resetVideoCount) {
       setPlayCount(0);
