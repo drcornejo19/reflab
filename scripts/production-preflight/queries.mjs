@@ -258,7 +258,7 @@ export const baseInventoryQueries = [
       from inherited_roles inherited
       join pg_catalog.pg_auth_members membership on membership.member = inherited.role_oid
       join pg_catalog.pg_roles granted on granted.oid = membership.roleid
-      where pg_catalog.position(' -> ' || granted.rolname in inherited.inheritance_path) = 0
+      where pg_catalog.strpos(inherited.inheritance_path, ' -> ' || granted.rolname) = 0
     )
     select pg_catalog.json_agg(x order by x.effective_for, x.inheritance_path) from (
       select inherited.effective_for, granted.rolname as granted_role,

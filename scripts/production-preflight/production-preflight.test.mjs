@@ -243,6 +243,16 @@ test("trigger, grant and Storage inventories remain separate and complete", () =
   }
 });
 
+test("generated preflight SQL contains no schema-qualified POSITION special syntax", () => {
+  const sql = buildSqlBatch([
+    ...baseInventoryQueries,
+    ...semanticQueries,
+    ...buildIdentityQueries({ includeLinks: true }),
+  ]);
+  assert.doesNotMatch(sql, /pg_catalog[.]position\s*[(]/i);
+  assert.match(sql, /pg_catalog[.]strpos\(inherited[.]inheritance_path, ' -> ' \|\| granted[.]rolname\) = 0/i);
+});
+
 test("token ownership conflicts always return an integer", () => {
   const query = semanticQueries.find((entry) => entry.id === "notification_integrity").sql;
   assert.match(query, /token_owner_conflicts', coalesce\(\(select count\(\*\)/i);
