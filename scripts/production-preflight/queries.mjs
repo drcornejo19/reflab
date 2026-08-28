@@ -21,6 +21,8 @@ const jsonQuery = (id, payloadSql, requires = {}) => ({
   sql: `select pg_catalog.json_build_object('query', '${id}', 'payload', ${payloadSql})::text`,
 });
 
+export const READ_ONLY_GUARD_QUERY_ID = "read_only_guard";
+
 export const catalogGateQuery = jsonQuery(
   "catalog_gate",
   `pg_catalog.json_build_object(
@@ -471,6 +473,10 @@ export function queryDependenciesExist(query, catalog) {
 }
 
 export function buildSqlBatch(queries) {
+  const readOnlyGuard = jsonQuery(
+    READ_ONLY_GUARD_QUERY_ID,
+    "pg_catalog.current_setting('transaction_read_only')"
+  );
   const statements = [
     "begin read only",
     "set local statement_timeout = '15s'",
@@ -478,7 +484,7 @@ export function buildSqlBatch(queries) {
     "show default_transaction_read_only",
     "show transaction_read_only",
     "select current_user, session_user",
-    "select case when current_setting('transaction_read_only') = 'on' then 1 else 1 / 0 end as read_only_guard",
+    readOnlyGuard.sql,
     ...queries.map((query) => query.sql),
     "rollback",
   ];

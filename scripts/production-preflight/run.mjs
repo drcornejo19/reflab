@@ -8,6 +8,7 @@ import {
   buildSqlBatch,
   compareInventoryWithManifest,
   queryDependenciesExist,
+  READ_ONLY_GUARD_QUERY_ID,
   semanticQueries,
 } from "./queries.mjs";
 import { assertReadOnlyBatch } from "./sql-safety.mjs";
@@ -86,7 +87,11 @@ export function executeReadOnlyBatch(sql, connectionEnvironment, { spawn = spawn
   if (result.error || result.status !== 0) {
     throw new Error(`Production preflight aborted on unexpected database error: ${sanitizeProcessOutput(result.stderr || result.stdout)}`);
   }
-  return parseJsonResults(result.stdout);
+  const results = parseJsonResults(result.stdout);
+  if (results.get(READ_ONLY_GUARD_QUERY_ID) !== "on") {
+    throw new Error("Production preflight aborted: transaction_read_only was not confirmed as on.");
+  }
+  return results;
 }
 
 function reportSafeResults(results) {

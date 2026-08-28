@@ -12,7 +12,14 @@ import {
   REQUIRED_IN_PRODUCTION,
   runtimeRpcSignatures,
 } from "./manifest.mjs";
-import { baseInventoryQueries, buildIdentityQueries, buildSqlBatch, compareInventoryWithManifest, semanticQueries } from "./queries.mjs";
+import {
+  baseInventoryQueries,
+  buildIdentityQueries,
+  buildSqlBatch,
+  compareInventoryWithManifest,
+  READ_ONLY_GUARD_QUERY_ID,
+  semanticQueries,
+} from "./queries.mjs";
 import { buildGateReport, connectionCredentialBlockers } from "./gates.mjs";
 import { assertReadOnlyBatch, assertReadOnlySql } from "./sql-safety.mjs";
 import { buildConditionalInventory, classifyMigrationHistory, executeReadOnlyBatch, runProductionPreflight } from "./run.mjs";
@@ -32,6 +39,11 @@ const poolerEnvironment = {
   ...productionEnvironment,
   REFLAB_PRODUCTION_PREFLIGHT_DB_URL: `postgresql://${PRODUCTION_PREFLIGHT_ROLE}.${PRODUCTION_PROJECT_REF}:secret@${PRODUCTION_SESSION_POOLER_HOST}:5432/postgres?sslmode=require`,
 };
+
+const readOnlyGuardLine = (payload = "on") => JSON.stringify({
+  query: READ_ONLY_GUARD_QUERY_ID,
+  payload,
+});
 
 test("target guard keeps accepting the exact direct Production host", () => {
   const result = authorizeProductionPreflightTarget(productionEnvironment);
@@ -104,20 +116,55 @@ test("generated SQL is wrapped, time-limited and restricted to the read-only all
   assert.ok(statements.some((statement) => /^show default_transaction_read_only$/i.test(statement)));
   assert.ok(statements.some((statement) => /^show transaction_read_only$/i.test(statement)));
   assert.ok(statements.some((statement) => /^select current_user, session_user$/i.test(statement)));
-  assert.ok(statements.findIndex((statement) => /current_setting\(\s*\) =/i.test(statement)) < statements.findIndex((statement) => /pg_catalog\.pg_namespace/i.test(statement)));
+  assert.ok(statements.findIndex((statement) => /current_setting\(\s*\)/i.test(statement)) < statements.findIndex((statement) => /pg_catalog\.pg_namespace/i.test(statement)));
   assert.match(sql, /statement_timeout = '15s'/);
   assert.match(sql, /lock_timeout = '2s'/);
+});
+
+test("read-only guard is parseable and contains no constant-folding failure expression", () => {
+  const sql = buildSqlBatch([]);
+  assert.match(sql, /^select pg_catalog\.json_build_object\('query', 'read_only_guard', 'payload', pg_catalog\.current_setting\('transaction_read_only'\)\)::text;$/im);
+  assert.doesNotMatch(sql, /\/\s*0\b|\bcase\b|\braise\b|\bpg_sleep\b/i);
+
+  const accepted = executeReadOnlyBatch(sql, {}, {
+    spawn() {
+      return { status: 0, stdout: `${readOnlyGuardLine()}\n`, stderr: "" };
+    },
+  });
+  assert.equal(accepted.get(READ_ONLY_GUARD_QUERY_ID), "on");
+
+  for (const payload of ["off", "ON", true, null, undefined]) {
+    assert.throws(() => executeReadOnlyBatch(sql, {}, {
+      spawn() {
+        const stdout = payload === undefined ? "" : `${readOnlyGuardLine(payload)}\n`;
+        return { status: 0, stdout, stderr: "" };
+      },
+    }), /transaction_read_only was not confirmed as on/);
+  }
+});
+
+test("a failed base read-only gate aborts before the semantic phase", () => {
+  let spawnCount = 0;
+  assert.throws(() => runProductionPreflight(productionEnvironment, {
+    spawn() {
+      spawnCount += 1;
+      return { status: 0, stdout: `${readOnlyGuardLine("off")}\n`, stderr: "" };
+    },
+    writeReport() {},
+  }), /transaction_read_only was not confirmed as on/);
+  assert.equal(spawnCount, 1);
 });
 
 test("both runner phases independently enforce a read-only transaction before inventory", () => {
   const batches = [];
   const outputs = [
     [
+      { query: READ_ONLY_GUARD_QUERY_ID, payload: "on" },
       { query: "catalog_gate", payload: { tables: [], columns: [] } },
       { query: "connection_role_security", payload: { rolname: "preflight_reader", rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false } },
       { query: "connection_effective_writes", payload: { schemas_with_create: [], tables_with_dml: [], sequences_with_write: [] } },
     ].map((entry) => JSON.stringify(entry)).join("\n"),
-    "",
+    readOnlyGuardLine(),
   ];
   runProductionPreflight(productionEnvironment, {
     spawn(_command, _arguments, options) {
@@ -129,7 +176,7 @@ test("both runner phases independently enforce a read-only transaction before in
   assert.equal(batches.length, 2);
   for (const sql of batches) {
     const statements = assertReadOnlyBatch(sql);
-    const guardIndex = statements.findIndex((statement) => /current_setting\(\s*\) =/i.test(statement));
+    const guardIndex = statements.findIndex((statement) => /current_setting\(\s*\)/i.test(statement));
     const substantiveIndex = statements.findIndex((statement, index) => index > guardIndex && /^select\b/i.test(statement));
     assert.ok(guardIndex >= 0);
     assert.ok(substantiveIndex > guardIndex);
@@ -500,7 +547,7 @@ test("the psql subprocess environment drops inherited PGOPTIONS and service conf
     },
     spawn(_command, _args, options) {
       spawnedEnvironment = options.env;
-      return { status: 0, stdout: "", stderr: "" };
+      return { status: 0, stdout: `${readOnlyGuardLine()}\n`, stderr: "" };
     },
   });
   assert.equal(spawnedEnvironment.PGOPTIONS, undefined);
@@ -513,12 +560,13 @@ test("the psql subprocess environment drops inherited PGOPTIONS and service conf
 test("the report never emits function bodies", () => {
   const outputs = [
     [
+      { query: READ_ONLY_GUARD_QUERY_ID, payload: "on" },
       { query: "catalog_gate", payload: { tables: [], columns: [] } },
       { query: "connection_role_security", payload: { rolname: "preflight_reader", rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false } },
       { query: "connection_effective_writes", payload: { schemas_with_create: [], tables_with_dml: [], sequences_with_write: [] } },
       { query: "function_inventory", payload: [{ signature: "public.example()", source_definition: "secret function body" }] },
     ].map((entry) => JSON.stringify(entry)).join("\n"),
-    "",
+    readOnlyGuardLine(),
   ];
   let reportText = "";
   runProductionPreflight(productionEnvironment, {
