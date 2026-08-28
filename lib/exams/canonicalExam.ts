@@ -3,7 +3,11 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { IdentityLinkRequiredError, loadAccessSnapshot } from "../access/server.ts";
 import type { AccessSnapshot } from "../access/types.ts";
-import { calculateScore, normalizeDiscipline } from "../scoring.ts";
+import {
+  calculateFieldScore,
+  FIELD_SCORING_VERSION,
+  normalizeDiscipline,
+} from "../scoring.ts";
 import { DEFAULT_SPORT_TYPE } from "../sports.ts";
 import { createSupabaseAdminClient } from "../supabaseAdmin.ts";
 import { FREE_WEEKLY_EXAM_LIMIT, getCurrentWeekStart } from "../subscription.ts";
@@ -481,9 +485,14 @@ function evaluateAnswer(
   const disciplinaryCorrect =
     normalizeDiscipline(answer.discipline) === normalizeDiscipline(clip.correct_discipline);
   const subtypeCorrect = getSubtypeCorrect(answer, clip);
-  let score = calculateScore(
-    { foul: answer.foul, restart: answer.restart, discipline: answer.discipline, var: clip.correct_var },
-    { foul: clip.correct_foul, restart: clip.correct_restart, discipline: clip.correct_discipline, var: clip.correct_var }
+  let score = calculateFieldScore(
+    { foul: answer.foul, restart: answer.restart, discipline: answer.discipline },
+    {
+      foul: clip.correct_foul,
+      restart: clip.correct_restart,
+      discipline: clip.correct_discipline,
+      var: clip.correct_var,
+    }
   );
   if (subtypeCorrect === false) score = Math.max(0, score - 20);
   return {
@@ -509,6 +518,7 @@ function evaluateAnswer(
     disciplinary_correct: disciplinaryCorrect,
     subtype_correct: subtypeCorrect,
     criterion_result: {
+      scoring_version: FIELD_SCORING_VERSION,
       selected_subtype: answer.offsideReason ?? answer.handballReason,
       technical: technicalCorrect,
       restart: restartCorrect,

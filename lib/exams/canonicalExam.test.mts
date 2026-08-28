@@ -12,6 +12,7 @@ import {
   submitCanonicalExam,
   type CanonicalExamDependencies,
 } from "./canonicalExam.ts";
+import { FIELD_SCORING_VERSION } from "../scoring.ts";
 
 const root = process.cwd();
 const sessionId = "11111111-1111-4111-8111-111111111111";
@@ -209,6 +210,41 @@ test("submit sends canonical identity and server-derived score to existing RPC",
   const evaluated = testHarness.rpcCalls[0].p_evaluated_attempts as Array<Record<string, unknown>>;
   assert.equal(evaluated[0].score, 100);
   assert.equal(evaluated[0].correct_restart, "Tiro libre indirecto");
+  assert.equal(
+    (evaluated[0].criterion_result as Record<string, unknown>).scoring_version,
+    FIELD_SCORING_VERSION
+  );
+});
+
+test("official exams share normalized applicable field scoring", async () => {
+  for (const correctVar of [null, true, false]) {
+    const testHarness = harness({
+      loadClipsByIds: async () => [{ ...clip, correct_var: correctVar }],
+    });
+    await submitCanonicalExam("subject", sessionId, body(), testHarness.dependencies);
+    const evaluated = testHarness.rpcCalls[0]
+      .p_evaluated_attempts as Array<Record<string, unknown>>;
+    assert.equal(evaluated[0].score, 100);
+  }
+
+  for (const [answerOverride, expectedScore] of [
+    [{ foul: false }, 53],
+    [{ restart: "Seguir el juego" }, 80],
+    [{ discipline: "Roja" }, 67],
+  ] as const) {
+    const testHarness = harness({
+      loadClipsByIds: async () => [{ ...clip, correct_var: null }],
+    });
+    await submitCanonicalExam(
+      "subject",
+      sessionId,
+      body({ answers: [answer(answerOverride)] }),
+      testHarness.dependencies
+    );
+    const evaluated = testHarness.rpcCalls[0]
+      .p_evaluated_attempts as Array<Record<string, unknown>>;
+    assert.equal(evaluated[0].score, expectedScore);
+  }
 });
 
 test("client-controlled identity and derived fields are rejected", async () => {

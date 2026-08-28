@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { IdentityLinkRequiredError } from "../access/server.ts";
-import { calculateScore } from "../scoring.ts";
+import { calculateFieldScore, FIELD_SCORING_VERSION } from "../scoring.ts";
 import { evaluateVideoAnswers, normalizeVideoAnswerMap } from "../videoAnalysisEngine.ts";
 import { getVideoTopicSchema } from "../videoAnalysisSchemas.ts";
 import {
@@ -163,6 +163,11 @@ test("linked Development identity persists only the canonical user", async () =>
   assert.equal(harness.calls[0].p_user_id, "user_dev_referee_a");
   assert.equal(JSON.stringify(harness.calls[0]).includes("clerk-subject"), false);
   assert.equal((harness.calls[0].p_attempt as Record<string, unknown>).score, 100);
+  assert.equal(
+    ((harness.calls[0].p_attempt as Record<string, unknown>)
+      .criterion_result as Record<string, unknown>).scoring_version,
+    FIELD_SCORING_VERSION
+  );
   assert.equal(harness.calls[0].p_weekly_limit, 0);
 });
 
@@ -337,7 +342,39 @@ test("missing, inactive, or unpublished clips are represented as unavailable", a
   assert.equal(harness.calls.length, 0);
 });
 
-test("server recomputes a manipulated field score from canonical answers", async () => {
+test("server excludes unavailable VAR and normalizes field scoring", async () => {
+  for (const correctVar of [null, true, false]) {
+    const harness = dependencies({
+      loadClip: async () => ({ ...clip, correct_var: correctVar }),
+    });
+    await submitCanonicalTrainingAttempt("subject", fieldInput(), harness.value);
+    assert.equal(
+      (harness.calls[0].p_attempt as Record<string, unknown>).score,
+      100
+    );
+  }
+
+  for (const [answer, expectedScore] of [
+    [{ foul: false, restart: "Tiro libre directo", discipline: "Sin sancion" }, 53],
+    [{ foul: true, restart: "Seguir el juego", discipline: "Sin sancion" }, 80],
+    [{ foul: true, restart: "Tiro libre directo", discipline: "Roja" }, 67],
+  ] as const) {
+    const harness = dependencies({
+      loadClip: async () => ({ ...clip, correct_var: null }),
+    });
+    await submitCanonicalTrainingAttempt(
+      "subject",
+      fieldInput({ answer }),
+      harness.value
+    );
+    assert.equal(
+      (harness.calls[0].p_attempt as Record<string, unknown>).score,
+      expectedScore
+    );
+  }
+});
+
+test("server recomputes a fully incorrect field score from canonical answers", async () => {
   const harness = dependencies();
   await submitCanonicalTrainingAttempt(
     "subject",
@@ -350,7 +387,7 @@ test("server recomputes a manipulated field score from canonical answers", async
     }),
     harness.value
   );
-  assert.equal((harness.calls[0].p_attempt as Record<string, unknown>).score, 25);
+  assert.equal((harness.calls[0].p_attempt as Record<string, unknown>).score, 0);
 });
 
 test("VAR accepts normalized text and persists the canonical values", async () => {
@@ -453,8 +490,8 @@ test("Football presentation replaces a local 100 with the canonical server score
     TrainingAttemptInput,
     { kind: "field_clip" }
   >;
-  const localScore = calculateScore(
-    { ...input.answer, var: clip.correct_var },
+  const localScore = calculateFieldScore(
+    input.answer,
     {
       foul: clip.correct_foul,
       restart: clip.correct_restart,
@@ -723,6 +760,7 @@ test("authorized training components no longer write attempts directly", () => {
   assert.match(fieldExercise, /\{result\.score\}/);
   assert.match(fieldExercise, /result\.feedback/);
   assert.doesNotMatch(fieldExercise, /setResult\(score\)/);
+  assert.doesNotMatch(fieldExercise, /userAnswer\s*=\s*\{[^}]*var:/);
 
   const futsalExercise = fs.readFileSync(
     path.join(root, "components/FutsalVideoAnalysisClient.tsx"),

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { calculateScore } from "@/lib/scoring";
+import { calculateFieldScore } from "@/lib/scoring";
 import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
 import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
 import type { Clip } from "@/lib/types";
@@ -213,7 +213,6 @@ export function ClipExercise({
       foul,
       restart,
       discipline,
-      var: typedClip.correct_var,
     };
 
     const correctAnswer = {
@@ -223,7 +222,7 @@ export function ClipExercise({
       var: typedClip.correct_var,
     };
 
-    const score = calculateScore(userAnswer, correctAnswer);
+    const score = calculateFieldScore(userAnswer, correctAnswer);
     if (examMode && onComplete) {
       onComplete({
         clipId: typedClip.id,

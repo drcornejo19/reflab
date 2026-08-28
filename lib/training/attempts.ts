@@ -1,6 +1,10 @@
 import "server-only";
 
-import { calculateScore, normalizeDiscipline } from "../scoring.ts";
+import {
+  calculateFieldScore,
+  FIELD_SCORING_VERSION,
+  normalizeDiscipline,
+} from "../scoring.ts";
 import { triviaItems } from "../communicationContent.ts";
 import { futsalRulesPracticeQuestions } from "../futsalRulesQuestions.ts";
 import {
@@ -321,9 +325,8 @@ function buildFieldClipAttempt(
     foul: input.answer.foul,
     restart: input.answer.restart,
     discipline: input.answer.discipline,
-    var: clip.correct_var,
   };
-  const score = calculateScore(userAnswer, {
+  const score = calculateFieldScore(userAnswer, {
     foul: clip.correct_foul,
     restart: clip.correct_restart,
     discipline: clip.correct_discipline,
@@ -355,6 +358,7 @@ function buildFieldClipAttempt(
     disciplinary_correct: disciplineCorrect,
     var_correct: null,
     criterion_result: {
+      scoring_version: FIELD_SCORING_VERSION,
       technical: input.answer.foul === clip.correct_foul,
       restart: input.answer.restart === clip.correct_restart,
       discipline: disciplineCorrect,
