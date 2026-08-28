@@ -14,6 +14,7 @@
     "test:field-feedback": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/training/attempts.test.mts lib/training/fieldFeedbackClient.test.mts",
     "test:api-auth-boundaries": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/auth/apiAuthBoundary.test.mts",
     "test:clerk-authorized-parties": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/auth/clerkAuthorizedParties.test.mts",
+    "test:production-preflight": "node --test scripts/production-preflight/production-preflight.test.mjs",
     "test:canonical-identity-cleanup": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/identity/canonicalIdentityCleanup.test.mts",
     "test:ranking": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/ranking/canonicalRanking.test.mts lib/performance/canonicalSummary.test.mts",
     "test:matches": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/matches/canonicalMatches.test.mts",
