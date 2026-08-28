@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { enrichFunctionContract, enrichPolicyContract } from "./canonical-contracts.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const baselineManifest = JSON.parse(
@@ -243,11 +244,19 @@ export const canonicalObjectManifest = Object.freeze({
   sanityCounts: { tables: 81, functions: 30, policies: 150, triggers: 82, explicitIndexes: 111 },
   tables: [...baselineManifest.object_inventory.tables, "reflab_private.user_identity_links"].sort(),
   criticalColumns,
-  functions: [...functionMap.values()].sort((left, right) => left.signature.localeCompare(right.signature)),
+  functions: [...functionMap.values()].map(enrichFunctionContract).sort((left, right) => left.signature.localeCompare(right.signature)),
   policies: [
     ...baselineManifest.object_inventory.policies.map((entry) => ({ ...entry, scope: "shared" })),
     ...incrementalPolicies,
-  ].sort((left, right) => left.name.localeCompare(right.name)),
+  ].map(enrichPolicyContract).sort((left, right) => left.name.localeCompare(right.name)),
+  rls: [
+    ...[...baselineManifest.object_inventory.tables, "reflab_private.user_identity_links"].map((table) => ({
+      table,
+      enabled: true,
+      forced: table === "reflab_private.user_identity_links",
+    })),
+    { table: "storage.objects", enabled: true, forced: false },
+  ].sort((left, right) => left.table.localeCompare(right.table)),
   triggers: baselineManifest.object_inventory.triggers,
   explicitIndexes: [
     ...baselineManifest.object_inventory.explicit_indexes,

@@ -18,8 +18,15 @@ exact Production project ref, and a direct database URL for the allowlisted host
   `BEGIN READ ONLY` transaction includes semantic queries only when all required
   tables and columns were confirmed. Both transactions re-check
   `transaction_read_only` before their first substantive query.
+- The connection role is inventoried before semantic queries. Superuser,
+  `BYPASSRLS`, role/database creation, schema creation, table DML, or sequence
+  write privileges stop the semantic phase and make the final gate a blocker.
+- The `psql` subprocess receives only operating-system launch variables and the
+  six explicit `PG*` connection fields. Inherited `PGOPTIONS`, service files,
+  passfiles, and application environment values are never forwarded.
 - Reports contain object names and aggregate counts, never Clerk subjects, emails,
-  names, Storage paths, notification tokens, or database credentials.
+  names, Storage paths, notification tokens, database credentials, or function
+  bodies. Function and policy content is compared through SHA-256 fingerprints.
 
 ## Required future environment
 
@@ -71,3 +78,13 @@ warning.
 Presence of an extra historical object is inventory only. Missing required
 objects, incompatible definitions, executable Development RPCs, and unknown
 migrations are approval blockers. Counts are sanity checks only.
+
+## Final gate
+
+The report exposes `targetBlockers`, `migrationBlockers`, `identityBlockers`,
+`rlsBlockers`, `functionBlockers`, `grantBlockers`, `integrityBlockers`,
+`storageBlockers`, and `objectBlockers`. `overallGate` is `PASS` only when every
+category is empty. RLS state, complete policy expressions, function ownership
+and source hashes, grants (including inherited roles), index definitions and
+predicates, trigger definitions and events, and semantic integrity are all
+approval criteria; the `81/30/150/82/111` counts are informational only.

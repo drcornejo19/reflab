@@ -13,8 +13,9 @@ import {
   runtimeRpcSignatures,
 } from "./manifest.mjs";
 import { baseInventoryQueries, buildIdentityQueries, buildSqlBatch, compareInventoryWithManifest, semanticQueries } from "./queries.mjs";
+import { buildGateReport, connectionCredentialBlockers } from "./gates.mjs";
 import { assertReadOnlyBatch, assertReadOnlySql } from "./sql-safety.mjs";
-import { buildConditionalInventory, classifyMigrationHistory, runProductionPreflight } from "./run.mjs";
+import { buildConditionalInventory, classifyMigrationHistory, executeReadOnlyBatch, runProductionPreflight } from "./run.mjs";
 import { authorizeProductionPreflightTarget } from "./target.mjs";
 
 const productionEnvironment = {
@@ -63,7 +64,11 @@ test("generated SQL is wrapped, time-limited and restricted to the read-only all
 test("both runner phases independently enforce a read-only transaction before inventory", () => {
   const batches = [];
   const outputs = [
-    `${JSON.stringify({ query: "catalog_gate", payload: { tables: [], columns: [] } })}\n`,
+    [
+      { query: "catalog_gate", payload: { tables: [], columns: [] } },
+      { query: "connection_role_security", payload: { rolname: "preflight_reader", rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false } },
+      { query: "connection_effective_writes", payload: { schemas_with_create: [], tables_with_dml: [], sequences_with_write: [] } },
+    ].map((entry) => JSON.stringify(entry)).join("\n"),
     "",
   ];
   runProductionPreflight(productionEnvironment, {
@@ -103,6 +108,7 @@ test("P5 detects direct claims, auth.jwt, sub extraction and external-subject fa
   assert.match(p5, /->>''sub''/i);
   assert.match(p5, /request\.jwt\.claim\.sub/i);
   assert.match(p5, /auth\[\.\]uid/i);
+  assert.match(p5, /references_identity_links/i);
   assert.match(p5, /external_subject_fallback/i);
   assert.doesNotMatch(p5, /select\s+external_subject\s+as/i);
 });
@@ -125,7 +131,11 @@ test("trigger, grant and Storage inventories remain separate and complete", () =
   }
   assert.match(baseInventoryQueries.find((query) => query.id === "trigger_inventory").sql, /enabled_state/);
   assert.match(baseInventoryQueries.find((query) => query.id === "trigger_inventory").sql, /function_executed/);
+  assert.match(baseInventoryQueries.find((query) => query.id === "trigger_inventory").sql, /trigger_definition/);
+  assert.match(baseInventoryQueries.find((query) => query.id === "trigger_inventory").sql, /timing_and_events/);
   assert.match(baseInventoryQueries.find((query) => query.id === "index_inventory").sql, /constraint_state\.conindid = index_class\.oid/);
+  assert.match(baseInventoryQueries.find((query) => query.id === "index_inventory").sql, /predicate/);
+  assert.match(baseInventoryQueries.find((query) => query.id === "policy_inventory").sql, /pg_get_expr/);
   assert.match(baseInventoryQueries.find((query) => query.id === "unique_constraint_inventory").sql, /constraint_state\.contype = 'u'/);
   assert.doesNotMatch(baseInventoryQueries.find((query) => query.id === "policy_inventory").sql, /\bcmd, qual, with_check\b/i);
   assert.doesNotMatch(semanticQueries.find((query) => query.id === "storage_object_policies").sql, /\bcmd, qual, with_check\b/i);
@@ -148,6 +158,12 @@ test("canonical manifest separates required and forbidden Production RPC categor
   assert.equal(canonicalObjectManifest.policies.length, 150);
   assert.equal(canonicalObjectManifest.triggers.length, 82);
   assert.equal(canonicalObjectManifest.explicitIndexes.length, 111);
+  assert.equal(canonicalObjectManifest.rls.length, 82);
+  assert.ok(canonicalObjectManifest.functions.every((entry) => entry.owner && /^[0-9a-f]{64}$/.test(entry.sourceHash)));
+  assert.ok(canonicalObjectManifest.policies.every((entry) =>
+    (entry.usingExpressionHash === null || /^[0-9a-f]{64}$/.test(entry.usingExpressionHash)) &&
+    (entry.withCheckExpressionHash === null || /^[0-9a-f]{64}$/.test(entry.withCheckExpressionHash))
+  ));
   assert.ok(canonicalObjectManifest.policies.every((entry) =>
     entry.schema && entry.table && entry.name && entry.command && entry.mode && entry.roles?.length
   ));
@@ -268,4 +284,231 @@ test("identity queries return only aggregates and never raw PII values", () => {
   assert.doesNotMatch(sql, /json_build_object\([^)]*'external_subject'\s*,\s*l\.external_subject/i);
   assert.doesNotMatch(sql, /json_build_object\([^)]*'token'\s*,\s*t\.token/i);
   assert.doesNotMatch(sql, /\bemail\b|\bfirst_name\b|\blast_name\b|\bstorage_path\b/i);
+});
+
+const emptyManifestComparison = () => ({
+  rlsContractDrift: [],
+  policyContractDrift: [],
+  missingPolicies: [],
+  functionContractDrift: [],
+  identityFallbackBlockers: [],
+  missingSharedFunctions: [],
+  missingRequiredProductionRpcs: [],
+  executableDevelopmentRpcs: [],
+  grantBlockers: [],
+  missingBuckets: [],
+  bucketContractDrift: [],
+  objectBlockers: [],
+});
+
+const validSemanticResults = () => new Map([
+  ["identity_link_structure", {
+    duplicate_external_subjects: 0,
+    duplicate_canonical_users: 0,
+    links_without_profile: 0,
+    profiles_with_multiple_links: 0,
+  }],
+  ["attempt_semantics", { official_orphans: 0, official_owner_mismatches: 0, invalid_communication_feedback: 0 }],
+  ["exam_integrity", { results_without_session: 0, session_owner_mismatches: 0, session_submission_mismatches: 0 }],
+  ["legacy_access", { user_roles: 0, automatic_default_global_roles: 0, automatic_default_subscriptions: 0, unknown_global_roles: 0 }],
+  ["institution_catalog", { permissions: 27, system_roles: 10, system_relations: 87, forbidden_roles: 0 }],
+  ["institution_tenant_integrity", { membership_role_mismatches: 0, group_membership_mismatches: 0, permission_override_mismatches: 0 }],
+  ["matches_tenant_integrity", { institutional_appointments_without_active_membership: 0 }],
+  ["fixture_creator_identity", { candidate_clerk_refs: 0, mapped_clerk_refs: 0 }],
+  ["notification_integrity", { token_owner_conflicts: 0, events_without_profile: 0, preferences_without_profile: 0 }],
+]);
+
+test("a policy with the canonical name but USING true is a blocker", () => {
+  const expected = canonicalObjectManifest.policies.find((entry) =>
+    entry.scope === "shared" && entry.usingExpressionHash && entry.name === "clips_authenticated_read"
+  );
+  const results = new Map([
+    ["catalog_gate", { tables: canonicalObjectManifest.tables, columns: [] }],
+    ["policy_inventory", [{
+      schema_name: expected.schema,
+      table_name: expected.table,
+      policy_name: expected.name,
+      permissive: expected.mode,
+      roles: expected.roles,
+      cmd: expected.command,
+      using_expression: "true",
+      with_check_expression: null,
+    }]],
+  ]);
+  assert.ok(compareInventoryWithManifest(results).policyContractDrift.some((entry) =>
+    entry.policy === `${expected.schema}.${expected.table}.${expected.name}`
+  ));
+});
+
+test("a sensitive canonical table with RLS disabled is a blocker", () => {
+  const expected = canonicalObjectManifest.rls.find((entry) => entry.table === "public.attempts");
+  const results = new Map([
+    ["catalog_gate", { tables: canonicalObjectManifest.tables, columns: [] }],
+    ["rls_inventory", [{ schema_name: "public", table_name: "attempts", rls_enabled: false, rls_forced: expected.forced }]],
+  ]);
+  assert.ok(compareInventoryWithManifest(results).rlsContractDrift.some((entry) => entry.code === "BLOCKER_RLS_DISABLED"));
+});
+
+test("an index with the canonical name but different columns or predicate is a blocker", () => {
+  const expected = canonicalObjectManifest.explicitIndexes.find((entry) => entry.name === "attempts_canonical_training_submission_unique");
+  const results = new Map([
+    ["catalog_gate", { tables: canonicalObjectManifest.tables, columns: [] }],
+    ["index_inventory", [{
+      schema_name: "public",
+      table_name: "attempts",
+      index_name: expected.name,
+      unique: true,
+      columns: ["submission_id", "user_id"],
+      predicate: "exam_result_id is not null",
+      index_definition: `CREATE UNIQUE INDEX ${expected.name} ON public.attempts USING btree (submission_id, user_id) WHERE exam_result_id IS NOT NULL`,
+    }]],
+  ]);
+  assert.ok(compareInventoryWithManifest(results).indexContractDrift.some((entry) => entry.index.endsWith(expected.name)));
+});
+
+test("a trigger with the canonical name but a different event is a blocker", () => {
+  const expected = canonicalObjectManifest.triggers[0];
+  const [schema, table] = expected.table.split(".");
+  const results = new Map([
+    ["catalog_gate", { tables: canonicalObjectManifest.tables, columns: [] }],
+    ["trigger_inventory", [{
+      schema_name: schema,
+      table_name: table,
+      trigger_name: expected.name,
+      enabled_state: "O",
+      function_executed: expected.function,
+      timing_and_events: "BEFORE INSERT",
+      orientation: "ROW",
+      trigger_definition: `CREATE TRIGGER ${expected.name} BEFORE INSERT ON ${expected.table} FOR EACH ROW EXECUTE FUNCTION ${expected.function}`,
+    }]],
+  ]);
+  assert.ok(compareInventoryWithManifest(results).triggerContractDrift.some((entry) => entry.trigger.endsWith(expected.name)));
+});
+
+test("legacy request_user_id fallback is an explicit blocker", () => {
+  const results = new Map([
+    ["catalog_gate", { tables: canonicalObjectManifest.tables, columns: [] }],
+    ["p5_direct_identity_readers", [{ signature: "reflab_private.request_user_id()", external_subject_fallback: true }]],
+  ]);
+  assert.deepEqual(compareInventoryWithManifest(results).identityFallbackBlockers, [{
+    code: "BLOCKER_LEGACY_IDENTITY_FALLBACK",
+    signature: "reflab_private.request_user_id()",
+  }]);
+});
+
+test("request_user_id returning JWT sub directly is blocked even without a named external variable", () => {
+  const results = new Map([
+    ["catalog_gate", { tables: canonicalObjectManifest.tables, columns: [] }],
+    ["p5_direct_identity_readers", [{
+      signature: "reflab_private.request_user_id()",
+      reads_sub_claim: true,
+      references_identity_links: false,
+      external_subject_fallback: false,
+    }]],
+  ]);
+  assert.equal(compareInventoryWithManifest(results).identityFallbackBlockers[0].code, "BLOCKER_LEGACY_IDENTITY_FALLBACK");
+});
+
+test("unexpected authenticated UPDATE and PUBLIC EXECUTE are blockers", () => {
+  const results = new Map([
+    ["catalog_gate", { tables: canonicalObjectManifest.tables, columns: [] }],
+    ["table_grants", [{ schema_name: "public", object_name: "attempts", grantee: "authenticated", privilege: "UPDATE" }]],
+    ["routine_grants", [{ signature: REQUIRED_IN_PRODUCTION[0], grantee: "PUBLIC", privilege: "EXECUTE" }]],
+    ["role_memberships", []],
+  ]);
+  const codes = compareInventoryWithManifest(results).grantBlockers.map((entry) => entry.code);
+  assert.ok(codes.includes("BLOCKER_UNEXPECTED_BROWSER_DML"));
+  assert.ok(codes.includes("BLOCKER_UNEXPECTED_ROUTINE_EXECUTE"));
+  assert.ok(codes.includes("BLOCKER_SENSITIVE_RPC_EXECUTE"));
+});
+
+test("superuser and BYPASSRLS connection roles are blockers", () => {
+  const results = new Map([
+    ["connection_role_security", { rolname: "unsafe", rolsuper: true, rolcreatedb: false, rolcreaterole: false, rolbypassrls: true }],
+    ["connection_effective_writes", { schemas_with_create: [], tables_with_dml: [], sequences_with_write: [] }],
+  ]);
+  const codes = connectionCredentialBlockers(results).map((entry) => entry.code);
+  assert.ok(codes.includes("BLOCKER_CONNECTION_SUPERUSER"));
+  assert.ok(codes.includes("BLOCKER_CONNECTION_BYPASSRLS"));
+});
+
+test("the psql subprocess environment drops inherited PGOPTIONS and service configuration", () => {
+  let spawnedEnvironment;
+  executeReadOnlyBatch(buildSqlBatch([]), {
+    PGHOST: "db.example.invalid",
+    PGPORT: "5432",
+    PGDATABASE: "postgres",
+    PGUSER: "readonly",
+    PGPASSWORD: "secret",
+    PGSSLMODE: "require",
+  }, {
+    processEnvironment: {
+      PATH: process.env.PATH,
+      SystemRoot: process.env.SystemRoot,
+      PGOPTIONS: "-c default_transaction_read_only=off",
+      PGSERVICE: "unsafe",
+      PGSERVICEFILE: "unsafe.conf",
+      PGPASSFILE: "unsafe.pgpass",
+    },
+    spawn(_command, _args, options) {
+      spawnedEnvironment = options.env;
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+  assert.equal(spawnedEnvironment.PGOPTIONS, undefined);
+  assert.equal(spawnedEnvironment.PGSERVICE, undefined);
+  assert.equal(spawnedEnvironment.PGSERVICEFILE, undefined);
+  assert.equal(spawnedEnvironment.PGPASSFILE, undefined);
+  assert.equal(spawnedEnvironment.PGUSER, "readonly");
+});
+
+test("the report never emits function bodies", () => {
+  const outputs = [
+    [
+      { query: "catalog_gate", payload: { tables: [], columns: [] } },
+      { query: "connection_role_security", payload: { rolname: "preflight_reader", rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false } },
+      { query: "connection_effective_writes", payload: { schemas_with_create: [], tables_with_dml: [], sequences_with_write: [] } },
+      { query: "function_inventory", payload: [{ signature: "public.example()", source_definition: "secret function body" }] },
+    ].map((entry) => JSON.stringify(entry)).join("\n"),
+    "",
+  ];
+  let reportText = "";
+  runProductionPreflight(productionEnvironment, {
+    spawn() {
+      return { status: 0, stdout: outputs.shift(), stderr: "" };
+    },
+    writeReport(value) {
+      reportText = value;
+    },
+  });
+  assert.doesNotMatch(reportText, /secret function body|source_definition/i);
+});
+
+test("a semantic mismatch makes the final gate BLOCKER", () => {
+  const results = validSemanticResults();
+  results.get("attempt_semantics").official_orphans = 1;
+  const gate = buildGateReport({
+    results,
+    migrationHistory: [],
+    manifestComparison: emptyManifestComparison(),
+    skipped: [],
+    identityLinksAvailable: true,
+  });
+  assert.equal(gate.overallGate, "BLOCKER");
+  assert.ok(gate.integrityBlockers.some((entry) => entry.query === "attempt_semantics"));
+});
+
+test("a fully valid synthetic fixture produces overallGate PASS", () => {
+  const gate = buildGateReport({
+    results: validSemanticResults(),
+    migrationHistory: [],
+    manifestComparison: emptyManifestComparison(),
+    skipped: [],
+    identityLinksAvailable: true,
+  });
+  assert.equal(gate.overallGate, "PASS");
+  for (const name of [
+    "targetBlockers", "migrationBlockers", "identityBlockers", "rlsBlockers", "functionBlockers",
+    "grantBlockers", "integrityBlockers", "storageBlockers", "objectBlockers",
+  ]) assert.deepEqual(gate[name], []);
 });

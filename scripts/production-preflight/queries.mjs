@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   canonicalObjectManifest,
   criticalColumns,
@@ -5,6 +6,14 @@ import {
   MUST_BE_ABSENT_OR_NONEXECUTABLE_IN_PRODUCTION,
   REQUIRED_IN_PRODUCTION,
 } from "./manifest.mjs";
+import {
+  expectedTriggerDefinition,
+  expressionHash,
+  indexDefinitionParts,
+  normalizeFunctionSource,
+  normalizeSqlExpression,
+  normalizeTriggerDefinition,
+} from "./canonical-contracts.mjs";
 
 const jsonQuery = (id, payloadSql, requires = {}) => ({
   id,
@@ -32,6 +41,38 @@ export const baseInventoryQueries = [
   catalogGateQuery,
   jsonQuery("session_roles", "pg_catalog.json_build_object('current_user', current_user, 'session_user', session_user)"),
   jsonQuery(
+    "connection_role_security",
+    `coalesce((select pg_catalog.row_to_json(x) from (
+      select rolname, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls
+      from pg_catalog.pg_roles where rolname = current_user
+    ) x), 'null'::json)`
+  ),
+  jsonQuery(
+    "connection_effective_writes",
+    `pg_catalog.json_build_object(
+      'schemas_with_create', coalesce((select pg_catalog.json_agg(n.nspname order by n.nspname)
+        from pg_catalog.pg_namespace n
+        where n.nspname in ('public', 'reflab_private', 'reflab_meta', 'storage')
+          and pg_catalog.has_schema_privilege(current_user, n.oid, 'CREATE')), '[]'::json),
+      'tables_with_dml', coalesce((select pg_catalog.json_agg(x.object_name order by x.object_name) from (
+        select n.nspname || '.' || c.relname as object_name
+        from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+        where c.relkind in ('r', 'p') and n.nspname in ('public', 'reflab_private', 'reflab_meta', 'storage')
+          and (pg_catalog.has_table_privilege(current_user, c.oid, 'INSERT')
+            or pg_catalog.has_table_privilege(current_user, c.oid, 'UPDATE')
+            or pg_catalog.has_table_privilege(current_user, c.oid, 'DELETE')
+            or pg_catalog.has_table_privilege(current_user, c.oid, 'TRUNCATE')
+            or pg_catalog.has_table_privilege(current_user, c.oid, 'REFERENCES')
+            or pg_catalog.has_table_privilege(current_user, c.oid, 'TRIGGER'))
+      ) x), '[]'::json),
+      'sequences_with_write', coalesce((select pg_catalog.json_agg(n.nspname || '.' || c.relname order by n.nspname, c.relname)
+        from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+        where c.relkind = 'S' and n.nspname in ('public', 'reflab_private', 'reflab_meta')
+          and (pg_catalog.has_sequence_privilege(current_user, c.oid, 'USAGE')
+            or pg_catalog.has_sequence_privilege(current_user, c.oid, 'UPDATE'))), '[]'::json)
+    )`
+  ),
+  jsonQuery(
     "rls_owner",
     `coalesce((select pg_catalog.row_to_json(x) from (
       select rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolinherit, rolbypassrls
@@ -44,9 +85,20 @@ export const baseInventoryQueries = [
       select n.nspname || '.' || p.proname || '(' || pg_catalog.pg_get_function_identity_arguments(p.oid) || ')' as signature,
         case when p.prosecdef then 'DEFINER' else 'INVOKER' end as security,
         pg_catalog.pg_get_userbyid(p.proowner) as owner,
-        coalesce((select setting from unnest(p.proconfig) setting where setting like 'search_path=%' limit 1), '') as search_path
+        coalesce((select setting from unnest(p.proconfig) setting where setting like 'search_path=%' limit 1), '') as search_path,
+        p.prosrc as source_definition
       from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
       where n.nspname in ('public', 'reflab_private', 'reflab_meta')
+    ) x), '[]'::json)`
+  ),
+  jsonQuery(
+    "rls_inventory",
+    `coalesce((select pg_catalog.json_agg(x order by x.schema_name, x.table_name) from (
+      select n.nspname as schema_name, c.relname as table_name,
+        c.relrowsecurity as rls_enabled, c.relforcerowsecurity as rls_forced
+      from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      where c.relkind in ('r', 'p')
+        and n.nspname in ('public', 'reflab_private', 'reflab_meta', 'storage')
     ) x), '[]'::json)`
   ),
   jsonQuery(
@@ -59,6 +111,7 @@ export const baseInventoryQueries = [
         pg_catalog.position('request.jwt.claim.sub' in lower(pg_catalog.pg_get_functiondef(p.oid))) > 0 as reads_direct_sub_setting,
         lower(pg_catalog.pg_get_functiondef(p.oid)) ~ 'auth[.]uid[[:space:]]*[(]' as calls_auth_uid,
         lower(pg_catalog.pg_get_functiondef(p.oid)) ~ '(external_subject|external_user_id|clerk_subject|jwt_subject)' as mentions_external_identity,
+        lower(pg_catalog.pg_get_functiondef(p.oid)) ~ 'reflab_private[.]user_identity_links' as references_identity_links,
         lower(pg_catalog.pg_get_functiondef(p.oid)) ~ '(return[[:space:]]+[^;]*(external_subject|external_user_id|clerk_subject|jwt_subject)|coalesce[(][^;]*(external_subject|external_user_id|clerk_subject|jwt_subject))' as external_subject_fallback
       from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
       where n.nspname in ('public', 'reflab_private') and p.prokind = 'f'
@@ -75,10 +128,17 @@ export const baseInventoryQueries = [
   jsonQuery(
     "policy_inventory",
     `coalesce((select pg_catalog.json_agg(x order by x.schema_name, x.table_name, x.policy_name) from (
-      select schemaname as schema_name, tablename as table_name, policyname as policy_name,
-        permissive, roles, cmd, qual is not null as has_using_expression,
-        with_check is not null as has_with_check_expression from pg_catalog.pg_policies
-      where schemaname in ('public', 'reflab_private', 'reflab_meta', 'storage')
+      select n.nspname as schema_name, c.relname as table_name, p.polname as policy_name,
+        case when p.polpermissive then 'PERMISSIVE' else 'RESTRICTIVE' end as permissive,
+        (select pg_catalog.array_agg(case when role_oid = 0 then 'public' else pg_catalog.pg_get_userbyid(role_oid) end order by role_oid)
+          from unnest(p.polroles) role_oid) as roles,
+        case p.polcmd when 'r' then 'SELECT' when 'a' then 'INSERT' when 'w' then 'UPDATE' when 'd' then 'DELETE' else 'ALL' end as cmd,
+        pg_catalog.pg_get_expr(p.polqual, p.polrelid, false) as using_expression,
+        pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid, false) as with_check_expression
+      from pg_catalog.pg_policy p
+      join pg_catalog.pg_class c on c.oid = p.polrelid
+      join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      where n.nspname in ('public', 'reflab_private', 'reflab_meta', 'storage')
     ) x), '[]'::json)`
   ),
   jsonQuery(
@@ -86,7 +146,16 @@ export const baseInventoryQueries = [
     `coalesce((select pg_catalog.json_agg(x order by x.schema_name, x.table_name, x.trigger_name) from (
       select n.nspname as schema_name, c.relname as table_name, t.tgname as trigger_name,
         t.tgenabled as enabled_state,
-        fn_ns.nspname || '.' || p.proname || '(' || pg_catalog.pg_get_function_identity_arguments(p.oid) || ')' as function_executed
+        fn_ns.nspname || '.' || p.proname || '(' || pg_catalog.pg_get_function_identity_arguments(p.oid) || ')' as function_executed,
+        (case when (t.tgtype & 2) <> 0 then 'BEFORE' when (t.tgtype & 64) <> 0 then 'INSTEAD OF' else 'AFTER' end) || ' ' ||
+          pg_catalog.array_to_string(array_remove(array[
+            case when (t.tgtype & 4) <> 0 then 'INSERT' end,
+            case when (t.tgtype & 8) <> 0 then 'DELETE' end,
+            case when (t.tgtype & 16) <> 0 then 'UPDATE' end,
+            case when (t.tgtype & 32) <> 0 then 'TRUNCATE' end
+          ], null), ' OR ') as timing_and_events,
+        case when (t.tgtype & 1) <> 0 then 'ROW' else 'STATEMENT' end as orientation,
+        pg_catalog.pg_get_triggerdef(t.oid, false) as trigger_definition
       from pg_catalog.pg_trigger t
       join pg_catalog.pg_class c on c.oid = t.tgrelid
       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
@@ -100,7 +169,10 @@ export const baseInventoryQueries = [
     `coalesce((select pg_catalog.json_agg(x order by x.schema_name, x.table_name, x.index_name) from (
       select n.nspname as schema_name, table_class.relname as table_name,
         index_class.relname as index_name, index_state.indisunique as unique,
-        pg_catalog.pg_get_indexdef(index_class.oid) as index_definition
+        pg_catalog.pg_get_indexdef(index_class.oid) as index_definition,
+        (select pg_catalog.json_agg(pg_catalog.pg_get_indexdef(index_class.oid, position, true) order by position)
+          from pg_catalog.generate_series(1, index_state.indnkeyatts) position) as columns,
+        pg_catalog.pg_get_expr(index_state.indpred, index_state.indrelid, false) as predicate
       from pg_catalog.pg_index index_state
       join pg_catalog.pg_class index_class on index_class.oid = index_state.indexrelid
       join pg_catalog.pg_class table_class on table_class.oid = index_state.indrelid
@@ -207,14 +279,23 @@ export const semanticQueries = [
   jsonQuery(
     "identity_link_structure",
     `pg_catalog.json_build_object(
-      'provider_count', count(distinct provider),
+      'provider_count', count(distinct l.provider),
       'link_count', count(*),
-      'distinct_external_subjects', count(distinct external_subject),
-      'distinct_canonical_users', count(distinct user_id),
+      'distinct_external_subjects', count(distinct l.external_subject),
+      'distinct_canonical_users', count(distinct l.user_id),
       'duplicate_external_subjects', coalesce((select count(*) from (select provider, external_subject from reflab_private.user_identity_links group by provider, external_subject having count(*) > 1) d), 0),
-      'duplicate_canonical_users', coalesce((select count(*) from (select provider, user_id from reflab_private.user_identity_links group by provider, user_id having count(*) > 1) d), 0)
-    ) from reflab_private.user_identity_links`,
-    { tables: ["reflab_private.user_identity_links"], columns: criticalColumns["reflab_private.user_identity_links"].map((column) => `reflab_private.user_identity_links.${column}`) }
+      'duplicate_canonical_users', coalesce((select count(*) from (select provider, user_id from reflab_private.user_identity_links group by provider, user_id having count(*) > 1) d), 0),
+      'links_without_profile', count(*) filter (where p.user_id is null),
+      'profiles_with_multiple_links', coalesce((select count(*) from (select user_id from reflab_private.user_identity_links group by user_id having count(*) > 1) d), 0)
+    ) from reflab_private.user_identity_links l
+      left join public.user_profiles p on p.user_id = l.user_id`,
+    {
+      tables: ["reflab_private.user_identity_links", "public.user_profiles"],
+      columns: [
+        ...criticalColumns["reflab_private.user_identity_links"].map((column) => `reflab_private.user_identity_links.${column}`),
+        "public.user_profiles.user_id",
+      ],
+    }
   ),
   jsonQuery(
     "attempt_semantics",
@@ -320,11 +401,18 @@ export const semanticQueries = [
   ),
   jsonQuery(
     "storage_object_policies",
-    `coalesce((select pg_catalog.json_agg(x order by x.policyname) from (
-      select policyname, permissive, roles, cmd,
-        qual is not null as has_using_expression,
-        with_check is not null as has_with_check_expression
-      from pg_catalog.pg_policies where schemaname = 'storage' and tablename = 'objects'
+    `coalesce((select pg_catalog.json_agg(x order by x.policy_name) from (
+      select n.nspname as schema_name, c.relname as table_name, p.polname as policy_name,
+        case when p.polpermissive then 'PERMISSIVE' else 'RESTRICTIVE' end as permissive,
+        (select pg_catalog.array_agg(case when role_oid = 0 then 'public' else pg_catalog.pg_get_userbyid(role_oid) end order by role_oid)
+          from unnest(p.polroles) role_oid) as roles,
+        case p.polcmd when 'r' then 'SELECT' when 'a' then 'INSERT' when 'w' then 'UPDATE' when 'd' then 'DELETE' else 'ALL' end as cmd,
+        pg_catalog.pg_get_expr(p.polqual, p.polrelid, false) as using_expression,
+        pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid, false) as with_check_expression
+      from pg_catalog.pg_policy p
+      join pg_catalog.pg_class c on c.oid = p.polrelid
+      join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'storage' and c.relname = 'objects'
     ) x), '[]'::json)`
   ),
 ];
@@ -397,7 +485,7 @@ export function buildSqlBatch(queries) {
   return `${statements.join(";\n")};\n`;
 }
 
-export function compareInventoryWithManifest(results) {
+function compareInventoryLegacy(results) {
   const functionInventory = results.get("function_inventory") ?? [];
   const triggerInventory = results.get("trigger_inventory") ?? [];
   const indexInventory = results.get("index_inventory") ?? [];
@@ -592,5 +680,300 @@ export function compareInventoryWithManifest(results) {
       uniqueConstraints: [...actualUniqueConstraints].filter((key) => !expectedUniqueConstraints.has(key)),
       buckets: [...actualBuckets].filter((id) => !expectedBuckets.has(id)),
     },
+  };
+}
+
+const sha256 = (value) => createHash("sha256").update(value, "utf8").digest("hex");
+const policyKey = (entry) => `${entry.schema_name ?? entry.schema}.${entry.table_name ?? entry.table}.${entry.policy_name ?? entry.name}`;
+const tableKey = (entry) => `${entry.schema_name}.${entry.table_name}`;
+const searchPathValue = (value) => String(value ?? "").replace(/^search_path=/, "").trim();
+
+function inheritedApplicationRoles(grantee, memberships) {
+  const roles = new Set();
+  if (["PUBLIC", "public"].includes(grantee)) for (const role of ["public", "anon", "authenticated"]) roles.add(role);
+  else if (["anon", "authenticated"].includes(grantee)) roles.add(grantee);
+  for (const membership of memberships) {
+    if (membership.granted_role === grantee && ["anon", "authenticated"].includes(membership.effective_for)) {
+      roles.add(membership.effective_for);
+    }
+  }
+  return roles;
+}
+
+function compareGrantContracts(results) {
+  const tableGrants = results.get("table_grants") ?? [];
+  const schemaGrants = results.get("schema_grants") ?? [];
+  const routineGrants = results.get("routine_grants") ?? [];
+  const sequenceGrants = results.get("sequence_grants") ?? [];
+  const memberships = results.get("role_memberships") ?? [];
+  const blockers = [];
+  const expectedTablePrivileges = new Set();
+  const expectedSchemaUsage = new Set(["authenticated|reflab_private"]);
+
+  for (const policy of canonicalObjectManifest.policies.filter((entry) => entry.scope === "shared")) {
+    const privilege = policy.command === "ALL" ? null : policy.command;
+    if (!privilege) continue;
+    for (const role of policy.roles ?? []) {
+      if (["public", "anon", "authenticated"].includes(role.toLowerCase())) {
+        const normalizedRole = role.toLowerCase();
+        const effectiveRoles = normalizedRole === "public" ? ["public", "anon", "authenticated"] : [normalizedRole];
+        for (const effectiveRole of effectiveRoles) {
+          expectedTablePrivileges.add(`${effectiveRole}|${policy.schema}.${policy.table}|${privilege}`);
+          expectedSchemaUsage.add(`${effectiveRole}|${policy.schema}`);
+        }
+      }
+    }
+  }
+
+  const actualTablePrivileges = new Set();
+  for (const grant of tableGrants) {
+    const roots = inheritedApplicationRoles(grant.grantee, memberships);
+    for (const root of roots) {
+      const normalizedRoot = root.toLowerCase() === "public" ? "public" : root;
+      const key = `${normalizedRoot}|${grant.schema_name}.${grant.object_name}|${grant.privilege}`;
+      actualTablePrivileges.add(key);
+      if (["INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"].includes(grant.privilege) &&
+          !expectedTablePrivileges.has(key)) {
+        blockers.push({
+          code: "BLOCKER_UNEXPECTED_BROWSER_DML",
+          role: normalizedRoot,
+          object: `${grant.schema_name}.${grant.object_name}`,
+          privilege: grant.privilege,
+        });
+      }
+    }
+  }
+  for (const expected of expectedTablePrivileges) {
+    if (!actualTablePrivileges.has(expected)) {
+      const [role, object, privilege] = expected.split("|");
+      blockers.push({ code: "BLOCKER_MISSING_CANONICAL_TABLE_GRANT", role, object, privilege });
+    }
+  }
+
+  const actualSchemaUsage = new Set();
+  for (const grant of schemaGrants) {
+    for (const root of inheritedApplicationRoles(grant.grantee, memberships)) {
+      if (grant.privilege === "CREATE") {
+        blockers.push({
+          code: "BLOCKER_UNEXPECTED_SCHEMA_CREATE",
+          role: root,
+          object: grant.schema_name,
+          privilege: grant.privilege,
+        });
+      } else if (grant.privilege === "USAGE") {
+        const key = `${root}|${grant.schema_name}`;
+        actualSchemaUsage.add(key);
+        if (!expectedSchemaUsage.has(key)) {
+          blockers.push({
+            code: "BLOCKER_UNEXPECTED_SCHEMA_USAGE",
+            role: root,
+            object: grant.schema_name,
+            privilege: grant.privilege,
+          });
+        }
+      }
+    }
+  }
+  for (const expected of expectedSchemaUsage) {
+    if (!actualSchemaUsage.has(expected)) {
+      const [role, object] = expected.split("|");
+      blockers.push({ code: "BLOCKER_MISSING_CANONICAL_SCHEMA_USAGE", role, object, privilege: "USAGE" });
+    }
+  }
+  for (const grant of sequenceGrants) {
+    for (const root of inheritedApplicationRoles(grant.grantee, memberships)) {
+      blockers.push({
+        code: "BLOCKER_UNEXPECTED_BROWSER_SEQUENCE_PRIVILEGE",
+        role: root,
+        object: `${grant.schema_name}.${grant.sequence_name}`,
+        privilege: grant.privilege,
+      });
+    }
+  }
+
+  const authenticatedHelpers = new Set([
+    "reflab_private.request_user_id()",
+    "reflab_private.is_super_admin()",
+    "reflab_private.has_active_institution_membership(uuid)",
+    "reflab_private.has_institution_permission(uuid, text)",
+    "reflab_private.can_access_user_data(text, uuid, text)",
+  ]);
+  for (const grant of routineGrants.filter((entry) => entry.privilege === "EXECUTE")) {
+    const roots = inheritedApplicationRoles(grant.grantee, memberships);
+    for (const root of roots) {
+      const allowed = root === "authenticated" && authenticatedHelpers.has(grant.signature);
+      if (!allowed) {
+        blockers.push({
+          code: "BLOCKER_UNEXPECTED_ROUTINE_EXECUTE",
+          role: root,
+          object: grant.signature,
+          privilege: "EXECUTE",
+        });
+      }
+    }
+    if (REQUIRED_IN_PRODUCTION.includes(grant.signature) && grant.grantee !== "service_role") {
+      blockers.push({
+        code: "BLOCKER_SENSITIVE_RPC_EXECUTE",
+        role: grant.grantee,
+        object: grant.signature,
+        privilege: "EXECUTE",
+      });
+    }
+  }
+  for (const signature of REQUIRED_IN_PRODUCTION) {
+    const serviceExecute = routineGrants.some((grant) =>
+      grant.signature === signature && grant.grantee === "service_role" && grant.privilege === "EXECUTE"
+    );
+    if (!serviceExecute) blockers.push({ code: "BLOCKER_MISSING_SERVICE_ROLE_EXECUTE", object: signature });
+  }
+  return blockers;
+}
+
+export function compareInventoryWithManifest(results) {
+  const legacy = compareInventoryLegacy(results);
+  const functionInventory = results.get("function_inventory") ?? [];
+  const policyInventory = results.get("policy_inventory") ?? [];
+  const rlsInventory = results.get("rls_inventory") ?? [];
+  const triggerInventory = results.get("trigger_inventory") ?? [];
+  const indexInventory = results.get("index_inventory") ?? [];
+  const directIdentityReaders = results.get("p5_direct_identity_readers") ?? [];
+  const functionBySignature = new Map(functionInventory.map((entry) => [entry.signature, entry]));
+  const policyByKey = new Map(policyInventory.map((entry) => [policyKey(entry), entry]));
+  const rlsByTable = new Map(rlsInventory.map((entry) => [tableKey(entry), entry]));
+  const triggerByKey = new Map(triggerInventory.map((entry) => [`${entry.schema_name}.${entry.table_name}.${entry.trigger_name}`, entry]));
+  const indexByKey = new Map(indexInventory.map((entry) => [`${entry.schema_name}.${entry.table_name}.${entry.index_name}`, entry]));
+
+  const rlsContractDrift = canonicalObjectManifest.rls.flatMap((expected) => {
+    const actual = rlsByTable.get(expected.table);
+    if (!actual) return [{ code: "BLOCKER_RLS_INVENTORY_MISSING", table: expected.table }];
+    if (expected.enabled && !actual.rls_enabled) return [{ code: "BLOCKER_RLS_DISABLED", table: expected.table }];
+    if (Boolean(actual.rls_forced) !== expected.forced) {
+      return [{ code: "BLOCKER_RLS_FORCE_DRIFT", table: expected.table, expected: expected.forced, actual: Boolean(actual.rls_forced) }];
+    }
+    return [];
+  });
+
+  const policyContractDrift = canonicalObjectManifest.policies
+    .filter((expected) => expected.scope === "shared")
+    .flatMap((expected) => {
+      const key = `${expected.schema}.${expected.table}.${expected.name}`;
+      const actual = policyByKey.get(key);
+      if (!actual) return [];
+      const expectedRoles = [...(expected.roles ?? [])].map((role) => role.toLowerCase()).sort();
+      const actualRoles = [...(actual.roles ?? [])].map((role) => role.toLowerCase()).sort();
+      const actualUsingHash = expressionHash(actual.using_expression);
+      const actualWithCheckHash = expressionHash(actual.with_check_expression);
+      const matches = actual.cmd === expected.command && actual.permissive === expected.mode &&
+        JSON.stringify(actualRoles) === JSON.stringify(expectedRoles) &&
+        actualUsingHash === expected.usingExpressionHash &&
+        actualWithCheckHash === expected.withCheckExpressionHash;
+      return matches ? [] : [{
+        code: "BLOCKER_POLICY_CONTRACT_DRIFT",
+        policy: key,
+        expected: {
+          command: expected.command,
+          mode: expected.mode,
+          roles: expectedRoles,
+          usingExpressionHash: expected.usingExpressionHash,
+          withCheckExpressionHash: expected.withCheckExpressionHash,
+        },
+        actual: {
+          command: actual.cmd,
+          mode: actual.permissive,
+          roles: actualRoles,
+          usingExpressionHash: actualUsingHash,
+          withCheckExpressionHash: actualWithCheckHash,
+        },
+      }];
+    });
+
+  const functionContractDrift = canonicalObjectManifest.functions
+    .filter((expected) => expected.scope === "shared" || expected.signature === "reflab_private.request_user_id()" || REQUIRED_IN_PRODUCTION.includes(expected.signature))
+    .flatMap((expected) => {
+      const actual = functionBySignature.get(expected.signature);
+      if (!actual) return [];
+      const actualSourceHash = sha256(normalizeFunctionSource(actual.source_definition));
+      const matches = actual.security === expected.security &&
+        searchPathValue(actual.search_path) === expected.search_path &&
+        actual.owner === expected.owner && actualSourceHash === expected.sourceHash;
+      return matches ? [] : [{
+        code: "BLOCKER_FUNCTION_CONTRACT_DRIFT",
+        signature: expected.signature,
+        expected: { security: expected.security, searchPath: expected.search_path, owner: expected.owner, sourceHash: expected.sourceHash },
+        actual: { security: actual.security, searchPath: searchPathValue(actual.search_path), owner: actual.owner, sourceHash: actualSourceHash },
+      }];
+    });
+
+  const identityFallbackBlockers = directIdentityReaders
+    .filter((entry) => entry.external_subject_fallback || (
+      entry.signature === "reflab_private.request_user_id()" && !entry.references_identity_links && (
+        entry.reads_request_jwt_claims || entry.calls_auth_jwt || entry.reads_sub_claim ||
+        entry.reads_direct_sub_setting || entry.calls_auth_uid
+      )
+    ))
+    .map((entry) => ({
+      code: entry.signature === "reflab_private.request_user_id()"
+        ? "BLOCKER_LEGACY_IDENTITY_FALLBACK"
+        : "BLOCKER_EXTERNAL_IDENTITY_FALLBACK",
+      signature: entry.signature,
+    }));
+
+  const triggerContractDrift = canonicalObjectManifest.triggers.flatMap((expected) => {
+    const key = `${expected.table}.${expected.name}`;
+    const actual = triggerByKey.get(key);
+    if (!actual) return [];
+    const expectedDefinition = expectedTriggerDefinition(expected);
+    const actualDefinition = normalizeTriggerDefinition(actual.trigger_definition);
+    const matches = actual.enabled_state === "O" && actual.orientation === "ROW" &&
+      actual.function_executed === expected.function && actual.timing_and_events === expected.timing_and_events &&
+      actualDefinition === expectedDefinition;
+    return matches ? [] : [{
+      code: "BLOCKER_TRIGGER_CONTRACT_DRIFT",
+      trigger: key,
+      expected: { enabled: "O", orientation: "ROW", timingAndEvents: expected.timing_and_events, function: expected.function, definition: expectedDefinition },
+      actual: { enabled: actual.enabled_state, orientation: actual.orientation, timingAndEvents: actual.timing_and_events, function: actual.function_executed, definition: actualDefinition },
+    }];
+  });
+
+  const indexContractDrift = canonicalObjectManifest.explicitIndexes.flatMap((expected) => {
+    const key = `${expected.table}.${expected.name}`;
+    const actual = indexByKey.get(key);
+    if (!actual) return [];
+    const expectedParts = indexDefinitionParts(expected.definition);
+    const actualParts = indexDefinitionParts(actual.index_definition);
+    const expectedDefinition = expectedParts.definition;
+    const actualDefinition = actualParts.definition;
+    const expectedPredicate = expectedParts.predicate;
+    const actualPredicate = normalizeSqlExpression(actual.predicate);
+    const actualColumns = (actual.columns ?? []).map(normalizeSqlExpression);
+    const matches = Boolean(actual.unique) === expected.unique && actualDefinition === expectedDefinition &&
+      JSON.stringify(actualColumns) === JSON.stringify(expectedParts.columns) && actualPredicate === expectedPredicate;
+    return matches ? [] : [{
+      code: "BLOCKER_INDEX_CONTRACT_DRIFT",
+      index: key,
+      expected: { unique: expected.unique, definition: expectedDefinition, columns: expectedParts.columns, predicate: expectedPredicate },
+      actual: { unique: Boolean(actual.unique), definition: actualDefinition, columns: actualColumns, predicate: actualPredicate },
+    }];
+  });
+
+  const grantBlockers = compareGrantContracts(results);
+  const objectBlockers = [
+    ...legacy.objectBlockers.filter((entry) => ![
+      "FUNCTION_CONTRACT_DRIFT", "POLICY_CONTRACT_DRIFT", "TRIGGER_CONTRACT_DRIFT", "INDEX_CONTRACT_DRIFT",
+    ].includes(entry.type)),
+    ...triggerContractDrift.map((entry) => ({ type: entry.code, object: entry.trigger })),
+    ...indexContractDrift.map((entry) => ({ type: entry.code, object: entry.index })),
+  ];
+
+  return {
+    ...legacy,
+    objectBlockers,
+    rlsContractDrift,
+    policyContractDrift,
+    functionContractDrift,
+    identityFallbackBlockers,
+    triggerContractDrift,
+    indexContractDrift,
+    grantBlockers,
   };
 }

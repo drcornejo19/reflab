@@ -12,6 +12,7 @@ import {
 } from "./queries.mjs";
 import { assertReadOnlyBatch } from "./sql-safety.mjs";
 import { authorizeProductionPreflightTarget } from "./target.mjs";
+import { buildGateReport, connectionCredentialBlockers } from "./gates.mjs";
 
 function sanitizeProcessOutput(value = "") {
   return String(value)
@@ -59,18 +60,44 @@ export function classifyMigrationHistory(remoteRows) {
   return [...known, ...unknown].sort((left, right) => left.version.localeCompare(right.version));
 }
 
-export function executeReadOnlyBatch(sql, connectionEnvironment, { spawn = spawnSync } = {}) {
+const subprocessEnvironmentAllowlist = Object.freeze([
+  "PATH", "Path", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP",
+]);
+
+export function buildPsqlEnvironment(hostEnvironment, connectionEnvironment) {
+  const minimalEnvironment = {};
+  for (const name of subprocessEnvironmentAllowlist) {
+    if (hostEnvironment[name]) minimalEnvironment[name] = hostEnvironment[name];
+  }
+  for (const name of ["PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD", "PGSSLMODE"]) {
+    if (connectionEnvironment[name]) minimalEnvironment[name] = connectionEnvironment[name];
+  }
+  return minimalEnvironment;
+}
+
+export function executeReadOnlyBatch(sql, connectionEnvironment, { spawn = spawnSync, processEnvironment = process.env } = {}) {
   assertReadOnlyBatch(sql);
   const result = spawn("psql", ["-X", "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "--tuples-only", "--no-align"], {
     input: sql,
     encoding: "utf8",
     windowsHide: true,
-    env: { ...process.env, ...connectionEnvironment },
+    env: buildPsqlEnvironment(processEnvironment, connectionEnvironment),
   });
   if (result.error || result.status !== 0) {
     throw new Error(`Production preflight aborted on unexpected database error: ${sanitizeProcessOutput(result.stderr || result.stdout)}`);
   }
   return parseJsonResults(result.stdout);
+}
+
+function reportSafeResults(results) {
+  return Object.fromEntries([...results].map(([query, payload]) => [
+    query,
+    query === "function_inventory" ? payload.map((entry) => {
+      const safeEntry = { ...entry };
+      delete safeEntry.source_definition;
+      return safeEntry;
+    }) : payload,
+  ]));
 }
 
 export function buildConditionalInventory(catalog) {
@@ -101,18 +128,38 @@ export function runProductionPreflight(environment = process.env, dependencies =
   if (!catalog) throw new Error("Production preflight catalog gate returned no result.");
 
   const { runnable, skipped, linksAvailable } = buildConditionalInventory(catalog);
-  const semanticResults = executeReadOnlyBatch(buildSqlBatch(runnable), target.connectionEnvironment, executionDependencies);
+  const credentialBlockers = connectionCredentialBlockers(baseResults);
+  const semanticResults = credentialBlockers.length === 0
+    ? executeReadOnlyBatch(buildSqlBatch(runnable), target.connectionEnvironment, executionDependencies)
+    : new Map();
+  const effectiveSkipped = credentialBlockers.length === 0 ? skipped : [
+    ...skipped,
+    ...runnable.map((query) => ({
+      query: query.id,
+      status: "BLOCKER_SKIPPED_UNSAFE_CONNECTION_CREDENTIAL",
+      requires: query.requires,
+    })),
+  ];
   const results = new Map([...baseResults, ...semanticResults]);
   const migrationHistory = classifyMigrationHistory(results.get("migration_history") ?? []);
+  const manifestComparison = compareInventoryWithManifest(results);
+  const gates = buildGateReport({
+    results,
+    migrationHistory,
+    manifestComparison,
+    skipped: effectiveSkipped,
+    identityLinksAvailable: linksAvailable,
+    targetBlockers: credentialBlockers,
+  });
   const report = {
     target: { projectRef: target.projectRef, host: target.host },
     readOnly: true,
     identityLinksAvailable: linksAvailable,
-    skipped,
+    skipped: effectiveSkipped,
     migrationHistory,
-    migrationBlockers: migrationHistory.filter((entry) => entry.gate.startsWith("BLOCKER_")),
-    manifestComparison: compareInventoryWithManifest(results),
-    results: Object.fromEntries(results),
+    manifestComparison,
+    ...gates,
+    results: reportSafeResults(results),
   };
   writeReport(`${JSON.stringify(report, null, 2)}\n`);
   return report;
