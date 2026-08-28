@@ -198,6 +198,9 @@ test("forbidden SQL is rejected while controlled comments and strings are ignore
 
 test("P5 detects direct claims, auth.jwt, sub extraction and external-subject fallback", () => {
   const p5 = baseInventoryQueries.find((query) => query.id === "p5_direct_identity_readers").sql;
+  assert.doesNotMatch(p5, /pg_catalog\.position\s*\(/i);
+  assert.match(p5, /pg_catalog\.strpos\(lower\(pg_catalog\.pg_get_functiondef\(p\.oid\)\), 'request\.jwt\.claims'\) > 0/i);
+  assert.match(p5, /pg_catalog\.strpos\(lower\(pg_catalog\.pg_get_functiondef\(p\.oid\)\), 'request\.jwt\.claim\.sub'\) > 0/i);
   assert.match(p5, /request\.jwt\.claims/i);
   assert.match(p5, /auth\[\.\]jwt/i);
   assert.match(p5, /->>''sub''/i);

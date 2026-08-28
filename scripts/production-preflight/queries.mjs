@@ -107,10 +107,10 @@ export const baseInventoryQueries = [
     "p5_direct_identity_readers",
     `coalesce((select pg_catalog.json_agg(x order by x.signature) from (
       select n.nspname || '.' || p.proname || '(' || pg_catalog.pg_get_function_identity_arguments(p.oid) || ')' as signature,
-        pg_catalog.position('request.jwt.claims' in lower(pg_catalog.pg_get_functiondef(p.oid))) > 0 as reads_request_jwt_claims,
+        pg_catalog.strpos(lower(pg_catalog.pg_get_functiondef(p.oid)), 'request.jwt.claims') > 0 as reads_request_jwt_claims,
         lower(pg_catalog.pg_get_functiondef(p.oid)) ~ 'auth[.]jwt[[:space:]]*[(]' as calls_auth_jwt,
         pg_catalog.regexp_replace(lower(pg_catalog.pg_get_functiondef(p.oid)), '[[:space:]]', '', 'g') like '%->>''sub''%' as reads_sub_claim,
-        pg_catalog.position('request.jwt.claim.sub' in lower(pg_catalog.pg_get_functiondef(p.oid))) > 0 as reads_direct_sub_setting,
+        pg_catalog.strpos(lower(pg_catalog.pg_get_functiondef(p.oid)), 'request.jwt.claim.sub') > 0 as reads_direct_sub_setting,
         lower(pg_catalog.pg_get_functiondef(p.oid)) ~ 'auth[.]uid[[:space:]]*[(]' as calls_auth_uid,
         lower(pg_catalog.pg_get_functiondef(p.oid)) ~ '(external_subject|external_user_id|clerk_subject|jwt_subject)' as mentions_external_identity,
         lower(pg_catalog.pg_get_functiondef(p.oid)) ~ 'reflab_private[.]user_identity_links' as references_identity_links,
@@ -118,10 +118,10 @@ export const baseInventoryQueries = [
       from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
       where n.nspname in ('public', 'reflab_private') and p.prokind = 'f'
         and (
-          pg_catalog.position('request.jwt.claims' in lower(pg_catalog.pg_get_functiondef(p.oid))) > 0
+          pg_catalog.strpos(lower(pg_catalog.pg_get_functiondef(p.oid)), 'request.jwt.claims') > 0
           or lower(pg_catalog.pg_get_functiondef(p.oid)) ~ 'auth[.]jwt[[:space:]]*[(]'
           or pg_catalog.regexp_replace(lower(pg_catalog.pg_get_functiondef(p.oid)), '[[:space:]]', '', 'g') like '%->>''sub''%'
-          or pg_catalog.position('request.jwt.claim.sub' in lower(pg_catalog.pg_get_functiondef(p.oid))) > 0
+          or pg_catalog.strpos(lower(pg_catalog.pg_get_functiondef(p.oid)), 'request.jwt.claim.sub') > 0
           or lower(pg_catalog.pg_get_functiondef(p.oid)) ~ 'auth[.]uid[[:space:]]*[(]'
           or lower(pg_catalog.pg_get_functiondef(p.oid)) ~ '(external_subject|external_user_id|clerk_subject|jwt_subject)'
         )
