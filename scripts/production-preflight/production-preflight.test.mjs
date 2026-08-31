@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import {
   canonicalObjectManifest,
   DEVELOPMENT_PROJECT_REF,
+  identityColumns,
   migrationManifest,
   MUST_BE_ABSENT_OR_NONEXECUTABLE_IN_PRODUCTION,
   PRODUCTION_PROJECT_REF,
@@ -605,6 +606,39 @@ test("Production canonical objects exclude Development identity-link infrastruct
   assert.equal(canonicalObjectManifest.policies.some((entry) => entry.scope === "development_chain"), false);
   assert.equal(canonicalObjectManifest.policies.some((entry) => entry.table === "user_identity_links"), false);
   assert.equal(canonicalObjectManifest.functions.some((entry) => MUST_BE_ABSENT_OR_NONEXECUTABLE_IN_PRODUCTION.includes(entry.signature)), false);
+});
+
+test("Matches preparations and reviews derive fixture context through appointments", () => {
+  for (const table of ["public.match_preparations", "public.post_match_reviews"]) {
+    assert.deepEqual(canonicalObjectManifest.criticalColumns[table], ["appointment_id", "user_id"]);
+    assert.equal(canonicalObjectManifest.criticalColumns[table].includes("fixture_id"), false);
+    assert.deepEqual(identityColumns[table], ["user_id"]);
+  }
+});
+
+test("appointment-backed Matches columns remain real object blockers without reducing others", () => {
+  const allCriticalColumns = Object.entries(canonicalObjectManifest.criticalColumns)
+    .flatMap(([table, columns]) => columns.map((column) => `${table}.${column}`));
+  const appointmentColumns = [
+    "public.match_preparations.appointment_id",
+    "public.post_match_reviews.appointment_id",
+  ];
+  const comparison = compareInventoryWithManifest(new Map([
+    ["catalog_gate", {
+      tables: canonicalObjectManifest.tables,
+      columns: allCriticalColumns.filter((column) => !appointmentColumns.includes(column)),
+    }],
+  ]));
+
+  assert.deepEqual(comparison.missingCriticalColumns.sort(), appointmentColumns.sort());
+  assert.equal(comparison.missingCriticalColumns.some((column) => column.endsWith(".fixture_id")), false);
+
+  const allMissing = compareInventoryWithManifest(new Map([
+    ["catalog_gate", { tables: canonicalObjectManifest.tables, columns: [] }],
+  ])).missingCriticalColumns;
+  assert.equal(allMissing.length, allCriticalColumns.length);
+  assert.ok(allMissing.includes("public.match_officials.fixture_id"));
+  assert.ok(allMissing.includes("public.appointments.institution_id"));
 });
 
 test("every local identity-link creator remains Development-only and forbidden in Production", () => {
