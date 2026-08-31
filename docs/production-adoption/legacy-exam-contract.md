@@ -12,11 +12,11 @@ Production contains six official `exam_results` created before the canonical exa
 
 ## Proposed Version Contract
 
-- `legacy_pre_cutover_v1` identifies the six preserved rows.
+- `legacy_pre_cutover_v1` is the conceptual provenance of preserved rows; Phase 1 does not write that value into historical records.
 - `canonical_exam_v1` identifies every result created by the post-cutover RPC.
 - A future explicit version marker is preferred over guessing from a `user_` prefix or from missing fields.
 - Marking legacy provenance may be the only historical-row update considered, and only after snapshot/hash verification and separate approval.
 
-Post-cutover triggers and constraints apply strong session, submission, manifest, payload, ownership, and idempotency invariants only to `canonical_exam_v1`. They must permit the exact grandfathered shape while preventing any new legacy-shaped insert.
+Phase 1 adds nullable `exam_session_id` and `payload_hash` only. Existing rows remain distinguishable by their grandfathered null shape without being rewritten. Post-cutover RPCs and triggers must require the full canonical session/submission/hash contract for every new result, while the table-level bridge constraints continue to permit the preserved historical shape.
 
 No scoring algorithm or historical score is reinterpreted by this contract.

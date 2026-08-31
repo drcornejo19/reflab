@@ -56,13 +56,18 @@ const canonicalMigrationManifest = [
   ["202608200001", "canonical_coach_rate_limit", "incremental_requires_adoption"],
   ["202608210001", "canonical_institution_invitation_acceptance", "incremental_requires_adoption"],
   ["202608240001", "canonical_institution_catalog_alignment", "incremental_requires_adoption"],
+  ["202608310001", "production_adoption_foundation", "production_adoption_bridge"],
+  ["202608310002", "production_adoption_exam_training_prerequisites", "production_adoption_bridge"],
+  ["202608310003", "production_adoption_psychology_notifications_prerequisites", "production_adoption_bridge"],
 ].map(([version, name, classification]) => ({
   version,
   name,
   classification,
   productionAction: classification === "incremental_requires_adoption"
     ? "MANUAL_ADOPTION_AFTER_ALL_GATES"
-    : "NEVER_EXECUTE_IN_PRODUCTION",
+    : classification === "production_adoption_bridge"
+      ? "MANUAL_PHASED_ADOPTION_AFTER_PHASE0_EVIDENCE"
+      : "NEVER_EXECUTE_IN_PRODUCTION",
 }));
 
 export const migrationManifest = [...historicalMigrationManifest, ...canonicalMigrationManifest];

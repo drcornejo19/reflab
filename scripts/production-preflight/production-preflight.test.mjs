@@ -672,12 +672,16 @@ test("migration manifest covers every local migration and distinguishes adoption
   assert.ok(migrationManifest.some((entry) => entry.classification === "empty_database_only"));
   assert.ok(migrationManifest.some((entry) => entry.classification === "development_only"));
   assert.ok(migrationManifest.some((entry) => entry.classification === "incremental_requires_adoption"));
+  assert.ok(migrationManifest.some((entry) => entry.classification === "production_adoption_bridge"));
   assert.ok(migrationManifest
     .filter((entry) => ["empty_database_only", "development_only"].includes(entry.classification))
     .every((entry) => entry.productionAction === "NEVER_EXECUTE_IN_PRODUCTION"));
   assert.ok(migrationManifest
     .filter((entry) => entry.classification === "incremental_requires_adoption")
     .every((entry) => entry.productionAction === "MANUAL_ADOPTION_AFTER_ALL_GATES"));
+  assert.ok(migrationManifest
+    .filter((entry) => entry.classification === "production_adoption_bridge")
+    .every((entry) => entry.productionAction === "MANUAL_PHASED_ADOPTION_AFTER_PHASE0_EVIDENCE"));
 });
 
 test("an applied Development migration is a Production blocker", () => {

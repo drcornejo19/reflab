@@ -15,6 +15,8 @@
     "test:api-auth-boundaries": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/auth/apiAuthBoundary.test.mts",
     "test:clerk-authorized-parties": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/auth/clerkAuthorizedParties.test.mts",
     "test:production-preflight": "node --test scripts/production-preflight/production-preflight.test.mjs",
+    "test:production-adoption:phase1": "node --test scripts/production-adoption/phase1/phase1-bridge.test.mjs",
+    "test:production-adoption:phase1:postgres": "node scripts/production-adoption/phase1/run-phase1-bridge-postgres.mjs",
     "test:canonical-identity-cleanup": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/identity/canonicalIdentityCleanup.test.mts",
     "test:ranking": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/ranking/canonicalRanking.test.mts lib/performance/canonicalSummary.test.mts",
     "test:matches": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/matches/canonicalMatches.test.mts",
