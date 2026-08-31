@@ -6,10 +6,8 @@ Phase 1 is a purely additive, fail-closed foundation. Its future migration must 
 
 - A no-login, non-superuser, non-BYPASSRLS `reflab_rls_owner` role when absent.
 - `reflab_private` and `reflab_meta` schemas when absent.
-- An empty `reflab_private.user_identity_links` table.
 - An empty `reflab_meta.reflab_schema_state` table, or one explicit adoption marker containing only reviewed schema/fingerprint metadata.
-- Constraints and indexes required solely to keep those new empty tables internally coherent.
-- RLS and `FORCE ROW LEVEL SECURITY` on private identity data.
+- Constraints and indexes required solely to keep that new empty metadata table internally coherent.
 
 ## Mandatory Creation Contract
 
@@ -28,6 +26,7 @@ Phase 1 is a purely additive, fail-closed foundation. Its future migration must 
 - Business RPCs and business triggers.
 - Runtime grants or replacement of legacy policies.
 - Changes to `reflab_private.request_user_id()` or any JWT helper.
+- Development-only identity-link tables, policies, functions, or RPCs.
 - Identity mappings or rewrites of existing IDs.
 - Any modification to historical attempts or `exam_results`.
 

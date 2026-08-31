@@ -14,6 +14,9 @@ export function connectionCredentialBlockers(results) {
     if (role[attribute]) blockers.push(blocker(code, { role: role.rolname }));
   }
   if (!writes) return [...blockers, blocker("BLOCKER_EFFECTIVE_WRITE_PRIVILEGES_NOT_INVENTORIED")];
+  for (const object of writes.tables_owned ?? []) {
+    blockers.push(blocker("BLOCKER_CONNECTION_TABLE_OWNER", { object }));
+  }
   for (const [field, code] of [
     ["schemas_with_create", "BLOCKER_CONNECTION_SCHEMA_CREATE"],
     ["tables_with_dml", "BLOCKER_CONNECTION_TABLE_DML"],
@@ -32,37 +35,34 @@ function nonZeroBlockers(payload, query, fields, code = "BLOCKER_SEMANTIC_MISMAT
   );
 }
 
-export function identityDataBlockers(results, identityLinksAvailable) {
+export function identityDataBlockers(results) {
   const blockers = [];
-  if (!identityLinksAvailable) blockers.push(blocker("BLOCKER_IDENTITY_LINKS_UNAVAILABLE"));
-  blockers.push(...nonZeroBlockers(results.get("identity_link_structure"), "identity_link_structure", [
-    "duplicate_external_subjects",
-    "duplicate_canonical_users",
-    "links_without_profile",
-    "profiles_with_multiple_links",
-  ], "BLOCKER_IDENTITY_INTEGRITY"));
   for (const [query, payload] of results) {
-    if (!query.startsWith("identity_") || query === "identity_link_structure") continue;
-    if (Number(payload?.unresolved_candidates ?? 0) > 0) {
-      blockers.push(blocker("BLOCKER_UNRESOLVED_CLERK_REFERENCE", {
+    if (!query.startsWith("identity_")) continue;
+    if (Number(payload?.unresolved_profile_refs ?? 0) > 0) {
+      blockers.push(blocker("BLOCKER_UNRESOLVED_CANONICAL_REFERENCE", {
         query,
-        actual: Number(payload.unresolved_candidates),
+        actual: Number(payload.unresolved_profile_refs),
         allowed: 0,
       }));
     }
   }
   const fixtureIdentity = results.get("fixture_creator_identity");
-  if (fixtureIdentity && Number(fixtureIdentity.candidate_clerk_refs ?? 0) !== Number(fixtureIdentity.mapped_clerk_refs ?? 0)) {
+  if (fixtureIdentity && Number(fixtureIdentity.unresolved_profile_refs ?? 0) > 0) {
     blockers.push(blocker("BLOCKER_UNRESOLVED_FIXTURE_CREATOR", {
-      candidateCount: Number(fixtureIdentity.candidate_clerk_refs ?? 0),
-      mappedCount: Number(fixtureIdentity.mapped_clerk_refs ?? 0),
+      actual: Number(fixtureIdentity.unresolved_profile_refs),
+      allowed: 0,
     }));
   }
   return blockers;
 }
 
 export function semanticIntegrityBlockers(results, skipped) {
-  const blockers = skipped.map((entry) => blocker("BLOCKER_SEMANTIC_CHECK_SKIPPED", { query: entry.query }));
+  const blockers = skipped.map((entry) => blocker("BLOCKER_SEMANTIC_CHECK_SKIPPED", {
+    query: entry.query,
+    reason: entry.status,
+    blockedTables: entry.blockedTables ?? [],
+  }));
   blockers.push(...nonZeroBlockers(results.get("attempt_semantics"), "attempt_semantics", [
     "official_orphans", "official_owner_mismatches", "invalid_communication_feedback",
   ]));
@@ -99,14 +99,13 @@ export function buildGateReport({
   migrationHistory,
   manifestComparison,
   skipped,
-  identityLinksAvailable,
   targetBlockers = [],
 }) {
   const migrationBlockers = migrationHistory
     .filter((entry) => entry.gate.startsWith("BLOCKER_"))
     .map((entry) => blocker(entry.gate, { version: entry.version, name: entry.remoteName ?? entry.name }));
   const identityBlockers = [
-    ...identityDataBlockers(results, identityLinksAvailable),
+    ...identityDataBlockers(results),
     ...manifestComparison.identityFallbackBlockers,
   ];
   const rlsBlockers = [
@@ -124,9 +123,15 @@ export function buildGateReport({
   const grantBlockers = manifestComparison.grantBlockers;
   const integrityBlockers = semanticIntegrityBlockers(results, skipped);
   const storagePolicyNames = new Set(["avatars_public_read", "institutional_content_authenticated_read", "videos_public_read"]);
+  const storageInventoryProven = results.has("storage_buckets") &&
+    !skipped.some((entry) => entry.query === "storage_buckets");
   const storageBlockers = [
-    ...manifestComparison.missingBuckets.map((object) => blocker("BLOCKER_MISSING_BUCKET", { object })),
-    ...manifestComparison.bucketContractDrift.map((entry) => blocker("BLOCKER_BUCKET_CONTRACT_DRIFT", { object: entry.bucket })),
+    ...(storageInventoryProven
+      ? manifestComparison.missingBuckets.map((object) => blocker("BLOCKER_MISSING_BUCKET", { object }))
+      : []),
+    ...(storageInventoryProven
+      ? manifestComparison.bucketContractDrift.map((entry) => blocker("BLOCKER_BUCKET_CONTRACT_DRIFT", { object: entry.bucket }))
+      : []),
     ...manifestComparison.policyContractDrift
       .filter((entry) => storagePolicyNames.has(entry.policy.split(".").at(-1)))
       .map((entry) => blocker("BLOCKER_STORAGE_POLICY_DRIFT", { object: entry.policy })),

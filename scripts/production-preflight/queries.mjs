@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import {
   canonicalObjectManifest,
-  criticalColumns,
   identityColumns,
   MUST_BE_ABSENT_OR_NONEXECUTABLE_IN_PRODUCTION,
   REQUIRED_IN_PRODUCTION,
@@ -50,8 +49,11 @@ export const catalogGateQuery = jsonQuery(
       where c.relkind in ('r', 'p')
     ) x),
     'columns', (select coalesce(pg_catalog.json_agg(x.name order by x.name), '[]'::json) from (
-      select table_schema || '.' || table_name || '.' || column_name as name
-      from information_schema.columns
+      select n.nspname || '.' || c.relname || '.' || a.attname as name
+      from pg_catalog.pg_attribute a
+      join pg_catalog.pg_class c on c.oid = a.attrelid
+      join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      where c.relkind in ('r', 'p') and a.attnum > 0 and not a.attisdropped
     ) x)
   )`
 );
@@ -84,12 +86,35 @@ export const baseInventoryQueries = [
             or pg_catalog.has_table_privilege(current_user, c.oid, 'REFERENCES')
             or pg_catalog.has_table_privilege(current_user, c.oid, 'TRIGGER'))
       ) x), '[]'::json),
+      'tables_owned', coalesce((select pg_catalog.json_agg(x.object_name order by x.object_name) from (
+        select n.nspname || '.' || c.relname as object_name
+        from pg_catalog.pg_class c
+        join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+        join pg_catalog.pg_roles r on r.oid = c.relowner
+        where c.relkind in ('r', 'p') and n.nspname in ('public', 'reflab_private', 'reflab_meta', 'storage')
+          and r.rolname = current_user
+      ) x), '[]'::json),
       'sequences_with_write', coalesce((select pg_catalog.json_agg(n.nspname || '.' || c.relname order by n.nspname, c.relname)
         from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
         where c.relkind = 'S' and n.nspname in ('public', 'reflab_private', 'reflab_meta')
           and (pg_catalog.has_sequence_privilege(current_user, c.oid, 'USAGE')
             or pg_catalog.has_sequence_privilege(current_user, c.oid, 'UPDATE'))), '[]'::json)
     )`
+  ),
+  jsonQuery(
+    "semantic_visibility",
+    `coalesce((select pg_catalog.json_agg(x order by x.table_name) from (
+      select n.nspname || '.' || c.relname as table_name,
+        pg_catalog.has_table_privilege(current_user, c.oid, 'SELECT') as has_select,
+        c.relrowsecurity as rls_enabled,
+        c.relforcerowsecurity as rls_forced,
+        pg_catalog.row_security_active(c.oid) as rls_applies,
+        c.relowner = (select r.oid from pg_catalog.pg_roles r where r.rolname = current_user) as current_user_is_owner
+      from pg_catalog.pg_class c
+      join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      where c.relkind in ('r', 'p')
+        and n.nspname in ('public', 'reflab_private', 'reflab_meta', 'storage', 'supabase_migrations')
+    ) x), '[]'::json)`
   ),
   jsonQuery(
     "rls_owner",
@@ -296,27 +321,6 @@ export const semanticQueries = [
     { tables: ["supabase_migrations.schema_migrations"], columns: ["supabase_migrations.schema_migrations.version", "supabase_migrations.schema_migrations.name"] }
   ),
   jsonQuery(
-    "identity_link_structure",
-    `pg_catalog.json_build_object(
-      'provider_count', count(distinct l.provider),
-      'link_count', count(*),
-      'distinct_external_subjects', count(distinct l.external_subject),
-      'distinct_canonical_users', count(distinct l.user_id),
-      'duplicate_external_subjects', coalesce((select count(*) from (select provider, external_subject from reflab_private.user_identity_links group by provider, external_subject having count(*) > 1) d), 0),
-      'duplicate_canonical_users', coalesce((select count(*) from (select provider, user_id from reflab_private.user_identity_links group by provider, user_id having count(*) > 1) d), 0),
-      'links_without_profile', count(*) filter (where p.user_id is null),
-      'profiles_with_multiple_links', coalesce((select count(*) from (select user_id from reflab_private.user_identity_links group by user_id having count(*) > 1) d), 0)
-    ) from reflab_private.user_identity_links l
-      left join public.user_profiles p on p.user_id = l.user_id`,
-    {
-      tables: ["reflab_private.user_identity_links", "public.user_profiles"],
-      columns: [
-        ...criticalColumns["reflab_private.user_identity_links"].map((column) => `reflab_private.user_identity_links.${column}`),
-        "public.user_profiles.user_id",
-      ],
-    }
-  ),
-  jsonQuery(
     "attempt_semantics",
     `pg_catalog.json_build_object(
       'training', count(*) filter (where a.exam_result_id is null),
@@ -386,11 +390,13 @@ export const semanticQueries = [
   jsonQuery(
     "fixture_creator_identity",
     `pg_catalog.json_build_object(
-      'candidate_clerk_refs', count(*) filter (where f.raw_source_reference->>'created_by' like 'user\\_%' escape '\\'),
-      'mapped_clerk_refs', count(*) filter (where l.external_subject is not null)
-    ) from public.fixtures f left join reflab_private.user_identity_links l
-      on l.provider = 'clerk' and l.external_subject = f.raw_source_reference->>'created_by'`,
-    { tables: ["public.fixtures", "reflab_private.user_identity_links"], columns: ["public.fixtures.raw_source_reference", "reflab_private.user_identity_links.provider", "reflab_private.user_identity_links.external_subject"] }
+      'creator_refs', count(*) filter (where nullif(f.raw_source_reference->>'created_by', '') is not null),
+      'user_subject_refs', count(*) filter (where f.raw_source_reference->>'created_by' like 'user\\_%' escape '\\'),
+      'profile_backed_refs', count(*) filter (where p.user_id is not null),
+      'unresolved_profile_refs', count(*) filter (where nullif(f.raw_source_reference->>'created_by', '') is not null and p.user_id is null)
+    ) from public.fixtures f left join public.user_profiles p
+      on p.user_id = f.raw_source_reference->>'created_by'`,
+    { tables: ["public.fixtures", "public.user_profiles"], columns: ["public.fixtures.raw_source_reference", "public.user_profiles.user_id"] }
   ),
   jsonQuery(
     "notification_integrity",
@@ -441,7 +447,7 @@ function quoteIdentifier(value) {
   return `"${value}"`;
 }
 
-export function buildIdentityQueries({ includeLinks }) {
+export function buildIdentityQueries() {
   const queries = [];
   for (const [qualifiedTable, columns] of Object.entries(identityColumns)) {
     const [schema, table] = qualifiedTable.split(".");
@@ -449,32 +455,17 @@ export function buildIdentityQueries({ includeLinks }) {
       const id = `identity_${schema}_${table}_${column}`;
       const tableSql = `${quoteIdentifier(schema)}.${quoteIdentifier(table)}`;
       const columnSql = `t.${quoteIdentifier(column)}`;
-      const basePayload = `pg_catalog.json_build_object(
+      const payload = `pg_catalog.json_build_object(
         'total_non_null', count(*) filter (where ${columnSql} is not null),
-        'candidate_user_prefix', count(*) filter (where ${columnSql} like 'user\\_%' escape '\\')`;
-      const linkedPayload = includeLinks
-        ? `,
-        'mapped_external_subjects', count(*) filter (where l.external_subject is not null),
-        'canonical_profiles', count(*) filter (where p.user_id is not null),
-        'unresolved_candidates', count(*) filter (where ${columnSql} like 'user\\_%' escape '\\' and l.external_subject is null and p.user_id is null)`
-        : "";
-      const joins = includeLinks
-        ? ` left join reflab_private.user_identity_links l on l.provider = 'clerk' and l.external_subject = ${columnSql}
-            left join public.user_profiles p on p.user_id = ${columnSql}`
-        : "";
+        'user_subject_ids', count(*) filter (where ${columnSql} like 'user\\_%' escape '\\'),
+        'profile_backed_ids', count(*) filter (where ${columnSql} is not null and p.user_id is not null),
+        'unresolved_profile_refs', count(*) filter (where ${columnSql} is not null and p.user_id is null)
+      ) from ${tableSql} t left join public.user_profiles p on p.user_id = ${columnSql}`;
       const requirements = {
-        tables: [qualifiedTable],
-        columns: [`${qualifiedTable}.${column}`],
+        tables: [qualifiedTable, "public.user_profiles"],
+        columns: [`${qualifiedTable}.${column}`, "public.user_profiles.user_id"],
       };
-      if (includeLinks) {
-        requirements.tables.push("reflab_private.user_identity_links", "public.user_profiles");
-        requirements.columns.push(
-          "reflab_private.user_identity_links.provider",
-          "reflab_private.user_identity_links.external_subject",
-          "public.user_profiles.user_id"
-        );
-      }
-      queries.push(jsonQuery(id, `${basePayload}${linkedPayload}) from ${tableSql} t${joins}`, requirements));
+      queries.push(jsonQuery(id, payload, requirements));
     }
   }
   return queries;
@@ -929,16 +920,18 @@ export function compareInventoryWithManifest(results) {
     });
 
   const identityFallbackBlockers = directIdentityReaders
-    .filter((entry) => entry.external_subject_fallback || (
-      entry.signature === "reflab_private.request_user_id()" && !entry.references_identity_links && (
-        entry.reads_request_jwt_claims || entry.calls_auth_jwt || entry.reads_sub_claim ||
-        entry.reads_direct_sub_setting || entry.calls_auth_uid
-      )
-    ))
+    .filter((entry) => {
+      if (entry.external_subject_fallback) return true;
+      const readsExternalIdentity = entry.reads_request_jwt_claims || entry.calls_auth_jwt ||
+        entry.reads_sub_claim || entry.reads_direct_sub_setting || entry.calls_auth_uid;
+      return readsExternalIdentity && entry.signature !== "reflab_private.request_user_id()";
+    })
     .map((entry) => ({
-      code: entry.signature === "reflab_private.request_user_id()"
-        ? "BLOCKER_LEGACY_IDENTITY_FALLBACK"
-        : "BLOCKER_EXTERNAL_IDENTITY_FALLBACK",
+      code: entry.external_subject_fallback
+        ? entry.signature === "reflab_private.request_user_id()"
+          ? "BLOCKER_LEGACY_IDENTITY_FALLBACK"
+          : "BLOCKER_EXTERNAL_IDENTITY_FALLBACK"
+        : "BLOCKER_DIRECT_EXTERNAL_IDENTITY_READ",
       signature: entry.signature,
     }));
 

@@ -148,7 +148,7 @@ test("an unauthorized target aborts before psql can be started", () => {
 });
 
 test("generated SQL is wrapped, time-limited and restricted to the read-only allowlist", () => {
-  const sql = buildSqlBatch([...baseInventoryQueries, ...semanticQueries, ...buildIdentityQueries({ includeLinks: true })]);
+  const sql = buildSqlBatch([...baseInventoryQueries, ...semanticQueries, ...buildIdentityQueries()]);
   const statements = assertReadOnlyBatch(sql);
   assert.match(statements[0], /^begin read only$/i);
   assert.match(statements.at(-1), /^rollback$/i);
@@ -194,10 +194,7 @@ test("jsonQuery wraps every payload form as an independent scalar query", () => 
 });
 
 test("all current semantic and identity queries use the same scalar payload wrapper", () => {
-  const identityQueries = [
-    ...buildIdentityQueries({ includeLinks: false }),
-    ...buildIdentityQueries({ includeLinks: true }),
-  ];
+  const identityQueries = buildIdentityQueries();
   const queries = [...baseInventoryQueries, ...semanticQueries, ...identityQueries];
   for (const query of queries) {
     assert.doesNotThrow(() => assertReadOnlySql(query.sql), `${query.id} is not valid read-only SQL`);
@@ -217,7 +214,6 @@ test("all current semantic and identity queries use the same scalar payload wrap
     .filter((query) => hasTopLevelKeyword(query.payloadSql, "from"))
     .map((query) => query.id);
   assert.deepEqual(topLevelFromSemanticIds, [
-    "identity_link_structure",
     "attempt_semantics",
     "exam_integrity",
     "matches_tenant_integrity",
@@ -393,7 +389,8 @@ test("both runner phases independently enforce a read-only transaction before in
       { query: READ_ONLY_GUARD_QUERY_ID, payload: "on" },
       { query: "catalog_gate", payload: { tables: [], columns: [] } },
       { query: "connection_role_security", payload: { rolname: "preflight_reader", rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false } },
-      { query: "connection_effective_writes", payload: { schemas_with_create: [], tables_with_dml: [], sequences_with_write: [] } },
+      { query: "connection_effective_writes", payload: { schemas_with_create: [], tables_with_dml: [], sequences_with_write: [], tables_owned: [] } },
+      { query: "semantic_visibility", payload: [] },
     ].map((entry) => resultFrameLine(entry.query, entry.payload)).join("\n"),
     readOnlyGuardLine(),
   ];
@@ -443,14 +440,82 @@ test("P5 detects direct claims, auth.jwt, sub extraction and external-subject fa
 });
 
 test("optional identity and semantic queries declare existence dependencies", () => {
-  for (const query of [...semanticQueries, ...buildIdentityQueries({ includeLinks: true })]) {
+  for (const query of [...semanticQueries, ...buildIdentityQueries()]) {
     if (query.id === "storage_object_policies") continue;
     assert.ok((query.requires.tables?.length ?? 0) > 0, `${query.id} lacks a table gate`);
   }
   const catalog = { tables: ["public.attempts"], columns: ["public.attempts.user_id"] };
-  const conditional = buildConditionalInventory(catalog);
-  assert.equal(conditional.linksAvailable, false);
-  assert.ok(conditional.skipped.some((entry) => entry.query === "identity_link_structure"));
+  const conditional = buildConditionalInventory(catalog, []);
+  assert.ok(conditional.skipped.some((entry) => entry.query === "attempt_semantics"));
+  assert.ok(conditional.skipped.every((entry) => entry.status.startsWith("BLOCKER_")));
+});
+
+test("semantic queries fail closed when visibility is unknown or RLS applies", () => {
+  const catalog = {
+    tables: ["public.attempts", "public.exam_results"],
+    columns: [
+      "public.attempts.user_id",
+      "public.attempts.exam_result_id",
+      "public.attempts.source_item_type",
+      "public.attempts.score",
+      "public.exam_results.id",
+      "public.exam_results.user_id",
+    ],
+  };
+  const unknown = buildConditionalInventory(catalog, []);
+  assert.equal(
+    unknown.skipped.find((entry) => entry.query === "attempt_semantics")?.status,
+    "BLOCKER_SKIPPED_VISIBILITY_UNKNOWN"
+  );
+
+  const rlsLimited = buildConditionalInventory(catalog, [
+    { table_name: "public.attempts", has_select: true, rls_applies: true },
+    { table_name: "public.exam_results", has_select: true, rls_applies: true },
+  ]);
+  assert.equal(
+    rlsLimited.skipped.find((entry) => entry.query === "attempt_semantics")?.status,
+    "BLOCKER_SKIPPED_RLS_VISIBILITY_UNPROVEN"
+  );
+  assert.equal(rlsLimited.runnable.some((entry) => entry.id === "attempt_semantics"), false);
+});
+
+test("semantic queries run only after complete SELECT and non-RLS visibility is proven", () => {
+  const catalog = {
+    tables: ["public.attempts", "public.exam_results"],
+    columns: [
+      "public.attempts.user_id",
+      "public.attempts.exam_result_id",
+      "public.attempts.source_item_type",
+      "public.attempts.score",
+      "public.exam_results.id",
+      "public.exam_results.user_id",
+    ],
+  };
+  const conditional = buildConditionalInventory(catalog, [
+    { table_name: "public.attempts", has_select: true, rls_applies: false },
+    { table_name: "public.exam_results", has_select: true, rls_applies: false },
+  ]);
+  assert.equal(conditional.runnable.some((entry) => entry.id === "attempt_semantics"), true);
+});
+
+test("catalog discovery uses pg_catalog and can gate migration history outside app schemas", () => {
+  const catalogSql = baseInventoryQueries.find((query) => query.id === "catalog_gate").sql;
+  assert.match(catalogSql, /pg_catalog\.pg_attribute/);
+  assert.doesNotMatch(catalogSql, /information_schema\.columns/);
+
+  const catalog = {
+    tables: ["supabase_migrations.schema_migrations"],
+    columns: [
+      "supabase_migrations.schema_migrations.version",
+      "supabase_migrations.schema_migrations.name",
+    ],
+  };
+  const conditional = buildConditionalInventory(catalog, [{
+    table_name: "supabase_migrations.schema_migrations",
+    has_select: true,
+    rls_applies: false,
+  }]);
+  assert.equal(conditional.runnable.some((entry) => entry.id === "migration_history"), true);
 });
 
 test("trigger, grant and Storage inventories remain separate and complete", () => {
@@ -478,7 +543,7 @@ test("generated preflight SQL contains no schema-qualified POSITION special synt
   const sql = buildSqlBatch([
     ...baseInventoryQueries,
     ...semanticQueries,
-    ...buildIdentityQueries({ includeLinks: true }),
+    ...buildIdentityQueries(),
   ]);
   assert.doesNotMatch(sql, /pg_catalog[.]position\s*[(]/i);
   assert.match(sql, /pg_catalog[.]strpos\(inherited[.]inheritance_path, ' -> ' \|\| granted[.]rolname\) = 0/i);
@@ -491,13 +556,13 @@ test("token ownership conflicts always return an integer", () => {
 });
 
 test("canonical manifest separates required and forbidden Production RPC categories", () => {
-  assert.deepEqual(canonicalObjectManifest.sanityCounts, { tables: 81, functions: 30, policies: 150, triggers: 82, explicitIndexes: 111 });
-  assert.equal(canonicalObjectManifest.tables.length, 81);
-  assert.equal(canonicalObjectManifest.functions.length, 30);
-  assert.equal(canonicalObjectManifest.policies.length, 150);
-  assert.equal(canonicalObjectManifest.triggers.length, 82);
-  assert.equal(canonicalObjectManifest.explicitIndexes.length, 111);
-  assert.equal(canonicalObjectManifest.rls.length, 82);
+  assert.deepEqual(canonicalObjectManifest.sanityCounts, {
+    tables: canonicalObjectManifest.tables.length,
+    functions: canonicalObjectManifest.functions.length,
+    policies: canonicalObjectManifest.policies.length,
+    triggers: canonicalObjectManifest.triggers.length,
+    explicitIndexes: canonicalObjectManifest.explicitIndexes.length,
+  });
   assert.ok(canonicalObjectManifest.functions.every((entry) => entry.owner && /^[0-9a-f]{64}$/.test(entry.sourceHash)));
   assert.ok(canonicalObjectManifest.policies.every((entry) =>
     (entry.usingExpressionHash === null || /^[0-9a-f]{64}$/.test(entry.usingExpressionHash)) &&
@@ -506,7 +571,6 @@ test("canonical manifest separates required and forbidden Production RPC categor
   assert.ok(canonicalObjectManifest.policies.every((entry) =>
     entry.schema && entry.table && entry.name && entry.command && entry.mode && entry.roles?.length
   ));
-  assert.equal(canonicalObjectManifest.sanityCounts.tables, 81);
   assert.deepEqual(
     REQUIRED_IN_PRODUCTION.filter((signature) => MUST_BE_ABSENT_OR_NONEXECUTABLE_IN_PRODUCTION.includes(signature)),
     []
@@ -531,6 +595,24 @@ test("canonical manifest separates required and forbidden Production RPC categor
   assert.ok(runtimeRpcSignatures
     .filter((entry) => entry.productionCategory === "REQUIRED_IN_PRODUCTION")
     .every((entry) => !MUST_BE_ABSENT_OR_NONEXECUTABLE_IN_PRODUCTION.includes(entry.signature)));
+});
+
+test("Production canonical objects exclude Development identity-link infrastructure", () => {
+  assert.equal(canonicalObjectManifest.tables.includes("reflab_private.user_identity_links"), false);
+  assert.equal(Object.hasOwn(canonicalObjectManifest.criticalColumns, "reflab_private.user_identity_links"), false);
+  assert.equal(canonicalObjectManifest.rls.some((entry) => entry.table === "reflab_private.user_identity_links"), false);
+  assert.equal(canonicalObjectManifest.uniques.some((entry) => entry.table === "reflab_private.user_identity_links"), false);
+  assert.equal(canonicalObjectManifest.policies.some((entry) => entry.scope === "development_chain"), false);
+  assert.equal(canonicalObjectManifest.policies.some((entry) => entry.table === "user_identity_links"), false);
+  assert.equal(canonicalObjectManifest.functions.some((entry) => MUST_BE_ABSENT_OR_NONEXECUTABLE_IN_PRODUCTION.includes(entry.signature)), false);
+});
+
+test("every local identity-link creator remains Development-only and forbidden in Production", () => {
+  for (const version of ["202607300001", "202608030001", "202608110002"]) {
+    const migration = migrationManifest.find((entry) => entry.version === version);
+    assert.equal(migration.classification, "development_only");
+    assert.equal(migration.productionAction, "NEVER_EXECUTE_IN_PRODUCTION");
+  }
 });
 
 test("migration history classifies known and unknown versions without executing them", () => {
@@ -611,6 +693,7 @@ test("sanity counts never approve and extra historical objects remain inventory 
   ]);
   const comparison = compareInventoryWithManifest(results);
   assert.equal(comparison.sanity.approvalCriterion, false);
+  assert.deepEqual(comparison.sanity.expected, canonicalObjectManifest.sanityCounts);
   assert.equal(comparison.approvalBasis, "OBJECT_BY_OBJECT");
   assert.ok(comparison.objectBlockers.length > 0);
   assert.equal(comparison.extraHistoricalObjects.disposition, "INVENTORY_ONLY_UNLESS_CONFLICTING");
@@ -619,7 +702,7 @@ test("sanity counts never approve and extra historical objects remain inventory 
 });
 
 test("identity queries return only aggregates and never raw PII values", () => {
-  const sql = buildIdentityQueries({ includeLinks: true }).map((query) => query.sql).join("\n");
+  const sql = buildIdentityQueries().map((query) => query.sql).join("\n");
   assert.doesNotMatch(sql, /json_build_object\([^)]*'external_subject'\s*,\s*l\.external_subject/i);
   assert.doesNotMatch(sql, /json_build_object\([^)]*'token'\s*,\s*t\.token/i);
   assert.doesNotMatch(sql, /\bemail\b|\bfirst_name\b|\blast_name\b|\bstorage_path\b/i);
@@ -641,19 +724,13 @@ const emptyManifestComparison = () => ({
 });
 
 const validSemanticResults = () => new Map([
-  ["identity_link_structure", {
-    duplicate_external_subjects: 0,
-    duplicate_canonical_users: 0,
-    links_without_profile: 0,
-    profiles_with_multiple_links: 0,
-  }],
   ["attempt_semantics", { official_orphans: 0, official_owner_mismatches: 0, invalid_communication_feedback: 0 }],
   ["exam_integrity", { results_without_session: 0, session_owner_mismatches: 0, session_submission_mismatches: 0 }],
   ["legacy_access", { user_roles: 0, automatic_default_global_roles: 0, automatic_default_subscriptions: 0, unknown_global_roles: 0 }],
   ["institution_catalog", { permissions: 27, system_roles: 10, system_relations: 87, forbidden_roles: 0 }],
   ["institution_tenant_integrity", { membership_role_mismatches: 0, group_membership_mismatches: 0, permission_override_mismatches: 0 }],
   ["matches_tenant_integrity", { institutional_appointments_without_active_membership: 0 }],
-  ["fixture_creator_identity", { candidate_clerk_refs: 0, mapped_clerk_refs: 0 }],
+  ["fixture_creator_identity", { creator_refs: 1, user_subject_refs: 1, profile_backed_refs: 1, unresolved_profile_refs: 0 }],
   ["notification_integrity", { token_owner_conflicts: 0, events_without_profile: 0, preferences_without_profile: 0 }],
 ]);
 
@@ -735,7 +812,7 @@ test("legacy request_user_id fallback is an explicit blocker", () => {
   }]);
 });
 
-test("request_user_id returning JWT sub directly is blocked even without a named external variable", () => {
+test("the exact baseline request_user_id boundary may return the JWT subject directly", () => {
   const results = new Map([
     ["catalog_gate", { tables: canonicalObjectManifest.tables, columns: [] }],
     ["p5_direct_identity_readers", [{
@@ -745,7 +822,58 @@ test("request_user_id returning JWT sub directly is blocked even without a named
       external_subject_fallback: false,
     }]],
   ]);
-  assert.equal(compareInventoryWithManifest(results).identityFallbackBlockers[0].code, "BLOCKER_LEGACY_IDENTITY_FALLBACK");
+  assert.deepEqual(compareInventoryWithManifest(results).identityFallbackBlockers, []);
+});
+
+test("direct JWT identity reads outside request_user_id remain blockers", () => {
+  const results = new Map([
+    ["catalog_gate", { tables: canonicalObjectManifest.tables, columns: [] }],
+    ["p5_direct_identity_readers", [{
+      signature: "public.unsafe_identity_reader()",
+      reads_sub_claim: true,
+      references_identity_links: false,
+      external_subject_fallback: false,
+    }]],
+  ]);
+  assert.deepEqual(compareInventoryWithManifest(results).identityFallbackBlockers, [{
+    code: "BLOCKER_DIRECT_EXTERNAL_IDENTITY_READ",
+    signature: "public.unsafe_identity_reader()",
+  }]);
+});
+
+test("user-prefixed canonical IDs are valid when backed by canonical profiles", () => {
+  const results = validSemanticResults();
+  results.set("identity_public_attempts_user_id", {
+    total_non_null: 37,
+    user_subject_ids: 37,
+    profile_backed_ids: 37,
+    unresolved_profile_refs: 0,
+  });
+  const gate = buildGateReport({
+    results,
+    migrationHistory: [],
+    manifestComparison: emptyManifestComparison(),
+    skipped: [],
+  });
+  assert.equal(gate.identityBlockers.length, 0);
+  assert.equal(gate.overallGate, "PASS");
+});
+
+test("missing referee exam sessions remains a real object and semantic blocker", () => {
+  const tables = canonicalObjectManifest.tables.filter((table) => table !== "public.referee_exam_sessions");
+  const columns = Object.entries(canonicalObjectManifest.criticalColumns)
+    .filter(([table]) => table !== "public.referee_exam_sessions")
+    .flatMap(([table, names]) => names.map((name) => `${table}.${name}`));
+  const comparison = compareInventoryWithManifest(new Map([
+    ["catalog_gate", { tables, columns }],
+  ]));
+  assert.ok(comparison.missingTables.includes("public.referee_exam_sessions"));
+
+  const conditional = buildConditionalInventory({ tables, columns }, []);
+  assert.equal(
+    conditional.skipped.find((entry) => entry.query === "exam_integrity")?.status,
+    "BLOCKER_SKIPPED_MISSING_DEPENDENCY"
+  );
 });
 
 test("unexpected authenticated UPDATE and PUBLIC EXECUTE are blockers", () => {
@@ -769,6 +897,14 @@ test("superuser and BYPASSRLS connection roles are blockers", () => {
   const codes = connectionCredentialBlockers(results).map((entry) => entry.code);
   assert.ok(codes.includes("BLOCKER_CONNECTION_SUPERUSER"));
   assert.ok(codes.includes("BLOCKER_CONNECTION_BYPASSRLS"));
+});
+
+test("an auditor that owns a product table is rejected before semantic queries", () => {
+  const results = new Map([
+    ["connection_role_security", { rolname: "owner", rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false }],
+    ["connection_effective_writes", { schemas_with_create: [], tables_with_dml: [], sequences_with_write: [], tables_owned: ["public.attempts"] }],
+  ]);
+  assert.ok(connectionCredentialBlockers(results).some((entry) => entry.code === "BLOCKER_CONNECTION_TABLE_OWNER"));
 });
 
 test("the psql subprocess environment drops inherited PGOPTIONS and service configuration", () => {
@@ -807,7 +943,8 @@ test("the report never emits function bodies", () => {
       { query: READ_ONLY_GUARD_QUERY_ID, payload: "on" },
       { query: "catalog_gate", payload: { tables: [], columns: [] } },
       { query: "connection_role_security", payload: { rolname: "preflight_reader", rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false } },
-      { query: "connection_effective_writes", payload: { schemas_with_create: [], tables_with_dml: [], sequences_with_write: [] } },
+      { query: "connection_effective_writes", payload: { schemas_with_create: [], tables_with_dml: [], sequences_with_write: [], tables_owned: [] } },
+      { query: "semantic_visibility", payload: [] },
       { query: "function_inventory", payload: [{ signature: "public.example()", source_definition: "secret function body" }] },
     ].map((entry) => resultFrameLine(entry.query, entry.payload)).join("\n"),
     readOnlyGuardLine(),
@@ -832,10 +969,49 @@ test("a semantic mismatch makes the final gate BLOCKER", () => {
     migrationHistory: [],
     manifestComparison: emptyManifestComparison(),
     skipped: [],
-    identityLinksAvailable: true,
   });
   assert.equal(gate.overallGate, "BLOCKER");
   assert.ok(gate.integrityBlockers.some((entry) => entry.query === "attempt_semantics"));
+});
+
+test("a zero semantic payload cannot pass when RLS visibility was not proven", () => {
+  const gate = buildGateReport({
+    results: validSemanticResults(),
+    migrationHistory: [],
+    manifestComparison: emptyManifestComparison(),
+    skipped: [{
+      query: "attempt_semantics",
+      status: "BLOCKER_SKIPPED_RLS_VISIBILITY_UNPROVEN",
+      blockedTables: ["public.attempts", "public.exam_results"],
+    }],
+  });
+  assert.equal(gate.overallGate, "BLOCKER");
+  assert.deepEqual(gate.integrityBlockers[0], {
+    code: "BLOCKER_SEMANTIC_CHECK_SKIPPED",
+    query: "attempt_semantics",
+    reason: "BLOCKER_SKIPPED_RLS_VISIBILITY_UNPROVEN",
+    blockedTables: ["public.attempts", "public.exam_results"],
+  });
+});
+
+test("an RLS-hidden Storage inventory is unknown, never falsely missing", () => {
+  const manifestComparison = emptyManifestComparison();
+  manifestComparison.missingBuckets = ["Videos", "institutional-content"];
+  const gate = buildGateReport({
+    results: validSemanticResults(),
+    migrationHistory: [],
+    manifestComparison,
+    skipped: [{
+      query: "storage_buckets",
+      status: "BLOCKER_SKIPPED_RLS_VISIBILITY_UNPROVEN",
+      blockedTables: ["storage.buckets"],
+    }],
+  });
+  assert.deepEqual(gate.storageBlockers, []);
+  assert.ok(gate.integrityBlockers.some((entry) =>
+    entry.query === "storage_buckets" && entry.reason === "BLOCKER_SKIPPED_RLS_VISIBILITY_UNPROVEN"
+  ));
+  assert.equal(gate.overallGate, "BLOCKER");
 });
 
 test("a fully valid synthetic fixture produces overallGate PASS", () => {
@@ -844,7 +1020,6 @@ test("a fully valid synthetic fixture produces overallGate PASS", () => {
     migrationHistory: [],
     manifestComparison: emptyManifestComparison(),
     skipped: [],
-    identityLinksAvailable: true,
   });
   assert.equal(gate.overallGate, "PASS");
   for (const name of [

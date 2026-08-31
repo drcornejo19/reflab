@@ -16,9 +16,11 @@ allowlisted Production targets.
 - The SQL validator permits only `SELECT`, `SHOW`, `BEGIN READ ONLY`, `ROLLBACK`,
   and the two approved `SET LOCAL` statements. psql meta-commands are forbidden.
 - The first transaction reads only system catalogs. A second, independent
-  `BEGIN READ ONLY` transaction includes semantic queries only when all required
-  tables and columns were confirmed. Both transactions re-check
-  `transaction_read_only` before their first substantive query.
+  `BEGIN READ ONLY` transaction includes a semantic query only when every required
+  table and column exists, the auditor has `SELECT`, and row security is not active
+  for the auditor on any required table. Unknown or RLS-limited visibility is a
+  blocker, never an implicit pass from an observed zero. Both transactions
+  re-check `transaction_read_only` before their first substantive query.
 - The connection role is inventoried before semantic queries. Superuser,
   `BYPASSRLS`, role/database creation, schema creation, table DML, or sequence
   write privileges stop the semantic phase and make the final gate a blocker.
@@ -33,6 +35,24 @@ allowlisted Production targets.
 - Reports contain object names and aggregate counts, never Clerk subjects, emails,
   names, Storage paths, notification tokens, database credentials, or function
   bodies. Function and policy content is compared through SHA-256 fingerprints.
+
+## Production identity contract
+
+The current canonical baseline stores the Clerk subject (`user_*`) directly as
+the internal `user_id`. `reflab_private.request_user_id()` is the single approved
+boundary that reads the JWT subject under its exact baseline source/security
+contract. Other functions that read Clerk/JWT identity directly, or any function
+that falls back from a canonical lookup to an external subject, remain blockers.
+
+`reflab_private.user_identity_links` and the three Development identity RPCs are
+Development-only infrastructure. The table, its columns, uniqueness, RLS, and
+policies are not Production object requirements. The migrations that create or
+consume that mapping remain `NEVER_EXECUTE_IN_PRODUCTION`; if a Development RPC
+is executable by an application role in Production, the preflight blocks.
+
+Identity aggregates in Production validate that persisted references resolve to
+the canonical profile contract. A `user_*` shape is inventory, not evidence of
+an unresolved or non-canonical identity by itself.
 
 ## Required future environment
 
@@ -93,6 +113,12 @@ Presence of an extra historical object is inventory only. Missing required
 objects, incompatible definitions, executable Development RPCs, and unknown
 migrations are approval blockers. Counts are sanity checks only.
 
+Migration history discovery uses `pg_catalog`, not privilege-filtered
+`information_schema` views. If `supabase_migrations.schema_migrations` does not
+exist, lacks required columns, cannot be selected, or is hidden by active RLS,
+the history check is skipped with a blocker. The harness never infers an applied
+migration solely from matching objects.
+
 ## Final gate
 
 The report exposes `targetBlockers`, `migrationBlockers`, `identityBlockers`,
@@ -101,4 +127,5 @@ The report exposes `targetBlockers`, `migrationBlockers`, `identityBlockers`,
 category is empty. RLS state, complete policy expressions, function ownership
 and source hashes, grants (including inherited roles), index definitions and
 predicates, trigger definitions and events, and semantic integrity are all
-approval criteria; the `81/30/150/82/111` counts are informational only.
+approval criteria. Sanity counts are derived from the current Production object
+collections and remain informational only; they never approve or block a run.

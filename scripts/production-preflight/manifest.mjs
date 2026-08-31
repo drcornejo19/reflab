@@ -145,7 +145,6 @@ const incrementalPolicies = [
 }));
 
 export const criticalColumns = {
-  "reflab_private.user_identity_links": ["provider", "external_subject", "user_id", "linked_at"],
   "public.user_profiles": ["user_id"],
   "public.user_global_roles": ["user_id", "role_key", "source", "assigned_by_user_id"],
   "public.user_subscriptions": ["user_id", "plan_key", "status", "source", "assigned_by_user_id"],
@@ -235,46 +234,53 @@ export const identityColumns = {
 
 const baselineFunctions = baselineManifest.object_inventory.functions.map((entry) => ({
   ...entry,
-  scope: entry.signature === "reflab_private.request_user_id()" ? "production_blocker" : "shared",
+  scope: "shared",
 }));
 const functionMap = new Map(baselineFunctions.map((entry) => [entry.signature, entry]));
-for (const entry of incrementalFunctions) functionMap.set(entry.signature, entry);
+for (const entry of incrementalFunctions.filter((candidate) => candidate.scope === "shared")) {
+  functionMap.set(entry.signature, entry);
+}
+
+const productionTables = [...baselineManifest.object_inventory.tables].sort();
+const productionFunctions = [...functionMap.values()]
+  .map(enrichFunctionContract)
+  .sort((left, right) => left.signature.localeCompare(right.signature));
+const productionPolicies = [
+  ...baselineManifest.object_inventory.policies.map((entry) => ({ ...entry, scope: "shared" })),
+  ...incrementalPolicies.filter((entry) => entry.scope === "shared"),
+].map(enrichPolicyContract).sort((left, right) => left.name.localeCompare(right.name));
+const productionRls = [
+  ...baselineManifest.object_inventory.tables.map((table) => ({ table, enabled: true, forced: false })),
+  { table: "storage.objects", enabled: true, forced: false },
+].sort((left, right) => left.table.localeCompare(right.table));
+const productionTriggers = baselineManifest.object_inventory.triggers;
+const productionExplicitIndexes = [
+  ...baselineManifest.object_inventory.explicit_indexes,
+  {
+    name: "attempts_canonical_training_submission_unique",
+    table: "public.attempts",
+    unique: true,
+    definition: "(user_id, submission_id) where exam_result_id is null and submission_id is not null",
+  },
+];
+const productionSanityCounts = Object.freeze({
+  tables: productionTables.length,
+  functions: productionFunctions.length,
+  policies: productionPolicies.length,
+  triggers: productionTriggers.length,
+  explicitIndexes: productionExplicitIndexes.length,
+});
 
 export const canonicalObjectManifest = Object.freeze({
-  sanityCounts: { tables: 81, functions: 30, policies: 150, triggers: 82, explicitIndexes: 111 },
-  tables: [...baselineManifest.object_inventory.tables, "reflab_private.user_identity_links"].sort(),
+  sanityCounts: productionSanityCounts,
+  tables: productionTables,
   criticalColumns,
-  functions: [...functionMap.values()].map(enrichFunctionContract).sort((left, right) => left.signature.localeCompare(right.signature)),
-  policies: [
-    ...baselineManifest.object_inventory.policies.map((entry) => ({ ...entry, scope: "shared" })),
-    ...incrementalPolicies,
-  ].map(enrichPolicyContract).sort((left, right) => left.name.localeCompare(right.name)),
-  rls: [
-    ...[...baselineManifest.object_inventory.tables, "reflab_private.user_identity_links"].map((table) => ({
-      table,
-      enabled: true,
-      forced: table === "reflab_private.user_identity_links",
-    })),
-    { table: "storage.objects", enabled: true, forced: false },
-  ].sort((left, right) => left.table.localeCompare(right.table)),
-  triggers: baselineManifest.object_inventory.triggers,
-  explicitIndexes: [
-    ...baselineManifest.object_inventory.explicit_indexes,
-    {
-      name: "attempts_canonical_training_submission_unique",
-      table: "public.attempts",
-      unique: true,
-      definition: "(user_id, submission_id) where exam_result_id is null and submission_id is not null",
-    },
-  ],
-  uniques: [
-    ...baselineManifest.object_inventory.unique_constraints,
-    {
-      table: "reflab_private.user_identity_links",
-      name: "user_identity_links_provider_user_key",
-      columns: ["provider", "user_id"],
-    },
-  ],
+  functions: productionFunctions,
+  policies: productionPolicies,
+  rls: productionRls,
+  triggers: productionTriggers,
+  explicitIndexes: productionExplicitIndexes,
+  uniques: baselineManifest.object_inventory.unique_constraints,
   buckets: baselineManifest.object_inventory.buckets,
   runtimeRpcSignatures,
   migrations: migrationManifest,

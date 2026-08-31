@@ -15,4 +15,6 @@ The original preflight used a least-privileged read-only role. RLS and table pri
 - `UNKNOWN`: dependencies or visibility are insufficient.
 - `ABSENT`: allowed only when catalog-level existence is visible and confirms absence.
 
-The Phase 0 fingerprint implements these states without changing the existing preflight gate logic. Updating the operational preflight requires a separate reviewed patch and regression fixture.
+The operational preflight now inventories `SELECT` and effective RLS state from
+`pg_catalog` before every semantic query. Missing proof, missing `SELECT`, or
+active RLS produces an explicit skipped blocker; an observed zero cannot pass.

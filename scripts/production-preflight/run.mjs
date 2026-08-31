@@ -155,21 +155,36 @@ function reportSafeResults(results) {
   ]));
 }
 
-export function buildConditionalInventory(catalog) {
-  const linksAvailable = [
-    "reflab_private.user_identity_links",
-    "reflab_private.user_identity_links.provider",
-    "reflab_private.user_identity_links.external_subject",
-    "reflab_private.user_identity_links.user_id",
-  ].every((name) => (name.split(".").length === 2 ? catalog.tables : catalog.columns).includes(name));
-  const candidates = [...semanticQueries, ...buildIdentityQueries({ includeLinks: linksAvailable })];
-  const runnable = candidates.filter((query) => queryDependenciesExist(query, catalog));
-  const skipped = candidates.filter((query) => !queryDependenciesExist(query, catalog)).map((query) => ({
-    query: query.id,
-    status: "BLOCKER_SKIPPED_MISSING_DEPENDENCY",
-    requires: query.requires,
-  }));
-  return { runnable, skipped, linksAvailable };
+export function buildConditionalInventory(catalog, semanticVisibility = []) {
+  const candidates = [...semanticQueries, ...buildIdentityQueries()];
+  const visibilityByTable = new Map(semanticVisibility.map((entry) => [entry.table_name, entry]));
+  const runnable = [];
+  const skipped = [];
+
+  for (const query of candidates) {
+    if (!queryDependenciesExist(query, catalog)) {
+      skipped.push({ query: query.id, status: "BLOCKER_SKIPPED_MISSING_DEPENDENCY", requires: query.requires });
+      continue;
+    }
+    const requiredTables = query.requires.tables ?? [];
+    const unknownTables = requiredTables.filter((table) => !visibilityByTable.has(table));
+    if (unknownTables.length > 0) {
+      skipped.push({ query: query.id, status: "BLOCKER_SKIPPED_VISIBILITY_UNKNOWN", blockedTables: unknownTables, requires: query.requires });
+      continue;
+    }
+    const noSelect = requiredTables.filter((table) => visibilityByTable.get(table)?.has_select !== true);
+    if (noSelect.length > 0) {
+      skipped.push({ query: query.id, status: "BLOCKER_SKIPPED_SELECT_UNAVAILABLE", blockedTables: noSelect, requires: query.requires });
+      continue;
+    }
+    const rlsLimited = requiredTables.filter((table) => visibilityByTable.get(table)?.rls_applies === true);
+    if (rlsLimited.length > 0) {
+      skipped.push({ query: query.id, status: "BLOCKER_SKIPPED_RLS_VISIBILITY_UNPROVEN", blockedTables: rlsLimited, requires: query.requires });
+      continue;
+    }
+    runnable.push(query);
+  }
+  return { runnable, skipped };
 }
 
 export function runProductionPreflight(environment = process.env, dependencies = {}) {
@@ -182,7 +197,11 @@ export function runProductionPreflight(environment = process.env, dependencies =
   const catalog = baseResults.get("catalog_gate");
   if (!catalog) throw new Error("Production preflight catalog gate returned no result.");
 
-  const { runnable, skipped, linksAvailable } = buildConditionalInventory(catalog);
+  const semanticVisibility = baseResults.get("semantic_visibility");
+  if (!Array.isArray(semanticVisibility)) {
+    throw new Error("Production preflight semantic visibility inventory returned no result.");
+  }
+  const { runnable, skipped } = buildConditionalInventory(catalog, semanticVisibility);
   const credentialBlockers = connectionCredentialBlockers(baseResults);
   const semanticResults = credentialBlockers.length === 0
     ? executeReadOnlyBatch(buildSqlBatch(runnable), target.connectionEnvironment, executionDependencies)
@@ -203,13 +222,11 @@ export function runProductionPreflight(environment = process.env, dependencies =
     migrationHistory,
     manifestComparison,
     skipped: effectiveSkipped,
-    identityLinksAvailable: linksAvailable,
     targetBlockers: credentialBlockers,
   });
   const report = {
     target: { projectRef: target.projectRef, host: target.host },
     readOnly: true,
-    identityLinksAvailable: linksAvailable,
     skipped: effectiveSkipped,
     migrationHistory,
     manifestComparison,
