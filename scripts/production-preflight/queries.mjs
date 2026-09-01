@@ -13,6 +13,10 @@ import {
   normalizeSqlExpression,
   normalizeTriggerDefinition,
 } from "./canonical-contracts.mjs";
+import {
+  SEMANTIC_AUDIT_FUNCTION,
+  SEMANTIC_AUDIT_QUERY_ID,
+} from "./semantic-audit.mjs";
 
 export const RESULT_FRAME_PREFIX = "REFLAB_PREFLIGHT_V1";
 
@@ -124,15 +128,54 @@ export const baseInventoryQueries = [
     ) x), 'null'::json)`
   ),
   jsonQuery(
+    "semantic_audit_role_security",
+    `pg_catalog.json_build_object(
+      'owner', (select pg_catalog.row_to_json(x) from (
+        select rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolinherit, rolbypassrls
+        from pg_catalog.pg_roles where rolname = 'reflab_preflight_audit_owner'
+      ) x),
+      'caller', (select pg_catalog.row_to_json(x) from (
+        select rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolinherit, rolbypassrls
+        from pg_catalog.pg_roles where rolname = 'reflab_prod_preflight_ro'
+      ) x),
+      'caller_is_owner_member', case
+        when pg_catalog.to_regrole('reflab_preflight_audit_owner') is null
+          or pg_catalog.to_regrole('reflab_prod_preflight_ro') is null then null
+        else pg_catalog.pg_has_role('reflab_prod_preflight_ro', 'reflab_preflight_audit_owner', 'MEMBER')
+      end,
+      'owner_membership_count', (
+        select pg_catalog.count(*) from pg_catalog.pg_auth_members membership
+        where membership.member = pg_catalog.to_regrole('reflab_preflight_audit_owner')
+      ),
+      'owner_effective_dml_count', (
+        select pg_catalog.count(*)
+        from pg_catalog.pg_class relation
+        join pg_catalog.pg_namespace namespace on namespace.oid = relation.relnamespace
+        where relation.relkind in ('r', 'p')
+          and namespace.nspname in ('public', 'reflab_private', 'reflab_meta', 'storage')
+          and pg_catalog.to_regrole('reflab_preflight_audit_owner') is not null
+          and (
+            pg_catalog.has_table_privilege('reflab_preflight_audit_owner', relation.oid, 'INSERT')
+            or pg_catalog.has_table_privilege('reflab_preflight_audit_owner', relation.oid, 'UPDATE')
+            or pg_catalog.has_table_privilege('reflab_preflight_audit_owner', relation.oid, 'DELETE')
+            or pg_catalog.has_table_privilege('reflab_preflight_audit_owner', relation.oid, 'TRUNCATE')
+            or pg_catalog.has_table_privilege('reflab_preflight_audit_owner', relation.oid, 'REFERENCES')
+            or pg_catalog.has_table_privilege('reflab_preflight_audit_owner', relation.oid, 'TRIGGER')
+          )
+      )
+    )`
+  ),
+  jsonQuery(
     "function_inventory",
     `coalesce((select pg_catalog.json_agg(x order by x.signature) from (
       select n.nspname || '.' || p.proname || '(' || pg_catalog.pg_get_function_identity_arguments(p.oid) || ')' as signature,
         case when p.prosecdef then 'DEFINER' else 'INVOKER' end as security,
+        case p.provolatile when 'i' then 'IMMUTABLE' when 's' then 'STABLE' else 'VOLATILE' end as volatility,
         pg_catalog.pg_get_userbyid(p.proowner) as owner,
         coalesce((select setting from unnest(p.proconfig) setting where setting like 'search_path=%' limit 1), '') as search_path,
         p.prosrc as source_definition
       from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-      where n.nspname in ('public', 'reflab_private', 'reflab_meta')
+      where n.nspname in ('public', 'reflab_private', 'reflab_meta', 'reflab_audit')
     ) x), '[]'::json)`
   ),
   jsonQuery(
@@ -142,7 +185,7 @@ export const baseInventoryQueries = [
         c.relrowsecurity as rls_enabled, c.relforcerowsecurity as rls_forced
       from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
       where c.relkind in ('r', 'p')
-        and n.nspname in ('public', 'reflab_private', 'reflab_meta', 'storage')
+        and n.nspname in ('public', 'reflab_private', 'reflab_meta', 'reflab_audit', 'storage')
     ) x), '[]'::json)`
   ),
   jsonQuery(
@@ -182,7 +225,7 @@ export const baseInventoryQueries = [
       from pg_catalog.pg_policy p
       join pg_catalog.pg_class c on c.oid = p.polrelid
       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-      where n.nspname in ('public', 'reflab_private', 'reflab_meta', 'storage')
+      where n.nspname in ('public', 'reflab_private', 'reflab_meta', 'reflab_audit', 'storage')
     ) x), '[]'::json)`
   ),
   jsonQuery(
@@ -263,7 +306,22 @@ export const baseInventoryQueries = [
         acl.privilege_type as privilege
       from pg_catalog.pg_namespace n
       cross join lateral pg_catalog.aclexplode(coalesce(n.nspacl, pg_catalog.acldefault('n'::\"char\", n.nspowner))) acl
-      where n.nspname in ('public', 'reflab_private', 'reflab_meta', 'storage')
+      where n.nspname in ('public', 'reflab_private', 'reflab_meta', 'reflab_audit', 'storage')
+    ) x), '[]'::json)`
+  ),
+  jsonQuery(
+    "column_grants",
+    `coalesce((select pg_catalog.json_agg(x order by x.schema_name, x.table_name, x.column_name, x.grantee, x.privilege) from (
+      select namespace.nspname as schema_name, relation.relname as table_name,
+        attribute.attname as column_name,
+        case when acl.grantee = 0 then 'PUBLIC' else pg_catalog.pg_get_userbyid(acl.grantee) end as grantee,
+        acl.privilege_type as privilege
+      from pg_catalog.pg_attribute attribute
+      join pg_catalog.pg_class relation on relation.oid = attribute.attrelid
+      join pg_catalog.pg_namespace namespace on namespace.oid = relation.relnamespace
+      cross join lateral pg_catalog.aclexplode(attribute.attacl) acl
+      where attribute.attnum > 0 and not attribute.attisdropped
+        and namespace.nspname in ('public', 'reflab_private', 'reflab_meta')
     ) x), '[]'::json)`
   ),
   jsonQuery(
@@ -274,7 +332,7 @@ export const baseInventoryQueries = [
         acl.privilege_type as privilege
       from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
       cross join lateral pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f'::\"char\", p.proowner))) acl
-      where n.nspname in ('public', 'reflab_private', 'reflab_meta')
+      where n.nspname in ('public', 'reflab_private', 'reflab_meta', 'reflab_audit')
     ) x), '[]'::json)`
   ),
   jsonQuery(
@@ -441,6 +499,11 @@ export const semanticQueries = [
     ) x), '[]'::json)`
   ),
 ];
+
+export const semanticAuditSnapshotQuery = jsonQuery(
+  SEMANTIC_AUDIT_QUERY_ID,
+  SEMANTIC_AUDIT_FUNCTION,
+);
 
 function quoteIdentifier(value) {
   if (!/^[a-z_][a-z0-9_]*$/.test(value)) throw new Error("Unsafe manifest identifier.");

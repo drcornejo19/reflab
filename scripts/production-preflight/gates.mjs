@@ -37,6 +37,14 @@ function nonZeroBlockers(payload, query, fields, code = "BLOCKER_SEMANTIC_MISMAT
 
 export function identityDataBlockers(results) {
   const blockers = [];
+  const aggregate = results.get("identity_reference_integrity");
+  if (aggregate && Number(aggregate.unresolved_profile_refs ?? 0) > 0) {
+    blockers.push(blocker("BLOCKER_UNRESOLVED_CANONICAL_REFERENCE", {
+      query: "identity_reference_integrity",
+      actual: Number(aggregate.unresolved_profile_refs),
+      allowed: 0,
+    }));
+  }
   for (const [query, payload] of results) {
     if (!query.startsWith("identity_")) continue;
     if (Number(payload?.unresolved_profile_refs ?? 0) > 0) {
@@ -100,6 +108,7 @@ export function buildGateReport({
   manifestComparison,
   skipped,
   targetBlockers = [],
+  temporarySemanticAuditPresent = false,
 }) {
   const migrationBlockers = migrationHistory
     .filter((entry) => entry.gate.startsWith("BLOCKER_"))
@@ -143,6 +152,12 @@ export function buildGateReport({
   const objectBlockers = manifestComparison.objectBlockers
     .filter((entry) => !categorizedObjectTypes.has(entry.type))
     .map((entry) => blocker(`BLOCKER_${entry.type}`, { object: entry.object }));
+  if (temporarySemanticAuditPresent) {
+    objectBlockers.push(blocker("BLOCKER_TEMPORARY_SEMANTIC_AUDIT_PRESENT", {
+      object: "reflab_audit.production_semantic_snapshot()",
+      requiredAction: "ATOMIC_SEMANTIC_ASSERTION_TEARDOWN_AND_CANONICAL_FINALIZATION",
+    }));
+  }
   const categories = {
     targetBlockers,
     migrationBlockers,

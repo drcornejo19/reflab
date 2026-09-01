@@ -47,6 +47,7 @@ Phase 0 evidence and restore rehearsal
   -> reviewed Admin branch (110001) and Training branch (130001 -> 150001)
   -> object-by-object RLS/grant/policy cutover
   -> runtime cutover
+  -> atomic semantic assertion + temporary audit teardown
   -> canonical provenance finalization
   -> legacy cleanup
 ```
@@ -54,3 +55,5 @@ Phase 0 evidence and restore rehearsal
 Timestamp order alone is never sufficient. Each edge is enforced by catalog and adoption-ledger preconditions.
 
 The installed marker is a runtime enablement edge, not a DDL prerequisite for the three canonical incrementals above. The table may exist empty while their functions and policies are installed; the functions must continue to reject calls until canonical finalization inserts the single reviewed Production row.
+
+The Phase 2A semantic sidecar is temporary adoption infrastructure, not a canonical object provider. Future finalization has an explicit dependency on `semantic_audit_teardown_future`: in one reviewed transaction it must execute and validate the fixed aggregate snapshot, remove the audit function, policies, column ACLs, schema grants, schema, and owner role, prove their absence, and only then insert the canonical marker. No destructive teardown migration exists yet.

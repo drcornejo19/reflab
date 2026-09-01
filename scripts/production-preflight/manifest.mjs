@@ -59,13 +59,14 @@ const canonicalMigrationManifest = [
   ["202608310001", "production_adoption_foundation", "production_adoption_bridge"],
   ["202608310002", "production_adoption_exam_training_prerequisites", "production_adoption_bridge"],
   ["202608310003", "production_adoption_psychology_notifications_prerequisites", "production_adoption_bridge"],
+  ["202608310004", "production_adoption_semantic_audit", "production_adoption_audit"],
 ].map(([version, name, classification]) => ({
   version,
   name,
   classification,
   productionAction: classification === "incremental_requires_adoption"
     ? "MANUAL_ADOPTION_AFTER_ALL_GATES"
-    : classification === "production_adoption_bridge"
+    : classification === "production_adoption_bridge" || classification === "production_adoption_audit"
       ? "MANUAL_PHASED_ADOPTION_AFTER_PHASE0_EVIDENCE"
       : "NEVER_EXECUTE_IN_PRODUCTION",
 }));

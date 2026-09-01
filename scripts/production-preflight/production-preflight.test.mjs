@@ -25,6 +25,24 @@ import {
   RESULT_FRAME_PREFIX,
   semanticQueries,
 } from "./queries.mjs";
+import {
+  expandSemanticAuditSnapshot,
+  SEMANTIC_AUDIT_FUNCTION,
+  SEMANTIC_AUDIT_QUERY_ID,
+  SEMANTIC_AUDIT_REPLACED_QUERY_IDS,
+  SEMANTIC_AUDIT_SOURCE_HASH,
+  semanticAuditContractBlockers,
+  semanticAuditInfrastructurePresent,
+} from "./semantic-audit.mjs";
+import {
+  SEMANTIC_AUDIT_CALLER,
+  SEMANTIC_AUDIT_OWNER,
+  SEMANTIC_AUDIT_POLICY,
+  SEMANTIC_AUDIT_SCHEMA,
+  semanticAuditExpectedFields,
+  semanticAuditTableColumns,
+  semanticAuditTables,
+} from "../production-adoption/phase2a/semantic-audit-contract.mjs";
 import { buildGateReport, connectionCredentialBlockers } from "./gates.mjs";
 import { assertReadOnlyBatch, assertReadOnlySql, maskSqlCommentsAndStrings } from "./sql-safety.mjs";
 import {
@@ -34,6 +52,7 @@ import {
   parseJsonResults,
   PREFLIGHT_MAX_BUFFER_BYTES,
   runProductionPreflight,
+  mergeSemanticAuditResults,
 } from "./run.mjs";
 import {
   authorizeProductionPreflightTarget,
@@ -1064,4 +1083,144 @@ test("a fully valid synthetic fixture produces overallGate PASS", () => {
     "targetBlockers", "migrationBlockers", "identityBlockers", "rlsBlockers", "functionBlockers",
     "grantBlockers", "integrityBlockers", "storageBlockers", "objectBlockers",
   ]) assert.deepEqual(gate[name], []);
+});
+
+function validSemanticAuditSnapshot() {
+  return Object.fromEntries(Object.entries(semanticAuditExpectedFields).map(([query, fields]) => [
+    query,
+    Object.fromEntries(fields.map((field) => [field, 0])),
+  ]));
+}
+
+function validSemanticAuditInventory() {
+  return new Map([
+    ["semantic_audit_role_security", {
+      owner: {
+        rolname: SEMANTIC_AUDIT_OWNER,
+        rolcanlogin: false,
+        rolsuper: false,
+        rolcreatedb: false,
+        rolcreaterole: false,
+        rolinherit: false,
+        rolbypassrls: false,
+      },
+      caller: { rolname: SEMANTIC_AUDIT_CALLER },
+      caller_is_owner_member: false,
+      owner_membership_count: 0,
+      owner_effective_dml_count: 0,
+    }],
+    ["function_inventory", [{
+      signature: SEMANTIC_AUDIT_FUNCTION,
+      security: "DEFINER",
+      volatility: "STABLE",
+      owner: SEMANTIC_AUDIT_OWNER,
+      search_path: "search_path=pg_catalog",
+      source_hash: SEMANTIC_AUDIT_SOURCE_HASH,
+    }]],
+    ["routine_grants", [SEMANTIC_AUDIT_OWNER, SEMANTIC_AUDIT_CALLER].map((grantee) => ({
+      signature: SEMANTIC_AUDIT_FUNCTION,
+      grantee,
+      privilege: "EXECUTE",
+    }))],
+    ["schema_grants", [SEMANTIC_AUDIT_OWNER, SEMANTIC_AUDIT_CALLER].map((grantee) => ({
+      schema_name: SEMANTIC_AUDIT_SCHEMA,
+      grantee,
+      privilege: "USAGE",
+    }))],
+    ["column_grants", Object.entries(semanticAuditTableColumns).flatMap(([table, columns]) => {
+      const [schema_name, table_name] = table.split(".");
+      return columns.map((column_name) => ({
+        schema_name,
+        table_name,
+        column_name,
+        grantee: SEMANTIC_AUDIT_OWNER,
+        privilege: "SELECT",
+      }));
+    })],
+    ["table_grants", []],
+    ["policy_inventory", semanticAuditTables.map((table) => {
+      const [schema_name, table_name] = table.split(".");
+      return {
+        schema_name,
+        table_name,
+        policy_name: SEMANTIC_AUDIT_POLICY,
+        permissive: "PERMISSIVE",
+        roles: [SEMANTIC_AUDIT_OWNER],
+        cmd: "SELECT",
+        using_expression: "true",
+        with_check_expression: null,
+      };
+    })],
+  ]);
+}
+
+test("the aggregate semantic audit contract is exact and hash-pinned", () => {
+  const inventory = validSemanticAuditInventory();
+  assert.deepEqual(semanticAuditContractBlockers(inventory), []);
+  assert.equal(semanticAuditInfrastructurePresent(inventory), true);
+  inventory.get("function_inventory")[0].source_hash = "0".repeat(64);
+  assert.ok(semanticAuditContractBlockers(inventory).includes("AUDIT_FUNCTION_SOURCE_DRIFT"));
+});
+
+test("temporary semantic audit infrastructure blocks canonical finalization even when exact", () => {
+  const gate = buildGateReport({
+    results: validSemanticResults(),
+    migrationHistory: [],
+    manifestComparison: emptyManifestComparison(),
+    skipped: [],
+    temporarySemanticAuditPresent: true,
+  });
+  assert.equal(gate.overallGate, "BLOCKER");
+  assert.deepEqual(gate.objectBlockers, [{
+    code: "BLOCKER_TEMPORARY_SEMANTIC_AUDIT_PRESENT",
+    object: "reflab_audit.production_semantic_snapshot()",
+    requiredAction: "ATOMIC_SEMANTIC_ASSERTION_TEARDOWN_AND_CANONICAL_FINALIZATION",
+  }]);
+});
+
+test("an exact aggregate audit replaces RLS-hidden row queries with one fixed function call", () => {
+  const catalog = {
+    tables: [...new Set([...semanticQueries, ...buildIdentityQueries()].flatMap((query) => query.requires.tables ?? []))],
+    columns: [...new Set([...semanticQueries, ...buildIdentityQueries()].flatMap((query) => query.requires.columns ?? []))],
+  };
+  const visibility = catalog.tables.map((table_name) => ({
+    table_name,
+    has_select: true,
+    rls_applies: true,
+  }));
+  const conditional = buildConditionalInventory(catalog, visibility, { semanticAuditAvailable: true });
+  assert.ok(conditional.runnable.some((query) => query.id === SEMANTIC_AUDIT_QUERY_ID));
+  assert.equal(conditional.runnable.filter((query) => SEMANTIC_AUDIT_REPLACED_QUERY_IDS.includes(query.id)).length, 0);
+  assert.equal(conditional.auditBacked.length, SEMANTIC_AUDIT_REPLACED_QUERY_IDS.length);
+});
+
+test("aggregate snapshot validation rejects raw or unexpected fields", () => {
+  const valid = validSemanticAuditSnapshot();
+  assert.equal(expandSemanticAuditSnapshot(valid).get("attempt_semantics").official_orphans, 0);
+  assert.throws(
+    () => expandSemanticAuditSnapshot({ ...valid, leaked_user_id: "user_sensitive" }),
+    /unexpected aggregate contract/,
+  );
+  assert.throws(
+    () => expandSemanticAuditSnapshot({
+      ...valid,
+      identity_reference_integrity: {
+        ...valid.identity_reference_integrity,
+        unresolved_profile_refs: "user_sensitive",
+      },
+    }),
+    /invalid metrics/,
+  );
+});
+
+test("aggregate results replace identity fan-out without fabricating per-table PASS values", () => {
+  const raw = new Map([[SEMANTIC_AUDIT_QUERY_ID, validSemanticAuditSnapshot()]]);
+  const merged = mergeSemanticAuditResults(raw, [
+    "attempt_semantics",
+    "identity_public_attempts_user_id",
+  ]);
+  assert.equal(merged.has(SEMANTIC_AUDIT_QUERY_ID), false);
+  assert.equal(merged.has("identity_public_attempts_user_id"), false);
+  assert.equal(merged.get("identity_reference_integrity").unresolved_profile_refs, 0);
+  assert.equal(merged.get("attempt_semantics").official_orphans, 0);
 });

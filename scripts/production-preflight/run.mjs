@@ -13,8 +13,15 @@ import {
   queryDependenciesExist,
   READ_ONLY_GUARD_QUERY_ID,
   RESULT_FRAME_PREFIX,
+  semanticAuditSnapshotQuery,
   semanticQueries,
 } from "./queries.mjs";
+import {
+  expandSemanticAuditSnapshot,
+  SEMANTIC_AUDIT_REPLACED_QUERY_IDS,
+  semanticAuditContractBlockers,
+  semanticAuditInfrastructurePresent,
+} from "./semantic-audit.mjs";
 import { assertReadOnlyBatch } from "./sql-safety.mjs";
 import { authorizeProductionPreflightTarget } from "./target.mjs";
 import { buildGateReport, connectionCredentialBlockers } from "./gates.mjs";
@@ -155,15 +162,22 @@ function reportSafeResults(results) {
   ]));
 }
 
-export function buildConditionalInventory(catalog, semanticVisibility = []) {
+export function buildConditionalInventory(catalog, semanticVisibility = [], options = {}) {
   const candidates = [...semanticQueries, ...buildIdentityQueries()];
   const visibilityByTable = new Map(semanticVisibility.map((entry) => [entry.table_name, entry]));
+  const semanticAuditAvailable = options.semanticAuditAvailable === true;
+  const auditReplacedIds = new Set(SEMANTIC_AUDIT_REPLACED_QUERY_IDS);
   const runnable = [];
   const skipped = [];
+  const auditBacked = [];
 
   for (const query of candidates) {
     if (!queryDependenciesExist(query, catalog)) {
       skipped.push({ query: query.id, status: "BLOCKER_SKIPPED_MISSING_DEPENDENCY", requires: query.requires });
+      continue;
+    }
+    if (semanticAuditAvailable && auditReplacedIds.has(query.id)) {
+      auditBacked.push(query.id);
       continue;
     }
     const requiredTables = query.requires.tables ?? [];
@@ -184,7 +198,27 @@ export function buildConditionalInventory(catalog, semanticVisibility = []) {
     }
     runnable.push(query);
   }
-  return { runnable, skipped };
+  if (auditBacked.length > 0) runnable.push(semanticAuditSnapshotQuery);
+  return { runnable, skipped, auditBacked };
+}
+
+export function mergeSemanticAuditResults(results, auditBacked) {
+  if (auditBacked.length === 0) return results;
+  const snapshot = results.get(semanticAuditSnapshotQuery.id);
+  const expanded = expandSemanticAuditSnapshot(snapshot);
+  const merged = new Map(results);
+  merged.delete(semanticAuditSnapshotQuery.id);
+  for (const query of auditBacked) {
+    if (query.startsWith("identity_")) continue;
+    if (!expanded.has(query)) {
+      throw new Error(`Production preflight semantic audit omitted ${query}.`);
+    }
+    merged.set(query, expanded.get(query));
+  }
+  if (auditBacked.some((query) => query.startsWith("identity_"))) {
+    merged.set("identity_reference_integrity", expanded.get("identity_reference_integrity"));
+  }
+  return merged;
 }
 
 export function runProductionPreflight(environment = process.env, dependencies = {}) {
@@ -201,11 +235,20 @@ export function runProductionPreflight(environment = process.env, dependencies =
   if (!Array.isArray(semanticVisibility)) {
     throw new Error("Production preflight semantic visibility inventory returned no result.");
   }
-  const { runnable, skipped } = buildConditionalInventory(catalog, semanticVisibility);
+  const semanticAuditBlockers = semanticAuditContractBlockers(baseResults);
+  const temporarySemanticAuditPresent = semanticAuditInfrastructurePresent(baseResults);
+  const { runnable, skipped, auditBacked } = buildConditionalInventory(
+    catalog,
+    semanticVisibility,
+    { semanticAuditAvailable: semanticAuditBlockers.length === 0 },
+  );
   const credentialBlockers = connectionCredentialBlockers(baseResults);
-  const semanticResults = credentialBlockers.length === 0
+  const rawSemanticResults = credentialBlockers.length === 0
     ? executeReadOnlyBatch(buildSqlBatch(runnable), target.connectionEnvironment, executionDependencies)
     : new Map();
+  const semanticResults = credentialBlockers.length === 0
+    ? mergeSemanticAuditResults(rawSemanticResults, auditBacked)
+    : rawSemanticResults;
   const effectiveSkipped = credentialBlockers.length === 0 ? skipped : [
     ...skipped,
     ...runnable.map((query) => ({
@@ -223,6 +266,7 @@ export function runProductionPreflight(environment = process.env, dependencies =
     manifestComparison,
     skipped: effectiveSkipped,
     targetBlockers: credentialBlockers,
+    temporarySemanticAuditPresent,
   });
   const report = {
     target: { projectRef: target.projectRef, host: target.host },
@@ -230,6 +274,13 @@ export function runProductionPreflight(environment = process.env, dependencies =
     skipped: effectiveSkipped,
     migrationHistory,
     manifestComparison,
+    semanticAudit: {
+      available: semanticAuditBlockers.length === 0,
+      lifecycle: "TEMPORARY_PRODUCTION_ADOPTION",
+      teardownRequiredBeforeCanonicalMarker: temporarySemanticAuditPresent,
+      contractBlockers: semanticAuditBlockers,
+      replacedChecks: auditBacked,
+    },
     ...gates,
     results: reportSafeResults(results),
   };

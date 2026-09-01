@@ -17,6 +17,8 @@
     "test:production-preflight": "node --test scripts/production-preflight/production-preflight.test.mjs",
     "test:production-adoption:phase1": "node --test scripts/production-adoption/phase1/phase1-bridge.test.mjs",
     "test:production-adoption:phase1:postgres": "node scripts/production-adoption/phase1/run-phase1-bridge-postgres.mjs",
+    "test:production-adoption:phase2a": "node --test scripts/production-adoption/phase2a/phase2a-semantic-audit.test.mjs",
+    "test:production-adoption:phase2a:postgres": "node scripts/production-adoption/phase2a/run-phase2a-semantic-audit-postgres.mjs",
     "test:canonical-identity-cleanup": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/identity/canonicalIdentityCleanup.test.mts",
     "test:ranking": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/ranking/canonicalRanking.test.mts lib/performance/canonicalSummary.test.mts",
     "test:matches": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/matches/canonicalMatches.test.mts",

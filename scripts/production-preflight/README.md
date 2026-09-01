@@ -36,6 +36,33 @@ allowlisted Production targets.
   names, Storage paths, notification tokens, database credentials, or function
   bodies. Function and policy content is compared through SHA-256 fingerprints.
 
+### Phase 2A aggregate audit boundary
+
+The optional Production-adoption audit bridge is recognized only when its
+entire local contract is exact: dedicated `NOLOGIN` owner attributes, no caller
+membership, hash-pinned `SECURITY DEFINER` source, `search_path = pg_catalog`,
+reviewed column grants, one owner-only SELECT policy per audited table, and an
+exclusive EXECUTE grant to `reflab_prod_preflight_ro`.
+
+When that contract is complete, the semantic phase calls
+`reflab_audit.production_semantic_snapshot()` inside the independent read-only
+transaction. The function has no arguments and returns only fixed aggregate
+counts. The runner validates every key and numeric field before replacing the
+corresponding RLS-hidden checks. Identity references are represented by one
+global integrity aggregate; the runner never fabricates per-table PASS values.
+
+If any part is absent or drifted, direct RLS-hidden queries remain skipped with
+`BLOCKER_SKIPPED_RLS_VISIBILITY_UNPROVEN`. Installation of a similarly named
+function never weakens this gate. See
+`docs/production-adoption/phase2a-semantic-audit.md` for the threat model.
+
+This boundary is temporary adoption infrastructure and is deliberately absent
+from the canonical manifest. Even an exact installation adds
+`BLOCKER_TEMPORARY_SEMANTIC_AUDIT_PRESENT` to the final gate. Canonical
+finalization must validate the snapshot and tear down the function, policies,
+column grants, schema, and owner role atomically before inserting the marker;
+there is no teardown migration in Phase 2A.
+
 ## Production identity contract
 
 The current canonical baseline stores the Clerk subject (`user_*`) directly as
