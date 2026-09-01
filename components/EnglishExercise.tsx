@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useUser } from "@clerk/nextjs";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   BookOpenCheck,
   CheckCircle2,
@@ -12,19 +10,21 @@ import {
   RefreshCw,
   Trophy,
 } from "lucide-react";
-import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import {
   ifabGlossaryTerms,
   spanishDecisionExercises,
   triviaItems,
   type SpanishDecisionExercise,
-  type TriviaItem,
   type TriviaMode,
 } from "@/lib/communicationContent";
 import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
 import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
 import { getEnglishClips, type ClipRecord } from "@/lib/clips";
 import { useSupabase } from "@/components/SupabaseProvider";
+import {
+  createTrainingSubmissionId,
+  submitTrainingAttempt,
+} from "@/lib/training/attemptClient";
 
 type EnglishClip = ClipRecord;
 type CommunicationMode = "spanish" | "english" | "trivia";
@@ -69,8 +69,10 @@ const modeCards: {
 
 export function EnglishExercise() {
   const supabase = useSupabase();
-  const { user } = useUser();
-  const startedAtRef = useRef<number>(0);
+  const pendingFeedbackRef = useRef<{
+    submissionId: string;
+    fingerprint: string;
+  } | null>(null);
   const [clips, setClips] = useState<EnglishClip[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loadingClips, setLoadingClips] = useState(true);
@@ -131,35 +133,54 @@ export function EnglishExercise() {
     };
   }, [supabase]);
 
-  useEffect(() => {
-    startedAtRef.current = Date.now();
-  }, [currentClip?.id, activeMode]);
-
   function changeMode(mode: CommunicationMode) {
     resetAnswer();
     setActiveMode(mode);
   }
 
   async function evaluate() {
-    if (activeMode === "trivia" || (!answer.trim() && !audioBlob) || loadingAi) return;
+    if (
+      activeMode === "trivia" ||
+      (!answer.trim() && !audioBlob) ||
+      loadingAi ||
+      !currentClip
+    ) {
+      return;
+    }
 
     setLoadingAi(true);
     setFeedback(null);
     setFeedbackScores(null);
+    setSaveMessage(null);
 
     try {
+      const feedbackLanguage = getBrowserFeedbackLanguage();
+      const requestInput = {
+        mode:
+          activeMode === "spanish"
+            ? "decision_explanation_es"
+            : "ifab_english",
+        clipId: currentClip.id,
+        sportType: DEFAULT_SPORT_TYPE,
+        answer: answer.trim(),
+        hasVoiceRecording: Boolean(audioBlob),
+        feedbackLanguage,
+      };
+      const fingerprint = JSON.stringify(requestInput);
+      const pending = pendingFeedbackRef.current;
+      const submissionId =
+        pending?.fingerprint === fingerprint
+          ? pending.submissionId
+          : createTrainingSubmissionId();
+      pendingFeedbackRef.current = { submissionId, fingerprint };
       const res = await fetch("/api/english-feedback", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          mode: activeMode === "spanish" ? "decision_explanation_es" : "ifab_english",
-          clipId: currentClip?.id,
-          sportType: DEFAULT_SPORT_TYPE,
-          answer,
-          hasVoiceRecording: Boolean(audioBlob),
-          feedbackLanguage: getBrowserFeedbackLanguage(),
+          submissionId,
+          ...requestInput,
         }),
       });
 
@@ -173,7 +194,12 @@ export function EnglishExercise() {
 
         setFeedback(feedbackText);
         setFeedbackScores(scores);
-        await saveCommunicationAttempt(feedbackText, scores);
+        setSaveMessage(
+          data.status === "already_recorded"
+            ? "Feedback de entrenamiento recuperado sin duplicar el intento."
+            : "Feedback guardado en tu historial de Entrenamiento."
+        );
+        pendingFeedbackRef.current = null;
       }
     } catch (error) {
       console.error("Communication feedback error:", error);
@@ -181,99 +207,6 @@ export function EnglishExercise() {
     } finally {
       setLoadingAi(false);
     }
-  }
-
-  async function saveCommunicationAttempt(feedbackText: string, scores: FeedbackScores | null) {
-    if (!currentClip) return;
-
-    if (!user) {
-      setSaveMessage("Feedback generado. Inicia sesion para guardar la respuesta en Rendimiento.");
-      return;
-    }
-
-    const isEnglishMode = activeMode === "english";
-    const timeSpentSeconds = Math.max(
-      1,
-      Math.round((Date.now() - startedAtRef.current) / 1000)
-    );
-    const globalScore = scoreToPercent(scores?.global ?? averageScore([
-      scores?.terminology,
-      scores?.clarity,
-      scores?.precision,
-      scores?.structure,
-      isEnglishMode ? scores?.vocabulary : null,
-      isEnglishMode ? scores?.grammar : null,
-    ]));
-
-    const primaryPayload = {
-      user_id: user.id,
-      sport_type: DEFAULT_SPORT_TYPE,
-      activity_type: isEnglishMode ? "english_training" : "communication_training",
-      clip_id: currentClip.id,
-      clip_title:
-        activeMode === "spanish" && selectedSpanishExercise
-          ? selectedSpanishExercise.title
-          : currentClip.title ?? "Comunicacion arbitral",
-      module: isEnglishMode ? "english_referee" : "communication_referee",
-      mode: isEnglishMode ? "english" : "decision_explanation_es",
-      communication_mode: isEnglishMode ? "ifab_english" : "decision_explanation_es",
-      topic: currentClip.topic ?? (isEnglishMode ? "Ingles Arbitral IFAB" : "Explicacion de decisiones"),
-      season: currentClip.season ?? "2026/27",
-      source_version:
-        currentClip.source_version ??
-        (isEnglishMode
-          ? "RefLab football_11 english training"
-          : "RefLab football_11 communication training"),
-      answer_text: answer.trim() || (audioBlob ? "Respuesta de voz registrada" : null),
-      score: globalScore,
-      feedback: feedbackText,
-      english_score: isEnglishMode ? globalScore : null,
-      communication_score: !isEnglishMode ? globalScore : null,
-      vocabulary_score: scoreToPercent(scores?.vocabulary),
-      clarity_score: scoreToPercent(scores?.clarity),
-      terminology_score: scoreToPercent(scores?.terminology),
-      grammar_score: scoreToPercent(scores?.grammar),
-      technical_accuracy_score: scoreToPercent(scores?.precision),
-      structure_score: scoreToPercent(scores?.structure),
-      pronunciation_score: audioBlob ? null : undefined,
-      global_communication_label: scores?.globalLabel ?? null,
-      time_spent_seconds: timeSpentSeconds,
-      created_at: new Date().toISOString(),
-    };
-
-    const fallbackPayload = {
-      user_id: user.id,
-      sport_type: DEFAULT_SPORT_TYPE,
-      activity_type: isEnglishMode ? "english_training" : "communication_training",
-      clip_title: currentClip.title ?? "Comunicacion arbitral",
-      score: globalScore,
-      topic: currentClip.topic ?? "Comunicacion arbitral",
-      season: currentClip.season ?? "2026/27",
-      source_version:
-        currentClip.source_version ??
-        (isEnglishMode
-          ? "RefLab football_11 english training"
-          : "RefLab football_11 communication training"),
-      difficulty: isEnglishMode ? "english" : "communication",
-      technical_correct: globalScore === null ? null : globalScore >= 70,
-      restart_correct: null,
-      discipline_correct: null,
-      disciplinary_correct: null,
-      var_correct: null,
-    };
-
-    const result = await insertAttemptSafely(supabase, primaryPayload, fallbackPayload);
-
-    if (result.saved) {
-      setSaveMessage(
-        result.usedFallback
-          ? "Respuesta guardada con estructura compatible. Las metricas finas quedan preparadas."
-          : "Respuesta guardada para Rendimiento."
-      );
-      return;
-    }
-
-    setSaveMessage("Feedback generado. No se pudo guardar el intento en Supabase.");
   }
 
   async function startRecording() {
@@ -328,6 +261,7 @@ export function EnglishExercise() {
     setSaveMessage(null);
     setLoadingAi(false);
     setAudioBlob(null);
+    pendingFeedbackRef.current = null;
 
     if (audioUrl) {
       URL.revokeObjectURL(audioUrl);
@@ -391,7 +325,7 @@ export function EnglishExercise() {
       </section>
 
       {activeMode === "trivia" ? (
-        <IfabTrivia userId={user?.id ?? null} />
+        <IfabTrivia />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1.35fr_0.9fr]">
           <section className="space-y-4">
@@ -657,8 +591,7 @@ function ScorePanel({
   );
 }
 
-function IfabTrivia({ userId }: { userId: string | null }) {
-  const supabase = useSupabase();
+function IfabTrivia() {
   const [mode, setMode] = useState<TriviaMode>("choice");
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -698,14 +631,21 @@ function IfabTrivia({ userId }: { userId: string | null }) {
     setSelected(selectedAnswer);
     setAnswered(true);
     setResults((prev) => ({ ...prev, [current.id]: correct }));
-    await saveTriviaAttempt(
-      supabase,
-      current,
-      selectedAnswer,
-      correct,
-      userId
-    );
-    setSaveMessage(userId ? "Progreso de vocabulario guardado." : "Progreso local. Inicia sesion para guardarlo.");
+    try {
+      await submitTrainingAttempt({
+        kind: "ifab_trivia",
+        submissionId: createTrainingSubmissionId(),
+        itemId: current.id,
+        selectedAnswer,
+      });
+      setSaveMessage("Progreso de vocabulario guardado.");
+    } catch (error) {
+      setSaveMessage(
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar el progreso de vocabulario."
+      );
+    }
   }
 
   function next() {
@@ -886,48 +826,6 @@ function ConceptList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-async function saveTriviaAttempt(
-  supabase: SupabaseClient,
-  item: TriviaItem,
-  selectedAnswer: string,
-  correct: boolean,
-  userId: string | null
-) {
-  if (!userId) return;
-
-  const score = correct ? 100 : 0;
-  const primaryPayload = {
-    user_id: userId,
-    module: "english_referee",
-    mode: "ifab_trivia",
-    communication_mode: "ifab_trivia",
-    topic: "IFAB English Vocabulary",
-    clip_title: item.term,
-    answer_text: selectedAnswer,
-    correct_decision: item.answer,
-    score,
-    is_correct: correct,
-    vocabulary_score: score,
-    mastered_concepts: correct ? [item.term] : [],
-    pending_concepts: correct ? [] : [item.term],
-    vocabulary_level: correct ? "concept_mastered" : "concept_pending",
-    feedback: item.explanation,
-    created_at: new Date().toISOString(),
-  };
-
-  const fallbackPayload = {
-    user_id: userId,
-    clip_title: item.term,
-    score,
-    topic: "IFAB English Vocabulary",
-    difficulty: item.difficulty.toLowerCase(),
-    is_correct: correct,
-    technical_correct: correct,
-  };
-
-  await insertAttemptSafely(supabase, primaryPayload, fallbackPayload);
-}
-
 function matchesSpanishExercise(
   clip: EnglishClip,
   exercise: SpanishDecisionExercise
@@ -981,17 +879,6 @@ function normalizeScores(value: unknown): FeedbackScores | null {
 function cleanOutOf10(value: unknown) {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   return Math.max(0, Math.min(10, Math.round(value)));
-}
-
-function scoreToPercent(value: number | null | undefined) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return Math.max(0, Math.min(100, Math.round(value * 10)));
-}
-
-function averageScore(values: Array<number | null | undefined>) {
-  const valid = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-  if (valid.length === 0) return null;
-  return Math.round(valid.reduce((sum, value) => sum + value, 0) / valid.length);
 }
 
 function formatOutOf10(value: number | null | undefined) {

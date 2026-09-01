@@ -6,22 +6,15 @@ import { useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
-import { useSupabase } from "@/components/SupabaseProvider";
 import { getDisciplineAction, getDisciplineDefinition } from "@/lib/discipline";
 import {
-  buildSportPerformanceDataset,
   formatPercent,
-  getSportCriterionPerformance,
-  getSportPerformanceSummary,
   getSportRecommendedPlan,
-  getSportTopicPerformance,
 } from "@/lib/performanceBySport";
 import {
-  type AttemptRecord,
-  type ExamResultRecord,
-  type PerformanceClipRecord,
-  type RulesExamResultRecord,
-} from "@/lib/performance";
+  buildCanonicalPerformanceSummary,
+  type CanonicalPerformanceSummaryModel,
+} from "@/lib/performance/canonicalSummaryModel";
 import {
   BarChart3,
   ChevronRight,
@@ -34,20 +27,6 @@ import {
 
 export const dynamic = "force-dynamic";
 
-type DashboardData = {
-  attempts: AttemptRecord[];
-  examResults: ExamResultRecord[];
-  rulesResults: RulesExamResultRecord[];
-  clips: PerformanceClipRecord[];
-};
-
-const emptyData: DashboardData = {
-  attempts: [],
-  examResults: [],
-  rulesResults: [],
-  clips: [],
-};
-
 export default function MobileDashboardPage() {
   return (
     <Suspense fallback={<PageShellFallback message="Cargando inicio mobile..." />}>
@@ -57,12 +36,13 @@ export default function MobileDashboardPage() {
 }
 
 function MobileDashboardPageContent() {
-  const supabase = useSupabase();
   const { user, isLoaded } = useUser();
   const { currentDiscipline: sportType } = useDiscipline();
   const theme = getDisciplineDefinition(sportType).theme;
-  const [data, setData] = useState<DashboardData>(emptyData);
+  const [data, setData] = useState<CanonicalPerformanceSummaryModel | null>(null);
+  const [weeklyTrainingUsed, setWeeklyTrainingUsed] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const displayName =
     user?.fullName ||
@@ -76,66 +56,77 @@ function MobileDashboardPageContent() {
       if (!isLoaded) return;
 
       if (!user) {
-        setData(emptyData);
+        setData(null);
+        setWeeklyTrainingUsed(0);
         setLoading(false);
         return;
       }
 
-      const [attemptsRes, examsRes, rulesRes, clipsRes] = await Promise.all([
-        supabase
-          .from("attempts")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("exam_results")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("rules_exam_results")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase.from("clips").select("*"),
-      ]);
-
-      setData({
-        attempts: (attemptsRes.data ?? []) as AttemptRecord[],
-        examResults: (examsRes.data ?? []) as ExamResultRecord[],
-        rulesResults: rulesRes.error ? [] : ((rulesRes.data ?? []) as RulesExamResultRecord[]),
-        clips: clipsRes.error ? [] : ((clipsRes.data ?? []) as PerformanceClipRecord[]),
-      });
-
-      setLoading(false);
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const [performanceResponse, usageResponse] = await Promise.all([
+          fetch(
+            `/api/performance/summary?sportType=${encodeURIComponent(sportType)}`,
+            { cache: "no-store" }
+          ),
+          fetch(
+            `/api/training/usage?sportType=${encodeURIComponent(sportType)}`,
+            { cache: "no-store" }
+          ).catch(() => null),
+        ]);
+        if (!performanceResponse.ok) {
+          const payload = (await performanceResponse.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(
+            payload?.error === "identity_link_required"
+              ? "Tu identidad debe estar vinculada para consultar el panel."
+              : "No se pudieron cargar las metricas oficiales."
+          );
+        }
+        const payload = (await performanceResponse.json()) as {
+          performance?: CanonicalPerformanceSummaryModel;
+        };
+        setData(payload.performance ?? null);
+        if (usageResponse?.ok) {
+          const usagePayload = (await usageResponse.json()) as {
+            usage?: { weeklyUsed?: number };
+          };
+          setWeeklyTrainingUsed(usagePayload.usage?.weeklyUsed ?? 0);
+        } else {
+          setWeeklyTrainingUsed(0);
+        }
+      } catch (error) {
+        setData(null);
+        setWeeklyTrainingUsed(0);
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : "No se pudieron cargar las metricas oficiales."
+        );
+      } finally {
+        setLoading(false);
+      }
     }
 
     void loadData();
-  }, [isLoaded, supabase, user]);
+  }, [isLoaded, sportType, user]);
 
-  const dataset = useMemo(
+  const emptyData = useMemo(
     () =>
-      buildSportPerformanceDataset({
-        attempts: data.attempts,
-        examResults: data.examResults,
-        rulesExamResults: data.rulesResults,
-        clips: data.clips,
+      buildCanonicalPerformanceSummary({
+        attempts: [],
+        examResults: [],
         sportType,
+        canonicalUserId: null,
       }),
-    [data.attempts, data.examResults, data.rulesResults, data.clips, sportType]
+    [sportType]
   );
-  const summary = useMemo(
-    () => getSportPerformanceSummary(dataset.items, dataset.sessions, sportType),
-    [dataset.items, dataset.sessions, sportType]
-  );
-  const criteria = useMemo(
-    () => getSportCriterionPerformance(dataset.items, sportType).slice(0, 4),
-    [dataset.items, sportType]
-  );
-  const topics = useMemo(
-    () => getSportTopicPerformance(dataset.items, sportType).slice(0, 3),
-    [dataset.items, sportType]
-  );
+  const performance = data?.sportType === sportType ? data : emptyData;
+  const summary = performance.summary;
+  const criteria = useMemo(() => performance.criteria.slice(0, 4), [performance.criteria]);
+  const topics = useMemo(() => performance.topics.slice(0, 3), [performance.topics]);
   const plan = useMemo(
     () => getSportRecommendedPlan(summary, sportType),
     [summary, sportType]
@@ -146,6 +137,16 @@ function MobileDashboardPageContent() {
       <AppShell>
         <div className="min-h-[70vh] rounded-[28px] border border-white/10 bg-[#101820] p-6 text-zinc-400">
           Cargando inicio...
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <AppShell>
+        <div className="min-h-[70vh] rounded-[28px] border border-red-500/25 bg-red-500/10 p-6 text-red-200">
+          {loadError}
         </div>
       </AppShell>
     );
@@ -221,7 +222,7 @@ function MobileDashboardPageContent() {
           >
             <p className="text-lg font-black text-white">Sin actividad todavia</p>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              Cuando completes ejercicios o evaluaciones de esta disciplina, tus metricas reales apareceran aca.
+              Cuando completes evaluaciones oficiales de esta disciplina, tus metricas apareceran aca. El Entrenamiento se contabiliza por separado.
             </p>
           </section>
         ) : null}
@@ -230,7 +231,7 @@ function MobileDashboardPageContent() {
           <div className="mb-3 flex items-end justify-between">
             <h2 className="text-xl font-black">Tu progreso</h2>
             <span className="text-xs font-black" style={{ color: theme.accent }}>
-              {summary.totalAttempts} registros
+              {summary.totalAttempts} intentos oficiales
             </span>
           </div>
 
@@ -249,9 +250,9 @@ function MobileDashboardPageContent() {
             />
             <MetricCard
               icon={Flame}
-              title="Entrenamientos"
-              value={summary.totalTrainings || "-"}
-              sub="Sesiones guardadas"
+              title="Entrenamiento semanal"
+              value={weeklyTrainingUsed || "-"}
+              sub="Practicas separadas"
             />
             <MetricCard
               icon={ClipboardList}

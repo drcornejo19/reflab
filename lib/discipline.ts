@@ -3,8 +3,8 @@ import {
   SPORT_TYPES,
   isSportType,
   type SportType,
-} from "@/lib/sports";
-import { FUTSAL_RF_LOGO_SRC, RF_LOGO_SRC } from "@/lib/brand";
+} from "./sports.ts";
+import { FUTSAL_RF_LOGO_SRC, RF_LOGO_SRC } from "./brand.ts";
 
 export const DISCIPLINE_STORAGE_KEY = "reflab.selectedDiscipline";
 export const DISCIPLINE_COOKIE_KEY = "reflab_selected_discipline";
@@ -143,6 +143,15 @@ export const disciplineDefinitions: Record<SportType, DisciplineExperience> = {
         iconKey: "decision",
       },
       {
+        title: "Videoanalisis",
+        category: "Audiovisual",
+        description:
+          "Analiza jugadas reales y entrena criterio tecnico, disciplinario y de reanudacion.",
+        href: "/training/video-analysis",
+        status: "Disponible",
+        iconKey: "video",
+      },
+      {
         title: "VAR Lab",
         category: "Protocolo",
         description:
@@ -177,15 +186,6 @@ export const disciplineDefinitions: Record<SportType, DisciplineExperience> = {
       },
     ],
     evaluationModules: [
-      {
-        title: "Videoanalisis",
-        category: "Audiovisual",
-        description:
-          "Evalua jugadas reales y entrena criterio tecnico, disciplinario y de reanudacion.",
-        href: "/training/video-analysis",
-        status: "Disponible",
-        iconKey: "video",
-      },
       {
         title: "Examen arbitral",
         category: "Decision",
@@ -314,15 +314,6 @@ export const disciplineDefinitions: Record<SportType, DisciplineExperience> = {
       },
     ],
     evaluationModules: [
-      {
-        title: "Videoanalisis de futsal",
-        category: "Audiovisual",
-        description:
-          "Resuelve clips reales con trazabilidad tecnica, disciplinaria y procedimental propia de futsal.",
-        href: "/futsal/video-analysis",
-        status: "Disponible",
-        iconKey: "video",
-      },
       {
         title: "Examen de reglas FIFA Futsal",
         category: "Reglas",

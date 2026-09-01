@@ -33,66 +33,42 @@ import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { RefPerformanceClient } from "@/components/RefPerformanceClient";
 import { SportRadarGraphic } from "@/components/SportRadarGraphic";
-import { useSupabase } from "@/components/SupabaseProvider";
 import { getDisciplineDefinition } from "@/lib/discipline";
 import {
-  buildSportPerformanceDataset,
-  getSportCriterionPerformance,
-  getSportModulePerformance,
-  getSportPerformanceSummary,
-  getSportRadarData,
   getSportRecommendedPlan,
-  getSportTopicPerformance,
   type RadarMetric,
   type SportCriterionMetric,
   type SportModulePerformance,
   type SportPerformanceItem,
+  type SportPerformanceSummary,
 } from "@/lib/performanceBySport";
+import {
+  buildCanonicalPerformanceSummary,
+  loadOptionalRanking,
+  type CanonicalPerformanceSummaryModel,
+} from "@/lib/performance/canonicalSummaryModel";
 import { type SportType } from "@/lib/sports";
 import {
   formatDate,
   formatPercent,
   formatScore,
-  getEvolutionData,
-  getRecentHistory,
-  type AttemptRecord,
-  type ExamResultRecord,
-  type PerformanceClipRecord,
-  type RankingRow,
-  type RulesExamResultRecord,
+  type EvolutionData,
   type SummaryMetric,
   type TopicMetric,
 } from "@/lib/performance";
+import type { RankingRow } from "@/lib/ranking/types";
 import { useUserRole } from "@/lib/useUserRole";
 
 export const dynamic = "force-dynamic";
 
-type HistoryMode = "ALL" | "training" | "exam" | "rules_exam";
+type HistoryMode = "ALL" | "exam";
 type HistoryResult = "ALL" | SportPerformanceItem["result"];
 type PerformanceSection = "physical" | "performance";
 type PerformanceView = "evolution" | "plan" | "topics" | "criteria" | "modules" | "history" | "ranking" | "complementary";
 
-type LoadState = {
-  attempts: AttemptRecord[];
-  examResults: ExamResultRecord[];
-  rulesResults: RulesExamResultRecord[];
-  clips: PerformanceClipRecord[];
-  ranking: RankingRow[];
-};
-
-const initialData: LoadState = {
-  attempts: [],
-  examResults: [],
-  rulesResults: [],
-  clips: [],
-  ranking: [],
-};
-
 const sourceLabels: Record<HistoryMode, string> = {
   ALL: "Todos los modos",
-  training: "Entrenamiento",
   exam: "Examen arbitral",
-  rules_exam: "Examen de reglas",
 };
 
 const resultLabels: Record<HistoryResult, string> = {
@@ -139,7 +115,6 @@ export default function PerformancePage() {
 }
 
 function PerformancePageContent() {
-  const supabase = useSupabase();
   const { user, isLoaded } = useUser();
   const searchParams = useSearchParams();
   const { currentDiscipline: sportType } = useDiscipline();
@@ -158,7 +133,12 @@ function PerformancePageContent() {
       }) as CSSProperties,
     [theme]
   );
-  const [data, setData] = useState<LoadState>(initialData);
+  const [data, setData] = useState<CanonicalPerformanceSummaryModel | null>(
+    null
+  );
+  const [ranking, setRanking] = useState<RankingRow[]>([]);
+  const [currentRanking, setCurrentRanking] = useState<RankingRow | null>(null);
+  const [rankingUnavailable, setRankingUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [historyMode, setHistoryMode] = useState<HistoryMode>("ALL");
@@ -181,7 +161,7 @@ function PerformancePageContent() {
       if (!isLoaded) return;
 
       if (!user) {
-        setData(initialData);
+        setData(null);
         setLoading(false);
         return;
       }
@@ -189,103 +169,95 @@ function PerformancePageContent() {
       setLoading(true);
       setLoadError(null);
 
-      const [attemptsRes, examsRes, rulesRes, clipsRes, rankingResponse] = await Promise.all([
-        supabase
-          .from("attempts")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("exam_results")
-          .select("id,user_id,total_questions,total_score,avg_score,correct_count,details,created_at")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("rules_exam_results")
-          .select("id,user_id,total_questions,correct_count,percentage,unanswered_count,finish_reason,level,details,topic_performance,created_at")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("clips")
-          .select("*"),
-        fetch(`/api/ranking?sport=${encodeURIComponent(sportType)}`, {
-          cache: "no-store",
-        }),
-      ]);
-
-      const rankingPayload = rankingResponse.ok
-        ? ((await rankingResponse.json()) as { ranking?: RankingRow[] })
-        : { ranking: [] };
-
-      if (attemptsRes.error || examsRes.error) {
-        setLoadError("No se pudieron cargar todas las metricas principales. RefLab mantiene la pantalla sin inventar datos.");
+      try {
+        const response = await fetch(
+          `/api/performance/summary?sportType=${encodeURIComponent(sportType)}`,
+          {
+            cache: "no-store",
+          }
+        );
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          setLoadError(
+            payload?.error === "identity_link_required"
+              ? "Tu identidad debe estar vinculada antes de consultar rendimiento."
+              : "No se pudieron cargar las metricas oficiales."
+          );
+          setData(null);
+          return;
+        }
+        const payload = (await response.json()) as {
+          performance?: CanonicalPerformanceSummaryModel;
+        };
+        setData(payload.performance ?? null);
+      } catch {
+        setLoadError("No se pudieron cargar las metricas oficiales.");
+        setData(null);
+      } finally {
+        setLoading(false);
       }
-
-      if (rulesRes.error) {
-        console.warn("Rules exam metrics unavailable:", rulesRes.error.message);
-      }
-
-      setData({
-        attempts: (attemptsRes.data ?? []) as AttemptRecord[],
-        examResults: (examsRes.data ?? []) as ExamResultRecord[],
-        rulesResults: rulesRes.error ? [] : ((rulesRes.data ?? []) as RulesExamResultRecord[]),
-        clips: clipsRes.error ? [] : ((clipsRes.data ?? []) as PerformanceClipRecord[]),
-        ranking: rankingPayload.ranking ?? [],
-      });
-
-      setLoading(false);
     }
 
-    loadPerformance();
-  }, [isLoaded, sportType, supabase, user]);
+    void loadPerformance();
+  }, [isLoaded, sportType, user]);
 
-  const dataset = useMemo(
+  useEffect(() => {
+    let active = true;
+
+    async function loadRanking() {
+      if (!isLoaded || !user) {
+        setRanking([]);
+        setCurrentRanking(null);
+        setRankingUnavailable(false);
+        return;
+      }
+
+      const result = await loadOptionalRanking(sportType);
+      if (!active) return;
+      setRanking(result.rows);
+      setCurrentRanking(result.selfPosition);
+      setRankingUnavailable(result.unavailable);
+    }
+
+    void loadRanking();
+    return () => {
+      active = false;
+    };
+  }, [isLoaded, sportType, user]);
+
+  const emptyData = useMemo(
     () =>
-      buildSportPerformanceDataset({
-        attempts: data.attempts,
-        examResults: data.examResults,
-        rulesExamResults: data.rulesResults,
-        clips: data.clips,
+      buildCanonicalPerformanceSummary({
+        attempts: [],
+        examResults: [],
         sportType,
+        canonicalUserId: null,
       }),
-    [data.attempts, data.examResults, data.rulesResults, data.clips, sportType]
+    [sportType]
   );
-
-  const summary = useMemo(
-    () => getSportPerformanceSummary(dataset.items, dataset.sessions, sportType),
-    [dataset.items, dataset.sessions, sportType]
-  );
-  const evolution = useMemo(() => getEvolutionData(dataset.sessions), [dataset.sessions]);
-  const topics = useMemo(
-    () => getSportTopicPerformance(dataset.items, sportType),
-    [dataset.items, sportType]
-  );
-  const criteria = useMemo(
-    () => getSportCriterionPerformance(dataset.items, sportType),
-    [dataset.items, sportType]
-  );
-  const radarAxes = useMemo(
-    () => getSportRadarData(dataset.items, sportType),
-    [dataset.items, sportType]
-  );
-  const modules = useMemo(
-    () => getSportModulePerformance(dataset.items, sportType),
-    [dataset.items, sportType]
-  );
+  const performance =
+    data?.sportType === sportType ? data : emptyData;
+  const summary = performance.summary;
+  const evolution = performance.evolution;
+  const topics = performance.topics;
+  const criteria = performance.criteria;
+  const radarAxes = performance.radarAxes;
+  const modules = performance.modules;
   const plan = useMemo(
     () => getSportRecommendedPlan(summary, sportType),
     [summary, sportType]
   );
-  const ranking = data.ranking;
-  const currentRanking = ranking.find((row) => row.userId === user?.id);
 
   const history = useMemo(() => {
-    return getRecentHistory(dataset.items, 30).filter((item) => {
+    return performance.history.filter((item) => {
       const modeMatch = historyMode === "ALL" || item.source === historyMode;
-      const resultMatch = historyResult === "ALL" || item.result === historyResult;
+      const resultMatch =
+        historyResult === "ALL" || item.result === historyResult;
       return modeMatch && resultMatch;
     });
-  }, [dataset.items, historyMode, historyResult]);
+  }, [performance.history, historyMode, historyResult]);
 
   if (!isLoaded || loading || loadingRole) {
     return (
@@ -403,6 +375,7 @@ function PerformancePageContent() {
                   setHistoryResult={setHistoryResult}
                   ranking={ranking}
                   currentRanking={currentRanking}
+                  rankingUnavailable={rankingUnavailable}
                   sportType={sportType}
                 />
               </>
@@ -419,7 +392,7 @@ function PerformancePageContent() {
 function FreePerformanceOverview({
   summary,
 }: {
-  summary: ReturnType<typeof getSportPerformanceSummary>;
+  summary: SportPerformanceSummary;
 }) {
   return (
     <section className="rounded-[34px] border border-white/10 bg-[#101b24] p-4 shadow-2xl sm:p-5 lg:p-6">
@@ -714,12 +687,13 @@ function PrimaryAnalysisView({
   setHistoryResult,
   ranking,
   currentRanking,
+  rankingUnavailable,
   sportType,
 }: {
   activeView: PerformanceView;
-  summary: ReturnType<typeof getSportPerformanceSummary>;
+  summary: SportPerformanceSummary;
   radarAxes: RadarMetric[];
-  evolution: ReturnType<typeof getEvolutionData>;
+  evolution: EvolutionData;
   plan: ReturnType<typeof getSportRecommendedPlan>;
   topics: TopicMetric[];
   criteria: SportCriterionMetric[];
@@ -730,7 +704,8 @@ function PrimaryAnalysisView({
   setHistoryMode: (value: HistoryMode) => void;
   setHistoryResult: (value: HistoryResult) => void;
   ranking: RankingRow[];
-  currentRanking?: RankingRow;
+  currentRanking: RankingRow | null;
+  rankingUnavailable: boolean;
   sportType: SportType;
 }) {
   return (
@@ -761,6 +736,7 @@ function PrimaryAnalysisView({
         <RankingPanel
           ranking={ranking}
           currentRanking={currentRanking}
+          unavailable={rankingUnavailable}
           sportType={sportType}
         />
       )}
@@ -769,7 +745,7 @@ function PrimaryAnalysisView({
   );
 }
 
-function ComplementaryAnalysisPanel({ summary }: { summary: ReturnType<typeof getSportPerformanceSummary> }) {
+function ComplementaryAnalysisPanel({ summary }: { summary: SportPerformanceSummary }) {
   const criterionWeak = {
     label: "Criterio debil",
     value: summary.weakestCriterion?.label ?? "Sin datos",
@@ -894,7 +870,7 @@ function SummaryCard({ metric }: { metric: SummaryMetric }) {
   );
 }
 
-function EvolutionPanel({ evolution }: { evolution: ReturnType<typeof getEvolutionData> }) {
+function EvolutionPanel({ evolution }: { evolution: EvolutionData }) {
   return (
     <Panel
       eyebrow="Mi evolucion"
@@ -924,7 +900,7 @@ function EvolutionPanel({ evolution }: { evolution: ReturnType<typeof getEvoluti
   );
 }
 
-function EvolutionBars({ series }: { series: ReturnType<typeof getEvolutionData>["series"] }) {
+function EvolutionBars({ series }: { series: EvolutionData["series"] }) {
   return (
     <div className="flex h-40 max-w-full items-end gap-1 overflow-hidden pb-1 sm:h-44 sm:gap-2">
       {series.map((item) => (
@@ -1251,20 +1227,24 @@ function HistoryItem({ item }: { item: SportPerformanceItem }) {
 function RankingPanel({
   ranking,
   currentRanking,
+  unavailable,
   sportType,
 }: {
   ranking: RankingRow[];
-  currentRanking?: RankingRow;
+  currentRanking: RankingRow | null;
+  unavailable: boolean;
   sportType: SportType;
 }) {
   return (
     <Panel
       eyebrow="Ranking"
       title="Comparacion comunitaria"
-      description="El ranking se calcula separado del analisis personal y usa intentos reales de entrenamiento disponibles."
+      description="El ranking compara exclusivamente evaluaciones oficiales de la disciplina seleccionada."
       icon={Trophy}
     >
-      {ranking.length === 0 ? (
+      {unavailable ? (
+        <InlineEmpty text="El ranking no esta disponible en este momento. Tus metricas oficiales siguen visibles." />
+      ) : ranking.length === 0 ? (
         <InlineEmpty text="Ranking disponible cuando existan mas usuarios con actividad registrada." />
       ) : (
         <>
@@ -1272,21 +1252,21 @@ function RankingPanel({
             <p className="text-xs font-black uppercase tracking-[0.25em] text-[var(--accent)]">Tu posicion</p>
             <p className="mt-2 text-4xl font-black">{currentRanking ? `#${currentRanking.position}` : "Sin datos"}</p>
             <p className="mt-2 text-sm text-zinc-300">
-              {currentRanking ? `${currentRanking.avgScore}/100 promedio - RefCard ${currentRanking.refCardId}` : "Completa entrenamientos para aparecer en el ranking."}
+              {currentRanking ? `${currentRanking.averageScore}/100 promedio - RefCard ${currentRanking.refCardId}` : "Completa evaluaciones oficiales para aparecer en el ranking."}
             </p>
           </div>
 
           <div className="mt-4 space-y-2">
             {ranking.slice(0, 6).map((row) => (
-              <div key={row.userId} className="grid min-w-0 grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:gap-3">
+              <div key={`${row.position}-${row.refCardId}`} className="grid min-w-0 grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:gap-3">
                 <p className="font-black text-[var(--accent)]">#{row.position}</p>
                 <div>
-                  <p className="font-black text-white">{row.name}</p>
-                  <p className="text-xs text-zinc-500">RefCard {row.refCardId} - Ultima actividad: {formatDate(row.lastAttempt)}</p>
+                  <p className="font-black text-white">{row.displayName}</p>
+                  <p className="text-xs text-zinc-500">RefCard {row.refCardId} - Ultima evaluacion: {formatDate(row.lastEvaluationAt)}</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-black text-white">{row.avgScore}</p>
-                  <p className="text-xs text-zinc-500">{row.tests} eval. / {row.trainings} ent.</p>
+                  <p className="font-black text-white">{row.averageScore}</p>
+                  <p className="text-xs text-zinc-500">{row.evaluations} evaluaciones</p>
                 </div>
               </div>
             ))}

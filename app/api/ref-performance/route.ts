@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { requireCanonicalRequestIdentity } from "@/lib/identity/canonicalRequestIdentity";
 import { DEFAULT_SPORT_TYPE, normalizeSportType } from "@/lib/sports";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
@@ -38,15 +38,16 @@ type PhysicalTestInput = {
 };
 
 export async function GET(request: Request) {
-  const userId = await getClerkUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const identity = await requireCanonicalRequestIdentity();
+  if (identity.response) return identity.response;
 
   try {
-    const supabase = createSupabaseAdminClient();
     const sportType = getRequestedSportType(request);
-    const data = await loadRefPerformanceData(supabase, userId, sportType);
+    const data = await loadRefPerformanceData(
+      identity.supabase,
+      identity.canonicalUserId,
+      sportType
+    );
     return NextResponse.json(data);
   } catch (error) {
     return migrationErrorResponse(error);
@@ -54,10 +55,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const userId = await getClerkUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const identity = await requireCanonicalRequestIdentity();
+  if (identity.response) return identity.response;
 
   let body: { action?: string; payload?: CheckInInput | PhysicalTestInput };
   try {
@@ -67,23 +66,34 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabase = createSupabaseAdminClient();
     const sportType = getRequestedSportType(request);
 
     if (body.action === "save_checkin") {
       await saveCheckIn(
-        supabase,
-        userId,
+        identity.supabase,
+        identity.canonicalUserId,
         body.payload as CheckInInput,
         sportType
       );
-      const data = await loadRefPerformanceData(supabase, userId, sportType);
+      const data = await loadRefPerformanceData(
+        identity.supabase,
+        identity.canonicalUserId,
+        sportType
+      );
       return NextResponse.json({ message: "Daily Ref Check-In guardado.", ...data });
     }
 
     if (body.action === "save_test") {
-      await savePhysicalTest(supabase, userId, body.payload as PhysicalTestInput);
-      const data = await loadRefPerformanceData(supabase, userId, sportType);
+      await savePhysicalTest(
+        identity.supabase,
+        identity.canonicalUserId,
+        body.payload as PhysicalTestInput
+      );
+      const data = await loadRefPerformanceData(
+        identity.supabase,
+        identity.canonicalUserId,
+        sportType
+      );
       return NextResponse.json({ message: "Test fisico guardado.", ...data });
     }
 
@@ -93,23 +103,26 @@ export async function POST(request: Request) {
   }
 }
 
-async function getClerkUserId() {
-  const session = await auth();
-  return session.userId;
-}
-
 async function loadRefPerformanceData(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
-  userId: string,
+  canonicalUserId: string,
   sportType = DEFAULT_SPORT_TYPE
 ) {
   const [checkinsRes, sessionsRes, testsRes, readinessRes, wellnessRes, attemptsRes] = await Promise.all([
-    supabase.from("performance_checkins").select("*").eq("user_id", userId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(40),
-    supabase.from("performance_sessions").select("*").eq("user_id", userId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(80),
-    supabase.from("physical_tests").select("*").eq("user_id", userId).order("test_date", { ascending: false }).limit(40),
-    supabase.from("readiness_scores").select("*").eq("user_id", userId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(40),
-    supabase.from("wellness_logs").select("*").eq("user_id", userId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(40),
-    supabase.from("attempts").select("id,score,topic,mode,module,created_at,sport_type").eq("user_id", userId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(80),
+    supabase.from("performance_checkins").select("*").eq("user_id", canonicalUserId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(40),
+    supabase.from("performance_sessions").select("*").eq("user_id", canonicalUserId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(80),
+    supabase.from("physical_tests").select("*").eq("user_id", canonicalUserId).order("test_date", { ascending: false }).limit(40),
+    supabase.from("readiness_scores").select("*").eq("user_id", canonicalUserId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(40),
+    supabase.from("wellness_logs").select("*").eq("user_id", canonicalUserId).eq("sport_type", sportType).order("created_at", { ascending: false }).limit(40),
+    supabase
+      .from("attempts")
+      .select("id,score,topic,mode,module,created_at,sport_type,exam_result_id,exam_results!inner(id,user_id)")
+      .eq("user_id", canonicalUserId)
+      .eq("exam_results.user_id", canonicalUserId)
+      .eq("sport_type", sportType)
+      .not("exam_result_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(80),
   ]);
 
   const primaryError = checkinsRes.error || sessionsRes.error || testsRes.error || readinessRes.error || wellnessRes.error;
@@ -135,7 +148,7 @@ function getRequestedSportType(request: Request) {
 
 async function saveCheckIn(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
-  userId: string,
+  canonicalUserId: string,
   input: CheckInInput = {},
   requestedSportType = DEFAULT_SPORT_TYPE
 ) {
@@ -152,7 +165,7 @@ async function saveCheckIn(
     .from("performance_checkins")
     .insert([
       {
-        user_id: userId,
+        user_id: canonicalUserId,
         date: today,
         checkin_type: payload.checkin_type,
         has_match_today: payload.has_match_today,
@@ -189,7 +202,7 @@ async function saveCheckIn(
   const writes = [
     supabase.from("readiness_scores").insert([
       {
-        user_id: userId,
+        user_id: canonicalUserId,
         checkin_id: checkinId,
         appointment_id: input.appointmentId || null,
         fixture_id: input.fixtureId || null,
@@ -203,7 +216,7 @@ async function saveCheckIn(
     ]),
     supabase.from("wellness_logs").insert([
       {
-        user_id: userId,
+        user_id: canonicalUserId,
         checkin_id: checkinId,
         appointment_id: input.appointmentId || null,
         fixture_id: input.fixtureId || null,
@@ -228,7 +241,7 @@ async function saveCheckIn(
     writes.push(
       supabase.from("performance_sessions").insert([
         {
-          user_id: userId,
+          user_id: canonicalUserId,
           checkin_id: checkinId,
           appointment_id: input.appointmentId || null,
           fixture_id: input.fixtureId || null,
@@ -255,7 +268,7 @@ async function saveCheckIn(
   if (secondaryError) throw secondaryError;
 }
 
-async function savePhysicalTest(supabase: ReturnType<typeof createSupabaseAdminClient>, userId: string, input: PhysicalTestInput = {}) {
+async function savePhysicalTest(supabase: ReturnType<typeof createSupabaseAdminClient>, canonicalUserId: string, input: PhysicalTestInput = {}) {
   const score = Number(input.score);
   if (!input.testType || !Number.isFinite(score)) {
     throw new Error("Carga un test y una marca valida.");
@@ -264,7 +277,7 @@ async function savePhysicalTest(supabase: ReturnType<typeof createSupabaseAdminC
   const now = new Date().toISOString();
   const { error } = await supabase.from("physical_tests").insert([
     {
-      user_id: userId,
+      user_id: canonicalUserId,
       test_type: input.testType,
       score,
       unit: input.unit || null,

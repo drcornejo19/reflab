@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, Loader2, Minus, Plus, X } from "lucide-react";
+import { loadAvatarCropImage } from "@/lib/profile/avatarCropperImage";
 
 const cropSize = 300;
 const outputSize = 512;
@@ -27,6 +28,7 @@ export function AvatarCropperModal({
   onSave,
 }: AvatarCropperModalProps) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1.12);
   const [offset, setOffset] = useState<Point>({ x: 0, y: 0 });
   const [error, setError] = useState<string | null>(null);
@@ -37,26 +39,25 @@ export function AvatarCropperModal({
     startOffset: Point;
   } | null>(null);
 
-  const sourceUrl = useMemo(() => URL.createObjectURL(file), [file]);
-
-  useEffect(() => () => URL.revokeObjectURL(sourceUrl), [sourceUrl]);
-
   useEffect(() => {
-    if (!sourceUrl) return;
+    setImage(null);
+    setSourceUrl(null);
+    setError(null);
 
-    const nextImage = new Image();
-    nextImage.onload = () => {
-      setImage(nextImage);
-      setOffset({ x: 0, y: 0 });
-      setZoom(1.12);
-      setError(null);
-    };
-    nextImage.onerror = () => {
-      setImage(null);
-      setError("No se pudo abrir la imagen.");
-    };
-    nextImage.src = sourceUrl;
-  }, [sourceUrl]);
+    return loadAvatarCropImage(file, {
+      onLoad(nextImage, nextSourceUrl) {
+        setImage(nextImage);
+        setSourceUrl(nextSourceUrl);
+        setOffset({ x: 0, y: 0 });
+        setZoom(1.12);
+      },
+      onError() {
+        setImage(null);
+        setSourceUrl(null);
+        setError("No se pudo abrir la imagen.");
+      },
+    });
+  }, [file]);
 
   const metrics = useMemo(() => {
     if (!image) return null;

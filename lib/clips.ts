@@ -5,8 +5,8 @@ import {
   isTopicAllowedForSport,
   normalizeSportType,
   type SportType,
-} from "@/lib/sports";
-import type { Clip, TrainingMode } from "@/lib/types";
+} from "./sports.ts";
+import type { Clip, TrainingMode } from "./types.ts";
 
 export type ClipRecord = Clip & {
   sub_type?: string | null;
@@ -16,6 +16,7 @@ export type ClipRecord = Clip & {
   category?: string | null;
   training_type?: string | null;
   is_active?: boolean | null;
+  status?: "draft" | "published" | "archived" | null;
   updated_at?: string | null;
 };
 
@@ -54,7 +55,6 @@ export type ClipValidationResult = {
 };
 
 type SupabaseLike = SupabaseClient;
-type ClipSaveError = { code?: string; message?: string; details?: string };
 
 const englishTerms = [
   "english",
@@ -143,80 +143,6 @@ export async function getEnglishClips(supabase: SupabaseLike) {
     .sort(compareByCreatedAtAsc);
 
   return { data: clips, error: null };
-}
-
-export async function insertClipDecision(supabase: SupabaseLike, payload: ClipDecisionPayload) {
-  const primary = stripUndefined(payload);
-  const primaryResult = await supabase.from("clips").insert([primary]).select("*").maybeSingle();
-
-  if (!primaryResult.error) {
-    return {
-      ...primaryResult,
-      error: primaryResult.data
-        ? null
-        : {
-            message:
-              "No se pudo confirmar la creacion del clip. Revisa permisos de lectura de Admin en Supabase.",
-          },
-    };
-  }
-
-  return primaryResult;
-}
-
-export async function updateClipDecision(
-  supabase: SupabaseLike,
-  clipId: string,
-  payload: ClipDecisionPayload
-) {
-  const primary = stripUndefined({
-    ...payload,
-    updated_at: new Date().toISOString(),
-  });
-
-  const primaryResult = await supabase
-    .from("clips")
-    .update(primary)
-    .eq("id", clipId)
-    .select("*")
-    .maybeSingle();
-
-  if (!primaryResult.error) {
-    return {
-      ...primaryResult,
-      error: primaryResult.data
-        ? null
-        : {
-            message:
-              "No se actualizo ningun clip. Revisa permisos de administrador o que el clip exista en Supabase.",
-          },
-    };
-  }
-
-  if (!isSchemaCompatibilityError(primaryResult.error)) return primaryResult;
-
-  const fallbackResult = await supabase
-    .from("clips")
-    .update(stripUndefined(payload))
-    .eq("id", clipId)
-    .select("*")
-    .maybeSingle();
-
-  return {
-    ...fallbackResult,
-    error:
-      fallbackResult.error ??
-      (fallbackResult.data
-        ? null
-        : {
-            message:
-              "No se actualizo ningun clip. Revisa permisos de administrador o que el clip exista en Supabase.",
-          }),
-  };
-}
-
-export async function deleteClipById(supabase: SupabaseLike, clipId: string) {
-  return supabase.from("clips").delete().eq("id", clipId);
 }
 
 export function validateClipDecision(payload: ClipDecisionPayload): ClipValidationResult {
@@ -335,21 +261,4 @@ export function isEnglishClip(clip: Partial<ClipRecord>) {
 
 function compareByCreatedAtAsc(a: ClipRecord, b: ClipRecord) {
   return new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime();
-}
-
-function stripUndefined<T extends object>(payload: T) {
-  return Object.fromEntries(
-    Object.entries(payload).filter(([, value]) => value !== undefined)
-  ) as Partial<T>;
-}
-
-function isSchemaCompatibilityError(error: ClipSaveError) {
-  const message = `${error.code ?? ""} ${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
-
-  return (
-    message.includes("pgrst204") ||
-    message.includes("could not find") ||
-    message.includes("schema cache") ||
-    message.includes("column")
-  );
 }

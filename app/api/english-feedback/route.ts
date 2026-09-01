@@ -1,27 +1,28 @@
 import { NextResponse } from "next/server";
 import { calculateCoachConfidence } from "@/lib/coach/confidence";
+import {
+  CommunicationFeedbackError,
+  createCommunicationFeedbackDatabaseDependencies,
+  submitCanonicalCommunicationFeedback,
+  type CanonicalCommunicationInput,
+  type CommunicationFeedbackMode,
+} from "@/lib/coach/communicationFeedback";
 import { coachErrorResponse, CoachEvidenceError } from "@/lib/coach/errors";
 import {
   loadCoachClipEvidence,
   serializeEvidenceForPrompt,
 } from "@/lib/coach/evidence";
 import { runCoachModel } from "@/lib/coach/gateway";
-import { asBoolean, asRecord, asString } from "@/lib/coach/input";
 import { coachCommunicationSchema } from "@/lib/coach/schemas";
 import {
   prepareCoachRequest,
   readCoachJson,
 } from "@/lib/coach/security";
 import { feedbackLanguageInstruction } from "@/lib/feedbackLanguage";
-import {
-  DEFAULT_SPORT_TYPE,
-  normalizeSportType,
-} from "@/lib/sports";
+import type { CoachEvidence } from "@/lib/coach/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-type FeedbackMode = "decision_explanation_es" | "ifab_english";
 
 const FEATURE = "communication_feedback" as const;
 const PROMPT_VERSION = "communication-feedback-v1";
@@ -32,80 +33,92 @@ export async function POST(request: Request) {
   try {
     const context = await prepareCoachRequest(request, FEATURE);
     requestId = context.requestId;
-    const body = asRecord(await readCoachJson(request));
-    const mode: FeedbackMode =
-      body.mode === "decision_explanation_es"
-        ? "decision_explanation_es"
-        : "ifab_english";
-    const clipId = asString(body.clipId, "clipId", { maxLength: 100 });
-    const sportType = normalizeSportType(body.sportType, DEFAULT_SPORT_TYPE);
-    const answer = asString(body.answer, "answer", { maxLength: 4_000 });
-    const hasVoiceRecording =
-      asBoolean(body.hasVoiceRecording, "hasVoiceRecording") ?? false;
-    const feedbackLanguage = asString(
-      body.feedbackLanguage,
-      "feedbackLanguage",
-      { maxLength: 10 }
+    const database = createCommunicationFeedbackDatabaseDependencies(
+      context.supabase
     );
-    const evidence = await loadCoachClipEvidence(
-      context.supabase,
-      clipId ? [clipId] : [],
-      sportType
+    const result = await submitCanonicalCommunicationFeedback(
+      context.userId,
+      await readCoachJson(request),
+      {
+        ...database,
+        loadEvidence: (clipId, sportType) =>
+          loadCoachClipEvidence(context.supabase, [clipId], sportType, {
+            requirePublishedActive: true,
+          }),
+        generate: (input, evidence) =>
+          generateCommunicationFeedback(
+            context,
+            input,
+            evidence
+          ),
+      }
     );
 
-    if (clipId && evidence.length === 0) {
-      throw new CoachEvidenceError(
-        `Communication clip ${clipId} was not found for ${sportType}.`
+    return NextResponse.json({ ...result, saved: true });
+  } catch (error) {
+    if (error instanceof CommunicationFeedbackError) {
+      if (error.diagnostic) {
+        console.error("REFLAB_COMMUNICATION_PERSISTENCE_ERROR", {
+          requestId: requestId ?? null,
+          ...error.diagnostic,
+        });
+      }
+      return NextResponse.json(
+        { error: error.publicMessage, code: error.code },
+        { status: error.status }
       );
     }
-
-    const confidence = calculateCoachConfidence({
-      evidence:
-        answer && !hasVoiceRecording
-          ? evidence.map((item) => item.reference)
-          : [],
-    });
-    const languageInstruction = feedbackLanguageInstruction(feedbackLanguage);
-    const result = await runCoachModel(context.supabase, {
-      userId: context.userId,
-      feature: FEATURE,
-      sportType,
-      promptVersion: PROMPT_VERSION,
-      confidence,
-      evidence,
-      outputSchema: coachCommunicationSchema,
-      instructions: buildInstructions(mode, languageInstruction),
-      input: JSON.stringify(
-        {
-          mode,
-          answer:
-            answer ??
-            (hasVoiceRecording
-              ? "Existe una grabacion sin transcripcion; no es posible evaluar su contenido."
-              : "Sin respuesta textual."),
-          hasVoiceRecording,
-          verifiedEvidence: serializeEvidenceForPrompt(evidence),
-          confidence,
-        },
-        null,
-        2
-      ),
-    });
-
-    return NextResponse.json({
-      feedback: result.value.feedback,
-      scores: result.value.scores,
-      confidence: result.confidence,
-      evidence: result.evidence,
-      coachRunId: result.runId,
-    });
-  } catch (error) {
     return coachErrorResponse(error, requestId);
   }
 }
 
+async function generateCommunicationFeedback(
+  context: Awaited<ReturnType<typeof prepareCoachRequest>>,
+  input: CanonicalCommunicationInput,
+  evidence: CoachEvidence[]
+) {
+  if (evidence.length === 0) {
+    throw new CoachEvidenceError(
+      `Communication clip was not found for ${input.sportType}.`
+    );
+  }
+  const confidence = calculateCoachConfidence({
+    evidence: input.answer
+      ? evidence.map((item) => item.reference)
+      : [],
+  });
+  const languageInstruction = feedbackLanguageInstruction(
+    input.feedbackLanguage
+  );
+
+  return runCoachModel(context.supabase, {
+    userId: context.userId,
+    feature: FEATURE,
+    sportType: input.sportType,
+    promptVersion: PROMPT_VERSION,
+    confidence,
+    evidence,
+    outputSchema: coachCommunicationSchema,
+    instructions: buildInstructions(input.mode, languageInstruction),
+    input: JSON.stringify(
+      {
+        mode: input.mode,
+        answer:
+          input.answer ??
+          "Existe una grabacion sin transcripcion; no es posible evaluar su contenido.",
+        hasVoiceRecording: input.hasVoiceRecording,
+        oralEvidenceAvailable: false,
+        verifiedEvidence: serializeEvidenceForPrompt(evidence),
+        confidence,
+      },
+      null,
+      2
+    ),
+  });
+}
+
 function buildInstructions(
-  mode: FeedbackMode,
+  mode: CommunicationFeedbackMode,
   languageInstruction: string
 ) {
   const target =

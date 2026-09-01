@@ -1,19 +1,24 @@
-import fs from "node:fs";
-import process from "node:process";
 import { createClient } from "@supabase/supabase-js";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  authorizeIsolatedSupabaseTarget,
+  SKIPPED_ISOLATED_TARGET_MESSAGE,
+} from "./isolated-supabase-target.mjs";
 
-loadLocalEnvironment();
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error(
-    "Faltan NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY."
-  );
+const target = authorizeIsolatedSupabaseTarget([
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "SUPABASE_SECRET_KEY",
+]);
+if (!target.allowed) {
+  console.log(SKIPPED_ISOLATED_TARGET_MESSAGE);
+  process.exit(0);
 }
 
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const secretKey = process.env.SUPABASE_SECRET_KEY;
+
+const supabase = createClient(supabaseUrl, secretKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false,
@@ -60,42 +65,36 @@ for (const [table, columns] of probes) {
   }
 }
 
-const { error: rpcError } = await supabase.rpc("admin_set_user_plan", {
-  actor_user_id: "diagnostic_invalid_actor",
-  target_user_id: "diagnostic_invalid_target",
-  new_plan_key: "basic",
-  change_reason: "schema verification without writes",
-});
+const migrationSql = readFileSync(
+  resolve(
+    "supabase/migrations/202608110001_canonical_admin_user_access.sql"
+  ),
+  "utf8"
+);
+const expectedRpcNames = [
+  "admin_set_canonical_user_plan",
+  "admin_set_canonical_global_role",
+];
 
-if (
-  rpcError?.message !== "Only a canonical Super Admin can change plans"
-) {
-  failed = true;
-  console.error(
-    `[FAIL] RPC admin_set_user_plan inesperada: ${rpcError?.message ?? "sin error"}`
+for (const rpcName of expectedRpcNames) {
+  const escapedName = rpcName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const contract = new RegExp(
+    `create(?:\\s+or\\s+replace)?\\s+function\\s+public\\.${escapedName}\\b[\\s\\S]*?` +
+      `revoke\\s+all\\s+on\\s+function\\s+public\\.${escapedName}\\b[\\s\\S]*?` +
+      `grant\\s+execute\\s+on\\s+function\\s+public\\.${escapedName}\\b[\\s\\S]*?to\\s+service_role`,
+    "i"
   );
-} else {
-  console.log("[PASS] RPC admin_set_user_plan canónica y sin escrituras.");
+
+  if (!contract.test(migrationSql)) {
+    failed = true;
+    console.error(`[FAIL] contrato RPC canonico incompleto: ${rpcName}.`);
+  } else {
+    console.log(`[PASS] contrato RPC canonico versionado: ${rpcName}.`);
+  }
 }
 
 if (failed) {
-  throw new Error("La reconciliación administrativa no está completa.");
+  throw new Error("La reconciliacion administrativa no esta completa.");
 }
 
-console.log("Verificación del esquema administrativo completada.");
-
-function loadLocalEnvironment() {
-  if (!fs.existsSync(".env.local")) return;
-
-  for (const line of fs.readFileSync(".env.local", "utf8").split(/\r?\n/)) {
-    const match = line.match(/^([^#=]+)=(.*)$/);
-    if (!match) continue;
-
-    const key = match[1].trim();
-    const value = match[2].trim().replace(/^(['"])(.*)\1$/, "$2");
-
-    if (!process.env[key]) {
-      process.env[key] = value;
-    }
-  }
-}
+console.log("Verificacion read-only del esquema administrativo completada.");

@@ -2,16 +2,27 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { calculateScore, normalizeDiscipline } from "@/lib/scoring";
-import { insertAttemptSafely } from "@/lib/attemptPersistence";
+import { calculateFieldScore } from "@/lib/scoring";
 import { getBrowserFeedbackLanguage } from "@/lib/feedbackLanguage";
-import { resolveRefCardId } from "@/lib/refCard";
 import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
 import type { Clip } from "@/lib/types";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
-import { useSupabase } from "@/components/SupabaseProvider";
-import { FREE_WEEKLY_CLIP_LIMIT, getCurrentWeekStart } from "@/lib/subscription";
+import { FREE_WEEKLY_CLIP_LIMIT } from "@/lib/subscription";
 import { useUserRole } from "@/lib/useUserRole";
+import {
+  createTrainingSubmissionId,
+  loadTrainingUsage,
+  submitCanonicalFieldAttempt,
+  type CanonicalScoredAttemptPresentation,
+} from "@/lib/training/attemptClient";
+import {
+  createFieldAiFeedbackRequest,
+  isSameFieldFeedbackContext,
+  isSameFieldFeedbackRequest,
+  type FieldFeedbackContext,
+  type FieldFeedbackPayload,
+  type FieldFeedbackRequestIdentity,
+} from "@/lib/training/fieldFeedbackClient";
 
 type ExamAnswer = {
   clipId: string;
@@ -72,7 +83,6 @@ function createInitialClipDecisionState(clip: ClipWithDetails): ClipDecisionStat
     discipline: "",
   };
 }
-
 function getSavedClipPlayCount(clipId: string) {
   if (typeof window === "undefined") return 0;
 
@@ -85,7 +95,6 @@ export function ClipExercise({
   onComplete,
   onBack,
 }: ClipExerciseProps) {
-  const supabase = useSupabase();
   const typedClip = clip as ClipWithDetails;
   const initialDecisionState = createInitialClipDecisionState(typedClip);
 
@@ -97,13 +106,29 @@ export function ClipExercise({
   const [restart, setRestart] = useState(() => initialDecisionState.restart);
   const [discipline, setDiscipline] = useState(() => initialDecisionState.discipline);
   const [justification, setJustification] = useState("");
-  const [result, setResult] = useState<number | null>(null);
+  const [result, setResult] =
+    useState<CanonicalScoredAttemptPresentation | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
   const [playCount, setPlayCount] = useState(() => getSavedClipPlayCount(typedClip.id));
   const [weeklyClipCount, setWeeklyClipCount] = useState(0);
+  const savingAttemptRef = useRef(false);
+  const mountedRef = useRef(true);
+  const activeAttemptIdRef = useRef<string | null>(null);
+  const activeAiRequestRef = useRef<{
+    context: FieldFeedbackRequestIdentity;
+    request: ReturnType<typeof createFieldAiFeedbackRequest>;
+  } | null>(null);
+  const currentFeedbackContextRef = useRef<FieldFeedbackContext>({
+    clipId: typedClip.id,
+    topic: typedClip.topic,
+  });
+  currentFeedbackContextRef.current = {
+    clipId: typedClip.id,
+    topic: typedClip.topic,
+  };
 
   const isOffside = typedClip.topic === "Offside";
   const isVarClip = typedClip.topic === "VAR";
@@ -130,23 +155,30 @@ export function ClipExercise({
         return;
       }
 
-      const { count, error } = await supabase
-        .from("attempts")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .gte("created_at", getCurrentWeekStart().toISOString());
-
-      if (error) {
-        console.warn("No se pudo calcular el limite semanal Basic:", error.message);
+      try {
+        const usage = await loadTrainingUsage(
+          typedClip.sport_type ?? DEFAULT_SPORT_TYPE
+        );
+        setWeeklyClipCount(usage.weeklyUsed);
+      } catch {
+        console.warn("No se pudo calcular el limite semanal Basic.");
         setWeeklyClipCount(0);
-        return;
       }
-
-      setWeeklyClipCount(count ?? 0);
     }
 
     loadWeeklyUsage();
-  }, [isPro, supabase, user]);
+  }, [isPro, typedClip.sport_type, user]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      activeAttemptIdRef.current = null;
+      activeAiRequestRef.current?.request.abort();
+      activeAiRequestRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     const savedCount = Number(
@@ -160,8 +192,8 @@ export function ClipExercise({
       videoRef.current.pause();
       videoRef.current.currentTime = 0;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- The reset only needs to react to clip identity changes.
-  }, [typedClip.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Reset only when the clip scoring context changes.
+  }, [typedClip.id, typedClip.topic]);
 
   useEffect(() => {
     if (typedClip.topic === "Offside" && typedClip.sub_type === "no_offside") {
@@ -204,7 +236,7 @@ export function ClipExercise({
   }
 
   async function submit() {
-    if (!canSubmit || isSaving) return;
+    if (!canSubmit || isSaving || savingAttemptRef.current) return;
 
     if (freeClipLimitReached) {
       setSaveError("Has completado tus clips gratuitos de esta semana. Desbloquea RefLab Pro para seguir entrenando sin limites.");
@@ -215,7 +247,6 @@ export function ClipExercise({
       foul,
       restart,
       discipline,
-      var: typedClip.correct_var,
     };
 
     const correctAnswer = {
@@ -225,13 +256,7 @@ export function ClipExercise({
       var: typedClip.correct_var,
     };
 
-    const score = calculateScore(userAnswer, correctAnswer);
-    const technicalCorrect = foul === typedClip.correct_foul;
-    const restartCorrect = restart === typedClip.correct_restart;
-    const disciplineCorrect =
-      normalizeDiscipline(discipline) ===
-      normalizeDiscipline(typedClip.correct_discipline);
-
+    const score = calculateFieldScore(userAnswer, correctAnswer);
     if (examMode && onComplete) {
       onComplete({
         clipId: typedClip.id,
@@ -250,123 +275,102 @@ export function ClipExercise({
       return;
     }
 
+    savingAttemptRef.current = true;
     setIsSaving(true);
     setSaveError(null);
+    invalidateAiFeedback();
     setAiFeedback(null);
 
-    const profileRes = await supabase
-      .from("user_profiles")
-      .select("ref_card_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    const refCardId = resolveRefCardId(user.id, profileRes.data);
-
-    const savedAttempt = await insertAttemptSafely(
-      supabase,
-      {
-        user_id: user.id,
-        sport_type: typedClip.sport_type ?? DEFAULT_SPORT_TYPE,
-        activity_type: isVarClip ? "var_training" : "video_training",
-        ref_card_id: refCardId,
-        clip_id: typedClip.id,
-        clip_title: typedClip.title,
-        module: isVarClip ? "var_lab" : "decision",
-        mode: isVarClip ? "var" : "training",
-        foul,
-        restart,
-        discipline,
-        var_review: typedClip.correct_var,
-        score,
-        topic: typedClip.topic,
-        subtopic: typedClip.subtopic ?? typedClip.sub_type ?? null,
-        rule_reference: typedClip.rule_reference ?? null,
-        season: typedClip.season ?? "2026/27",
-        source_version:
-          typedClip.source_version ?? "RefLab football_11 video training",
-        difficulty: typedClip.difficulty,
-        is_correct: score >= 85,
-        selected_decision: decisionLabel(foul),
-        correct_decision: decisionLabel(typedClip.correct_foul),
-        selected_restart: restart,
-        correct_restart: typedClip.correct_restart,
-        selected_discipline: discipline,
-        correct_discipline: typedClip.correct_discipline,
-        technical_correct: technicalCorrect,
-        restart_correct: restartCorrect,
-        discipline_correct: disciplineCorrect,
-        disciplinary_correct: disciplineCorrect,
-        var_correct: null,
-        criterion_result: {
-          technical: technicalCorrect,
-          restart: restartCorrect,
-          discipline: disciplineCorrect,
-        },
-      },
-      {
-        user_id: user.id,
-        sport_type: typedClip.sport_type ?? DEFAULT_SPORT_TYPE,
-        activity_type: isVarClip ? "var_training" : "video_training",
-        clip_title: typedClip.title,
-        foul,
-        restart,
-        discipline,
-        var_review: typedClip.correct_var,
-        score,
-        topic: typedClip.topic,
-        subtopic: typedClip.subtopic ?? typedClip.sub_type ?? null,
-        rule_reference: typedClip.rule_reference ?? null,
-        season: typedClip.season ?? "2026/27",
-        source_version:
-          typedClip.source_version ?? "RefLab football_11 video training",
-        difficulty: typedClip.difficulty,
-        technical_correct: technicalCorrect,
-        restart_correct: restartCorrect,
-        discipline_correct: disciplineCorrect,
-        disciplinary_correct: disciplineCorrect,
-        var_correct: null,
-      },
-    );
-
-    if (!savedAttempt.saved) {
-      setSaveError(savedAttempt.error ?? "No se pudo guardar el intento.");
-      setIsSaving(false);
-      return;
-    }
-
-    setResult(score);
-    if (!isPro) setWeeklyClipCount((prev) => prev + 1);
-    setIsSaving(false);
+    const submissionContext = currentFeedbackContextRef.current;
+    let persistedPresentation: CanonicalScoredAttemptPresentation | null = null;
 
     try {
-      setLoadingAi(true);
-
-      const aiRes = await fetch("/api/ai-feedback", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          clipId: typedClip.id,
-          sportType: DEFAULT_SPORT_TYPE,
-          userAnswer,
-          justification,
-          feedbackLanguage: getBrowserFeedbackLanguage(),
-        }),
+      const presentation = await submitCanonicalFieldAttempt({
+        kind: "field_clip",
+        submissionId: createTrainingSubmissionId(),
+        clipId: typedClip.id,
+        answer: { foul, restart, discipline },
       });
 
-      const aiData = await aiRes.json();
-
-      if (!aiRes.ok) {
-        setAiFeedback("No se pudo generar el feedback IA.");
-      } else {
-        setAiFeedback(aiData.feedback ?? "Sin feedback IA disponible.");
+      if (
+        !mountedRef.current ||
+        !isSameFieldFeedbackContext(
+          submissionContext,
+          currentFeedbackContextRef.current
+        )
+      ) {
+        return;
       }
+
+      activeAttemptIdRef.current = presentation.result.attemptId;
+      persistedPresentation = presentation;
+      setResult(presentation);
+      if (!isPro) setWeeklyClipCount((prev) => prev + 1);
     } catch (error) {
-      console.error("Error generando feedback IA:", error);
-      setAiFeedback("No se pudo generar el feedback IA.");
+      if (mountedRef.current) {
+        setSaveError(
+          error instanceof Error ? error.message : "No se pudo guardar el intento."
+        );
+      }
+      return;
     } finally {
-      setLoadingAi(false);
+      savingAttemptRef.current = false;
+      if (mountedRef.current) setIsSaving(false);
     }
+
+    startAiFeedback(persistedPresentation.result.attemptId, {
+      clipId: typedClip.id,
+      sportType: DEFAULT_SPORT_TYPE,
+      userAnswer,
+      justification,
+      feedbackLanguage: getBrowserFeedbackLanguage(),
+    });
+  }
+
+  function startAiFeedback(attemptId: string, payload: FieldFeedbackPayload) {
+    const context = {
+      attemptId,
+      ...currentFeedbackContextRef.current,
+    };
+    const request = createFieldAiFeedbackRequest(payload);
+
+    activeAttemptIdRef.current = attemptId;
+    activeAiRequestRef.current?.request.abort();
+    activeAiRequestRef.current = { context, request };
+    setLoadingAi(true);
+
+    void request.promise
+      .then((outcome) => {
+        if (!isCurrentAiFeedbackRequest(context, request)) return;
+        setAiFeedback(outcome.feedback);
+      })
+      .finally(() => {
+        if (!isCurrentAiFeedbackRequest(context, request)) return;
+        activeAiRequestRef.current = null;
+        setLoadingAi(false);
+      });
+  }
+
+  function isCurrentAiFeedbackRequest(
+    context: FieldFeedbackRequestIdentity,
+    request: ReturnType<typeof createFieldAiFeedbackRequest>
+  ) {
+    const activeRequest = activeAiRequestRef.current;
+
+    return (
+      mountedRef.current &&
+      activeAttemptIdRef.current === context.attemptId &&
+      activeRequest?.request === request &&
+      isSameFieldFeedbackRequest(context, activeRequest.context) &&
+      isSameFieldFeedbackContext(context, currentFeedbackContextRef.current)
+    );
+  }
+
+  function invalidateAiFeedback() {
+    activeAttemptIdRef.current = null;
+    activeAiRequestRef.current?.request.abort();
+    activeAiRequestRef.current = null;
+    setLoadingAi(false);
   }
 
   function reset(resetVideoCount = false) {
@@ -379,7 +383,7 @@ export function ClipExercise({
     setResult(null);
     setSaveError(null);
     setAiFeedback(null);
-    setLoadingAi(false);
+    invalidateAiFeedback();
 
     if (resetVideoCount) {
       setPlayCount(0);
@@ -396,14 +400,14 @@ export function ClipExercise({
           </p>
 
           <h2 className="mt-5 text-7xl font-black leading-none text-[#6fc11f]">
-            {result}
+            {result.score}
             <span className="text-2xl text-zinc-400">/100</span>
           </h2>
 
           <p className="mt-2 text-2xl font-black">
-            {result >= 85
+            {result.score >= 85
               ? "¡Excelente!"
-              : result >= 60
+              : result.score >= 60
                 ? "Buen intento"
                 : "A revisar"}
           </p>
@@ -466,6 +470,15 @@ export function ClipExercise({
               </div>
             )}
           </div>
+
+          {result.feedback && (
+            <div className="rounded-[22px] border border-[#6fc11f]/25 bg-[#6fc11f]/10 p-5">
+              <h3 className="font-black text-[#b7ff8a]">Feedback del intento</h3>
+              <p className="mt-3 text-sm leading-6 text-zinc-300">
+                {result.feedback}
+              </p>
+            </div>
+          )}
         </section>
       </div>
     );
@@ -800,10 +813,4 @@ function labelFromValue(value?: string | null) {
   };
 
   return dictionary[value] ?? value;
-}
-
-function decisionLabel(value: boolean | null | undefined) {
-  if (value === true) return "Infraccion";
-  if (value === false) return "No infraccion";
-  return "Sin respuesta";
 }

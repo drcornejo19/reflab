@@ -6,7 +6,7 @@ import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { getDisciplineDefinition } from "@/lib/discipline";
-import { type RankingRow } from "@/lib/performance";
+import type { RankingResponse, RankingRow } from "@/lib/ranking/types";
 import { getSportLabel } from "@/lib/sports";
 import { useUserRole } from "@/lib/useUserRole";
 
@@ -22,9 +22,11 @@ export default function RankingPage() {
 
 function RankingPageContent() {
   const { currentDiscipline: sportType } = useDiscipline();
-  const { isPro, loadingRole } = useUserRole();
+  const { canAccessFeature, loadingRole } = useUserRole();
+  const canAccessRanking = canAccessFeature("ref_performance");
   const theme = getDisciplineDefinition(sportType).theme;
   const [ranking, setRanking] = useState<RankingRow[]>([]);
+  const [selfPosition, setSelfPosition] = useState<RankingRow | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -36,20 +38,21 @@ function RankingPageContent() {
       try {
         const response = await fetch(
           `/api/ranking?sport=${encodeURIComponent(sportType)}`,
-          { cache: "no-store" }
+          { cache: "no-store", signal: AbortSignal.timeout(8000) }
         );
-        const data = (await response.json()) as {
-          ranking?: RankingRow[];
+        const data = (await response.json()) as Partial<RankingResponse> & {
           error?: string;
         };
 
-        if (!response.ok) {
+        if (!response.ok || !Array.isArray(data.rows)) {
           throw new Error(data.error ?? "No se pudo cargar el ranking.");
         }
 
-        setRanking(data.ranking ?? []);
+        setRanking(data.rows);
+        setSelfPosition(data.selfPosition ?? null);
       } catch (error) {
         setRanking([]);
+        setSelfPosition(null);
         setLoadError(
           error instanceof Error ? error.message : "No se pudo cargar el ranking."
         );
@@ -58,12 +61,12 @@ function RankingPageContent() {
       }
     }
 
-    if (!loadingRole && isPro) {
+    if (!loadingRole && canAccessRanking) {
       void loadRanking();
     } else if (!loadingRole) {
       setLoading(false);
     }
-  }, [isPro, loadingRole, sportType]);
+  }, [canAccessRanking, loadingRole, sportType]);
   const podium = ranking.slice(0, 3);
   const rest = ranking.slice(3);
 
@@ -77,7 +80,7 @@ function RankingPageContent() {
     );
   }
 
-  if (!isPro) {
+  if (!canAccessRanking) {
     return (
       <AppShell>
         <div className="mx-auto w-full max-w-[980px] space-y-5 overflow-hidden">
@@ -119,9 +122,16 @@ function RankingPageContent() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-            Clasificacion por {getSportLabel(sportType).toLowerCase()} segun promedio, mejor score, entrenamientos y evaluaciones. La identidad publica respeta la privacidad elegida en Perfil.
+            Clasificacion por {getSportLabel(sportType).toLowerCase()} segun promedio, mejor score y cantidad de evaluaciones oficiales. La identidad publica respeta la privacidad elegida en Perfil.
           </p>
         </header>
+
+        {selfPosition && (
+          <section className="rounded-3xl border border-white/10 bg-[#0b131b] p-5">
+            <p className="text-xs font-black uppercase tracking-[0.25em]" style={{ color: theme.accent }}>Tu posicion</p>
+            <p className="mt-2 text-3xl font-black">#{selfPosition.position}</p>
+          </section>
+        )}
 
 
         {loadError ? (
@@ -130,13 +140,13 @@ function RankingPageContent() {
           </div>
         ) : ranking.length === 0 ? (
           <div className="rounded-3xl border border-white/10 bg-[#0b131b] p-8 text-center text-zinc-400">
-            Todavia no hay intentos registrados para generar ranking en esta disciplina.
+            Todavia no hay evaluaciones oficiales para generar ranking en esta disciplina.
           </div>
         ) : (
           <>
             <section className="grid gap-4 md:grid-cols-3">
               {podium.map((row) => (
-                <PodiumCard key={row.userId} row={row} />
+                <PodiumCard key={`${row.position}-${row.refCardId}`} row={row} />
               ))}
             </section>
 
@@ -164,7 +174,7 @@ function RankingPageContent() {
 
               <div className="space-y-3">
                 {rest.map((row) => (
-                  <RankingItem key={row.userId} row={row} />
+                  <RankingItem key={`${row.position}-${row.refCardId}`} row={row} />
                 ))}
               </div>
             </section>
@@ -203,17 +213,16 @@ function PodiumCard({ row }: { row: RankingRow }) {
         </span>
       </div>
 
-      <h3 className="mt-5 break-words text-xl font-black">{row.name}</h3>
+      <h3 className="mt-5 break-words text-xl font-black">{row.displayName}</h3>
 
       <p className="mt-1 break-words text-xs text-zinc-500">
-        RefCard {row.refCardId} - Ultimo intento: {formatDate(row.lastAttempt)}
+        RefCard {row.refCardId} - Ultima evaluacion: {formatDate(row.lastEvaluationAt)}
       </p>
 
-      <div className="mt-6 grid grid-cols-2 gap-3 text-center min-[420px]:grid-cols-4 md:grid-cols-2 xl:grid-cols-4">
-        <MiniStat label="Prom." value={`${row.avgScore}`} />
+      <div className="mt-6 grid grid-cols-3 gap-3 text-center">
+        <MiniStat label="Prom." value={`${row.averageScore}`} />
         <MiniStat label="Best" value={`${row.bestScore}`} />
-        <MiniStat label="Eval." value={`${row.tests}`} />
-        <MiniStat label="Entr." value={`${row.trainings}`} />
+        <MiniStat label="Eval." value={`${row.evaluations}`} />
       </div>
     </div>
   );
@@ -224,20 +233,19 @@ function RankingItem({ row }: { row: RankingRow }) {
   const theme = getDisciplineDefinition(currentDiscipline).theme;
 
   return (
-    <div className="grid gap-3 rounded-2xl border border-white/10 bg-[#0f1a23] px-4 py-4 text-sm sm:grid-cols-[58px_minmax(0,1fr)_80px_80px_80px_80px] sm:items-center">
+    <div className="grid gap-3 rounded-2xl border border-white/10 bg-[#0f1a23] px-4 py-4 text-sm sm:grid-cols-[58px_minmax(0,1fr)_80px_80px_80px] sm:items-center">
       <div className="text-xl font-black" style={{ color: theme.accent }}>#{row.position}</div>
 
       <div className="min-w-0">
-        <p className="break-words font-black">{row.name}</p>
+        <p className="break-words font-black">{row.displayName}</p>
         <p className="mt-1 break-words text-xs text-zinc-500">
-          RefCard {row.refCardId} - Ultimo intento: {formatDate(row.lastAttempt)}
+          RefCard {row.refCardId} - Ultima evaluacion: {formatDate(row.lastEvaluationAt)}
         </p>
       </div>
 
-      <RankingStat label="Promedio" value={row.avgScore.toString()} green />
+      <RankingStat label="Promedio" value={row.averageScore.toString()} green />
       <RankingStat label="Mejor" value={row.bestScore.toString()} />
-      <RankingStat label="Eval." value={row.tests.toString()} />
-      <RankingStat label="Entr." value={row.trainings.toString()} />
+      <RankingStat label="Eval." value={row.evaluations.toString()} />
     </div>
   );
 }

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireSuperAdminAccess } from "@/lib/adminAuthorization";
+import {
+  requireSuperAdminAccess,
+  requireSuperAdminReadAccess,
+} from "@/lib/adminAuthorization";
 import {
   getGoverningBodyForSport,
   isTopicAllowedForSport,
@@ -13,7 +16,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const access = await requireSuperAdminAccess();
+  const access = await requireSuperAdminReadAccess();
   if (access.response) return access.response;
 
   const { data, error } = await access.supabase

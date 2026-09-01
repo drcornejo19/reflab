@@ -8,9 +8,9 @@ import {
   type RulesExamResultRecord,
   type SummaryMetric,
   type TopicMetric,
-} from "@/lib/performance";
-import { getDisciplineAction, getDisciplineRoute } from "@/lib/discipline";
-import { getRadarAxesForSport, type MetricFieldKey } from "@/lib/sportMetrics";
+} from "./performance.ts";
+import { getDisciplineAction, getDisciplineRoute } from "./discipline.ts";
+import { getRadarAxesForSport, type MetricFieldKey } from "./sportMetrics.ts";
 import {
   DEFAULT_SPORT_TYPE,
   getSportLabel,
@@ -18,7 +18,7 @@ import {
   normalizeSportTopic,
   normalizeSportType,
   type SportType,
-} from "@/lib/sports";
+} from "./sports.ts";
 
 export type SportCriterionKey =
   | "technical"
@@ -179,12 +179,14 @@ export function buildSportPerformanceDataset({
   rulesExamResults,
   clips = [],
   sportType = DEFAULT_SPORT_TYPE,
+  validatedOfficialExamResultIds,
 }: {
   attempts: AttemptRecord[];
   examResults: ExamResultRecord[];
   rulesExamResults: RulesExamResultRecord[];
   clips?: PerformanceClipRecord[];
   sportType?: SportType;
+  validatedOfficialExamResultIds?: ReadonlySet<string>;
 }) {
   const items: SportPerformanceItem[] = [];
   const sessions: PerformanceSession[] = [];
@@ -203,9 +205,15 @@ export function buildSportPerformanceDataset({
     if (normalizeSportType(attempt.sport_type) !== sportType) return;
 
     const score = cleanScore(attempt.score);
+    const examResultId = attempt.exam_result_id?.trim() ?? "";
+    const isValidatedOfficialAttempt = Boolean(
+      examResultId && validatedOfficialExamResultIds?.has(examResultId)
+    );
     const clipId = attempt.clip_id?.trim() ?? "";
     const clip = clipId ? clipMap.get(clipId) : undefined;
-    const isExamAttempt = String(attempt.mode ?? "").toLowerCase() === "exam";
+    const isExamAttempt =
+      isValidatedOfficialAttempt ||
+      String(attempt.mode ?? "").toLowerCase() === "exam";
     const hasMissingClip = hasClipIndex && clipId && !clip;
 
     if (hasMissingClip) {
@@ -228,14 +236,17 @@ export function buildSportPerformanceDataset({
     }
 
     const storedTopic = normalizeSportTopic(attempt.topic, sportType);
-    const resolvedTopic = getClipTopic(clip, sportType) || attempt.topic;
+    const resolvedTopic = isValidatedOfficialAttempt
+      ? attempt.topic
+      : getClipTopic(clip, sportType) || attempt.topic;
     const topic = normalizeSportTopic(resolvedTopic, sportType);
     const topicValid = isRadarTopicValid(
       topic,
       clip,
       hasClipIndex,
       storedTopic,
-      sportType
+      sportType,
+      isValidatedOfficialAttempt
     );
     const date = attempt.created_at ?? "";
     const moduleKey = normalizeModule(
@@ -459,7 +470,7 @@ export function getSportTopicPerformance(
         correct,
         errors,
         accuracy,
-        avgScore: average(scores),
+        avgScore: averageToHundredths(scores),
         lastScore:
           sortByDateDesc(topicItems).find((item) => isNumber(item.score))?.score ??
           null,
@@ -966,9 +977,11 @@ function isRadarTopicValid(
   clip: PerformanceClipRecord | undefined,
   hasClipIndex: boolean,
   storedTopic: string,
-  sportType: SportType
+  sportType: SportType,
+  isValidatedOfficialAttempt = false
 ) {
   const radarTopics = new Set(getSportTopicLabels(sportType));
+  if (isValidatedOfficialAttempt) return radarTopics.has(topic);
   if (!radarTopics.has(topic)) return sportType === "football_11";
   if (!hasClipIndex) return false;
   if (!clip || !isActiveClip(clip)) return false;
@@ -1113,6 +1126,15 @@ function dateMs(value?: string | null) {
 function average(values: number[]) {
   if (values.length === 0) return null;
   return Math.round(values.reduce((acc, value) => acc + value, 0) / values.length);
+}
+
+function averageToHundredths(values: number[]) {
+  if (values.length === 0) return null;
+  return (
+    Math.round(
+      (values.reduce((acc, value) => acc + value, 0) / values.length) * 100
+    ) / 100
+  );
 }
 
 function isNumber(value: unknown): value is number {
