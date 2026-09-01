@@ -684,7 +684,7 @@ test("migration manifest covers every local migration and distinguishes adoption
   const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
   const localVersions = readdirSync(resolve(repositoryRoot, "supabase", "migrations"))
     .filter((name) => name.endsWith(".sql"))
-    .map((name) => name.slice(0, 12))
+    .map((name) => name.split("_", 1)[0])
     .sort();
   assert.deepEqual(migrationManifest.map((entry) => entry.version).sort(), localVersions);
   assert.ok(migrationManifest.some((entry) => entry.classification === "legacy_historical_not_for_replay"));

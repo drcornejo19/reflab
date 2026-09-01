@@ -62,13 +62,16 @@ const canonicalMigrationManifest = [
   ["202608310004", "production_adoption_semantic_audit", "production_adoption_audit"],
   ["202608310005", "production_adoption_canonical_runtime_prerequisites", "production_adoption_bridge"],
   ["202608310006", "production_adoption_canonical_runtime_installed", "production_adoption_bridge"],
+  ["20260901064236", "production_adoption_identity_security_bridge", "production_adoption_security"],
+  ["20260901064245", "production_adoption_core_policy_reconciliation", "production_adoption_security"],
+  ["20260901064249", "production_adoption_browser_privilege_reconciliation", "production_adoption_security"],
 ].map(([version, name, classification]) => ({
   version,
   name,
   classification,
   productionAction: classification === "incremental_requires_adoption"
     ? "MANUAL_ADOPTION_AFTER_ALL_GATES"
-    : classification === "production_adoption_bridge" || classification === "production_adoption_audit"
+    : classification === "production_adoption_bridge" || classification === "production_adoption_audit" || classification === "production_adoption_security"
       ? "MANUAL_PHASED_ADOPTION_AFTER_PHASE0_EVIDENCE"
       : "NEVER_EXECUTE_IN_PRODUCTION",
 }));
