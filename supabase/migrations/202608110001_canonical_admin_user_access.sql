@@ -1,5 +1,6 @@
 -- Canonical, server-only global role and individual plan administration.
--- This migration must run after 202608030001_development_identity_resolution.sql.
+-- Production adoption requires the reviewed Phase 2B prerequisites. It never
+-- depends on the Development-only identity-resolution chain.
 
 begin;
 
@@ -29,6 +30,39 @@ begin
       and not role.rolbypassrls
   ) then
     raise exception 'Canonical RLS owner is missing or unsafe'
+      using errcode = '55000';
+  end if;
+
+  if pg_catalog.to_regclass('reflab_meta.production_adoption_state') is not null then
+    if (select pg_catalog.count(*) from reflab_meta.reflab_schema_state) <> 0
+       or (select pg_catalog.count(*) from reflab_meta.production_adoption_state) <> 3
+       or not exists (
+         select 1
+         from reflab_meta.production_adoption_state state
+         where state.phase_order = 3
+           and state.phase_key = 'psychology_notification_prerequisites'
+       ) then
+      raise exception 'Canonical Admin requires the reviewed disabled Production adoption state'
+        using errcode = '55000';
+    end if;
+
+    if pg_catalog.to_regclass('reflab_private.user_identity_links') is not null
+       or pg_catalog.to_regprocedure('public.resolve_development_clerk_identity(text)') is not null
+       or pg_catalog.to_regprocedure('public.link_development_clerk_identity(text)') is not null
+       or pg_catalog.to_regprocedure('public.link_development_super_admin_clerk_identity(text)') is not null then
+      raise exception 'Development identity infrastructure is forbidden during Production adoption'
+        using errcode = '55000';
+    end if;
+
+    if pg_catalog.to_regprocedure('reflab_private.canonical_jsonb_text(jsonb)') is null then
+      raise exception 'Canonical Admin Production prerequisites are incomplete'
+        using errcode = '55000';
+    end if;
+  end if;
+
+  if pg_catalog.to_regprocedure('public.admin_set_canonical_user_plan(text,text,text,text)') is not null
+     or pg_catalog.to_regprocedure('public.admin_set_canonical_global_role(text,text,text,text)') is not null then
+    raise exception 'Canonical Admin provider conflict'
       using errcode = '55000';
   end if;
 end

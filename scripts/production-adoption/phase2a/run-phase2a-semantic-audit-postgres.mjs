@@ -238,6 +238,7 @@ export async function runPhase2aSemanticAuditPostgres() {
 
     return {
       localOnly: true,
+      localTarget: { host: environment.PGHOST, port: environment.PGPORT },
       productTables: semanticAuditTables.length,
       directRowsVisibleToCaller: 0,
       aggregateSnapshotObservedRows: true,

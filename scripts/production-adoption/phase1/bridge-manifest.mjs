@@ -108,6 +108,8 @@ export const productionObjectProviders = Object.freeze([
   ["public.attempts.attempts_exam_occurrence_unique", "202608310002"],
   ["public.attempts.canonical_payload_hash", "202608130001"],
   ["public.attempts.attempts_canonical_payload_hash_check", "202608130001"],
+  ["reflab_private.canonical_jsonb_text(jsonb)", "202608310005"],
+  ["reflab_meta.production_adoption_state.canonical_objects", "202608310006"],
   ["public.attempts.attempts_exam_source_check", "canonical_exam_cutover_future"],
   ["public.psychology_modules.table", "202608310003"],
   ["public.psychology_modules.canonical_seed_rows", "202608310003"],

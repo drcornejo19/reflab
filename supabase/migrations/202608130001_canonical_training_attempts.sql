@@ -1,5 +1,97 @@
 begin;
 
+set local lock_timeout = '5s';
+set local statement_timeout = '60s';
+
+do $preflight$
+declare
+  required_table text;
+  role_state record;
+begin
+  foreach required_table in array array[
+    'public.attempts',
+    'public.user_profiles',
+    'public.user_global_roles',
+    'public.user_subscriptions',
+    'public.institution_memberships',
+    'public.institutions',
+    'public.institution_subscriptions',
+    'public.clips',
+    'reflab_meta.reflab_schema_state'
+  ] loop
+    if pg_catalog.to_regclass(required_table) is null then
+      raise exception 'Canonical Training dependency is missing: %', required_table
+        using errcode = '55000';
+    end if;
+  end loop;
+
+  select
+    role.rolcanlogin,
+    role.rolsuper,
+    role.rolcreatedb,
+    role.rolcreaterole,
+    role.rolinherit,
+    role.rolbypassrls
+  into role_state
+  from pg_catalog.pg_roles role
+  where role.rolname = 'reflab_rls_owner';
+
+  if not found
+     or role_state.rolcanlogin
+     or role_state.rolsuper
+     or role_state.rolcreatedb
+     or role_state.rolcreaterole
+     or role_state.rolinherit
+     or role_state.rolbypassrls then
+    raise exception 'Canonical RLS owner is missing or unsafe'
+      using errcode = '55000';
+  end if;
+
+  if pg_catalog.to_regprocedure('reflab_private.canonical_jsonb_text(jsonb)') is null
+     or pg_catalog.to_regprocedure('extensions.digest(text,text)') is null
+     or pg_catalog.to_regprocedure('extensions.gen_random_uuid()') is null then
+    raise exception 'Canonical Training helper dependency is missing'
+      using errcode = '55000';
+  end if;
+
+  if pg_catalog.to_regclass('reflab_meta.production_adoption_state') is not null then
+    if (select pg_catalog.count(*) from reflab_meta.reflab_schema_state) <> 0
+       or (select pg_catalog.count(*) from reflab_meta.production_adoption_state) <> 3
+       or not exists (
+         select 1
+         from reflab_meta.production_adoption_state state
+         where state.phase_order = 3
+           and state.phase_key = 'psychology_notification_prerequisites'
+       ) then
+      raise exception 'Canonical Training requires the reviewed disabled Production adoption state'
+        using errcode = '55000';
+    end if;
+
+    if pg_catalog.to_regclass('reflab_private.user_identity_links') is not null
+       or pg_catalog.to_regprocedure('public.resolve_development_clerk_identity(text)') is not null
+       or pg_catalog.to_regprocedure('public.link_development_clerk_identity(text)') is not null
+       or pg_catalog.to_regprocedure('public.link_development_super_admin_clerk_identity(text)') is not null then
+      raise exception 'Development identity infrastructure is forbidden during Production adoption'
+        using errcode = '55000';
+    end if;
+  end if;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_attribute attribute
+    where attribute.attrelid = 'public.attempts'::pg_catalog.regclass
+      and attribute.attname = 'canonical_payload_hash'
+      and attribute.attnum > 0
+      and not attribute.attisdropped
+  ) or pg_catalog.to_regprocedure(
+    'public.submit_canonical_training_attempt(text,uuid,jsonb,integer)'
+  ) is not null then
+    raise exception 'Canonical Training provider conflict'
+      using errcode = '55000';
+  end if;
+end
+$preflight$;
+
 alter table public.attempts
   add column canonical_payload_hash text,
   add constraint attempts_canonical_payload_hash_check

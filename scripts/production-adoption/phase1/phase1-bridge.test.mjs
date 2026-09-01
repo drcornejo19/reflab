@@ -13,7 +13,10 @@ import {
   phase1BridgeMigrations,
   productionObjectProviders,
 } from "./bridge-manifest.mjs";
-import { parsePsqlScalar } from "./run-phase1-bridge-postgres.mjs";
+import {
+  buildDisposablePostgresEnvironment,
+  parsePsqlScalar,
+} from "./run-phase1-bridge-postgres.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(directory, "..", "..", "..");
@@ -270,7 +273,11 @@ test("legacy identity helpers have no TypeScript or JavaScript runtime callers",
 
 test("local PostgreSQL rehearsal is target-guarded and never references Supabase hosts", () => {
   const runner = readFileSync(resolve(directory, "run-phase1-bridge-postgres.mjs"), "utf8");
-  assert.match(runner, /authorizeLocalPostgresTarget/);
+  assert.match(runner, /mkdtempSync/);
+  assert.match(runner, /binaries\.initdb/);
+  assert.match(runner, /binaries\.pgCtl/);
+  assert.match(runner, /bootstrapDisposableRoles/);
+  assert.match(runner, /clusterCleanup: "PASS"/);
   assert.doesNotMatch(runner, /supabase\.co|nagjddldrldwavmfaytc|bthnhbpgiyuajsgoccrp/i);
   assert.match(runner, /unexpectedColumnRollback: true/);
   assert.match(runner, /unknownModuleRollback: true/);
@@ -283,6 +290,29 @@ test("local PostgreSQL rehearsal is target-guarded and never references Supabase
   assert.match(runner, /set role/);
   assert.match(runner, /could not prove disposable database cleanup/i);
   assert.doesNotMatch(runner, /catch\s*\{\s*\/\*\s*Surface the primary rehearsal error/i);
+});
+
+test("Phase 1 disposable PostgreSQL ignores inherited connection settings", () => {
+  const environment = buildDisposablePostgresEnvironment(55432, {
+    SystemRoot: "C:\\Windows",
+    PATH: "C:\\Program Files\\PostgreSQL\\18\\bin",
+    PGHOST: "db.example.supabase.co",
+    PGPORT: "6543",
+    PGDATABASE: "remote",
+    PGUSER: "remote_user",
+    PGPASSWORD: "must_not_leak",
+    PGOPTIONS: "-c role=unsafe",
+    PGSERVICE: "unsafe",
+    PGPASSFILE: "unsafe",
+  });
+  assert.equal(environment.PGHOST, "127.0.0.1");
+  assert.equal(environment.PGPORT, "55432");
+  assert.equal(environment.PGDATABASE, "postgres");
+  assert.equal(environment.PGUSER, "postgres");
+  assert.equal(environment.PGSSLMODE, "disable");
+  for (const name of ["PGPASSWORD", "PGOPTIONS", "PGSERVICE", "PGSERVICEFILE", "PGPASSFILE"]) {
+    assert.ok(!(name in environment));
+  }
 });
 
 test("psql scalar parser ignores only expected command tags", () => {

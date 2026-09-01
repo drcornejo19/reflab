@@ -60,6 +60,8 @@ const canonicalMigrationManifest = [
   ["202608310002", "production_adoption_exam_training_prerequisites", "production_adoption_bridge"],
   ["202608310003", "production_adoption_psychology_notifications_prerequisites", "production_adoption_bridge"],
   ["202608310004", "production_adoption_semantic_audit", "production_adoption_audit"],
+  ["202608310005", "production_adoption_canonical_runtime_prerequisites", "production_adoption_bridge"],
+  ["202608310006", "production_adoption_canonical_runtime_installed", "production_adoption_bridge"],
 ].map(([version, name, classification]) => ({
   version,
   name,

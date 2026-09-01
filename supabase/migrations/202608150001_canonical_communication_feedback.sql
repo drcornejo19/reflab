@@ -1,5 +1,96 @@
 begin;
 
+set local lock_timeout = '5s';
+set local statement_timeout = '60s';
+
+do $preflight$
+declare
+  role_state record;
+begin
+  if pg_catalog.to_regclass('public.attempts') is null
+     or pg_catalog.to_regclass('public.user_profiles') is null
+     or pg_catalog.to_regclass('public.user_global_roles') is null
+     or pg_catalog.to_regclass('public.user_subscriptions') is null
+     or pg_catalog.to_regclass('public.clips') is null
+     or pg_catalog.to_regclass('reflab_meta.reflab_schema_state') is null
+     or pg_catalog.to_regprocedure(
+       'public.submit_canonical_training_attempt(text,uuid,jsonb,integer)'
+     ) is null then
+    raise exception 'Canonical Communication dependency is missing'
+      using errcode = '55000';
+  end if;
+
+  select
+    role.rolcanlogin,
+    role.rolsuper,
+    role.rolcreatedb,
+    role.rolcreaterole,
+    role.rolinherit,
+    role.rolbypassrls
+  into role_state
+  from pg_catalog.pg_roles role
+  where role.rolname = 'reflab_rls_owner';
+
+  if not found
+     or role_state.rolcanlogin
+     or role_state.rolsuper
+     or role_state.rolcreatedb
+     or role_state.rolcreaterole
+     or role_state.rolinherit
+     or role_state.rolbypassrls then
+    raise exception 'Canonical RLS owner is missing or unsafe'
+      using errcode = '55000';
+  end if;
+
+  if not exists (
+    select 1
+    from pg_catalog.pg_constraint constraint_state
+    where constraint_state.conrelid = 'public.attempts'::pg_catalog.regclass
+      and constraint_state.conname = 'attempts_source_type_check'
+  ) or not exists (
+    select 1
+    from pg_catalog.pg_attribute attribute
+    where attribute.attrelid = 'public.attempts'::pg_catalog.regclass
+      and attribute.attname = 'canonical_payload_hash'
+      and pg_catalog.format_type(attribute.atttypid, attribute.atttypmod) = 'text'
+      and attribute.attnum > 0
+      and not attribute.attisdropped
+  ) then
+    raise exception 'Canonical Communication attempt contract is incompatible'
+      using errcode = '55000';
+  end if;
+
+  if pg_catalog.to_regclass('reflab_meta.production_adoption_state') is not null then
+    if (select pg_catalog.count(*) from reflab_meta.reflab_schema_state) <> 0
+       or (select pg_catalog.count(*) from reflab_meta.production_adoption_state) <> 3
+       or not exists (
+         select 1
+         from reflab_meta.production_adoption_state state
+         where state.phase_order = 3
+           and state.phase_key = 'psychology_notification_prerequisites'
+       ) then
+      raise exception 'Canonical Communication requires the reviewed disabled Production adoption state'
+        using errcode = '55000';
+    end if;
+
+    if pg_catalog.to_regclass('reflab_private.user_identity_links') is not null
+       or pg_catalog.to_regprocedure('public.resolve_development_clerk_identity(text)') is not null
+       or pg_catalog.to_regprocedure('public.link_development_clerk_identity(text)') is not null
+       or pg_catalog.to_regprocedure('public.link_development_super_admin_clerk_identity(text)') is not null then
+      raise exception 'Development identity infrastructure is forbidden during Production adoption'
+        using errcode = '55000';
+    end if;
+  end if;
+
+  if pg_catalog.to_regprocedure(
+    'public.submit_canonical_communication_feedback(text,uuid,text,jsonb)'
+  ) is not null then
+    raise exception 'Canonical Communication provider conflict'
+      using errcode = '55000';
+  end if;
+end
+$preflight$;
+
 alter table public.attempts
   drop constraint attempts_source_type_check,
   add constraint attempts_source_type_check check (

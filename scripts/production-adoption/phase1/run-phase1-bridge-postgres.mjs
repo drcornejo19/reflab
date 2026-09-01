@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildPsqlEnvironment } from "../../production-preflight/run.mjs";
@@ -18,9 +20,15 @@ const migrations = [
   "202608310002_production_adoption_exam_training_prerequisites.sql",
   "202608310003_production_adoption_psychology_notifications_prerequisites.sql",
 ].map((name) => ({ name, sql: readFileSync(resolve(repositoryRoot, "supabase", "migrations", name), "utf8") }));
+const postgresBin = process.env.POSTGRES_BIN ?? "C:\\Program Files\\PostgreSQL\\18\\bin";
+const binaries = {
+  initdb: join(postgresBin, "initdb.exe"),
+  pgCtl: join(postgresBin, "pg_ctl.exe"),
+  psql: join(postgresBin, "psql.exe"),
+};
 
 function execute(sql, environment, spawn = spawnSync) {
-  return spawn("psql", [
+  return spawn(binaries.psql, [
     "-X",
     "--no-psqlrc",
     "--set",
@@ -36,6 +44,52 @@ function execute(sql, environment, spawn = spawnSync) {
     windowsHide: true,
     env: environment,
   });
+}
+
+function reservePort() {
+  return new Promise((resolvePort, reject) => {
+    const server = createServer();
+    server.unref();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close(() => resolvePort(address.port));
+    });
+  });
+}
+
+export function buildDisposablePostgresEnvironment(port, sourceEnvironment = process.env) {
+  if (!Number.isInteger(port) || port < 1024 || port > 65535 || port === 6543) {
+    throw new Error("Phase 1 disposable PostgreSQL port is invalid.");
+  }
+  return {
+    ...(sourceEnvironment.SystemRoot ? { SystemRoot: sourceEnvironment.SystemRoot } : {}),
+    ...(sourceEnvironment.WINDIR ? { WINDIR: sourceEnvironment.WINDIR } : {}),
+    ...(sourceEnvironment.PATH ? { PATH: sourceEnvironment.PATH } : {}),
+    PGHOST: "127.0.0.1",
+    PGPORT: String(port),
+    PGDATABASE: "postgres",
+    PGUSER: "postgres",
+    PGSSLMODE: "disable",
+  };
+}
+
+function runBinary(binary, args, environment, options = {}) {
+  return execFileSync(binary, args, {
+    env: environment,
+    encoding: "utf8",
+    stdio: options.quiet ? "ignore" : ["ignore", "pipe", "pipe"],
+    maxBuffer: 16 * 1024 * 1024,
+  });
+}
+
+function bootstrapDisposableRoles(environment, spawn) {
+  requireSuccess(execute(`
+    create role anon nologin;
+    create role authenticated nologin;
+    create role service_role nologin;
+    create role reflab_rls_owner nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
+  `, environment, spawn), "disposable role bootstrap");
 }
 
 export class PositiveAssertionFailure extends Error {
@@ -178,7 +232,7 @@ function requireLocalRoles(adminEnvironment, spawn) {
   if (output !== "4") throw new Error("Local Phase 1 bridge rehearsal requires the four Supabase-compatible test roles.");
 }
 
-export function runPhase1BridgePostgres(environment = process.env, dependencies = {}, options = {}) {
+function runPhase1BridgeAgainstLocalTarget(environment, dependencies = {}, options = {}) {
   const target = authorizeLocalPostgresTarget(environment);
   const adminEnvironment = buildPsqlEnvironment(environment, target);
   const spawn = dependencies.spawn ?? spawnSync;
@@ -339,9 +393,69 @@ export function runPhase1BridgePostgres(environment = process.env, dependencies 
   return result;
 }
 
+export async function runPhase1BridgePostgres(environment = process.env, dependencies = {}, options = {}) {
+  const temporaryRoot = mkdtempSync(join(tmpdir(), "reflab-phase1-"));
+  const dataDirectory = join(temporaryRoot, "data");
+  const logPath = join(temporaryRoot, "postgres.log");
+  const port = await reservePort();
+  const disposableEnvironment = buildDisposablePostgresEnvironment(port, environment);
+  const spawn = dependencies.spawn ?? spawnSync;
+  let serverStarted = false;
+  let result;
+  let primaryError;
+  let cleanupError;
+
+  try {
+    runBinary(binaries.initdb, [
+      "--auth=trust",
+      "--username=postgres",
+      "--encoding=UTF8",
+      "--no-locale",
+      "--pgdata",
+      dataDirectory,
+    ], disposableEnvironment);
+    runBinary(binaries.pgCtl, [
+      "start",
+      "-D",
+      dataDirectory,
+      "-l",
+      logPath,
+      "-o",
+      `-h 127.0.0.1 -p ${port}`,
+      "-w",
+    ], disposableEnvironment, { quiet: true });
+    serverStarted = true;
+    bootstrapDisposableRoles(disposableEnvironment, spawn);
+    result = runPhase1BridgeAgainstLocalTarget(disposableEnvironment, { ...dependencies, spawn }, options);
+  } catch (error) {
+    primaryError = error;
+  } finally {
+    if (serverStarted) {
+      try {
+        runBinary(binaries.pgCtl, ["stop", "-D", dataDirectory, "-m", "immediate", "-w"], disposableEnvironment, { quiet: true });
+      } catch {
+        cleanupError = new Error("Local Phase 1 bridge rehearsal could not stop its disposable PostgreSQL cluster.");
+      }
+    }
+    try {
+      rmSync(temporaryRoot, { recursive: true, force: true });
+    } catch {
+      cleanupError ??= new Error("Local Phase 1 bridge rehearsal could not remove its disposable PostgreSQL cluster.");
+    }
+  }
+
+  if (primaryError) throw primaryError;
+  if (cleanupError) throw cleanupError;
+  return {
+    ...result,
+    localTarget: { host: disposableEnvironment.PGHOST, port: disposableEnvironment.PGPORT },
+    clusterCleanup: "PASS",
+  };
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   try {
-    process.stdout.write(`${JSON.stringify(runPhase1BridgePostgres(
+    process.stdout.write(`${JSON.stringify(await runPhase1BridgePostgres(
       process.env,
       {},
       { positiveOnly: process.argv.includes("--positive-only") },
