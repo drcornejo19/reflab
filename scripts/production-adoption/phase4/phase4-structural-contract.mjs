@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { canonicalObjectManifest } from "../../production-preflight/manifest.mjs";
 import { productionObjectProviders } from "../phase1/bridge-manifest.mjs";
 import { PHASE2B_OBJECT_PROVIDERS } from "../phase2b/phase2b-contract.mjs";
+import { PHASE4B_WAVE1_HELPERS, PHASE4B_WAVE1_VERSION } from "./phase4b-wave1-contract.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const baselineManifest = JSON.parse(readFileSync(resolve(root, "supabase", "baseline", "manifest.json"), "utf8"));
@@ -81,24 +82,7 @@ export const PENDING_UNIQUES = Object.freeze([
   maxDuplicateGroupSize: null,
 })));
 
-const baselineOnlyHelpers = Object.freeze([
-  "reflab_private.can_access_user_data(text, uuid, text)",
-  "reflab_private.has_active_institution_membership(uuid)",
-  "reflab_private.has_institution_permission(uuid, text)",
-  "reflab_private.protect_referee_exam_session()",
-  "reflab_private.set_updated_at()",
-  "reflab_private.validate_assessment_session_assignment()",
-  "reflab_private.validate_attempt_exam_context()",
-  "reflab_private.validate_exam_result_context()",
-  "reflab_private.validate_institution_data_consent()",
-  "reflab_private.validate_institution_role_scope()",
-  "reflab_private.validate_institution_user_target()",
-  "reflab_private.validate_owned_appointment()",
-  "reflab_private.validate_performance_checkin_owner()",
-  "reflab_private.validate_referee_exam_manifest()",
-  "reflab_private.validate_referee_exam_session_context()",
-  "reflab_private.validate_user_appointment_context()",
-]);
+const baselineOnlyHelpers = Object.freeze(PHASE4B_WAVE1_HELPERS.map((helperContract) => helperContract.signature));
 
 const missingRuntimeFunctions = Object.freeze([
   "public.submit_referee_exam(text, uuid, uuid, text, jsonb)",
@@ -108,7 +92,7 @@ const missingRuntimeFunctions = Object.freeze([
 export const FUNCTION_CLASSIFICATION = Object.freeze([
   ...baselineOnlyHelpers.map((signature) => ({
     signature,
-    provider: "202607270000 baseline target; a future Phase 4B incremental provider is required",
+    provider: PHASE4B_WAVE1_VERSION,
     classification: "SAFE_INSTALL_PHASE4B",
     activation: "inert_until_trigger_or_policy_references_it",
   })),
@@ -234,7 +218,7 @@ export function buildUniqueProviderMap(entries) {
 export const PHASE4_PROVIDER_MAP = buildUniqueProviderMap([
   ...productionObjectProviders,
   ...Object.entries(PHASE2B_OBJECT_PROVIDERS),
-  ...baselineOnlyHelpers.map((signature) => [signature, "future_phase4b_function_reconciliation"]),
+  ...baselineOnlyHelpers.map((signature) => [signature, PHASE4B_WAVE1_VERSION]),
   ["public.submit_referee_exam(text, uuid, uuid, text, jsonb)", "future_phase4_runtime_cutover"],
 ]);
 

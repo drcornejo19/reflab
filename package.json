@@ -25,6 +25,8 @@
     "test:production-adoption:phase3:postgres": "node scripts/production-adoption/phase3/run-phase3-postgres.mjs",
     "test:production-adoption:phase4a": "node --test scripts/production-adoption/phase4/phase4-structural.test.mjs",
     "test:production-adoption:phase4a:postgres": "node scripts/production-adoption/phase4/run-phase4a-unique-postgres.mjs",
+    "test:production-adoption:phase4b-wave1": "node --test scripts/production-adoption/phase4/phase4b-wave1.test.mjs",
+    "test:production-adoption:phase4b-wave1:postgres": "node scripts/production-adoption/phase4/run-phase4b-wave1-postgres.mjs",
     "test:canonical-identity-cleanup": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/identity/canonicalIdentityCleanup.test.mts",
     "test:ranking": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/ranking/canonicalRanking.test.mts lib/performance/canonicalSummary.test.mts",
     "test:matches": "node --conditions=react-server --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/matches/canonicalMatches.test.mts",
