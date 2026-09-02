@@ -268,8 +268,8 @@
     "algorithm": "sha256",
     "sql_checksum_normalization": "Replace the reflab_schema_state sql_checksum literal with 64 zeroes before hashing the SQL bytes as UTF-8.",
     "manifest_hash_normalization": "Replace both integrity hash values with 64 zeroes, serialize this JSON with two-space indentation and a final LF, then hash UTF-8 bytes.",
-    "sql_checksum": "dd0c8f9d4ec4707c7483a4e333a2e59ba79356fffc1877bdae30f31b9d7ccb37",
-    "manifest_hash": "7c6f2480aeff86609e5f33a81ba45693a74f6e3296d62fbdbd61c70a28b41046"
+    "sql_checksum": "1760e75c66a1e9dd2d46da1c14bab5adfb34e23b185b4442e178cb936efd596b",
+    "manifest_hash": "0c01c9c74f9ac46dd1344ac7839dcd1d7887b0b6b48d8c4ab484ea54c14b86f4"
   },
   "execution": {
     "sql_executed": false,
@@ -3674,7 +3674,7 @@
         "source": "generated:appointment_context_triggers"
       },
       {
-        "name": "performance_sessions_validate_appointment_context",
+        "name": "performance_sessions_validate_checkin_owner",
         "table": "public.performance_sessions",
         "timing_and_events": "BEFORE INSERT OR UPDATE",
         "function": "reflab_private.validate_performance_checkin_owner()",
@@ -3758,7 +3758,7 @@
         "source": "generated:appointment_context_triggers"
       },
       {
-        "name": "readiness_scores_validate_appointment_context",
+        "name": "readiness_scores_validate_checkin_owner",
         "table": "public.readiness_scores",
         "timing_and_events": "BEFORE INSERT OR UPDATE",
         "function": "reflab_private.validate_performance_checkin_owner()",
@@ -3856,7 +3856,7 @@
         "source": "generated:appointment_context_triggers"
       },
       {
-        "name": "wellness_logs_validate_appointment_context",
+        "name": "wellness_logs_validate_checkin_owner",
         "table": "public.wellness_logs",
         "timing_and_events": "BEFORE INSERT OR UPDATE",
         "function": "reflab_private.validate_performance_checkin_owner()",
@@ -5106,7 +5106,13 @@
         "references_table": "public.coach_runs",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.appointment_history",
@@ -5117,7 +5123,13 @@
         "references_table": "public.appointments",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.appointments",
@@ -5128,7 +5140,13 @@
         "references_table": "public.fixtures",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.associations",
@@ -5139,7 +5157,13 @@
         "references_table": "public.countries",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
@@ -5150,7 +5174,13 @@
         "references_table": "public.exam_results",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.capability_overrides",
@@ -5161,7 +5191,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.coach_evidence",
@@ -5172,7 +5208,13 @@
         "references_table": "public.coach_runs",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.coach_runs",
@@ -5183,7 +5225,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.competition_categories",
@@ -5194,7 +5242,13 @@
         "references_table": "public.competitions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.competition_seasons",
@@ -5205,7 +5259,13 @@
         "references_table": "public.competitions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.competitions",
@@ -5216,7 +5276,13 @@
         "references_table": "public.associations",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.exam_results",
@@ -5227,7 +5293,13 @@
         "references_table": "public.referee_exam_sessions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "RESTRICT",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.fixture_sync_logs",
@@ -5238,7 +5310,13 @@
         "references_table": "public.competitions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.fixtures",
@@ -5249,7 +5327,13 @@
         "references_table": "public.countries",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_assignments",
@@ -5260,7 +5344,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_feedback",
@@ -5271,7 +5361,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_history",
@@ -5282,7 +5378,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_items",
@@ -5293,7 +5395,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_sessions",
@@ -5304,7 +5412,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessments",
@@ -5315,7 +5429,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_audit_logs",
@@ -5326,7 +5446,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_cohorts",
@@ -5337,7 +5463,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_content_assignments",
@@ -5348,7 +5480,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_contents",
@@ -5359,7 +5497,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_data_consents",
@@ -5370,7 +5514,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_demo_sessions",
@@ -5381,7 +5531,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_group_memberships",
@@ -5392,7 +5548,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_groups",
@@ -5403,7 +5565,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_members",
@@ -5414,7 +5582,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_membership_permission_overrides",
@@ -5425,7 +5599,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_membership_roles",
@@ -5436,7 +5616,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_memberships",
@@ -5447,7 +5633,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_notification_campaigns",
@@ -5458,7 +5650,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_notification_recipients",
@@ -5469,7 +5667,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_role_permissions",
@@ -5480,7 +5684,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_roles",
@@ -5491,7 +5701,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_subscriptions",
@@ -5502,7 +5718,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institutional_clips",
@@ -5513,7 +5735,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institutional_lead_activities",
@@ -5524,7 +5752,13 @@
         "references_table": "public.institutional_leads",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institutional_leads",
@@ -5535,7 +5769,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.match_context_snapshots",
@@ -5546,7 +5786,13 @@
         "references_table": "public.fixtures",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.match_officials",
@@ -5557,7 +5803,13 @@
         "references_table": "public.fixtures",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.match_preparations",
@@ -5568,7 +5820,13 @@
         "references_table": "public.appointments",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.notification_events",
@@ -5579,7 +5837,13 @@
         "references_table": "public.appointments",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.performance_checkins",
@@ -5590,7 +5854,13 @@
         "references_table": "public.appointments",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.performance_sessions",
@@ -5601,7 +5871,13 @@
         "references_table": "public.performance_checkins",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.plan_capabilities",
@@ -5612,7 +5888,13 @@
         "references_table": "public.access_plans",
         "references_columns": [
           "plan_key"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.post_match_reviews",
@@ -5623,7 +5905,13 @@
         "references_table": "public.appointments",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
@@ -5634,7 +5922,13 @@
         "references_table": "public.psychology_modules",
         "references_columns": [
           "slug"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.psychology_exercise_sessions",
@@ -5645,7 +5939,13 @@
         "references_table": "public.psychology_modules",
         "references_columns": [
           "slug"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.psychology_wellbeing_assessments",
@@ -5656,7 +5956,13 @@
         "references_table": "public.psychology_modules",
         "references_columns": [
           "slug"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "NO ACTION",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.readiness_scores",
@@ -5667,7 +5973,13 @@
         "references_table": "public.performance_checkins",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.referee_eligibility",
@@ -5678,7 +5990,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.referee_exam_sessions",
@@ -5689,7 +6007,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.teams",
@@ -5700,7 +6024,13 @@
         "references_table": "public.countries",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.user_global_roles",
@@ -5711,7 +6041,13 @@
         "references_table": "public.platform_roles",
         "references_columns": [
           "role_key"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "NO ACTION",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.user_profiles",
@@ -5722,7 +6058,13 @@
         "references_table": "public.associations",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.user_roles",
@@ -5733,7 +6075,13 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.user_subscriptions",
@@ -5744,7 +6092,13 @@
         "references_table": "public.access_plans",
         "references_columns": [
           "plan_key"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "NO ACTION",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.venues",
@@ -5755,7 +6109,13 @@
         "references_table": "public.countries",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.wellness_logs",
@@ -5766,7 +6126,13 @@
         "references_table": "public.performance_checkins",
         "references_columns": [
           "id"
-        ]
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       }
     ],
     "unique_constraints": [
@@ -5775,7 +6141,11 @@
         "name": null,
         "columns": [
           "run_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.associations",
@@ -5783,7 +6153,11 @@
         "columns": [
           "country_id",
           "name"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.coach_data_consents",
@@ -5792,7 +6166,11 @@
           "user_id",
           "data_category",
           "purpose"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.competition_categories",
@@ -5801,7 +6179,11 @@
           "competition_id",
           "season_id",
           "name"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.competition_seasons",
@@ -5809,7 +6191,11 @@
         "columns": [
           "competition_id",
           "label"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.competitions",
@@ -5818,21 +6204,33 @@
           "association_id",
           "sport_type",
           "name"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.countries",
         "name": null,
         "columns": [
           "code"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.exam_results",
         "name": null,
         "columns": [
           "exam_session_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.exam_results",
@@ -5840,7 +6238,11 @@
         "columns": [
           "user_id",
           "submission_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_assignments",
@@ -5849,7 +6251,11 @@
           "id",
           "institution_id",
           "assessment_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_sessions",
@@ -5857,7 +6263,11 @@
         "columns": [
           "id",
           "institution_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_sessions",
@@ -5866,7 +6276,11 @@
           "assignment_id",
           "user_id",
           "attempt_number"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessments",
@@ -5874,7 +6288,11 @@
         "columns": [
           "id",
           "institution_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_cohorts",
@@ -5882,7 +6300,11 @@
         "columns": [
           "id",
           "institution_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_contents",
@@ -5890,7 +6312,11 @@
         "columns": [
           "id",
           "institution_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_data_consents",
@@ -5898,7 +6324,11 @@
         "columns": [
           "membership_id",
           "data_category"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_group_memberships",
@@ -5906,7 +6336,11 @@
         "columns": [
           "group_id",
           "membership_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_groups",
@@ -5914,7 +6348,11 @@
         "columns": [
           "id",
           "institution_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_groups",
@@ -5922,7 +6360,11 @@
         "columns": [
           "institution_id",
           "name"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_membership_permission_overrides",
@@ -5930,7 +6372,11 @@
         "columns": [
           "membership_id",
           "permission_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_membership_roles",
@@ -5938,7 +6384,11 @@
         "columns": [
           "membership_id",
           "role_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_memberships",
@@ -5946,7 +6396,11 @@
         "columns": [
           "id",
           "institution_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_memberships",
@@ -5954,7 +6408,11 @@
         "columns": [
           "institution_id",
           "user_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_notification_campaigns",
@@ -5962,7 +6420,11 @@
         "columns": [
           "id",
           "institution_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_notification_recipients",
@@ -5970,14 +6432,22 @@
         "columns": [
           "campaign_id",
           "user_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_permissions",
         "name": null,
         "columns": [
           "permission_key"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_role_permissions",
@@ -5985,7 +6455,11 @@
         "columns": [
           "role_id",
           "permission_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_roles",
@@ -5993,14 +6467,22 @@
         "columns": [
           "id",
           "institution_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.institution_subscriptions",
         "name": null,
         "columns": [
           "institution_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.match_preparations",
@@ -6008,21 +6490,33 @@
         "columns": [
           "appointment_id",
           "stage"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.notification_tokens",
         "name": null,
         "columns": [
           "token"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.post_match_reviews",
         "name": null,
         "columns": [
           "appointment_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.referee_exam_sessions",
@@ -6030,7 +6524,11 @@
         "columns": [
           "user_id",
           "submission_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.referee_roles",
@@ -6038,1536 +6536,2158 @@
         "columns": [
           "sport_type",
           "role_key"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.user_profiles",
         "name": null,
         "columns": [
           "ref_card_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.user_profiles",
         "name": null,
         "columns": [
           "user_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.user_roles",
         "name": null,
         "columns": [
           "user_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "public.user_subscriptions",
         "name": null,
         "columns": [
           "user_id"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "reflab_meta.reflab_schema_state",
         "name": null,
         "columns": [
           "baseline_version"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       },
       {
         "table": "reflab_meta.reflab_schema_state",
         "name": "reflab_schema_state_singleton",
         "columns": [
           "installation_status"
-        ]
+        ],
+        "nulls_not_distinct": false,
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
       }
     ],
     "check_constraints": [
       {
         "table": "public.access_change_audit",
         "name": null,
-        "expression": "check (jsonb_typeof(new_data) = 'object')"
+        "expression": "check (jsonb_typeof(new_data) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.access_change_audit",
         "name": null,
-        "expression": "check (jsonb_typeof(old_data) = 'object')"
+        "expression": "check (jsonb_typeof(old_data) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.access_plans",
         "name": null,
-        "expression": "check (audience in ('individual', 'institution'))"
+        "expression": "check (audience in ('individual', 'institution'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.ai_usage_ledger",
         "name": null,
-        "expression": "check (estimated_cost_usd is null or estimated_cost_usd >= 0)"
+        "expression": "check (estimated_cost_usd is null or estimated_cost_usd >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.ai_usage_ledger",
         "name": null,
-        "expression": "check (input_tokens >= 0)"
+        "expression": "check (input_tokens >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.ai_usage_ledger",
         "name": null,
-        "expression": "check (output_tokens >= 0)"
+        "expression": "check (output_tokens >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.ai_usage_ledger",
         "name": null,
-        "expression": "check (total_tokens >= 0)"
+        "expression": "check (total_tokens >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.appointment_history",
         "name": null,
-        "expression": "check ( change_type in ( 'created', 'status_changed', 'role_changed', 'fixture_changed', 'note_updated', 'system_sync' ) )"
+        "expression": "check ( change_type in ( 'created', 'status_changed', 'role_changed', 'fixture_changed', 'note_updated', 'system_sync' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.appointment_history",
         "name": null,
-        "expression": "check (jsonb_typeof(snapshot) = 'object')"
+        "expression": "check (jsonb_typeof(snapshot) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.appointments",
         "name": null,
-        "expression": "check ( status in ( 'draft', 'pending_confirmation', 'confirmed', 'modified', 'replaced', 'cancelled', 'suspended', 'postponed', 'completed' ) )"
+        "expression": "check ( status in ( 'draft', 'pending_confirmation', 'confirmed', 'modified', 'replaced', 'cancelled', 'suspended', 'postponed', 'completed' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.appointments",
         "name": null,
-        "expression": "check (jsonb_typeof(metadata) = 'object')"
+        "expression": "check (jsonb_typeof(metadata) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.appointments",
         "name": null,
-        "expression": "check (source_type in ('manual', 'institutional', 'api'))"
+        "expression": "check (source_type in ('manual', 'institutional', 'api'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.appointments",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.associations",
         "name": null,
-        "expression": "check (source_type in ('manual', 'institutional', 'api'))"
+        "expression": "check (source_type in ('manual', 'institutional', 'api'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (clarity_score is null or clarity_score between 0 and 100)"
+        "expression": "check (clarity_score is null or clarity_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (communication_score is null or communication_score between 0 and 100)"
+        "expression": "check (communication_score is null or communication_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (completed_rounds is null or completed_rounds >= 0)"
+        "expression": "check (completed_rounds is null or completed_rounds >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (criterion_result is null or jsonb_typeof(criterion_result) = 'object')"
+        "expression": "check (criterion_result is null or jsonb_typeof(criterion_result) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (english_score is null or english_score between 0 and 100)"
+        "expression": "check (english_score is null or english_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (fatigue_level is null or fatigue_level between 1 and 10)"
+        "expression": "check (fatigue_level is null or fatigue_level between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (grammar_score is null or grammar_score between 0 and 100)"
+        "expression": "check (grammar_score is null or grammar_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (jsonb_typeof(mastered_concepts) = 'array')"
+        "expression": "check (jsonb_typeof(mastered_concepts) = 'array')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (jsonb_typeof(pending_concepts) = 'array')"
+        "expression": "check (jsonb_typeof(pending_concepts) = 'array')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (justification_score is null or justification_score between 0 and 100)"
+        "expression": "check (justification_score is null or justification_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (perceived_effort is null or perceived_effort between 1 and 10)"
+        "expression": "check (perceived_effort is null or perceived_effort between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (pronunciation_score is null or pronunciation_score between 0 and 100)"
+        "expression": "check (pronunciation_score is null or pronunciation_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (protocol_score is null or protocol_score between 0 and 100)"
+        "expression": "check (protocol_score is null or protocol_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (structure_score is null or structure_score between 0 and 100)"
+        "expression": "check (structure_score is null or structure_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (technical_accuracy_score is null or technical_accuracy_score between 0 and 100)"
+        "expression": "check (technical_accuracy_score is null or technical_accuracy_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (terminology_score is null or terminology_score between 0 and 100)"
+        "expression": "check (terminology_score is null or terminology_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (time_spent is null or time_spent >= 0)"
+        "expression": "check (time_spent is null or time_spent >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (time_spent_seconds is null or time_spent_seconds >= 0)"
+        "expression": "check (time_spent_seconds is null or time_spent_seconds >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (total_duration is null or total_duration >= 0)"
+        "expression": "check (total_duration is null or total_duration >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (total_rounds is null or total_rounds >= 0)"
+        "expression": "check (total_rounds is null or total_rounds >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": null,
-        "expression": "check (vocabulary_score is null or vocabulary_score between 0 and 100)"
+        "expression": "check (vocabulary_score is null or vocabulary_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": "attempts_exam_source_check",
-        "expression": "check ( exam_result_id is null or ( source_item_type is not null and source_item_id is not null and source_occurrence_id is not null ) )"
+        "expression": "check ( exam_result_id is null or ( source_item_type is not null and source_item_id is not null and source_occurrence_id is not null ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": "attempts_source_reference_check",
-        "expression": "check ( (source_item_type is null and source_item_id is null and source_occurrence_id is null) or ( source_item_type is not null and source_item_id is not null and source_occurrence_id is not null ) )"
+        "expression": "check ( (source_item_type is null and source_item_id is null and source_occurrence_id is null) or ( source_item_type is not null and source_item_id is not null and source_occurrence_id is not null ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.attempts",
         "name": "attempts_source_type_check",
-        "expression": "check ( source_item_type is null or source_item_type in ( 'global_clip', 'institutional_clip', 'rule_question', 'manual' ) )"
+        "expression": "check ( source_item_type is null or source_item_type in ( 'global_clip', 'institutional_clip', 'rule_question', 'manual' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.capability_overrides",
         "name": null,
-        "expression": "check (effect in ('allow', 'deny'))"
+        "expression": "check (effect in ('allow', 'deny'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.capability_overrides",
         "name": null,
-        "expression": "check (scope_type in ('global_user', 'institution_user'))"
+        "expression": "check (scope_type in ('global_user', 'institution_user'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.capability_overrides",
         "name": "capability_overrides_scope_check",
-        "expression": "check ( (scope_type = 'global_user' and institution_id is null) or (scope_type = 'institution_user' and institution_id is not null) )"
+        "expression": "check ( (scope_type = 'global_user' and institution_id is null) or (scope_type = 'institution_user' and institution_id is not null) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.capability_overrides",
         "name": "capability_overrides_window_check",
-        "expression": "check (valid_until is null or valid_until > valid_from)"
+        "expression": "check (valid_until is null or valid_until > valid_from)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.clips",
         "name": null,
-        "expression": "check ( correct_app_status is null or correct_app_status in ('same_app', 'new_app', 'not_relevant') )"
+        "expression": "check ( correct_app_status is null or correct_app_status in ('same_app', 'new_app', 'not_relevant') )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.clips",
         "name": null,
-        "expression": "check ( correct_clear_error is null or correct_clear_error in ('yes', 'no', 'unclear') )"
+        "expression": "check ( correct_clear_error is null or correct_clear_error in ('yes', 'no', 'unclear') )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.clips",
         "name": null,
-        "expression": "check ( correct_var_decision is null or correct_var_decision in ('check_complete', 'recommend_ofr', 'factual_review') )"
+        "expression": "check ( correct_var_decision is null or correct_var_decision in ('check_complete', 'recommend_ofr', 'factual_review') )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.clips",
         "name": null,
-        "expression": "check (mode in ('field', 'var', 'english', 'exam', 'training'))"
+        "expression": "check (mode in ('field', 'var', 'english', 'exam', 'training'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.clips",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.clips",
         "name": "clips_analysis_answers_object_check",
-        "expression": "check (analysis_answers is null or jsonb_typeof(analysis_answers) = 'object')"
+        "expression": "check (analysis_answers is null or jsonb_typeof(analysis_answers) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_data_consents",
         "name": null,
-        "expression": "check ( data_category in ( 'technical_history', 'match_operational', 'physical_summary', 'psychology_summary', 'psychology_detail', 'medical_sensitive' ) )"
+        "expression": "check ( data_category in ( 'technical_history', 'match_operational', 'physical_summary', 'psychology_summary', 'psychology_detail', 'medical_sensitive' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_data_consents",
         "name": null,
-        "expression": "check (purpose in ('personal_coaching', 'institutional_sharing', 'model_improvement'))"
+        "expression": "check (purpose in ('personal_coaching', 'institutional_sharing', 'model_improvement'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_data_consents",
         "name": "coach_data_consents_dates_check",
-        "expression": "check ( (granted and granted_at is not null and revoked_at is null) or (not granted) )"
+        "expression": "check ( (granted and granted_at is not null and revoked_at is null) or (not granted) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_evidence",
         "name": null,
-        "expression": "check (evidence_type in ('clip', 'attempt', 'exam', 'official_document', 'metric_snapshot'))"
+        "expression": "check (evidence_type in ('clip', 'attempt', 'exam', 'official_document', 'metric_snapshot'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_evidence",
         "name": null,
-        "expression": "check (jsonb_typeof(evidence_snapshot) = 'object')"
+        "expression": "check (jsonb_typeof(evidence_snapshot) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_evidence",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_rate_limit_buckets",
         "name": null,
-        "expression": "check (request_count >= 0)"
+        "expression": "check (request_count >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_runs",
         "name": null,
-        "expression": "check ( feature in ( 'technical_feedback', 'exam_analysis', 'communication_feedback', 'var_feedback', 'coach_conversation' ) )"
+        "expression": "check ( feature in ( 'technical_feedback', 'exam_analysis', 'communication_feedback', 'var_feedback', 'coach_conversation' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_runs",
         "name": null,
-        "expression": "check (confidence_label in ('high', 'medium', 'human_review'))"
+        "expression": "check (confidence_label in ('high', 'medium', 'human_review'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_runs",
         "name": null,
-        "expression": "check (confidence_score between 0 and 100)"
+        "expression": "check (confidence_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_runs",
         "name": null,
-        "expression": "check (evidence_count >= 0)"
+        "expression": "check (evidence_count >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_runs",
         "name": null,
-        "expression": "check (input_tokens is null or input_tokens >= 0)"
+        "expression": "check (input_tokens is null or input_tokens >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_runs",
         "name": null,
-        "expression": "check (latency_ms is null or latency_ms >= 0)"
+        "expression": "check (latency_ms is null or latency_ms >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_runs",
         "name": null,
-        "expression": "check (output_tokens is null or output_tokens >= 0)"
+        "expression": "check (output_tokens is null or output_tokens >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_runs",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_runs",
         "name": null,
-        "expression": "check (status in ('running', 'completed', 'failed'))"
+        "expression": "check (status in ('running', 'completed', 'failed'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.coach_runs",
         "name": null,
-        "expression": "check (total_tokens is null or total_tokens >= 0)"
+        "expression": "check (total_tokens is null or total_tokens >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.competition_categories",
         "name": null,
-        "expression": "check (source_type in ('institutional', 'api', 'manual'))"
+        "expression": "check (source_type in ('institutional', 'api', 'manual'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.competition_categories",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.competition_seasons",
         "name": null,
-        "expression": "check (source_type in ('institutional', 'api', 'manual'))"
+        "expression": "check (source_type in ('institutional', 'api', 'manual'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.competition_seasons",
         "name": null,
-        "expression": "check (status in ('draft', 'active', 'archived'))"
+        "expression": "check (status in ('draft', 'active', 'archived'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.competition_seasons",
         "name": "competition_seasons_window_check",
-        "expression": "check (end_date is null or start_date is null or end_date >= start_date)"
+        "expression": "check (end_date is null or start_date is null or end_date >= start_date)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.competitions",
         "name": null,
-        "expression": "check (competition_type in ('league', 'cup', 'playoff', 'friendly', 'tournament', 'other'))"
+        "expression": "check (competition_type in ('league', 'cup', 'playoff', 'friendly', 'tournament', 'other'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.competitions",
         "name": null,
-        "expression": "check (source_type in ('institutional', 'api', 'manual'))"
+        "expression": "check (source_type in ('institutional', 'api', 'manual'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.competitions",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.countries",
         "name": "countries_code_length_check",
-        "expression": "check (char_length(code) between 2 and 3)"
+        "expression": "check (char_length(code) between 2 and 3)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.exam_results",
         "name": null,
-        "expression": "check (avg_score between 0 and 100)"
+        "expression": "check (avg_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.exam_results",
         "name": null,
-        "expression": "check (correct_count between 0 and total_questions)"
+        "expression": "check (correct_count between 0 and total_questions)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.exam_results",
         "name": null,
-        "expression": "check (jsonb_typeof(details) = 'array')"
+        "expression": "check (jsonb_typeof(details) = 'array')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.exam_results",
         "name": null,
-        "expression": "check (payload_hash ~ '^[0-9a-f]{64}$')"
+        "expression": "check (payload_hash ~ '^[0-9a-f]{64}$')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.exam_results",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.exam_results",
         "name": null,
-        "expression": "check (total_questions between 1 and 100)"
+        "expression": "check (total_questions between 1 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.exam_results",
         "name": null,
-        "expression": "check (total_score >= 0)"
+        "expression": "check (total_score >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.fixture_sync_logs",
         "name": null,
-        "expression": "check (competitions_upserted >= 0)"
+        "expression": "check (competitions_upserted >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.fixture_sync_logs",
         "name": null,
-        "expression": "check (fixtures_upserted >= 0)"
+        "expression": "check (fixtures_upserted >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.fixture_sync_logs",
         "name": null,
-        "expression": "check (jsonb_typeof(error_payload) = 'object')"
+        "expression": "check (jsonb_typeof(error_payload) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.fixture_sync_logs",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.fixture_sync_logs",
         "name": null,
-        "expression": "check (sync_status in ('success', 'partial', 'error', 'skipped'))"
+        "expression": "check (sync_status in ('success', 'partial', 'error', 'skipped'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.fixture_sync_logs",
         "name": null,
-        "expression": "check (teams_upserted >= 0)"
+        "expression": "check (teams_upserted >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.fixture_sync_logs",
         "name": null,
-        "expression": "check (venues_upserted >= 0)"
+        "expression": "check (venues_upserted >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.fixture_sync_logs",
         "name": "fixture_sync_logs_date_window_check",
-        "expression": "check (date_to >= date_from)"
+        "expression": "check (date_to >= date_from)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.fixtures",
         "name": null,
-        "expression": "check ( status in ( 'scheduled', 'confirmed', 'live', 'completed', 'postponed', 'suspended', 'cancelled' ) )"
+        "expression": "check ( status in ( 'scheduled', 'confirmed', 'live', 'completed', 'postponed', 'suspended', 'cancelled' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.fixtures",
         "name": null,
-        "expression": "check (data_source in ('institutional', 'api', 'manual'))"
+        "expression": "check (data_source in ('institutional', 'api', 'manual'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.fixtures",
         "name": null,
-        "expression": "check (jsonb_typeof(raw_source_reference) = 'object')"
+        "expression": "check (jsonb_typeof(raw_source_reference) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.fixtures",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.fixtures",
         "name": "fixtures_distinct_teams_check",
-        "expression": "check (home_team_id is null or away_team_id is null or home_team_id <> away_team_id)"
+        "expression": "check (home_team_id is null or away_team_id is null or home_team_id <> away_team_id)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.ifab_library_documents",
         "name": null,
-        "expression": "check ( category in ( 'reglas', 'circular', 'resumen', 'protocolo_var', 'cambios_reglamentarios', 'mundial', 'material_consulta' ) )"
+        "expression": "check ( category in ( 'reglas', 'circular', 'resumen', 'protocolo_var', 'cambios_reglamentarios', 'mundial', 'material_consulta' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.ifab_library_documents",
         "name": null,
-        "expression": "check (governing_body in ('IFAB', 'FIFA'))"
+        "expression": "check (governing_body in ('IFAB', 'FIFA'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.ifab_library_documents",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.ifab_library_documents",
         "name": null,
-        "expression": "check (status in ('vigente', 'proxima_actualizacion', 'archivado'))"
+        "expression": "check (status in ('vigente', 'proxima_actualizacion', 'archivado'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.ifab_library_documents",
         "name": "ifab_library_documents_current_source_check",
-        "expression": "check ( status <> 'vigente' or (source_official is not null and btrim(source_official) <> '') )"
+        "expression": "check ( status <> 'vigente' or (source_official is not null and btrim(source_official) <> '') )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.ifab_library_documents",
         "name": "ifab_library_documents_sport_body_check",
-        "expression": "check ( (sport_type = 'football_11' and governing_body = 'IFAB') or (sport_type = 'futsal' and governing_body = 'FIFA') )"
+        "expression": "check ( (sport_type = 'football_11' and governing_body = 'IFAB') or (sport_type = 'futsal' and governing_body = 'FIFA') )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_assignments",
         "name": null,
-        "expression": "check (attempts_override is null or attempts_override > 0)"
+        "expression": "check (attempts_override is null or attempts_override > 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_assignments",
         "name": null,
-        "expression": "check (status in ('assigned', 'cancelled', 'completed'))"
+        "expression": "check (status in ('assigned', 'cancelled', 'completed'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_assignments",
         "name": "institution_assessment_assignments_target_check",
-        "expression": "check ( (group_id is not null and user_id is null) or (group_id is null and user_id is not null) )"
+        "expression": "check ( (group_id is not null and user_id is null) or (group_id is null and user_id is not null) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_assignments",
         "name": "institution_assessment_assignments_window_check",
-        "expression": "check ( opens_at_override is null or closes_at_override is null or closes_at_override > opens_at_override )"
+        "expression": "check ( opens_at_override is null or closes_at_override is null or closes_at_override > opens_at_override )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_feedback",
         "name": null,
-        "expression": "check ( action in ( 'comment', 'approve', 'fail', 'request_retry', 'mark_for_review', 'assign_activity' ) )"
+        "expression": "check ( action in ( 'comment', 'approve', 'fail', 'request_retry', 'mark_for_review', 'assign_activity' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_feedback",
         "name": null,
-        "expression": "check (priority in ('low', 'normal', 'high', 'urgent'))"
+        "expression": "check (priority in ('low', 'normal', 'high', 'urgent'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_history",
         "name": null,
-        "expression": "check (jsonb_typeof(snapshot) = 'object')"
+        "expression": "check (jsonb_typeof(snapshot) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_items",
         "name": null,
-        "expression": "check ( item_type in ( 'global_clip', 'institutional_clip', 'rule_question', 'institution_content', 'manual' ) )"
+        "expression": "check ( item_type in ( 'global_clip', 'institutional_clip', 'rule_question', 'institution_content', 'manual' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_items",
         "name": null,
-        "expression": "check (jsonb_typeof(item_snapshot) = 'object')"
+        "expression": "check (jsonb_typeof(item_snapshot) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_items",
         "name": null,
-        "expression": "check (points >= 0)"
+        "expression": "check (points >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_sessions",
         "name": null,
-        "expression": "check ( status in ( 'not_started', 'in_progress', 'submitted', 'graded', 'expired', 'cancelled' ) )"
+        "expression": "check ( status in ( 'not_started', 'in_progress', 'submitted', 'graded', 'expired', 'cancelled' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_sessions",
         "name": null,
-        "expression": "check (attempt_number > 0)"
+        "expression": "check (attempt_number > 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_sessions",
         "name": null,
-        "expression": "check (jsonb_typeof(result_payload) = 'object')"
+        "expression": "check (jsonb_typeof(result_payload) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_sessions",
         "name": null,
-        "expression": "check (percentage is null or percentage between 0 and 100)"
+        "expression": "check (percentage is null or percentage between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessment_sessions",
         "name": null,
-        "expression": "check (time_spent_seconds is null or time_spent_seconds >= 0)"
+        "expression": "check (time_spent_seconds is null or time_spent_seconds >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessments",
         "name": null,
-        "expression": "check ( modality in ( 'video_analysis', 'rules_exam', 'trivia', 'referee_exam', 'communication', 'var', 'futsal', 'psychology_orientation', 'physical', 'custom' ) )"
+        "expression": "check ( modality in ( 'video_analysis', 'rules_exam', 'trivia', 'referee_exam', 'communication', 'var', 'futsal', 'psychology_orientation', 'physical', 'custom' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessments",
         "name": null,
-        "expression": "check (attempts_allowed > 0)"
+        "expression": "check (attempts_allowed > 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessments",
         "name": null,
-        "expression": "check (duration_minutes is null or duration_minutes > 0)"
+        "expression": "check (duration_minutes is null or duration_minutes > 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessments",
         "name": null,
-        "expression": "check (jsonb_typeof(settings) = 'object')"
+        "expression": "check (jsonb_typeof(settings) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessments",
         "name": null,
-        "expression": "check (minimum_score is null or minimum_score between 0 and 100)"
+        "expression": "check (minimum_score is null or minimum_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessments",
         "name": null,
-        "expression": "check (question_count is null or question_count > 0)"
+        "expression": "check (question_count is null or question_count > 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessments",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessments",
         "name": null,
-        "expression": "check (status in ('draft', 'scheduled', 'open', 'closed', 'cancelled', 'archived'))"
+        "expression": "check (status in ('draft', 'scheduled', 'open', 'closed', 'cancelled', 'archived'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessments",
         "name": null,
-        "expression": "check (video_count is null or video_count > 0)"
+        "expression": "check (video_count is null or video_count > 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_assessments",
         "name": "institution_assessments_window_check",
-        "expression": "check (opens_at is null or closes_at is null or closes_at > opens_at)"
+        "expression": "check (opens_at is null or closes_at is null or closes_at > opens_at)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_audit_logs",
         "name": null,
-        "expression": "check (after_state is null or jsonb_typeof(after_state) = 'object')"
+        "expression": "check (after_state is null or jsonb_typeof(after_state) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_audit_logs",
         "name": null,
-        "expression": "check (before_state is null or jsonb_typeof(before_state) = 'object')"
+        "expression": "check (before_state is null or jsonb_typeof(before_state) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_audit_logs",
         "name": null,
-        "expression": "check (jsonb_typeof(metadata) = 'object')"
+        "expression": "check (jsonb_typeof(metadata) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_cohorts",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_cohorts",
         "name": null,
-        "expression": "check (status in ('draft', 'active', 'paused', 'completed', 'archived'))"
+        "expression": "check (status in ('draft', 'active', 'paused', 'completed', 'archived'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_cohorts",
         "name": "institution_cohorts_window_check",
-        "expression": "check (ends_on is null or starts_on is null or ends_on >= starts_on)"
+        "expression": "check (ends_on is null or starts_on is null or ends_on >= starts_on)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_content_assignments",
         "name": "institution_content_assignments_target_check",
-        "expression": "check ( (group_id is not null and user_id is null) or (group_id is null and user_id is not null) )"
+        "expression": "check ( (group_id is not null and user_id is null) or (group_id is null and user_id is not null) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_content_assignments",
         "name": "institution_content_assignments_window_check",
-        "expression": "check (due_at is null or available_from is null or due_at >= available_from)"
+        "expression": "check (due_at is null or available_from is null or due_at >= available_from)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_contents",
         "name": null,
-        "expression": "check ( content_type in ( 'video', 'question', 'trivia', 'document', 'circular', 'class', 'exercise', 'presentation', 'pdf', 'link', 'audio', 'case_study' ) )"
+        "expression": "check ( content_type in ( 'video', 'question', 'trivia', 'document', 'circular', 'class', 'exercise', 'presentation', 'pdf', 'link', 'audio', 'case_study' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_contents",
         "name": null,
-        "expression": "check (jsonb_typeof(metadata) = 'object')"
+        "expression": "check (jsonb_typeof(metadata) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_contents",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_contents",
         "name": null,
-        "expression": "check (status in ('draft', 'in_review', 'published', 'archived', 'expired'))"
+        "expression": "check (status in ('draft', 'in_review', 'published', 'archived', 'expired'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_contents",
         "name": null,
-        "expression": "check (version > 0)"
+        "expression": "check (version > 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_contents",
         "name": null,
-        "expression": "check (visibility in ('private', 'institution', 'assigned_groups', 'public'))"
+        "expression": "check (visibility in ('private', 'institution', 'assigned_groups', 'public'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_contents",
         "name": "institution_contents_validity_check",
-        "expression": "check (valid_until is null or valid_from is null or valid_until >= valid_from)"
+        "expression": "check (valid_until is null or valid_from is null or valid_until >= valid_from)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_data_consents",
         "name": null,
-        "expression": "check ( data_category in ( 'availability', 'readiness_summary', 'physical_load', 'physical_detail', 'medical_notes', 'psychology_compliance', 'psychology_detail', 'post_match_review' ) )"
+        "expression": "check ( data_category in ( 'availability', 'readiness_summary', 'physical_load', 'physical_detail', 'medical_notes', 'psychology_compliance', 'psychology_detail', 'post_match_review' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_demo_sessions",
         "name": null,
-        "expression": "check (jsonb_typeof(metadata) = 'object')"
+        "expression": "check (jsonb_typeof(metadata) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_demo_sessions",
         "name": null,
-        "expression": "check (status in ('active', 'ended', 'expired'))"
+        "expression": "check (status in ('active', 'ended', 'expired'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_demo_sessions",
         "name": "institution_demo_sessions_expiry_check",
-        "expression": "check (expires_at > started_at)"
+        "expression": "check (expires_at > started_at)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_group_memberships",
         "name": null,
-        "expression": "check (group_role in ('participant', 'instructor', 'coordinator', 'observer'))"
+        "expression": "check (group_role in ('participant', 'instructor', 'coordinator', 'observer'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_group_memberships",
         "name": null,
-        "expression": "check (status in ('active', 'completed', 'removed'))"
+        "expression": "check (status in ('active', 'completed', 'removed'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_groups",
         "name": null,
-        "expression": "check ( group_type in ( 'course', 'cohort', 'commission', 'category', 'role', 'training', 'work_team' ) )"
+        "expression": "check ( group_type in ( 'course', 'cohort', 'commission', 'category', 'role', 'training', 'work_team' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_groups",
         "name": null,
-        "expression": "check (jsonb_typeof(metadata) = 'object')"
+        "expression": "check (jsonb_typeof(metadata) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_groups",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_groups",
         "name": null,
-        "expression": "check (status in ('draft', 'active', 'paused', 'completed', 'archived'))"
+        "expression": "check (status in ('draft', 'active', 'paused', 'completed', 'archived'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_groups",
         "name": "institution_groups_window_check",
-        "expression": "check (ends_on is null or starts_on is null or ends_on >= starts_on)"
+        "expression": "check (ends_on is null or starts_on is null or ends_on >= starts_on)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_memberships",
         "name": null,
-        "expression": "check (jsonb_typeof(metadata) = 'object')"
+        "expression": "check (jsonb_typeof(metadata) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_memberships",
         "name": null,
-        "expression": "check (primary_sport is null or primary_sport in ('football_11', 'futsal'))"
+        "expression": "check (primary_sport is null or primary_sport in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_memberships",
         "name": null,
-        "expression": "check (status in ('invited', 'active', 'suspended', 'revoked'))"
+        "expression": "check (status in ('invited', 'active', 'suspended', 'revoked'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_notification_campaigns",
         "name": null,
-        "expression": "check ( cardinality(channels) > 0 and channels <@ array['web', 'pwa', 'email', 'push']::text[] )"
+        "expression": "check ( cardinality(channels) > 0 and channels <@ array['web', 'pwa', 'email', 'push']::text[] )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_notification_campaigns",
         "name": null,
-        "expression": "check (priority in ('low', 'normal', 'high', 'urgent'))"
+        "expression": "check (priority in ('low', 'normal', 'high', 'urgent'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_notification_campaigns",
         "name": null,
-        "expression": "check (status in ('draft', 'scheduled', 'sending', 'sent', 'cancelled'))"
+        "expression": "check (status in ('draft', 'scheduled', 'sending', 'sent', 'cancelled'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_notification_recipients",
         "name": null,
-        "expression": "check (delivery_status in ('pending', 'sent', 'failed', 'read', 'dismissed'))"
+        "expression": "check (delivery_status in ('pending', 'sent', 'failed', 'read', 'dismissed'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_subscriptions",
         "name": null,
-        "expression": "check (seat_limit is null or seat_limit >= 0)"
+        "expression": "check (seat_limit is null or seat_limit >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_subscriptions",
         "name": null,
-        "expression": "check (status in ('trialing', 'active', 'paused', 'canceled', 'expired'))"
+        "expression": "check (status in ('trialing', 'active', 'paused', 'canceled', 'expired'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_subscriptions",
         "name": "institution_subscriptions_plan_check",
-        "expression": "check (plan_key in ('academy', 'enterprise'))"
+        "expression": "check (plan_key in ('academy', 'enterprise'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institution_subscriptions",
         "name": "institution_subscriptions_window_check",
-        "expression": "check (ends_at is null or ends_at > starts_at)"
+        "expression": "check (ends_at is null or ends_at > starts_at)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutional_clips",
         "name": null,
-        "expression": "check ( status in ( 'uploaded', 'under_review', 'processing', 'approved', 'rejected', 'published' ) )"
+        "expression": "check ( status in ( 'uploaded', 'under_review', 'processing', 'approved', 'rejected', 'published' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutional_lead_activities",
         "name": null,
-        "expression": "check ( activity_type in ( 'created', 'updated', 'status_changed', 'note_added', 'contact_logged', 'archived', 'restored', 'converted', 'deleted' ) )"
+        "expression": "check ( activity_type in ( 'created', 'updated', 'status_changed', 'note_added', 'contact_logged', 'archived', 'restored', 'converted', 'deleted' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutional_lead_activities",
         "name": null,
-        "expression": "check (jsonb_typeof(metadata) = 'object')"
+        "expression": "check (jsonb_typeof(metadata) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutional_leads",
         "name": null,
-        "expression": "check ( status in ( 'new', 'contacted', 'demo_scheduled', 'demo_completed', 'proposal_sent', 'negotiation', 'won', 'lost', 'archived' ) )"
+        "expression": "check ( status in ( 'new', 'contacted', 'demo_scheduled', 'demo_completed', 'proposal_sent', 'negotiation', 'won', 'lost', 'archived' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutional_leads",
         "name": null,
-        "expression": "check (instructor_count is null or instructor_count >= 0)"
+        "expression": "check (instructor_count is null or instructor_count >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutional_leads",
         "name": null,
-        "expression": "check (potential_plan in ('academy', 'enterprise'))"
+        "expression": "check (potential_plan in ('academy', 'enterprise'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutional_leads",
         "name": null,
-        "expression": "check (referee_count is null or referee_count >= 0)"
+        "expression": "check (referee_count is null or referee_count >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutional_leads",
         "name": "institutional_leads_conversion_check",
-        "expression": "check ( (converted_institution_id is null and converted_at is null) or (converted_institution_id is not null and converted_at is not null) )"
+        "expression": "check ( (converted_institution_id is null and converted_at is null) or (converted_institution_id is not null and converted_at is not null) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutions",
         "name": null,
-        "expression": "check ( cardinality(enabled_sports) > 0 and enabled_sports <@ array['football_11', 'futsal']::text[] )"
+        "expression": "check ( cardinality(enabled_sports) > 0 and enabled_sports <@ array['football_11', 'futsal']::text[] )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutions",
         "name": null,
-        "expression": "check ( institution_type in ( 'school', 'league', 'association', 'federation', 'private_academy', 'other' ) )"
+        "expression": "check ( institution_type in ( 'school', 'league', 'association', 'federation', 'private_academy', 'other' ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutions",
         "name": null,
-        "expression": "check (brand_color ~ '^#[0-9A-Fa-f]{6}$')"
+        "expression": "check (brand_color ~ '^#[0-9A-Fa-f]{6}$')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutions",
         "name": null,
-        "expression": "check (jsonb_typeof(assessment_settings) = 'object')"
+        "expression": "check (jsonb_typeof(assessment_settings) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutions",
         "name": null,
-        "expression": "check (jsonb_typeof(metrics_settings) = 'object')"
+        "expression": "check (jsonb_typeof(metrics_settings) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutions",
         "name": null,
-        "expression": "check (jsonb_typeof(privacy_settings) = 'object')"
+        "expression": "check (jsonb_typeof(privacy_settings) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutions",
         "name": null,
-        "expression": "check (license_limit >= 0)"
+        "expression": "check (license_limit >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutions",
         "name": null,
-        "expression": "check (seats_total >= 0)"
+        "expression": "check (seats_total >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutions",
         "name": null,
-        "expression": "check (seats_used >= 0)"
+        "expression": "check (seats_used >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutions",
         "name": null,
-        "expression": "check (status in ('pending', 'trial', 'active', 'suspended', 'expired', 'archived'))"
+        "expression": "check (status in ('pending', 'trial', 'active', 'suspended', 'expired', 'archived'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutions",
         "name": "institutions_license_window_check",
-        "expression": "check (license_end is null or license_start is null or license_end > license_start)"
+        "expression": "check (license_end is null or license_start is null or license_end > license_start)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.institutions",
         "name": "institutions_seat_usage_check",
-        "expression": "check (seats_used <= seats_total)"
+        "expression": "check (seats_used <= seats_total)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.match_context_snapshots",
         "name": null,
-        "expression": "check (jsonb_typeof(payload) = 'object')"
+        "expression": "check (jsonb_typeof(payload) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.match_context_snapshots",
         "name": null,
-        "expression": "check (snapshot_type in ('standings', 'form', 'disciplinary', 'official_note', 'summary'))"
+        "expression": "check (snapshot_type in ('standings', 'form', 'disciplinary', 'official_note', 'summary'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.match_context_snapshots",
         "name": null,
-        "expression": "check (source_type in ('manual', 'institutional', 'api'))"
+        "expression": "check (source_type in ('manual', 'institutional', 'api'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.match_context_snapshots",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.match_officials",
         "name": null,
-        "expression": "check (source_type in ('manual', 'institutional', 'api'))"
+        "expression": "check (source_type in ('manual', 'institutional', 'api'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.match_officials",
         "name": null,
-        "expression": "check (status in ('assigned', 'confirmed', 'replaced', 'removed'))"
+        "expression": "check (status in ('assigned', 'confirmed', 'replaced', 'removed'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.match_preparations",
         "name": null,
-        "expression": "check (jsonb_typeof(answers) = 'object')"
+        "expression": "check (jsonb_typeof(answers) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.match_preparations",
         "name": null,
-        "expression": "check (jsonb_typeof(checklist) = 'array')"
+        "expression": "check (jsonb_typeof(checklist) = 'array')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.match_preparations",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.match_preparations",
         "name": null,
-        "expression": "check (stage in ('72_48_hours', '24_hours', 'matchday'))"
+        "expression": "check (stage in ('72_48_hours', '24_hours', 'matchday'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.match_preparations",
         "name": null,
-        "expression": "check (status in ('draft', 'completed'))"
+        "expression": "check (status in ('draft', 'completed'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.notification_events",
         "name": null,
-        "expression": "check (sport_type is null or sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type is null or sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.notification_events",
         "name": null,
-        "expression": "check (status in ('queued', 'sent', 'failed', 'skipped'))"
+        "expression": "check (status in ('queued', 'sent', 'failed', 'skipped'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.performance_checkins",
         "name": null,
-        "expression": "check (checkin_type in ('pre', 'post', 'rest_day'))"
+        "expression": "check (checkin_type in ('pre', 'post', 'rest_day'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.performance_checkins",
         "name": null,
-        "expression": "check (duration_minutes is null or duration_minutes > 0)"
+        "expression": "check (duration_minutes is null or duration_minutes > 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.performance_checkins",
         "name": null,
-        "expression": "check (emotional_score is null or emotional_score between 1 and 10)"
+        "expression": "check (emotional_score is null or emotional_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.performance_checkins",
         "name": null,
-        "expression": "check (fatigue is null or fatigue between 1 and 10)"
+        "expression": "check (fatigue is null or fatigue between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.performance_checkins",
         "name": null,
-        "expression": "check (internal_load is null or internal_load >= 0)"
+        "expression": "check (internal_load is null or internal_load >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.performance_checkins",
         "name": null,
-        "expression": "check (readiness_score is null or readiness_score between 0 and 100)"
+        "expression": "check (readiness_score is null or readiness_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.performance_checkins",
         "name": null,
-        "expression": "check (rpe is null or rpe between 1 and 10)"
+        "expression": "check (rpe is null or rpe between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.performance_checkins",
         "name": null,
-        "expression": "check (sleep_hours is null or sleep_hours between 0 and 24)"
+        "expression": "check (sleep_hours is null or sleep_hours between 0 and 24)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.performance_checkins",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.performance_sessions",
         "name": null,
-        "expression": "check (duration_minutes is null or duration_minutes > 0)"
+        "expression": "check (duration_minutes is null or duration_minutes > 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.performance_sessions",
         "name": null,
-        "expression": "check (fatigue_post is null or fatigue_post between 1 and 10)"
+        "expression": "check (fatigue_post is null or fatigue_post between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.performance_sessions",
         "name": null,
-        "expression": "check (internal_load is null or internal_load >= 0)"
+        "expression": "check (internal_load is null or internal_load >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.performance_sessions",
         "name": null,
-        "expression": "check (rpe is null or rpe between 1 and 10)"
+        "expression": "check (rpe is null or rpe between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.performance_sessions",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.physical_tests",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.platform_audit_logs",
         "name": null,
-        "expression": "check (jsonb_typeof(after_state) = 'object')"
+        "expression": "check (jsonb_typeof(after_state) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.platform_audit_logs",
         "name": null,
-        "expression": "check (jsonb_typeof(before_state) = 'object')"
+        "expression": "check (jsonb_typeof(before_state) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.platform_audit_logs",
         "name": null,
-        "expression": "check (jsonb_typeof(metadata) = 'object')"
+        "expression": "check (jsonb_typeof(metadata) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.post_match_reviews",
         "name": null,
-        "expression": "check (fatigue_score is null or fatigue_score between 1 and 10)"
+        "expression": "check (fatigue_score is null or fatigue_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.post_match_reviews",
         "name": null,
-        "expression": "check (jsonb_typeof(incidents) = 'array')"
+        "expression": "check (jsonb_typeof(incidents) = 'array')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.post_match_reviews",
         "name": null,
-        "expression": "check (jsonb_typeof(key_decisions) = 'array')"
+        "expression": "check (jsonb_typeof(key_decisions) = 'array')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.post_match_reviews",
         "name": null,
-        "expression": "check (minutes_played is null or minutes_played between 0 and 180)"
+        "expression": "check (minutes_played is null or minutes_played between 0 and 180)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.post_match_reviews",
         "name": null,
-        "expression": "check (perceived_load is null or perceived_load between 1 and 10)"
+        "expression": "check (perceived_load is null or perceived_load between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.post_match_reviews",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (activation_score is null or activation_score between 1 and 10)"
+        "expression": "check (activation_score is null or activation_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (checkin_type in ('pre_match', 'post_match', 'error_recovery'))"
+        "expression": "check (checkin_type in ('pre_match', 'post_match', 'error_recovery'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (concentration_score is null or concentration_score between 1 and 10)"
+        "expression": "check (concentration_score is null or concentration_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (confidence_score is null or confidence_score between 1 and 10)"
+        "expression": "check (confidence_score is null or confidence_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (emotional_control_score is null or emotional_control_score between 1 and 10)"
+        "expression": "check (emotional_control_score is null or emotional_control_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (error_impact_score is null or error_impact_score between 1 and 10)"
+        "expression": "check (error_impact_score is null or error_impact_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (incident_minute is null or incident_minute between 0 and 130)"
+        "expression": "check (incident_minute is null or incident_minute between 0 and 130)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (jsonb_typeof(feedback) = 'object')"
+        "expression": "check (jsonb_typeof(feedback) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (jsonb_typeof(responses) = 'object')"
+        "expression": "check (jsonb_typeof(responses) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (mental_fatigue_score is null or mental_fatigue_score between 1 and 10)"
+        "expression": "check (mental_fatigue_score is null or mental_fatigue_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (mental_score is null or mental_score between 0 and 100)"
+        "expression": "check (mental_score is null or mental_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (pressure_score is null or pressure_score between 1 and 10)"
+        "expression": "check (pressure_score is null or pressure_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (process_orientation_score is null or process_orientation_score between 1 and 10)"
+        "expression": "check (process_orientation_score is null or process_orientation_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (recovery_score is null or recovery_score between 1 and 10)"
+        "expression": "check (recovery_score is null or recovery_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_checkins",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_exercise_sessions",
         "name": null,
-        "expression": "check (after_score is null or after_score between 1 and 10)"
+        "expression": "check (after_score is null or after_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_exercise_sessions",
         "name": null,
-        "expression": "check (before_score is null or before_score between 1 and 10)"
+        "expression": "check (before_score is null or before_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_exercise_sessions",
         "name": null,
-        "expression": "check (clarity_score is null or clarity_score between 1 and 10)"
+        "expression": "check (clarity_score is null or clarity_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_exercise_sessions",
         "name": null,
-        "expression": "check (exercise_type in ('focus_reset', 'pressure_scenario', 'self_talk', 'team_prebrief'))"
+        "expression": "check (exercise_type in ('focus_reset', 'pressure_scenario', 'self_talk', 'team_prebrief'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_exercise_sessions",
         "name": null,
-        "expression": "check (jsonb_typeof(feedback) = 'object')"
+        "expression": "check (jsonb_typeof(feedback) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_exercise_sessions",
         "name": null,
-        "expression": "check (pressure_level is null or pressure_level between 1 and 10)"
+        "expression": "check (pressure_level is null or pressure_level between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_exercise_sessions",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_modules",
         "name": null,
-        "expression": "check (sort_order >= 0)"
+        "expression": "check (sort_order >= 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_wellbeing_assessments",
         "name": null,
-        "expression": "check (burnout_risk_score is null or burnout_risk_score between 0 and 100)"
+        "expression": "check (burnout_risk_score is null or burnout_risk_score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_wellbeing_assessments",
         "name": null,
-        "expression": "check (concentration_difficulty_score is null or concentration_difficulty_score between 1 and 10)"
+        "expression": "check (concentration_difficulty_score is null or concentration_difficulty_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_wellbeing_assessments",
         "name": null,
-        "expression": "check (cynicism_score is null or cynicism_score between 1 and 10)"
+        "expression": "check (cynicism_score is null or cynicism_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_wellbeing_assessments",
         "name": null,
-        "expression": "check (emotional_exhaustion_score is null or emotional_exhaustion_score between 1 and 10)"
+        "expression": "check (emotional_exhaustion_score is null or emotional_exhaustion_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_wellbeing_assessments",
         "name": null,
-        "expression": "check (external_pressure_score is null or external_pressure_score between 1 and 10)"
+        "expression": "check (external_pressure_score is null or external_pressure_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_wellbeing_assessments",
         "name": null,
-        "expression": "check (institutional_support_score is null or institutional_support_score between 1 and 10)"
+        "expression": "check (institutional_support_score is null or institutional_support_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_wellbeing_assessments",
         "name": null,
-        "expression": "check (jsonb_typeof(feedback) = 'object')"
+        "expression": "check (jsonb_typeof(feedback) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_wellbeing_assessments",
         "name": null,
-        "expression": "check (motivation_score is null or motivation_score between 1 and 10)"
+        "expression": "check (motivation_score is null or motivation_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_wellbeing_assessments",
         "name": null,
-        "expression": "check (recovery_quality_score is null or recovery_quality_score between 1 and 10)"
+        "expression": "check (recovery_quality_score is null or recovery_quality_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_wellbeing_assessments",
         "name": null,
-        "expression": "check (sleep_disruption_score is null or sleep_disruption_score between 1 and 10)"
+        "expression": "check (sleep_disruption_score is null or sleep_disruption_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_wellbeing_assessments",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_wellbeing_assessments",
         "name": null,
-        "expression": "check (violence_exposure_score is null or violence_exposure_score between 1 and 10)"
+        "expression": "check (violence_exposure_score is null or violence_exposure_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.psychology_wellbeing_assessments",
         "name": null,
-        "expression": "check (workload_score is null or workload_score between 1 and 10)"
+        "expression": "check (workload_score is null or workload_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.readiness_scores",
         "name": null,
-        "expression": "check (factors is null or jsonb_typeof(factors) = 'object')"
+        "expression": "check (factors is null or jsonb_typeof(factors) = 'object')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.readiness_scores",
         "name": null,
-        "expression": "check (score between 0 and 100)"
+        "expression": "check (score between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.readiness_scores",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.referee_eligibility",
         "name": null,
-        "expression": "check (eligibility_mode in ('eligible', 'view_only', 'blocked'))"
+        "expression": "check (eligibility_mode in ('eligible', 'view_only', 'blocked'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.referee_eligibility",
         "name": null,
-        "expression": "check (source_type in ('profile', 'institutional', 'admin', 'system'))"
+        "expression": "check (source_type in ('profile', 'institutional', 'admin', 'system'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.referee_eligibility",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.referee_exam_sessions",
         "name": null,
-        "expression": "check (activity_type = 'referee_exam')"
+        "expression": "check (activity_type = 'referee_exam')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.referee_exam_sessions",
         "name": null,
-        "expression": "check (context_type in ('individual', 'institutional'))"
+        "expression": "check (context_type in ('individual', 'institutional'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.referee_exam_sessions",
         "name": null,
-        "expression": "check (item_count between 1 and 100)"
+        "expression": "check (item_count between 1 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.referee_exam_sessions",
         "name": null,
-        "expression": "check (jsonb_typeof(item_manifest) = 'array')"
+        "expression": "check (jsonb_typeof(item_manifest) = 'array')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.referee_exam_sessions",
         "name": null,
-        "expression": "check (manifest_hash ~ '^[0-9a-f]{64}$')"
+        "expression": "check (manifest_hash ~ '^[0-9a-f]{64}$')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.referee_exam_sessions",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.referee_exam_sessions",
         "name": null,
-        "expression": "check (status in ('created', 'active', 'submitted', 'expired', 'cancelled'))"
+        "expression": "check (status in ('created', 'active', 'submitted', 'expired', 'cancelled'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.referee_exam_sessions",
         "name": "referee_exam_sessions_context_check",
-        "expression": "check ( ( context_type = 'individual' and institution_id is null and institution_group_id is null and institution_assessment_session_id is null ) or ( context_type = 'institutional' and institution_id is not null and institution_assessment_session_id is not null ) )"
+        "expression": "check ( ( context_type = 'individual' and institution_id is null and institution_group_id is null and institution_assessment_session_id is null ) or ( context_type = 'institutional' and institution_id is not null and institution_assessment_session_id is not null ) )",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.referee_exam_sessions",
         "name": "referee_exam_sessions_expiry_check",
-        "expression": "check (expires_at > started_at)"
+        "expression": "check (expires_at > started_at)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.referee_exam_sessions",
         "name": "referee_exam_sessions_item_count_check",
-        "expression": "check (item_count = jsonb_array_length(item_manifest))"
+        "expression": "check (item_count = jsonb_array_length(item_manifest))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.referee_roles",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.rules_exam_results",
         "name": null,
-        "expression": "check (correct_count between 0 and total_questions)"
+        "expression": "check (correct_count between 0 and total_questions)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.rules_exam_results",
         "name": null,
-        "expression": "check (jsonb_typeof(details) = 'array')"
+        "expression": "check (jsonb_typeof(details) = 'array')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.rules_exam_results",
         "name": null,
-        "expression": "check (jsonb_typeof(topic_performance) = 'array')"
+        "expression": "check (jsonb_typeof(topic_performance) = 'array')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.rules_exam_results",
         "name": null,
-        "expression": "check (percentage between 0 and 100)"
+        "expression": "check (percentage between 0 and 100)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.rules_exam_results",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.rules_exam_results",
         "name": null,
-        "expression": "check (total_questions > 0)"
+        "expression": "check (total_questions > 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.rules_exam_results",
         "name": null,
-        "expression": "check (unanswered_count between 0 and total_questions)"
+        "expression": "check (unanswered_count between 0 and total_questions)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.teams",
         "name": null,
-        "expression": "check (source_type in ('institutional', 'api', 'manual'))"
+        "expression": "check (source_type in ('institutional', 'api', 'manual'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.teams",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.user_profiles",
         "name": null,
-        "expression": "check (preferred_sport_type is null or preferred_sport_type in ('football_11', 'futsal'))"
+        "expression": "check (preferred_sport_type is null or preferred_sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.user_roles",
         "name": null,
-        "expression": "check (subscription_plan in ('free', 'basic', 'pro'))"
+        "expression": "check (subscription_plan in ('free', 'basic', 'pro'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.user_subscriptions",
         "name": null,
-        "expression": "check (status in ('trialing', 'active', 'paused', 'canceled', 'expired'))"
+        "expression": "check (status in ('trialing', 'active', 'paused', 'canceled', 'expired'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.user_subscriptions",
         "name": "user_subscriptions_individual_plan_check",
-        "expression": "check (plan_key in ('basic', 'pro'))"
+        "expression": "check (plan_key in ('basic', 'pro'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.user_subscriptions",
         "name": "user_subscriptions_window_check",
-        "expression": "check (ends_at is null or ends_at > starts_at)"
+        "expression": "check (ends_at is null or ends_at > starts_at)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.venues",
         "name": null,
-        "expression": "check (source_type in ('institutional', 'api', 'manual'))"
+        "expression": "check (source_type in ('institutional', 'api', 'manual'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.wellness_logs",
         "name": null,
-        "expression": "check (emotional_score is null or emotional_score between 1 and 10)"
+        "expression": "check (emotional_score is null or emotional_score between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.wellness_logs",
         "name": null,
-        "expression": "check (fatigue is null or fatigue between 1 and 10)"
+        "expression": "check (fatigue is null or fatigue between 1 and 10)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.wellness_logs",
         "name": null,
-        "expression": "check (sleep_hours is null or sleep_hours between 0 and 24)"
+        "expression": "check (sleep_hours is null or sleep_hours between 0 and 24)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "public.wellness_logs",
         "name": null,
-        "expression": "check (sport_type in ('football_11', 'futsal'))"
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "reflab_meta.reflab_schema_state",
         "name": null,
-        "expression": "check (environment in ('development', 'test', 'preview', 'staging', 'production'))"
+        "expression": "check (environment in ('development', 'test', 'preview', 'staging', 'production'))",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "reflab_meta.reflab_schema_state",
         "name": null,
-        "expression": "check (installation_status = 'installed')"
+        "expression": "check (installation_status = 'installed')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "reflab_meta.reflab_schema_state",
         "name": null,
-        "expression": "check (manifest_hash ~ '^[0-9a-f]{64}$')"
+        "expression": "check (manifest_hash ~ '^[0-9a-f]{64}$')",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "reflab_meta.reflab_schema_state",
         "name": null,
-        "expression": "check (schema_version > 0)"
+        "expression": "check (schema_version > 0)",
+        "no_inherit": false,
+        "validated": true
       },
       {
         "table": "reflab_meta.reflab_schema_state",
         "name": null,
-        "expression": "check (sql_checksum ~ '^[0-9a-f]{64}$')"
+        "expression": "check (sql_checksum ~ '^[0-9a-f]{64}$')",
+        "no_inherit": false,
+        "validated": true
       }
     ],
     "buckets": [

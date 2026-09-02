@@ -351,6 +351,12 @@ function parseConstraints(tableDefinitions) {
       /^constraint\s+[a-z_][a-z0-9_]*\s+/i,
       ""
     );
+    const option = (keyword, fallback) =>
+      body.match(new RegExp(`\\b${keyword}\\s+(no action|restrict|cascade|set null|set default)\\b`, "i"))?.[1]
+        ?.toUpperCase() ?? fallback;
+    const deferrable = /\bdeferrable\b/i.test(body) && !/\bnot\s+deferrable\b/i.test(body);
+    const initiallyDeferred = /\binitially\s+deferred\b/i.test(body);
+    const validated = !/\bnot\s+valid\b/i.test(body);
 
     const primaryMatch = body.match(/^primary key\s*(\([^)]*\))/i);
     if (primaryMatch) {
@@ -368,6 +374,10 @@ function parseConstraints(tableDefinitions) {
         table,
         name: constraintName,
         columns: normalizeColumns(uniqueMatch[1]),
+        nulls_not_distinct: /\bnulls\s+not\s+distinct\b/i.test(body),
+        deferrable,
+        initially_deferred: initiallyDeferred,
+        validated,
       });
       return;
     }
@@ -382,6 +392,12 @@ function parseConstraints(tableDefinitions) {
         columns: normalizeColumns(foreignMatch[1]),
         references_table: foreignMatch[2],
         references_columns: normalizeColumns(foreignMatch[3]),
+        match_type: body.match(/\bmatch\s+(full|partial|simple)\b/i)?.[1]?.toUpperCase() ?? "SIMPLE",
+        on_update: option("on update", "NO ACTION"),
+        on_delete: option("on delete", "NO ACTION"),
+        deferrable,
+        initially_deferred: initiallyDeferred,
+        validated,
       });
       return;
     }
@@ -391,6 +407,8 @@ function parseConstraints(tableDefinitions) {
         table,
         name: constraintName,
         expression: body,
+        no_inherit: /\bno\s+inherit\b/i.test(body),
+        validated,
       });
       return;
     }
@@ -402,7 +420,15 @@ function parseConstraints(tableDefinitions) {
       primaryKeys.push({ table, name: null, columns: [columnName] });
     }
     if (/\bunique\b/i.test(normalized)) {
-      uniqueConstraints.push({ table, name: null, columns: [columnName] });
+      uniqueConstraints.push({
+        table,
+        name: null,
+        columns: [columnName],
+        nulls_not_distinct: /\bnulls\s+not\s+distinct\b/i.test(normalized),
+        deferrable,
+        initially_deferred: initiallyDeferred,
+        validated,
+      });
     }
 
     const referenceMatch = normalized.match(
@@ -415,6 +441,12 @@ function parseConstraints(tableDefinitions) {
         columns: [columnName],
         references_table: referenceMatch[1],
         references_columns: normalizeColumns(referenceMatch[2]),
+        match_type: body.match(/\bmatch\s+(full|partial|simple)\b/i)?.[1]?.toUpperCase() ?? "SIMPLE",
+        on_update: option("on update", "NO ACTION"),
+        on_delete: option("on delete", "NO ACTION"),
+        deferrable,
+        initially_deferred: initiallyDeferred,
+        validated,
       });
     }
 
@@ -424,6 +456,8 @@ function parseConstraints(tableDefinitions) {
         table,
         name: null,
         expression: normalized.slice(checkIndex + 1),
+        no_inherit: /\bno\s+inherit\b/i.test(normalized),
+        validated,
       });
     }
   }
@@ -548,7 +582,7 @@ function parseTriggers() {
     ),
     ...dynamicTriggers(
       "performance_checkin_context_triggers",
-      "validate_appointment_context",
+      "validate_checkin_owner",
       "BEFORE INSERT OR UPDATE",
       "reflab_private.validate_performance_checkin_owner"
     ),
@@ -743,6 +777,11 @@ assert(
   new Set(inventory.policies.map((policy) => `${policy.schema}.${policy.name}`))
     .size === inventory.policies.length,
   "Duplicate policy names detected within a schema."
+);
+assert(
+  new Set(inventory.triggers.map((trigger) => `${trigger.table}.${trigger.name}`))
+    .size === inventory.triggers.length,
+  "Duplicate trigger identities detected within a table."
 );
 
 if (writeMode) {

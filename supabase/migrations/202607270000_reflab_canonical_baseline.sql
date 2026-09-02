@@ -5643,8 +5643,8 @@ insert into reflab_meta.reflab_schema_state (
 )
 values (
   '202607270000',
-  'dd0c8f9d4ec4707c7483a4e333a2e59ba79356fffc1877bdae30f31b9d7ccb37',
-  '7c6f2480aeff86609e5f33a81ba45693a74f6e3296d62fbdbd61c70a28b41046',
+  '1760e75c66a1e9dd2d46da1c14bab5adfb34e23b185b4442e178cb936efd596b',
+  '0c01c9c74f9ac46dd1344ac7839dcd1d7887b0b6b48d8c4ab484ea54c14b86f4',
   coalesce(
     nullif(pg_catalog.current_setting('reflab.installation_environment', true), ''),
     'development'
