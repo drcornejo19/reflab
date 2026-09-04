@@ -12,6 +12,7 @@ const writeMode = process.argv.includes("--write");
 
 const normalizeNewlines = (value) => value.replace(/\r\n/g, "\n");
 const normalizeSpace = (value) => value.replace(/\s+/g, " ").trim();
+const stripLineComments = (value) => value.replace(/--[^\n]*(?:\n|$)/g, " ");
 const sha256 = (value) =>
   createHash("sha256").update(value, "utf8").digest("hex");
 const uniqueSorted = (values) => [...new Set(values)].sort();
@@ -341,7 +342,9 @@ function parseConstraints(tableDefinitions) {
   const checkConstraints = [];
 
   function addDefinition(table, definition, explicitName = null) {
-    const normalized = normalizeSpace(definition);
+    // A column definition may be preceded by its documentation comment inside
+    // CREATE TABLE. Comments are not part of the catalog constraint contract.
+    const normalized = normalizeSpace(stripLineComments(definition));
     const lower = normalized.toLowerCase();
     const constraintName =
       explicitName ??
@@ -467,10 +470,15 @@ function parseConstraints(tableDefinitions) {
   }
 
   const alterPattern =
-    /^alter table\s+([a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*)\s+add constraint\s+([a-z_][a-z0-9_]*)\s+([\s\S]*?);/gim;
+    /^alter table\s+([a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*)\s+([\s\S]*?);/gim;
   let match;
   while ((match = alterPattern.exec(sql)) !== null) {
-    addDefinition(match[1], match[3], match[2]);
+    for (const clause of splitTopLevel(match[2])) {
+      const constraint = clause.trim().match(
+        /^add constraint\s+([a-z_][a-z0-9_]*)\s+([\s\S]+)$/i
+      );
+      if (constraint) addDefinition(match[1], constraint[2], constraint[1]);
+    }
   }
 
   const sorter = (constraint) =>

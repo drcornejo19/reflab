@@ -19,9 +19,9 @@
     "triggers": 82,
     "explicit_indexes": 110,
     "primary_keys": 80,
-    "foreign_keys": 61,
+    "foreign_keys": 129,
     "unique_constraints": 40,
-    "check_constraints": 297,
+    "check_constraints": 300,
     "baseline_public_tables": 79,
     "baseline_private_metadata_tables": 1,
     "baseline_total_tables": 80,
@@ -268,8 +268,8 @@
     "algorithm": "sha256",
     "sql_checksum_normalization": "Replace the reflab_schema_state sql_checksum literal with 64 zeroes before hashing the SQL bytes as UTF-8.",
     "manifest_hash_normalization": "Replace both integrity hash values with 64 zeroes, serialize this JSON with two-space indentation and a final LF, then hash UTF-8 bytes.",
-    "sql_checksum": "1760e75c66a1e9dd2d46da1c14bab5adfb34e23b185b4442e178cb936efd596b",
-    "manifest_hash": "0c01c9c74f9ac46dd1344ac7839dcd1d7887b0b6b48d8c4ab484ea54c14b86f4"
+    "sql_checksum": "fdbf18a96ad88c07fae93f746e90f494cc8219d9ee077a5b9ad05150093a9bc6",
+    "manifest_hash": "9ffc6dac324bb467966496e07de4db7ff342633a2456cf66a1571eedba2fde9b"
   },
   "execution": {
     "sql_executed": false,
@@ -5133,6 +5133,40 @@
       },
       {
         "table": "public.appointments",
+        "name": "appointments_association_fk",
+        "columns": [
+          "association_id"
+        ],
+        "references_table": "public.associations",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.appointments",
+        "name": "appointments_competition_fk",
+        "columns": [
+          "competition_id"
+        ],
+        "references_table": "public.competitions",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.appointments",
         "name": "appointments_fixture_fk",
         "columns": [
           "fixture_id"
@@ -5144,6 +5178,57 @@
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
         "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.appointments",
+        "name": "appointments_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.appointments",
+        "name": "appointments_replacement_fk",
+        "columns": [
+          "replaced_by_appointment_id"
+        ],
+        "references_table": "public.appointments",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.appointments",
+        "name": "appointments_role_fk",
+        "columns": [
+          "role_id"
+        ],
+        "references_table": "public.referee_roles",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "RESTRICT",
         "deferrable": false,
         "initially_deferred": false,
         "validated": true
@@ -5167,6 +5252,23 @@
       },
       {
         "table": "public.attempts",
+        "name": "attempts_assessment_session_fk",
+        "columns": [
+          "institution_assessment_session_id"
+        ],
+        "references_table": "public.institution_assessment_sessions",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.attempts",
         "name": "attempts_exam_result_fk",
         "columns": [
           "exam_result_id"
@@ -5174,6 +5276,57 @@
         "references_table": "public.exam_results",
         "references_columns": [
           "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.attempts",
+        "name": "attempts_group_fk",
+        "columns": [
+          "institution_group_id"
+        ],
+        "references_table": "public.institution_groups",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.attempts",
+        "name": "attempts_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.capability_overrides",
+        "name": "capability_overrides_capability_fk",
+        "columns": [
+          "capability_key"
+        ],
+        "references_table": "public.capabilities",
+        "references_columns": [
+          "capability_key"
         ],
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
@@ -5251,6 +5404,23 @@
         "validated": true
       },
       {
+        "table": "public.competition_categories",
+        "name": "competition_categories_season_fk",
+        "columns": [
+          "season_id"
+        ],
+        "references_table": "public.competition_seasons",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
         "table": "public.competition_seasons",
         "name": "competition_seasons_competition_fk",
         "columns": [
@@ -5280,6 +5450,57 @@
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
         "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.exam_results",
+        "name": "exam_results_assessment_session_fk",
+        "columns": [
+          "institution_assessment_session_id"
+        ],
+        "references_table": "public.institution_assessment_sessions",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.exam_results",
+        "name": "exam_results_group_fk",
+        "columns": [
+          "institution_group_id"
+        ],
+        "references_table": "public.institution_groups",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.exam_results",
+        "name": "exam_results_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
         "deferrable": false,
         "initially_deferred": false,
         "validated": true
@@ -5320,6 +5541,74 @@
       },
       {
         "table": "public.fixtures",
+        "name": "fixtures_association_fk",
+        "columns": [
+          "association_id"
+        ],
+        "references_table": "public.associations",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.fixtures",
+        "name": "fixtures_away_team_fk",
+        "columns": [
+          "away_team_id"
+        ],
+        "references_table": "public.teams",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.fixtures",
+        "name": "fixtures_category_fk",
+        "columns": [
+          "category_id"
+        ],
+        "references_table": "public.competition_categories",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.fixtures",
+        "name": "fixtures_competition_fk",
+        "columns": [
+          "competition_id"
+        ],
+        "references_table": "public.competitions",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.fixtures",
         "name": "fixtures_country_fk",
         "columns": [
           "country_id"
@@ -5331,6 +5620,95 @@
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
         "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.fixtures",
+        "name": "fixtures_home_team_fk",
+        "columns": [
+          "home_team_id"
+        ],
+        "references_table": "public.teams",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.fixtures",
+        "name": "fixtures_season_fk",
+        "columns": [
+          "season_id"
+        ],
+        "references_table": "public.competition_seasons",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.fixtures",
+        "name": "fixtures_venue_fk",
+        "columns": [
+          "venue_id"
+        ],
+        "references_table": "public.venues",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_assessment_assignments",
+        "name": "institution_assessment_assignments_assessment_fk",
+        "columns": [
+          "assessment_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_assessments",
+        "references_columns": [
+          "id",
+          "institution_id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_assessment_assignments",
+        "name": "institution_assessment_assignments_group_fk",
+        "columns": [
+          "group_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_groups",
+        "references_columns": [
+          "id",
+          "institution_id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
         "deferrable": false,
         "initially_deferred": false,
         "validated": true
@@ -5370,6 +5748,44 @@
         "validated": true
       },
       {
+        "table": "public.institution_assessment_feedback",
+        "name": "institution_assessment_feedback_session_fk",
+        "columns": [
+          "session_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_assessment_sessions",
+        "references_columns": [
+          "id",
+          "institution_id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_assessment_history",
+        "name": "institution_assessment_history_assessment_fk",
+        "columns": [
+          "assessment_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_assessments",
+        "references_columns": [
+          "id",
+          "institution_id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
         "table": "public.institution_assessment_history",
         "name": "institution_assessment_history_institution_fk",
         "columns": [
@@ -5378,6 +5794,25 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_assessment_items",
+        "name": "institution_assessment_items_assessment_fk",
+        "columns": [
+          "assessment_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_assessments",
+        "references_columns": [
+          "id",
+          "institution_id"
         ],
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
@@ -5399,6 +5834,65 @@
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
         "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_assessment_sessions",
+        "name": "institution_assessment_sessions_assessment_fk",
+        "columns": [
+          "assessment_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_assessments",
+        "references_columns": [
+          "id",
+          "institution_id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_assessment_sessions",
+        "name": "institution_assessment_sessions_assignment_fk",
+        "columns": [
+          "assignment_id",
+          "institution_id",
+          "assessment_id"
+        ],
+        "references_table": "public.institution_assessment_assignments",
+        "references_columns": [
+          "id",
+          "institution_id",
+          "assessment_id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_assessment_sessions",
+        "name": "institution_assessment_sessions_group_fk",
+        "columns": [
+          "group_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_groups",
+        "references_columns": [
+          "id",
+          "institution_id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "RESTRICT",
         "deferrable": false,
         "initially_deferred": false,
         "validated": true
@@ -5455,6 +5949,23 @@
         "validated": true
       },
       {
+        "table": "public.institution_audit_logs",
+        "name": "institution_audit_logs_membership_fk",
+        "columns": [
+          "actor_membership_id"
+        ],
+        "references_table": "public.institution_memberships",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
         "table": "public.institution_cohorts",
         "name": "institution_cohorts_institution_fk",
         "columns": [
@@ -5463,6 +5974,44 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_content_assignments",
+        "name": "institution_content_assignments_content_fk",
+        "columns": [
+          "content_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_contents",
+        "references_columns": [
+          "id",
+          "institution_id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_content_assignments",
+        "name": "institution_content_assignments_group_fk",
+        "columns": [
+          "group_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_groups",
+        "references_columns": [
+          "id",
+          "institution_id"
         ],
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
@@ -5523,6 +6072,25 @@
         "validated": true
       },
       {
+        "table": "public.institution_data_consents",
+        "name": "institution_data_consents_membership_fk",
+        "columns": [
+          "membership_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_memberships",
+        "references_columns": [
+          "id",
+          "institution_id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
         "table": "public.institution_demo_sessions",
         "name": "institution_demo_sessions_institution_fk",
         "columns": [
@@ -5531,6 +6099,25 @@
         "references_table": "public.institutions",
         "references_columns": [
           "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_group_memberships",
+        "name": "institution_group_memberships_group_fk",
+        "columns": [
+          "group_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_groups",
+        "references_columns": [
+          "id",
+          "institution_id"
         ],
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
@@ -5552,6 +6139,44 @@
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
         "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_group_memberships",
+        "name": "institution_group_memberships_membership_fk",
+        "columns": [
+          "membership_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_memberships",
+        "references_columns": [
+          "id",
+          "institution_id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_groups",
+        "name": "institution_groups_cohort_fk",
+        "columns": [
+          "cohort_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_cohorts",
+        "references_columns": [
+          "id",
+          "institution_id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "RESTRICT",
         "deferrable": false,
         "initially_deferred": false,
         "validated": true
@@ -5608,12 +6233,84 @@
         "validated": true
       },
       {
+        "table": "public.institution_membership_permission_overrides",
+        "name": "institution_permission_overrides_membership_fk",
+        "columns": [
+          "membership_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_memberships",
+        "references_columns": [
+          "id",
+          "institution_id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_membership_permission_overrides",
+        "name": "institution_permission_overrides_permission_fk",
+        "columns": [
+          "permission_id"
+        ],
+        "references_table": "public.institution_permissions",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
         "table": "public.institution_membership_roles",
         "name": "institution_membership_roles_institution_fk",
         "columns": [
           "institution_id"
         ],
         "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_membership_roles",
+        "name": "institution_membership_roles_membership_fk",
+        "columns": [
+          "membership_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_memberships",
+        "references_columns": [
+          "id",
+          "institution_id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_membership_roles",
+        "name": "institution_membership_roles_role_fk",
+        "columns": [
+          "role_id"
+        ],
+        "references_table": "public.institution_roles",
         "references_columns": [
           "id"
         ],
@@ -5660,6 +6357,25 @@
       },
       {
         "table": "public.institution_notification_recipients",
+        "name": "institution_notification_recipients_campaign_fk",
+        "columns": [
+          "campaign_id",
+          "institution_id"
+        ],
+        "references_table": "public.institution_notification_campaigns",
+        "references_columns": [
+          "id",
+          "institution_id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_notification_recipients",
         "name": "institution_notification_recipients_institution_fk",
         "columns": [
           "institution_id"
@@ -5682,6 +6398,40 @@
           "institution_id"
         ],
         "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_role_permissions",
+        "name": "institution_role_permissions_permission_fk",
+        "columns": [
+          "permission_id"
+        ],
+        "references_table": "public.institution_permissions",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_role_permissions",
+        "name": "institution_role_permissions_role_fk",
+        "columns": [
+          "role_id"
+        ],
+        "references_table": "public.institution_roles",
         "references_columns": [
           "id"
         ],
@@ -5722,6 +6472,23 @@
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
         "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.institution_subscriptions",
+        "name": "institution_subscriptions_plan_fk",
+        "columns": [
+          "plan_key"
+        ],
+        "references_table": "public.access_plans",
+        "references_columns": [
+          "plan_key"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "NO ACTION",
         "deferrable": false,
         "initially_deferred": false,
         "validated": true
@@ -5796,6 +6563,23 @@
       },
       {
         "table": "public.match_officials",
+        "name": "match_officials_appointment_fk",
+        "columns": [
+          "appointment_id"
+        ],
+        "references_table": "public.appointments",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.match_officials",
         "name": "match_officials_fixture_fk",
         "columns": [
           "fixture_id"
@@ -5807,6 +6591,23 @@
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
         "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.match_officials",
+        "name": "match_officials_role_fk",
+        "columns": [
+          "role_id"
+        ],
+        "references_table": "public.referee_roles",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "RESTRICT",
         "deferrable": false,
         "initially_deferred": false,
         "validated": true
@@ -5846,8 +6647,59 @@
         "validated": true
       },
       {
+        "table": "public.notification_events",
+        "name": "notification_events_fixture_fk",
+        "columns": [
+          "fixture_id"
+        ],
+        "references_table": "public.fixtures",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
         "table": "public.performance_checkins",
         "name": "performance_checkins_appointment_fk",
+        "columns": [
+          "appointment_id"
+        ],
+        "references_table": "public.appointments",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.performance_checkins",
+        "name": "performance_checkins_fixture_fk",
+        "columns": [
+          "fixture_id"
+        ],
+        "references_table": "public.fixtures",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.performance_sessions",
+        "name": "performance_sessions_appointment_fk",
         "columns": [
           "appointment_id"
         ],
@@ -5875,6 +6727,40 @@
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
         "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.performance_sessions",
+        "name": "performance_sessions_fixture_fk",
+        "columns": [
+          "fixture_id"
+        ],
+        "references_table": "public.fixtures",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.plan_capabilities",
+        "name": "plan_capabilities_capability_fk",
+        "columns": [
+          "capability_key"
+        ],
+        "references_table": "public.capabilities",
+        "references_columns": [
+          "capability_key"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
         "deferrable": false,
         "initially_deferred": false,
         "validated": true
@@ -5915,6 +6801,40 @@
       },
       {
         "table": "public.psychology_checkins",
+        "name": "psychology_checkins_appointment_fk",
+        "columns": [
+          "appointment_id"
+        ],
+        "references_table": "public.appointments",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.psychology_checkins",
+        "name": "psychology_checkins_fixture_fk",
+        "columns": [
+          "fixture_id"
+        ],
+        "references_table": "public.fixtures",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.psychology_checkins",
         "name": "psychology_checkins_module_fk",
         "columns": [
           "module_slug"
@@ -5922,6 +6842,40 @@
         "references_table": "public.psychology_modules",
         "references_columns": [
           "slug"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "NO ACTION",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.psychology_exercise_sessions",
+        "name": "psychology_exercise_appointment_fk",
+        "columns": [
+          "appointment_id"
+        ],
+        "references_table": "public.appointments",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.psychology_exercise_sessions",
+        "name": "psychology_exercise_fixture_fk",
+        "columns": [
+          "fixture_id"
+        ],
+        "references_table": "public.fixtures",
+        "references_columns": [
+          "id"
         ],
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
@@ -5942,7 +6896,7 @@
         ],
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
-        "on_delete": "SET NULL",
+        "on_delete": "NO ACTION",
         "deferrable": false,
         "initially_deferred": false,
         "validated": true
@@ -5966,11 +6920,113 @@
       },
       {
         "table": "public.readiness_scores",
+        "name": "readiness_scores_appointment_fk",
+        "columns": [
+          "appointment_id"
+        ],
+        "references_table": "public.appointments",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.readiness_scores",
         "name": "readiness_scores_checkin_fk",
         "columns": [
           "checkin_id"
         ],
         "references_table": "public.performance_checkins",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.readiness_scores",
+        "name": "readiness_scores_fixture_fk",
+        "columns": [
+          "fixture_id"
+        ],
+        "references_table": "public.fixtures",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.referee_eligibility",
+        "name": "referee_eligibility_association_fk",
+        "columns": [
+          "association_id"
+        ],
+        "references_table": "public.associations",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.referee_eligibility",
+        "name": "referee_eligibility_category_fk",
+        "columns": [
+          "category_id"
+        ],
+        "references_table": "public.competition_categories",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.referee_eligibility",
+        "name": "referee_eligibility_competition_fk",
+        "columns": [
+          "competition_id"
+        ],
+        "references_table": "public.competitions",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.referee_eligibility",
+        "name": "referee_eligibility_country_fk",
+        "columns": [
+          "country_id"
+        ],
+        "references_table": "public.countries",
         "references_columns": [
           "id"
         ],
@@ -5999,6 +7055,57 @@
         "validated": true
       },
       {
+        "table": "public.referee_eligibility",
+        "name": "referee_eligibility_role_fk",
+        "columns": [
+          "role_id"
+        ],
+        "references_table": "public.referee_roles",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": "referee_exam_sessions_assessment_session_fk",
+        "columns": [
+          "institution_assessment_session_id"
+        ],
+        "references_table": "public.institution_assessment_sessions",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.referee_exam_sessions",
+        "name": "referee_exam_sessions_group_fk",
+        "columns": [
+          "institution_group_id"
+        ],
+        "references_table": "public.institution_groups",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
         "table": "public.referee_exam_sessions",
         "name": "referee_exam_sessions_institution_fk",
         "columns": [
@@ -6011,6 +7118,23 @@
         "match_type": "SIMPLE",
         "on_update": "NO ACTION",
         "on_delete": "CASCADE",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.teams",
+        "name": "teams_association_fk",
+        "columns": [
+          "association_id"
+        ],
+        "references_table": "public.associations",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
         "deferrable": false,
         "initially_deferred": false,
         "validated": true
@@ -6067,6 +7191,23 @@
         "validated": true
       },
       {
+        "table": "public.user_profiles",
+        "name": "user_profiles_institution_fk",
+        "columns": [
+          "institution_id"
+        ],
+        "references_table": "public.institutions",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
         "table": "public.user_roles",
         "name": "user_roles_institution_fk",
         "columns": [
@@ -6102,6 +7243,23 @@
       },
       {
         "table": "public.venues",
+        "name": "venues_association_fk",
+        "columns": [
+          "association_id"
+        ],
+        "references_table": "public.associations",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.venues",
         "name": "venues_country_fk",
         "columns": [
           "country_id"
@@ -6119,11 +7277,45 @@
       },
       {
         "table": "public.wellness_logs",
+        "name": "wellness_logs_appointment_fk",
+        "columns": [
+          "appointment_id"
+        ],
+        "references_table": "public.appointments",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.wellness_logs",
         "name": "wellness_logs_checkin_fk",
         "columns": [
           "checkin_id"
         ],
         "references_table": "public.performance_checkins",
+        "references_columns": [
+          "id"
+        ],
+        "match_type": "SIMPLE",
+        "on_update": "NO ACTION",
+        "on_delete": "SET NULL",
+        "deferrable": false,
+        "initially_deferred": false,
+        "validated": true
+      },
+      {
+        "table": "public.wellness_logs",
+        "name": "wellness_logs_fixture_fk",
+        "columns": [
+          "fixture_id"
+        ],
+        "references_table": "public.fixtures",
         "references_columns": [
           "id"
         ],
@@ -7759,6 +8951,13 @@
         "validated": true
       },
       {
+        "table": "public.institutional_clips",
+        "name": null,
+        "expression": "check (sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
+      },
+      {
         "table": "public.institutional_lead_activities",
         "name": null,
         "expression": "check ( activity_type in ( 'created', 'updated', 'status_changed', 'note_added', 'contact_logged', 'archived', 'restored', 'converted', 'deleted' ) )",
@@ -7853,6 +9052,13 @@
         "table": "public.institutions",
         "name": null,
         "expression": "check (license_limit >= 0)",
+        "no_inherit": false,
+        "validated": true
+      },
+      {
+        "table": "public.institutions",
+        "name": null,
+        "expression": "check (plan_key in ('academy', 'enterprise'))",
         "no_inherit": false,
         "validated": true
       },
@@ -8588,6 +9794,13 @@
         "table": "public.user_profiles",
         "name": null,
         "expression": "check (preferred_sport_type is null or preferred_sport_type in ('football_11', 'futsal'))",
+        "no_inherit": false,
+        "validated": true
+      },
+      {
+        "table": "public.user_profiles",
+        "name": null,
+        "expression": "check (subscription_plan in ('free', 'basic', 'pro'))",
         "no_inherit": false,
         "validated": true
       },

@@ -173,7 +173,7 @@ function duplicateAggregateSql(contract) {
   ) duplicate_group;`;
 }
 
-async function runScenario(scenario) {
+export async function runScenario(scenario, localExtension = null) {
   const port = await reservePort();
   const temporaryRoot = mkdtempSync(join(tmpdir(), `reflab-wave4-${scenario}-`));
   const dataDirectory = join(temporaryRoot, "data");
@@ -313,6 +313,7 @@ async function runScenario(scenario) {
     });
     const rpcFailure = parsePhase4BWave4Failure(rpc);
     if (rpc.status === 0 || rpcFailure.sqlstate !== "55000") throw new Error("Canonical RPC did not remain fail-closed after Wave 4.");
+    const extension = localExtension ? await localExtension({ database, sql, apply, scalar, historicalBefore }) : null;
     return {
       scenario, localTarget: { host: environment.PGHOST, port: environment.PGPORT },
       audit: duplicateAudit, partialIndexes: { reviewed: 2, valueSemantics: "EXACT_EQUIVALENCE", structuralEquivalence: false },
@@ -321,7 +322,7 @@ async function runScenario(scenario) {
       historicalFingerprint: "PASS", legacyWrites: "PASS", canonicalRpcFailClosed: { status: "PASS", sqlstate: rpcFailure.sqlstate },
       schemaStateRows: state.schema_state, canonicalMarker: "absent", semanticSidecar: "PASS",
       developmentObjects: "absent", ledger: { phase: state.ledger_phase, order: state.ledger_order, rows: state.ledger_rows },
-      cleanup: cleanup(),
+      extension, cleanup: cleanup(),
     };
   } finally {
     if (!cleaned) cleanup();

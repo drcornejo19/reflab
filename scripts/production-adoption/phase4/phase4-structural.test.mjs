@@ -120,10 +120,10 @@ test("unique aggregate rehearsal is local-only and preserves missing fixture evi
 });
 
 test("CHECK and FK evidence remains fail-closed until V2 is captured", () => {
-  assert.equal(CONSTRAINT_EVIDENCE.checks.canonicalTotal, 297);
+  assert.equal(CONSTRAINT_EVIDENCE.checks.canonicalTotal, 300);
   assert.deepEqual(CONSTRAINT_EVIDENCE.checks.cutoverOnly, ["public.attempts.attempts_exam_source_check"]);
-  assert.equal(CONSTRAINT_EVIDENCE.foreignKeys.canonicalTotal, 61);
-  assert.equal(CONSTRAINT_EVIDENCE.foreignKeys.unknownRequiresV2, 61);
+  assert.equal(CONSTRAINT_EVIDENCE.foreignKeys.canonicalTotal, 129);
+  assert.equal(CONSTRAINT_EVIDENCE.foreignKeys.unknownRequiresV2, 129);
 });
 
 test("provider ownership rejects conflicting migrations", () => {
@@ -144,6 +144,6 @@ test("Phase 4A closes contracts but creates no installation migration", () => {
   assert.equal(TRIGGER_PAIR_SUMMARY.institutionalValidatorSemanticDrift, 6);
   const inventory = canonicalStructuralInventory();
   assert.equal(inventory.triggers.length, 82);
-  assert.equal(inventory.checks.length, 297);
-  assert.equal(inventory.foreignKeys.length, 61);
+  assert.equal(inventory.checks.length, 300);
+  assert.equal(inventory.foreignKeys.length, 129);
 });
