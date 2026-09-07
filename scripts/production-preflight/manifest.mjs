@@ -68,6 +68,7 @@ const canonicalMigrationManifest = [
   ["20260901064253", "production_adoption_inert_private_helpers", "production_adoption_structural"],
   ["20260901064257", "production_adoption_non_unique_indexes", "production_adoption_structural"],
   ["20260901064301", "production_adoption_pre_cutover_evidence_boundary", "production_adoption_evidence"],
+  ["20260901064305", "production_adoption_pre_cutover_evidence_teardown", "production_adoption_evidence"],
 ].map(([version, name, classification]) => ({
   version,
   name,

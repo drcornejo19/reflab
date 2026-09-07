@@ -12,6 +12,7 @@ import {
 const directory = dirname(fileURLToPath(import.meta.url));
 const root = resolve(directory, "..", "..", "..");
 export const PRE_CUTOVER_MIGRATION = "supabase/migrations/20260901064301_production_adoption_pre_cutover_evidence_boundary.sql";
+export const PRE_CUTOVER_TEARDOWN = "supabase/migrations/20260901064305_production_adoption_pre_cutover_evidence_teardown.sql";
 export const PRE_CUTOVER_CATALOG_BATCH = "scripts/production-adoption/phase4/pre-cutover-catalog-evidence.sql";
 
 const literal = (value) => `'${String(value).replaceAll("'", "''")}'`;
@@ -286,13 +287,13 @@ begin read only;
 set local statement_timeout = '2min';
 set local lock_timeout = '2s';
 show transaction_read_only;
-select pg_catalog.jsonb_build_object(
+select case when pg_catalog.current_setting('transaction_read_only')='on' then pg_catalog.jsonb_build_object(
   'format',${literal(PRE_CUTOVER_EVIDENCE_FORMAT)},
   'contract_hash',${literal(evidenceContractHash())},
   'items',(select pg_catalog.jsonb_agg(item order by item->>'id') from (
     ${rows}
   ) catalog_items)
-)::text;
+) else null end::text;
 rollback;
 `;
 }
@@ -303,7 +304,9 @@ begin read only;
 set local statement_timeout = '5min';
 set local lock_timeout = '2s';
 show transaction_read_only;
-select reflab_audit.pre_cutover_evidence_snapshot_v1()::text;
+select case when pg_catalog.current_setting('transaction_read_only')='on'
+  then reflab_audit.pre_cutover_evidence_snapshot_v1()
+  else null end::text;
 rollback;
 `;
 }
@@ -324,6 +327,127 @@ export function validateReadOnlyEvidenceSql(sql) {
   const forbidden = /\b(create|alter|drop|insert|update|delete|truncate|grant|revoke|set\s+role)\b/i;
   if (forbidden.test(stripped.replace(/'[^']*'/g, "''"))) throw new Error("Writable SQL is forbidden in an evidence batch.");
   return true;
+}
+
+function buildBoundaryContractAssertions() {
+  const grants = requiredColumnGrants();
+  const grantRows = grants.flatMap((entry) => entry.columns.map((column) =>
+    `(${literal(entry.schema)},${literal(entry.relation)},${literal(column)})`)).join(",");
+  const tableRows = grants.map((entry) => `(${literal(entry.schema)},${literal(entry.relation)})`).join(",");
+  return `
+  if not exists(select 1 from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+    join pg_catalog.pg_language l on l.oid=p.prolang
+    join pg_catalog.pg_roles r on r.oid=p.proowner
+    where p.oid=pg_catalog.to_regprocedure(${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)})
+      and n.nspname='reflab_audit' and p.proname='pre_cutover_evidence_snapshot_v1'
+      and pg_catalog.pg_get_function_identity_arguments(p.oid)=''
+      and pg_catalog.format_type(p.prorettype,null)='jsonb'
+      and l.lanname='sql' and p.provolatile='s' and not p.proisstrict and p.prosecdef
+      and r.rolname=${literal(PRE_CUTOVER_BOUNDARY_OWNER)}
+      and p.proconfig=array['search_path=pg_catalog']::text[])
+     or (select pg_catalog.count(*) from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+       where n.nspname='reflab_audit' and p.proname='pre_cutover_evidence_snapshot_v1')<>1 then
+    raise exception 'Pre-cutover evidence boundary function contract drift' using errcode='55000';
+  end if;
+  if not exists(select 1 from pg_catalog.pg_proc p where p.oid=pg_catalog.to_regprocedure(${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)})
+      and pg_catalog.regexp_replace(pg_catalog.replace(p.prosrc,pg_catalog.chr(13)||pg_catalog.chr(10),pg_catalog.chr(10)),'^[[:space:]]+|[[:space:]]+$','','g')=${literal(PRE_CUTOVER_BOUNDARY_SOURCE.trim())}) then
+    raise exception 'Pre-cutover evidence boundary source drift' using errcode='55000';
+  end if;
+  if not exists(select 1 from pg_catalog.pg_roles r where r.rolname=${literal(PRE_CUTOVER_BOUNDARY_OWNER)}
+      and not r.rolcanlogin and not r.rolinherit and not r.rolbypassrls and not r.rolsuper and not r.rolcreatedb and not r.rolcreaterole) then
+    raise exception 'Pre-cutover evidence owner drift' using errcode='55000';
+  end if;
+  if exists(select 1 from pg_catalog.pg_auth_members m
+    where m.roleid in (pg_catalog.to_regrole(${literal(PRE_CUTOVER_BOUNDARY_OWNER)}),pg_catalog.to_regrole('reflab_prod_preflight_ro'))
+       or m.member in (pg_catalog.to_regrole(${literal(PRE_CUTOVER_BOUNDARY_OWNER)}),pg_catalog.to_regrole('reflab_prod_preflight_ro'))) then
+    raise exception 'Pre-cutover evidence boundary role membership drift' using errcode='55000';
+  end if;
+  if exists(select 1 from pg_catalog.pg_proc p
+    cross join lateral pg_catalog.aclexplode(coalesce(p.proacl,pg_catalog.acldefault('f'::"char",p.proowner))) acl
+    where p.oid=pg_catalog.to_regprocedure(${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)})
+      and (acl.privilege_type<>'EXECUTE'
+        or acl.grantee not in (p.proowner,pg_catalog.to_regrole('reflab_prod_preflight_ro'))
+        or (acl.grantee=pg_catalog.to_regrole('reflab_prod_preflight_ro') and acl.is_grantable)))
+     or (select pg_catalog.count(*) from pg_catalog.pg_proc p
+       cross join lateral pg_catalog.aclexplode(coalesce(p.proacl,pg_catalog.acldefault('f'::"char",p.proowner))) acl
+       where p.oid=pg_catalog.to_regprocedure(${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)})
+         and acl.grantee=pg_catalog.to_regrole('reflab_prod_preflight_ro') and acl.privilege_type='EXECUTE' and not acl.is_grantable)<>1 then
+    raise exception 'Pre-cutover evidence boundary EXECUTE drift' using errcode='55000';
+  end if;
+  if exists(select 1 from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+    where n.nspname='public' and c.relkind in ('r','p','v','m','f','S')
+      and c.relowner=pg_catalog.to_regrole(${literal(PRE_CUTOVER_BOUNDARY_OWNER)}))
+     or exists(select 1 from pg_catalog.pg_proc p
+       where p.proowner=pg_catalog.to_regrole(${literal(PRE_CUTOVER_BOUNDARY_OWNER)})
+         and p.oid<>pg_catalog.to_regprocedure(${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)}))
+     or exists(select 1 from pg_catalog.pg_namespace n
+       where n.nspowner=pg_catalog.to_regrole(${literal(PRE_CUTOVER_BOUNDARY_OWNER)})) then
+    raise exception 'Pre-cutover evidence owner has unexpected ownership' using errcode='55000';
+  end if;
+  if exists(with expected(schema_name,table_name) as (values ${tableRows})
+    select 1 from expected
+    join pg_catalog.pg_class c on c.oid=pg_catalog.to_regclass(pg_catalog.format('%I.%I',expected.schema_name,expected.table_name))
+    where pg_catalog.has_table_privilege(${literal(PRE_CUTOVER_BOUNDARY_OWNER)},c.oid,'SELECT')
+       or pg_catalog.has_table_privilege(${literal(PRE_CUTOVER_BOUNDARY_OWNER)},c.oid,'INSERT')
+       or pg_catalog.has_table_privilege(${literal(PRE_CUTOVER_BOUNDARY_OWNER)},c.oid,'UPDATE')
+       or pg_catalog.has_table_privilege(${literal(PRE_CUTOVER_BOUNDARY_OWNER)},c.oid,'DELETE')
+       or pg_catalog.has_table_privilege(${literal(PRE_CUTOVER_BOUNDARY_OWNER)},c.oid,'TRUNCATE')
+       or pg_catalog.has_table_privilege(${literal(PRE_CUTOVER_BOUNDARY_OWNER)},c.oid,'REFERENCES')
+       or pg_catalog.has_table_privilege(${literal(PRE_CUTOVER_BOUNDARY_OWNER)},c.oid,'TRIGGER')) then
+    raise exception 'Pre-cutover evidence owner has unexpected table privilege' using errcode='55000';
+  end if;
+  if exists(with expected(schema_name,table_name,column_name) as (values ${grantRows}),
+    actual as (
+      select n.nspname,c.relname,a.attname from pg_catalog.pg_class c
+      join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+      join pg_catalog.pg_attribute a on a.attrelid=c.oid and a.attnum>0 and not a.attisdropped
+      where n.nspname='public' and c.relkind in ('r','p','v','m','f')
+        and pg_catalog.has_column_privilege(${literal(PRE_CUTOVER_BOUNDARY_OWNER)},c.oid,a.attnum,'SELECT')
+    )
+    select 1 from ((select * from actual except select * from expected)
+      union all (select * from expected except select * from actual)) drift) then
+    raise exception 'Pre-cutover evidence effective column access drift' using errcode='55000';
+  end if;
+  if exists(with expected(schema_name,table_name,column_name,privilege_type) as (
+      values ${grants.flatMap((entry) => entry.columns.map((column) => `(${literal(entry.schema)},${literal(entry.relation)},${literal(column)},'SELECT')`)).join(",")}),
+    actual as (
+      select n.nspname,c.relname,a.attname,acl.privilege_type from pg_catalog.pg_attribute a
+      join pg_catalog.pg_class c on c.oid=a.attrelid join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+      cross join lateral pg_catalog.aclexplode(a.attacl) acl
+      where acl.grantee=pg_catalog.to_regrole(${literal(PRE_CUTOVER_BOUNDARY_OWNER)})
+    )
+    select 1 from ((select * from actual except select * from expected)
+      union all (select * from expected except select * from actual)) drift) then
+    raise exception 'Pre-cutover evidence direct column ACL drift' using errcode='55000';
+  end if;
+  if exists(with expected(schema_name,privilege_type) as (values ('public','USAGE'),('reflab_audit','USAGE')),
+    actual as (
+      select n.nspname,acl.privilege_type from pg_catalog.pg_namespace n
+      cross join lateral pg_catalog.aclexplode(n.nspacl) acl
+      where acl.grantee=pg_catalog.to_regrole(${literal(PRE_CUTOVER_BOUNDARY_OWNER)})
+    )
+    select 1 from ((select * from actual except select * from expected)
+      union all (select * from expected except select * from actual)) drift) then
+    raise exception 'Pre-cutover evidence schema ACL drift' using errcode='55000';
+  end if;
+  if (select pg_catalog.count(*) from (values ${tableRows}) expected(schema_name,table_name)
+      join pg_catalog.pg_class c on c.oid=pg_catalog.to_regclass(pg_catalog.format('%I.%I',expected.schema_name,expected.table_name))
+      join pg_catalog.pg_policy p on p.polrelid=c.oid
+      where p.polname=${literal(PRE_CUTOVER_POLICY_NAME)} and p.polcmd='r' and p.polpermissive
+        and p.polroles=array[pg_catalog.to_regrole(${literal(PRE_CUTOVER_BOUNDARY_OWNER)})::oid]
+        and pg_catalog.pg_get_expr(p.polqual,p.polrelid,false) in ('true','(true)') and p.polwithcheck is null)<>${grants.length}
+     or exists(select 1 from pg_catalog.pg_policy p
+       where pg_catalog.to_regrole(${literal(PRE_CUTOVER_BOUNDARY_OWNER)})::oid=any(p.polroles)
+         and not (p.polname=${literal(PRE_CUTOVER_POLICY_NAME)}
+           and exists(select 1 from (values ${tableRows}) expected(schema_name,table_name)
+             where p.polrelid=pg_catalog.to_regclass(pg_catalog.format('%I.%I',expected.schema_name,expected.table_name)))
+           and p.polcmd='r' and p.polpermissive
+           and p.polroles=array[pg_catalog.to_regrole(${literal(PRE_CUTOVER_BOUNDARY_OWNER)})::oid]
+           and pg_catalog.pg_get_expr(p.polqual,p.polrelid,false) in ('true','(true)') and p.polwithcheck is null)) then
+    raise exception 'Pre-cutover evidence RLS policy drift' using errcode='55000';
+  end if;`;
 }
 
 export function buildPreCutoverMigration() {
@@ -383,27 +507,7 @@ revoke all on function reflab_audit.pre_cutover_evidence_snapshot_v1() from publ
 grant execute on function reflab_audit.pre_cutover_evidence_snapshot_v1() to reflab_prod_preflight_ro;
 
 do $postconditions$
-declare role_state record;
-begin
-  select rolcanlogin,rolinherit,rolbypassrls,rolsuper,rolcreatedb,rolcreaterole into role_state from pg_catalog.pg_roles where rolname=${literal(PRE_CUTOVER_BOUNDARY_OWNER)};
-  if not found or role_state.rolcanlogin or role_state.rolinherit or role_state.rolbypassrls or role_state.rolsuper or role_state.rolcreatedb or role_state.rolcreaterole then
-    raise exception 'Pre-cutover evidence owner is unsafe' using errcode='55000';
-  end if;
-  if exists(select 1 from pg_catalog.pg_auth_members m join pg_catalog.pg_roles r on r.oid in (m.roleid,m.member) where r.rolname=${literal(PRE_CUTOVER_BOUNDARY_OWNER)}) then
-    raise exception 'Pre-cutover evidence owner membership is unsafe' using errcode='55000';
-  end if;
-  if not exists(select 1 from pg_catalog.pg_proc p where p.oid=pg_catalog.to_regprocedure(${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)})
-      and pg_catalog.regexp_replace(pg_catalog.replace(p.prosrc,pg_catalog.chr(13)||pg_catalog.chr(10),pg_catalog.chr(10)),'^[[:space:]]+|[[:space:]]+$','','g')=${literal(PRE_CUTOVER_BOUNDARY_SOURCE.trim())}) then
-    raise exception 'Pre-cutover evidence boundary source drifted' using errcode='55000';
-  end if;
-  if not pg_catalog.has_function_privilege('reflab_prod_preflight_ro',${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)},'EXECUTE')
-     or exists(select 1 from pg_catalog.pg_proc p cross join lateral pg_catalog.aclexplode(coalesce(p.proacl,pg_catalog.acldefault('f'::"char",p.proowner))) acl
-       where p.oid=pg_catalog.to_regprocedure(${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)}) and acl.grantee=0 and acl.privilege_type='EXECUTE')
-     or pg_catalog.has_function_privilege('anon',${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)},'EXECUTE')
-     or pg_catalog.has_function_privilege('authenticated',${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)},'EXECUTE')
-     or pg_catalog.has_function_privilege('service_role',${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)},'EXECUTE') then
-    raise exception 'Pre-cutover evidence boundary ACL is unsafe' using errcode='55000';
-  end if;
+begin${buildBoundaryContractAssertions()}
   if (select pg_catalog.count(*) from reflab_meta.reflab_schema_state)<>0
      or not exists(select 1 from reflab_meta.production_adoption_state where phase_key='canonical_objects' and phase_order=4) then
     raise exception 'Pre-cutover evidence changed adoption markers' using errcode='55000';
@@ -414,56 +518,78 @@ commit;
 }
 
 export function buildPreCutoverVerificationSql() {
-  const grants = requiredColumnGrants();
-  const grantRows = grants.flatMap((entry) => entry.columns.map((column) =>
-    `(${literal(entry.schema)},${literal(entry.relation)},${literal(column)})`)).join(",");
-  const tableRows = grants.map((entry) => `(${literal(entry.schema)},${literal(entry.relation)})`).join(",");
   return `begin;
 do $verify$
-declare function_state record; owner_state record;
-begin
-  select p.prosecdef,p.provolatile,l.lanname,r.rolname,p.proconfig into function_state
-  from pg_catalog.pg_proc p join pg_catalog.pg_language l on l.oid=p.prolang join pg_catalog.pg_roles r on r.oid=p.proowner
-  where p.oid=pg_catalog.to_regprocedure(${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)});
-  if not found or not function_state.prosecdef or function_state.provolatile<>'s' or function_state.lanname<>'sql'
-     or function_state.rolname<>${literal(PRE_CUTOVER_BOUNDARY_OWNER)} or function_state.proconfig<>array['search_path=pg_catalog']::text[] then
-    raise exception 'Pre-cutover evidence boundary function contract drift' using errcode='55000';
-  end if;
-  if not exists(select 1 from pg_catalog.pg_proc p where p.oid=pg_catalog.to_regprocedure(${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)})
-      and pg_catalog.regexp_replace(pg_catalog.replace(p.prosrc,pg_catalog.chr(13)||pg_catalog.chr(10),pg_catalog.chr(10)),'^[[:space:]]+|[[:space:]]+$','','g')=${literal(PRE_CUTOVER_BOUNDARY_SOURCE.trim())}) then
-    raise exception 'Pre-cutover evidence boundary source drift' using errcode='55000';
-  end if;
-  select rolcanlogin,rolinherit,rolbypassrls,rolsuper,rolcreatedb,rolcreaterole into owner_state from pg_catalog.pg_roles where rolname=${literal(PRE_CUTOVER_BOUNDARY_OWNER)};
-  if not found or owner_state.rolcanlogin or owner_state.rolinherit or owner_state.rolbypassrls or owner_state.rolsuper or owner_state.rolcreatedb or owner_state.rolcreaterole then
-    raise exception 'Pre-cutover evidence owner drift' using errcode='55000';
-  end if;
-  if not pg_catalog.has_function_privilege('reflab_prod_preflight_ro',${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)},'EXECUTE')
-     or exists(select 1 from pg_catalog.pg_proc p cross join lateral pg_catalog.aclexplode(coalesce(p.proacl,pg_catalog.acldefault('f'::"char",p.proowner))) acl
-       where p.oid=pg_catalog.to_regprocedure(${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)}) and acl.grantee=0 and acl.privilege_type='EXECUTE')
-     or pg_catalog.has_function_privilege('anon',${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)},'EXECUTE')
-     or pg_catalog.has_function_privilege('authenticated',${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)},'EXECUTE')
-     or pg_catalog.has_function_privilege('service_role',${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)},'EXECUTE') then
-    raise exception 'Pre-cutover evidence boundary EXECUTE drift' using errcode='55000';
-  end if;
-  if (select pg_catalog.count(*) from (values ${tableRows}) expected(schema_name,table_name)
-      join pg_catalog.pg_class c on c.oid=pg_catalog.to_regclass(expected.schema_name||'.'||expected.table_name)
-      join pg_catalog.pg_policy p on p.polrelid=c.oid
-      where p.polname=${literal(PRE_CUTOVER_POLICY_NAME)} and p.polcmd='r' and p.polpermissive
-        and p.polroles=array[(select oid from pg_catalog.pg_roles where rolname=${literal(PRE_CUTOVER_BOUNDARY_OWNER)})]
-        and pg_catalog.pg_get_expr(p.polqual,p.polrelid,false) in ('true','(true)') and p.polwithcheck is null)<>${grants.length} then
-    raise exception 'Pre-cutover evidence RLS policy drift' using errcode='55000';
-  end if;
-  if exists(select 1 from pg_catalog.pg_attribute attribute
-    join pg_catalog.pg_class relation on relation.oid=attribute.attrelid
-    join pg_catalog.pg_namespace namespace on namespace.oid=relation.relnamespace
-    cross join lateral pg_catalog.aclexplode(attribute.attacl) privilege
-    where privilege.grantee=pg_catalog.to_regrole(${literal(PRE_CUTOVER_BOUNDARY_OWNER)}) and privilege.privilege_type='SELECT'
-      and not exists(select 1 from (values ${grantRows}) expected(schema_name,table_name,column_name)
-        where expected.schema_name=namespace.nspname and expected.table_name=relation.relname and expected.column_name=attribute.attname)) then
-    raise exception 'Pre-cutover evidence excessive column grant' using errcode='55000';
-  end if;
+begin${buildBoundaryContractAssertions()}
 end $verify$;
 rollback;
+`;
+}
+
+export function buildPreCutoverTeardown() {
+  const grants = requiredColumnGrants();
+  const dropPolicies = grants.map((entry) => `drop policy ${ident(PRE_CUTOVER_POLICY_NAME)} on ${qname(entry.schema, entry.relation)};`).join("\n");
+  const revokeColumns = grants.map((entry) => `revoke select (${entry.columns.map(ident).join(", ")}) on ${qname(entry.schema, entry.relation)} from ${ident(PRE_CUTOVER_BOUNDARY_OWNER)};`).join("\n");
+  const canonicalSidecarSource = semanticAuditFunctionSource().trim();
+  return `-- ADOPTION_TEMPORARY teardown: execute only after evidence classification is complete.
+begin;
+set local lock_timeout = '5s';
+set local statement_timeout = '5min';
+
+do $preconditions$
+begin
+  if (select pg_catalog.count(*) from reflab_meta.reflab_schema_state)<>0
+     or not exists(select 1 from reflab_meta.production_adoption_state where phase_key='canonical_objects' and phase_order=4) then
+    raise exception 'Pre-cutover evidence teardown marker state drift' using errcode='55000';
+  end if;
+  if not exists(select 1 from pg_catalog.pg_proc p
+    where p.oid=pg_catalog.to_regprocedure('reflab_audit.production_semantic_snapshot()')
+      and pg_catalog.regexp_replace(pg_catalog.replace(p.prosrc,pg_catalog.chr(13)||pg_catalog.chr(10),pg_catalog.chr(10)),'^[[:space:]]+|[[:space:]]+$','','g')=${literal(canonicalSidecarSource)}) then
+    raise exception 'Phase 2A semantic sidecar drift blocks pre-cutover teardown' using errcode='55000';
+  end if;${buildBoundaryContractAssertions()}
+  if exists(select 1 from pg_catalog.pg_depend dependency
+    where dependency.refclassid='pg_catalog.pg_proc'::pg_catalog.regclass
+      and dependency.refobjid=pg_catalog.to_regprocedure(${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)})) then
+    raise exception 'Unexpected dependency blocks pre-cutover evidence teardown' using errcode='55000';
+  end if;
+end $preconditions$;
+
+revoke execute on function reflab_audit.pre_cutover_evidence_snapshot_v1() from reflab_prod_preflight_ro;
+drop function reflab_audit.pre_cutover_evidence_snapshot_v1();
+${dropPolicies}
+${revokeColumns}
+revoke usage on schema public, reflab_audit from ${ident(PRE_CUTOVER_BOUNDARY_OWNER)};
+
+do $residual_dependencies$
+declare owner_oid oid;
+begin
+  select oid into owner_oid from pg_catalog.pg_roles where rolname=${literal(PRE_CUTOVER_BOUNDARY_OWNER)};
+  if not found or exists(select 1 from pg_catalog.pg_shdepend dependency
+    where dependency.refclassid='pg_catalog.pg_authid'::pg_catalog.regclass and dependency.refobjid=owner_oid) then
+    raise exception 'Residual dependency blocks pre-cutover evidence owner teardown' using errcode='55000';
+  end if;
+end $residual_dependencies$;
+
+drop role ${ident(PRE_CUTOVER_BOUNDARY_OWNER)};
+
+do $postconditions$
+begin
+  if pg_catalog.to_regprocedure(${literal(PRE_CUTOVER_BOUNDARY_SIGNATURE)}) is not null
+     or exists(select 1 from pg_catalog.pg_roles where rolname=${literal(PRE_CUTOVER_BOUNDARY_OWNER)})
+     or exists(select 1 from pg_catalog.pg_policy where polname=${literal(PRE_CUTOVER_POLICY_NAME)}) then
+    raise exception 'Pre-cutover evidence teardown is incomplete' using errcode='55000';
+  end if;
+  if not exists(select 1 from pg_catalog.pg_proc p
+    where p.oid=pg_catalog.to_regprocedure('reflab_audit.production_semantic_snapshot()')
+      and pg_catalog.regexp_replace(pg_catalog.replace(p.prosrc,pg_catalog.chr(13)||pg_catalog.chr(10),pg_catalog.chr(10)),'^[[:space:]]+|[[:space:]]+$','','g')=${literal(canonicalSidecarSource)}) then
+    raise exception 'Phase 2A semantic sidecar changed during pre-cutover teardown' using errcode='55000';
+  end if;
+  if (select pg_catalog.count(*) from reflab_meta.reflab_schema_state)<>0
+     or not exists(select 1 from reflab_meta.production_adoption_state where phase_key='canonical_objects' and phase_order=4) then
+    raise exception 'Pre-cutover evidence teardown changed adoption markers' using errcode='55000';
+  end if;
+end $postconditions$;
+commit;
 `;
 }
 
@@ -474,6 +600,7 @@ export function writePreCutoverEvidenceFiles() {
   validateReadOnlyEvidenceSql(aggregate);
   const outputs = [
     [resolve(root, PRE_CUTOVER_MIGRATION), buildPreCutoverMigration()],
+    [resolve(root, PRE_CUTOVER_TEARDOWN), buildPreCutoverTeardown()],
     [resolve(root, PRE_CUTOVER_CATALOG_BATCH), catalog],
     [resolve(directory, "pre-cutover-aggregate-evidence.sql"), aggregate],
   ];

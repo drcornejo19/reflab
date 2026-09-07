@@ -3,7 +3,7 @@ begin read only;
 set local statement_timeout = '2min';
 set local lock_timeout = '2s';
 show transaction_read_only;
-select pg_catalog.jsonb_build_object(
+select case when pg_catalog.current_setting('transaction_read_only')='on' then pg_catalog.jsonb_build_object(
   'format','REFLAB_PRE_CUTOVER_PRODUCTION_EVIDENCE_V1',
   'contract_hash','cc2135a3eb1ba0436d5ea9b0a82de570c35f77e9a4e5bc619e9fc88ccf752c82',
   'items',(select pg_catalog.jsonb_agg(item order by item->>'id') from (
@@ -10372,5 +10372,5 @@ select pg_catalog.jsonb_build_object(
       'expected','{"role":"PUBLIC","objectType":"FUNCTION","object":"public.institution_is_super_admin()","privilege":"EXECUTE"}'::jsonb,
       'observed',coalesce(pg_catalog.jsonb_build_object('present',exists(select 1 from pg_catalog.pg_proc p cross join lateral pg_catalog.aclexplode(coalesce(p.proacl,pg_catalog.acldefault('f'::"char",p.proowner))) acl where p.oid=pg_catalog.to_regprocedure('public.institution_is_super_admin()') and acl.grantee=0 and acl.privilege_type='EXECUTE'),'role','PUBLIC','privilege','EXECUTE'),'null'::jsonb)) as item
   ) catalog_items)
-)::text;
+) else null end::text;
 rollback;

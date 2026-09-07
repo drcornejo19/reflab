@@ -11,10 +11,17 @@ import {
 } from "./pre-cutover-evidence-contract.mjs";
 import {
   PRE_CUTOVER_BOUNDARY_SOURCE, PRE_CUTOVER_BOUNDARY_SOURCE_HASH, buildPreCutoverAggregateBatch,
-  assertBalancedGeneratedSql, buildPreCutoverCatalogBatch, buildPreCutoverMigration, generatedAggregateSqlFor,
-  validateReadOnlyEvidenceSql,
+  PRE_CUTOVER_TEARDOWN, assertBalancedGeneratedSql, buildPreCutoverCatalogBatch, buildPreCutoverMigration,
+  buildPreCutoverTeardown, generatedAggregateSqlFor, validateReadOnlyEvidenceSql,
 } from "./generate-pre-cutover-evidence-sql.mjs";
-import { buildPreCutoverColumnFixtureSql, buildPreCutoverRlsFixtureSql } from "./run-pre-cutover-evidence.mjs";
+import {
+  PRE_CUTOVER_MAX_BUFFER_BYTES, PRE_CUTOVER_PRODUCTION_OPT_IN,
+  authorizeProductionEvidenceTarget, buildPreCutoverColumnFixtureSql, buildPreCutoverRlsFixtureSql,
+  executeProductionEvidenceBatch, parseOperationalEvidenceOutput, preCutoverNegativeMutationAssertionSql,
+  runProductionEvidence,
+} from "./run-pre-cutover-evidence.mjs";
+import { PRODUCTION_PROJECT_REF } from "../../production-preflight/manifest.mjs";
+import { PREFLIGHT_DATABASE_URL, PREFLIGHT_OPT_IN, PREFLIGHT_PROJECT_REF } from "../../production-preflight/target.mjs";
 
 const root = resolve(import.meta.dirname, "..", "..", "..");
 
@@ -62,7 +69,7 @@ test("temporary boundary is a fixed SQL SECURITY DEFINER with strict ACL and own
   assert.match(migration, new RegExp(`owner to "${PRE_CUTOVER_BOUNDARY_OWNER}"`, "i"));
   assert.match(migration, /revoke all on function[\s\S]*from public, anon, authenticated, service_role, reflab_rls_owner, reflab_preflight_audit_owner/i);
   assert.match(migration, /grant execute on function[\s\S]*to reflab_prod_preflight_ro/i);
-  assert.match(migration, /aclexplode[\s\S]*acl\.grantee=0[\s\S]*acl\.privilege_type='EXECUTE'/i);
+  assert.match(migration, /aclexplode[\s\S]*acl\.grantee not in \(p\.proowner,pg_catalog\.to_regrole\('reflab_prod_preflight_ro'\)\)/i);
   assert.doesNotMatch(PRE_CUTOVER_BOUNDARY_SOURCE, /\bexecute\b|\bformat\s*\(/i);
   assert.doesNotMatch(PRE_CUTOVER_BOUNDARY_SOURCE, /\binsert\b|\bupdate\b|\bdelete\b|\btruncate\b/i);
 });
@@ -77,6 +84,22 @@ test("owner capabilities, policies, and column grants are minimum and teardown-a
   assert.doesNotMatch(migration, /grant\s+(insert|update|delete|truncate)/i);
   assert.match(buildPreCutoverMigration(), /grant select \([^)]*\) on/i);
   assert.ok(!requiredColumnGrants().find((entry) => entry.table === "public.notification_events").columns.includes("id"));
+});
+
+test("boundary attestation uses exact global EXECUTE and effective column allowlists", () => {
+  const migration = buildPreCutoverMigration();
+  assert.doesNotMatch(migration, /pg_catalog\.coalesce/i);
+  assert.doesNotMatch(migration, /aclexplode\(coalesce\((?:a\.attacl|n\.nspacl)/i);
+  assert.match(migration, /aclexplode[\s\S]*grantee not in \(p\.proowner,pg_catalog\.to_regrole\('reflab_prod_preflight_ro'\)\)/i);
+  assert.match(migration, /acl\.grantee=pg_catalog\.to_regrole\('reflab_prod_preflight_ro'\)[\s\S]*not acl\.is_grantable/i);
+  assert.match(migration, /has_column_privilege\('reflab_pre_cutover_evidence_owner',c\.oid,a\.attnum,'SELECT'\)/i);
+  assert.match(migration, /select \* from actual except select \* from expected/i);
+  assert.match(migration, /select \* from expected except select \* from actual/i);
+  assert.match(migration, /has_table_privilege\('reflab_pre_cutover_evidence_owner',c\.oid,'SELECT'\)/i);
+  assert.match(migration, /pg_catalog\.pg_auth_members/i);
+  assert.match(migration, /pg_catalog\.to_regrole\('reflab_prod_preflight_ro'\)/i);
+  assert.match(migration, /p\.polroles=array\[pg_catalog\.to_regrole\('reflab_pre_cutover_evidence_owner'\)::oid\]/i);
+  assert.match(migration, /owner has unexpected ownership/i);
 });
 
 test("local structural fixture restores RLS for every aggregate dependency", () => {
@@ -146,12 +169,83 @@ test("temporary evidence infrastructure blocks final marker and has complete tea
   assert.match(migration, /reflab_schema_state\) <> 0/);
   assert.match(migration, /canonical_objects' and phase_order=4/);
   assert.equal(requiredColumnGrants().length, new Set(requiredColumnGrants().map((entry) => entry.table)).size);
+  const teardown = buildPreCutoverTeardown();
+  assert.match(teardown, /revoke execute on function reflab_audit\.pre_cutover_evidence_snapshot_v1\(\)/i);
+  assert.match(teardown, /drop function reflab_audit\.pre_cutover_evidence_snapshot_v1\(\)/i);
+  assert.equal((teardown.match(new RegExp(`drop policy "${PRE_CUTOVER_POLICY_NAME}"`, "gi")) ?? []).length, requiredColumnGrants().length);
+  assert.equal((teardown.match(/revoke select \([^)]*\) on/gi) ?? []).length, requiredColumnGrants().length);
+  assert.match(teardown, /revoke usage on schema public, reflab_audit/i);
+  assert.match(teardown, /drop role "reflab_pre_cutover_evidence_owner"/i);
+  assert.doesNotMatch(teardown, /\bcascade\b/i);
+  assert.doesNotMatch(teardown, /(create|alter|drop)\s+function\s+reflab_audit\.production_semantic_snapshot/i);
+  assert.doesNotMatch(teardown, /(insert|update|delete)\s+(into\s+|from\s+)?reflab_meta\.(reflab_schema_state|production_adoption_state)/i);
 });
 
 test("generated files match the deterministic generators", () => {
   assert.equal(readFileSync(resolve(root, "scripts/production-adoption/phase4/pre-cutover-catalog-evidence.sql"), "utf8"), buildPreCutoverCatalogBatch());
   assert.equal(readFileSync(resolve(root, "scripts/production-adoption/phase4/pre-cutover-aggregate-evidence.sql"), "utf8"), buildPreCutoverAggregateBatch());
   assert.equal(readFileSync(resolve(root, "supabase/migrations/20260901064301_production_adoption_pre_cutover_evidence_boundary.sql"), "utf8"), buildPreCutoverMigration());
+  assert.equal(readFileSync(resolve(root, PRE_CUTOVER_TEARDOWN), "utf8"), buildPreCutoverTeardown());
+});
+
+test("Production evidence execution is double-opt-in, target-pinned, and environment-sanitized", () => {
+  const environment = {
+    [PRE_CUTOVER_PRODUCTION_OPT_IN]: "true",
+    [PREFLIGHT_OPT_IN]: "true",
+    [PREFLIGHT_PROJECT_REF]: PRODUCTION_PROJECT_REF,
+    [PREFLIGHT_DATABASE_URL]: `postgresql://reflab_prod_preflight_ro:fixture-password@db.${PRODUCTION_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require`,
+    PATH: process.env.PATH,
+    SystemRoot: process.env.SystemRoot,
+    WINDIR: process.env.WINDIR,
+    PGPASSWORD: "external-password",
+    PGOPTIONS: "-c role=postgres",
+    PGSERVICE: "unsafe-service",
+    PGSERVICEFILE: "unsafe-service-file",
+    PGPASSFILE: "unsafe-pass-file",
+  };
+  const calls = [];
+  const spawn = (_command, args, options) => {
+    calls.push({ args, options });
+    const payload = options.input.includes("catalog evidence")
+      ? { format: "REFLAB_PRE_CUTOVER_PRODUCTION_EVIDENCE_V1", items: Array.from({ length: 442 }, () => ({})) }
+      : { format: "REFLAB_PRE_CUTOVER_PRODUCTION_EVIDENCE_V1", metrics: Array.from({ length: 405 }, () => ({})) };
+    return { status: 0, stdout: `on\n${JSON.stringify(payload)}\n`, stderr: "" };
+  };
+  const result = runProductionEvidence(environment, { spawn });
+  assert.equal(result.productionEvidence, true);
+  assert.equal(calls.length, 2);
+  for (const call of calls) {
+    assert.ok(call.args.includes("--quiet"));
+    assert.equal(call.options.maxBuffer, PRE_CUTOVER_MAX_BUFFER_BYTES);
+    assert.equal(call.options.env.PGUSER, "reflab_prod_preflight_ro");
+    assert.equal(call.options.env.PGPASSWORD, "fixture-password");
+    for (const forbidden of ["PGOPTIONS", "PGSERVICE", "PGSERVICEFILE", "PGPASSFILE"]) assert.equal(call.options.env[forbidden], undefined);
+  }
+  assert.throws(() => authorizeProductionEvidenceTarget({ ...environment, [PRE_CUTOVER_PRODUCTION_OPT_IN]: "false" }), /independent explicit opt-in/);
+  let invoked = false;
+  assert.throws(() => runProductionEvidence({ ...environment, [PREFLIGHT_DATABASE_URL]: "postgresql://reflab_prod_preflight_ro:x@localhost/postgres?sslmode=require" }, {
+    spawn: () => { invoked = true; return { status: 0, stdout: "", stderr: "" }; },
+  }), /exact allowlisted host/);
+  assert.equal(invoked, false);
+});
+
+test("operational read-only output must be exactly on before strict JSON", () => {
+  assert.deepEqual(parseOperationalEvidenceOutput('on\n{"result":"PASS"}\n'), { result: "PASS" });
+  assert.throws(() => parseOperationalEvidenceOutput('off\n{"result":"PASS"}\n'), /not confirmed as on/);
+  assert.throws(() => parseOperationalEvidenceOutput('{"result":"PASS"}\n'), /not confirmed as on/);
+  assert.throws(() => parseOperationalEvidenceOutput('on\nnot-json\n'), /invalid JSON/);
+  assert.throws(() => parseOperationalEvidenceOutput('on\n{"result":"PASS"}\nunexpected\n'), /malformed/);
+  const guarded = buildPreCutoverAggregateBatch();
+  assert.match(guarded, /case when pg_catalog\.current_setting\('transaction_read_only'\)='on'[\s\S]*then reflab_audit\.pre_cutover_evidence_snapshot_v1\(\)/i);
+  assert.throws(() => executeProductionEvidenceBatch(guarded, {}, {
+    spawn: () => ({ status: 0, stdout: 'off\n{"result":"PASS"}\n', stderr: "" }), processEnvironment: {},
+  }), /not confirmed as on/);
+});
+
+test("negative mutation assertions use PostgreSQL special syntax safely", () => {
+  const assertion = preCutoverNegativeMutationAssertionSql("public_table_select");
+  assert.match(assertion, /aclexplode\(coalesce\(c\.relacl/i);
+  assert.doesNotMatch(assertion, /pg_catalog\.coalesce/i);
 });
 
 test("invalid evidence IDs and duplicate IDs fail closed", () => {

@@ -27,7 +27,7 @@ import { authorizeProductionPreflightTarget } from "./target.mjs";
 import { buildGateReport, connectionCredentialBlockers } from "./gates.mjs";
 import { preCutoverEvidenceInfrastructurePresent } from "./pre-cutover-evidence-lifecycle.mjs";
 
-function sanitizeProcessOutput(value = "") {
+export function sanitizeProcessOutput(value = "") {
   return String(value)
     .replace(/postgres(?:ql)?:\/\/[^\s]+/gi, "[REDACTED_DB_URL]")
     .slice(0, 2000);
