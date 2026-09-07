@@ -203,6 +203,11 @@ export async function runScenario(scenario, localExtension = null) {
       environment: { PGDATABASE: database }, input: statement,
     });
   }
+  function sqlAs(database, user, statement) {
+    return run(binaries.psql, ["-X", "--no-psqlrc", "-q", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose", "-t", "-A"], {
+      environment: { PGDATABASE: database, PGUSER: user }, input: statement,
+    });
+  }
   function apply(database, path, base = migrationsDirectory) {
     return run(binaries.psql, ["-X", "--no-psqlrc", "-q", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose", "-f", resolve(base, path)], {
       environment: { PGDATABASE: database },
@@ -313,7 +318,7 @@ export async function runScenario(scenario, localExtension = null) {
     });
     const rpcFailure = parsePhase4BWave4Failure(rpc);
     if (rpc.status === 0 || rpcFailure.sqlstate !== "55000") throw new Error("Canonical RPC did not remain fail-closed after Wave 4.");
-    const extension = localExtension ? await localExtension({ database, sql, apply, scalar, historicalBefore }) : null;
+    const extension = localExtension ? await localExtension({ database, sql, sqlAs, apply, scalar, historicalBefore }) : null;
     return {
       scenario, localTarget: { host: environment.PGHOST, port: environment.PGPORT },
       audit: duplicateAudit, partialIndexes: { reviewed: 2, valueSemantics: "EXACT_EQUIVALENCE", structuralEquivalence: false },

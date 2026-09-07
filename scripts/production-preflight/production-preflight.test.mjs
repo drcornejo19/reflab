@@ -44,6 +44,12 @@ import {
   semanticAuditTables,
 } from "../production-adoption/phase2a/semantic-audit-contract.mjs";
 import { buildGateReport, connectionCredentialBlockers } from "./gates.mjs";
+import { preCutoverEvidenceInfrastructurePresent } from "./pre-cutover-evidence-lifecycle.mjs";
+import {
+  PRE_CUTOVER_BOUNDARY_OWNER,
+  PRE_CUTOVER_BOUNDARY_SIGNATURE,
+  PRE_CUTOVER_POLICY_NAME,
+} from "../production-adoption/phase4/pre-cutover-evidence-contract.mjs";
 import { assertReadOnlyBatch, assertReadOnlySql, maskSqlCommentsAndStrings } from "./sql-safety.mjs";
 import {
   buildConditionalInventory,
@@ -1176,6 +1182,43 @@ test("temporary semantic audit infrastructure blocks canonical finalization even
     object: "reflab_audit.production_semantic_snapshot()",
     requiredAction: "ATOMIC_SEMANTIC_ASSERTION_TEARDOWN_AND_CANONICAL_FINALIZATION",
   }]);
+});
+
+test("temporary pre-cutover evidence infrastructure blocks canonical finalization", () => {
+  const gate = buildGateReport({
+    results: validSemanticResults(),
+    migrationHistory: [],
+    manifestComparison: emptyManifestComparison(),
+    skipped: [],
+    temporaryPreCutoverEvidencePresent: true,
+  });
+  assert.equal(gate.overallGate, "BLOCKER");
+  assert.ok(gate.objectBlockers.some((entry) => entry.code === "BLOCKER_TEMPORARY_PRE_CUTOVER_EVIDENCE_PRESENT"));
+});
+
+test("every pre-cutover evidence residue independently requires teardown", () => {
+  const emptyInventory = () => new Map([
+    ["pre_cutover_evidence_role_security", { owner: null }],
+    ["function_inventory", []],
+    ["routine_grants", []],
+    ["schema_grants", []],
+    ["column_grants", []],
+    ["policy_inventory", []],
+  ]);
+  const residues = [
+    ["pre_cutover_evidence_role_security", { owner: { rolname: PRE_CUTOVER_BOUNDARY_OWNER } }],
+    ["function_inventory", [{ signature: PRE_CUTOVER_BOUNDARY_SIGNATURE }]],
+    ["routine_grants", [{ signature: PRE_CUTOVER_BOUNDARY_SIGNATURE }]],
+    ["schema_grants", [{ grantee: PRE_CUTOVER_BOUNDARY_OWNER }]],
+    ["column_grants", [{ grantee: PRE_CUTOVER_BOUNDARY_OWNER }]],
+    ["policy_inventory", [{ policy_name: PRE_CUTOVER_POLICY_NAME, roles: [PRE_CUTOVER_BOUNDARY_OWNER] }]],
+  ];
+  assert.equal(preCutoverEvidenceInfrastructurePresent(emptyInventory()), false);
+  for (const [query, payload] of residues) {
+    const inventory = emptyInventory();
+    inventory.set(query, payload);
+    assert.equal(preCutoverEvidenceInfrastructurePresent(inventory), true, query);
+  }
 });
 
 test("an exact aggregate audit replaces RLS-hidden row queries with one fixed function call", () => {

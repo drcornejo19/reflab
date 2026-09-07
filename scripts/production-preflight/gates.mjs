@@ -109,6 +109,7 @@ export function buildGateReport({
   skipped,
   targetBlockers = [],
   temporarySemanticAuditPresent = false,
+  temporaryPreCutoverEvidencePresent = false,
 }) {
   const migrationBlockers = migrationHistory
     .filter((entry) => entry.gate.startsWith("BLOCKER_"))
@@ -156,6 +157,12 @@ export function buildGateReport({
     objectBlockers.push(blocker("BLOCKER_TEMPORARY_SEMANTIC_AUDIT_PRESENT", {
       object: "reflab_audit.production_semantic_snapshot()",
       requiredAction: "ATOMIC_SEMANTIC_ASSERTION_TEARDOWN_AND_CANONICAL_FINALIZATION",
+    }));
+  }
+  if (temporaryPreCutoverEvidencePresent) {
+    objectBlockers.push(blocker("BLOCKER_TEMPORARY_PRE_CUTOVER_EVIDENCE_PRESENT", {
+      object: "reflab_audit.pre_cutover_evidence_snapshot_v1()",
+      requiredAction: "VERIFIED_PRE_CUTOVER_EVIDENCE_TEARDOWN_BEFORE_CANONICAL_MARKER",
     }));
   }
   const categories = {

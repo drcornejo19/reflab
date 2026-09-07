@@ -25,6 +25,7 @@ import {
 import { assertReadOnlyBatch } from "./sql-safety.mjs";
 import { authorizeProductionPreflightTarget } from "./target.mjs";
 import { buildGateReport, connectionCredentialBlockers } from "./gates.mjs";
+import { preCutoverEvidenceInfrastructurePresent } from "./pre-cutover-evidence-lifecycle.mjs";
 
 function sanitizeProcessOutput(value = "") {
   return String(value)
@@ -237,6 +238,7 @@ export function runProductionPreflight(environment = process.env, dependencies =
   }
   const semanticAuditBlockers = semanticAuditContractBlockers(baseResults);
   const temporarySemanticAuditPresent = semanticAuditInfrastructurePresent(baseResults);
+  const temporaryPreCutoverEvidencePresent = preCutoverEvidenceInfrastructurePresent(baseResults);
   const { runnable, skipped, auditBacked } = buildConditionalInventory(
     catalog,
     semanticVisibility,
@@ -267,6 +269,7 @@ export function runProductionPreflight(environment = process.env, dependencies =
     skipped: effectiveSkipped,
     targetBlockers: credentialBlockers,
     temporarySemanticAuditPresent,
+    temporaryPreCutoverEvidencePresent,
   });
   const report = {
     target: { projectRef: target.projectRef, host: target.host },
@@ -280,6 +283,10 @@ export function runProductionPreflight(environment = process.env, dependencies =
       teardownRequiredBeforeCanonicalMarker: temporarySemanticAuditPresent,
       contractBlockers: semanticAuditBlockers,
       replacedChecks: auditBacked,
+    },
+    preCutoverEvidence: {
+      lifecycle: "ADOPTION_TEMPORARY",
+      teardownRequiredBeforeCanonicalMarker: temporaryPreCutoverEvidencePresent,
     },
     ...gates,
     results: reportSafeResults(results),

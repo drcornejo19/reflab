@@ -156,3 +156,7 @@ and source hashes, grants (including inherited roles), index definitions and
 predicates, trigger definitions and events, and semantic integrity are all
 approval criteria. Sanity counts are derived from the current Production object
 collections and remain informational only; they never approve or block a run.
+The separate pre-cutover evidence boundary is also adoption-only. Any remaining
+`reflab_pre_cutover_evidence_owner`, versioned snapshot function, policy, or
+grant produces `BLOCKER_TEMPORARY_PRE_CUTOVER_EVIDENCE_PRESENT`; it must be
+removed by the reviewed teardown before the canonical marker is inserted.

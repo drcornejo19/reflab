@@ -166,6 +166,15 @@ export const baseInventoryQueries = [
     )`
   ),
   jsonQuery(
+    "pre_cutover_evidence_role_security",
+    `pg_catalog.json_build_object(
+      'owner', (select pg_catalog.row_to_json(x) from (
+        select rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolinherit, rolbypassrls
+        from pg_catalog.pg_roles where rolname = 'reflab_pre_cutover_evidence_owner'
+      ) x)
+    )`
+  ),
+  jsonQuery(
     "function_inventory",
     `coalesce((select pg_catalog.json_agg(x order by x.signature) from (
       select n.nspname || '.' || p.proname || '(' || pg_catalog.pg_get_function_identity_arguments(p.oid) || ')' as signature,

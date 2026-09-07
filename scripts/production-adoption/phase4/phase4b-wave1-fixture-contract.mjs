@@ -132,7 +132,7 @@ function splitTopLevel(value) {
   return parts;
 }
 
-function canonicalColumnDefinitions(source, table) {
+export function canonicalColumnDefinitions(source, table) {
   const pattern = new RegExp(`create table\\s+${table.replaceAll(".", "\\.")}\\s*\\(`, "i");
   const match = pattern.exec(source);
   if (!match) throw new Error(`Canonical fixture relation is missing: ${table}`);
@@ -143,6 +143,15 @@ function canonicalColumnDefinitions(source, table) {
     const column = normalizedDefinition.match(/^([a-z_][a-z0-9_]*)\s+/i)?.[1];
     if (!column || ["constraint", "primary", "foreign", "unique", "check"].includes(column.toLowerCase())) return [];
     return [[column, normalizedDefinition.replace(/\s+/g, " ").trim()]];
+  }));
+}
+
+export function canonicalColumnTypeDefinitions(source, table) {
+  return new Map([...canonicalColumnDefinitions(source, table)].map(([column, definition]) => {
+    const remainder = definition.slice(column.length).trim();
+    const type = remainder.match(/^(.+?)(?=\s+(?:not\s+null|default|primary\s+key|unique|references|check|generated)\b|$)/i)?.[1]?.trim();
+    if (!type) throw new Error(`Canonical fixture column type is ambiguous: ${table}.${column}`);
+    return [column, `${column} ${type}`];
   }));
 }
 
