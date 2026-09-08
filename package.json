@@ -17,6 +17,7 @@
     "test:production-preflight": "node --test scripts/production-preflight/production-preflight.test.mjs",
     "test:production-adoption:role-bootstrap": "node --test scripts/production-adoption/bootstrap/production-role-bootstrap.test.mjs",
     "test:production-adoption:role-bootstrap:postgres": "node scripts/production-adoption/bootstrap/run-production-role-bootstrap-postgres.mjs",
+    "attest:production-ddl-installer": "node scripts/production-adoption/bootstrap/run-production-installer-identity-attestation.mjs",
     "test:production-adoption:phase1": "node --test scripts/production-adoption/phase1/phase1-bridge.test.mjs",
     "test:production-adoption:phase1:postgres": "node scripts/production-adoption/phase1/run-phase1-bridge-postgres.mjs",
     "test:production-adoption:phase2a": "node --test scripts/production-adoption/phase2a/phase2a-semantic-audit.test.mjs",

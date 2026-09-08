@@ -5,6 +5,7 @@ begin;
 
 set local lock_timeout = '2s';
 set local statement_timeout = '15s';
+set local createrole_self_grant = '';
 
 do $preflight$
 declare
@@ -14,14 +15,16 @@ declare
   ownership_count bigint;
   direct_acl_count bigint;
   unsafe_membership_count bigint;
-  approved_membership_count bigint;
+  automatic_membership_count bigint;
+  explicit_membership_count bigint;
 begin
   if current_user <> 'postgres' or session_user <> 'postgres' then
     raise exception 'Production role bootstrap installer identity is not approved'
       using errcode = '42501';
   end if;
 
-  select rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolinherit, rolbypassrls
+  select rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolinherit,
+    rolreplication, rolbypassrls
   into installer
   from pg_catalog.pg_roles
   where rolname = current_user;
@@ -32,6 +35,7 @@ begin
      or installer.rolcreatedb
      or not installer.rolcreaterole
      or not installer.rolinherit
+     or installer.rolreplication
      or installer.rolbypassrls
      or not pg_catalog.has_database_privilege(current_user, pg_catalog.current_database(), 'CREATE') then
     raise exception 'Production role bootstrap installer privilege contract is not approved'
@@ -57,31 +61,6 @@ begin
         using errcode = '55000';
     end if;
 
-    select pg_catalog.count(*) filter (
-      where membership.roleid = target_role.oid
-        and membership.member = installer_role.oid
-    ), pg_catalog.count(*) filter (
-      where not (
-        membership.roleid = target_role.oid
-        and membership.member = installer_role.oid
-      )
-    )
-    into approved_membership_count, unsafe_membership_count
-    from (
-      select distinct membership.roleid, membership.member
-      from pg_catalog.pg_auth_members membership
-    ) membership
-    cross join pg_catalog.pg_roles target_role
-    cross join pg_catalog.pg_roles installer_role
-    where target_role.rolname = 'reflab_rls_owner'
-      and installer_role.rolname = 'postgres'
-      and (membership.roleid = target_role.oid or membership.member = target_role.oid);
-
-    if approved_membership_count <> 1 or unsafe_membership_count <> 0 then
-      raise exception 'Existing reflab_rls_owner membership contract is incompatible'
-        using errcode = '55000';
-    end if;
-
     if pg_catalog.shobj_description(
       (select oid from pg_catalog.pg_roles where rolname = 'reflab_rls_owner'),
       'pg_authid'
@@ -98,10 +77,61 @@ begin
       noinherit
       nobypassrls;
 
-    grant reflab_rls_owner to postgres;
+    grant reflab_rls_owner to postgres
+      with admin false, inherit false, set true
+      granted by postgres;
 
     comment on role reflab_rls_owner is
       'NOLOGIN owner for audited RefLab RLS helper functions. It owns no product tables and has read-only access to authorization tables.';
+  end if;
+
+  select
+    pg_catalog.count(*) filter (
+      where granted_role.rolname = 'reflab_rls_owner'
+        and member_role.rolname = 'postgres'
+        and grantor_role.rolname = 'supabase_admin'
+        and membership.admin_option
+        and not membership.inherit_option
+        and not membership.set_option
+    ),
+    pg_catalog.count(*) filter (
+      where granted_role.rolname = 'reflab_rls_owner'
+        and member_role.rolname = 'postgres'
+        and grantor_role.rolname = 'postgres'
+        and not membership.admin_option
+        and not membership.inherit_option
+        and membership.set_option
+    ),
+    pg_catalog.count(*) filter (
+      where not (
+        granted_role.rolname = 'reflab_rls_owner'
+        and member_role.rolname = 'postgres'
+        and (
+          (grantor_role.rolname = 'supabase_admin'
+            and membership.admin_option
+            and not membership.inherit_option
+            and not membership.set_option)
+          or
+          (grantor_role.rolname = 'postgres'
+            and not membership.admin_option
+            and not membership.inherit_option
+            and membership.set_option)
+        )
+      )
+    )
+  into automatic_membership_count, explicit_membership_count, unsafe_membership_count
+  from pg_catalog.pg_auth_members membership
+  join pg_catalog.pg_roles granted_role on granted_role.oid = membership.roleid
+  join pg_catalog.pg_roles member_role on member_role.oid = membership.member
+  join pg_catalog.pg_roles grantor_role on grantor_role.oid = membership.grantor
+  where granted_role.rolname = 'reflab_rls_owner'
+    or member_role.rolname = 'reflab_rls_owner';
+
+  if automatic_membership_count <> 1
+     or explicit_membership_count <> 1
+     or unsafe_membership_count <> 0 then
+    raise exception 'reflab_rls_owner membership options or grantor contract is incompatible'
+      using errcode = '55000';
   end if;
 
   select

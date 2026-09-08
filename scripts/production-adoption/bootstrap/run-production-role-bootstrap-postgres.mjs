@@ -25,6 +25,7 @@ const binaries = Object.freeze({
 
 const scenarios = Object.freeze([
   "login", "inherit", "bypassrls", "superuser", "createdb", "createrole",
+  "admin_option_drift", "set_option_drift", "inherit_option_drift", "incompatible_grantor",
   "unexpected_membership", "unexpected_ownership", "unexpected_grant", "wrong_installer",
 ]);
 
@@ -79,28 +80,78 @@ export function createTargetSql(overrides = {}) {
     attributes.createdb ? "createdb" : "nocreatedb",
     attributes.createrole ? "createrole" : "nocreaterole",
   ].join(" ");
-  return `create role reflab_rls_owner ${roleOptions};
-    grant reflab_rls_owner to postgres;
+  return `set createrole_self_grant = '';
+    create role reflab_rls_owner ${roleOptions};
+    grant reflab_rls_owner to postgres with admin false, inherit false, set true granted by postgres;
     comment on role reflab_rls_owner is ${sqlLiteral("NOLOGIN owner for audited RefLab RLS helper functions. It owns no product tables and has read-only access to authorization tables.")};`;
 }
 
-function setupSql(scenario) {
+function setupScenario(environment, scenario) {
+  if (scenario === "wrong_installer") {
+    psql(environment, "create role wrong_installer login inherit createrole nosuperuser nocreatedb noreplication nobypassrls; grant create on database postgres to wrong_installer;", "supabase_admin");
+    return;
+  }
+
+  psql(environment, createTargetSql(), "postgres");
   const attribute = ["login", "inherit", "bypassrls", "superuser", "createdb", "createrole"].find(
     (candidate) => candidate === scenario,
   );
-  if (attribute) return createTargetSql({ [attribute]: true });
-  if (scenario === "unexpected_membership") return `${createTargetSql()} create role unexpected_parent nologin; grant unexpected_parent to reflab_rls_owner;`;
-  if (scenario === "unexpected_ownership") return `${createTargetSql()} create schema unexpected_owned authorization reflab_rls_owner;`;
-  if (scenario === "unexpected_grant") return `${createTargetSql()} alter default privileges for role cluster_admin grant select on tables to reflab_rls_owner;`;
-  if (scenario === "wrong_installer") return "create role wrong_installer login inherit createrole nosuperuser nocreatedb nobypassrls; grant create on database postgres to wrong_installer;";
-  return "";
+  if (attribute) {
+    psql(environment, `alter role reflab_rls_owner ${attribute};`, "supabase_admin");
+    return;
+  }
+  if (scenario === "admin_option_drift") {
+    psql(environment, "grant reflab_rls_owner to postgres with admin false granted by supabase_admin;", "supabase_admin");
+  } else if (scenario === "set_option_drift") {
+    psql(environment, "grant reflab_rls_owner to postgres with set false granted by postgres;", "postgres");
+  } else if (scenario === "inherit_option_drift") {
+    psql(environment, "grant reflab_rls_owner to postgres with inherit true granted by postgres;", "postgres");
+  } else if (scenario === "incompatible_grantor") {
+    psql(environment, "create role unexpected_grantor login; grant reflab_rls_owner to unexpected_grantor with admin true, inherit false, set false;", "supabase_admin");
+    psql(environment, "grant reflab_rls_owner to postgres with admin false, inherit false, set true;", "unexpected_grantor");
+  } else if (scenario === "unexpected_membership") {
+    psql(environment, "create role unexpected_parent nologin; grant unexpected_parent to reflab_rls_owner;", "supabase_admin");
+  } else if (scenario === "unexpected_ownership") {
+    psql(environment, "create schema unexpected_owned authorization reflab_rls_owner;", "supabase_admin");
+  } else if (scenario === "unexpected_grant") {
+    psql(environment, "alter default privileges for role supabase_admin grant select on tables to reflab_rls_owner;", "supabase_admin");
+  }
 }
 
 function roleFingerprint(environment) {
   return psql(environment, `select pg_catalog.md5(coalesce(pg_catalog.json_agg(x order by x.kind,x.value)::text,'')) from (
     select 'role' kind, pg_catalog.concat_ws(':',rolname,rolcanlogin,rolsuper,rolcreatedb,rolcreaterole,rolinherit,rolbypassrls) value from pg_catalog.pg_roles where rolname='reflab_rls_owner'
-    union all select 'membership',roleid::text||':'||member::text from pg_catalog.pg_auth_members where roleid=pg_catalog.to_regrole('reflab_rls_owner') or member=pg_catalog.to_regrole('reflab_rls_owner')
+    union all select 'membership',pg_catalog.concat_ws(':',roleid,member,grantor,admin_option,inherit_option,set_option) from pg_catalog.pg_auth_members where roleid=pg_catalog.to_regrole('reflab_rls_owner') or member=pg_catalog.to_regrole('reflab_rls_owner')
   ) x;`).stdout.trim();
+}
+
+function assertScenarioMutation(environment, scenario) {
+  const roleAttribute = {
+    login: "rolcanlogin", inherit: "rolinherit", bypassrls: "rolbypassrls",
+    superuser: "rolsuper", createdb: "rolcreatedb", createrole: "rolcreaterole",
+  }[scenario];
+  let predicate;
+  if (roleAttribute) {
+    predicate = `exists(select 1 from pg_catalog.pg_roles where rolname='reflab_rls_owner' and ${roleAttribute})`;
+  } else if (scenario === "admin_option_drift") {
+    predicate = "exists(select 1 from pg_catalog.pg_auth_members m join pg_catalog.pg_roles g on g.oid=m.grantor where m.roleid='reflab_rls_owner'::regrole and m.member='postgres'::regrole and g.rolname='supabase_admin' and not m.admin_option and not m.inherit_option and not m.set_option)";
+  } else if (scenario === "set_option_drift") {
+    predicate = "exists(select 1 from pg_catalog.pg_auth_members m join pg_catalog.pg_roles g on g.oid=m.grantor where m.roleid='reflab_rls_owner'::regrole and m.member='postgres'::regrole and g.rolname='postgres' and not m.set_option)";
+  } else if (scenario === "inherit_option_drift") {
+    predicate = "exists(select 1 from pg_catalog.pg_auth_members m join pg_catalog.pg_roles g on g.oid=m.grantor where m.roleid='reflab_rls_owner'::regrole and m.member='postgres'::regrole and g.rolname='postgres' and m.inherit_option)";
+  } else if (scenario === "incompatible_grantor") {
+    predicate = "exists(select 1 from pg_catalog.pg_auth_members m join pg_catalog.pg_roles g on g.oid=m.grantor where m.roleid='reflab_rls_owner'::regrole and m.member='postgres'::regrole and g.rolname='unexpected_grantor')";
+  } else if (scenario === "unexpected_membership") {
+    predicate = "exists(select 1 from pg_catalog.pg_auth_members where member='reflab_rls_owner'::regrole and roleid='unexpected_parent'::regrole)";
+  } else if (scenario === "unexpected_ownership") {
+    predicate = "exists(select 1 from pg_catalog.pg_namespace where nspname='unexpected_owned' and nspowner='reflab_rls_owner'::regrole)";
+  } else if (scenario === "unexpected_grant") {
+    predicate = "exists(select 1 from pg_catalog.pg_default_acl d cross join lateral pg_catalog.aclexplode(d.defaclacl) a where a.grantee='reflab_rls_owner'::regrole)";
+  } else if (scenario === "wrong_installer") {
+    predicate = "exists(select 1 from pg_catalog.pg_roles where rolname='wrong_installer' and rolcanlogin and rolcreaterole and not rolsuper and not rolbypassrls)";
+  }
+  const observed = predicate ? psql(environment, `select ${predicate};`, "supabase_admin").stdout.trim() : "f";
+  if (observed !== "t") throw new Error(`HARNESS_SETUP_FAIL: mutation was not installed for ${scenario}`);
 }
 
 async function withCluster(scenario, callback) {
@@ -111,12 +162,14 @@ async function withCluster(scenario, callback) {
   let started = false;
   try {
     for (const binary of Object.values(binaries)) if (!existsSync(binary)) throw new Error(`PostgreSQL binary unavailable: ${binary}`);
-    command(binaries.initdb, ["--auth=trust", "--username=cluster_admin", "--encoding=UTF8", "--no-locale", "--pgdata", data]);
+    command(binaries.initdb, ["--auth=trust", "--username=supabase_admin", "--encoding=UTF8", "--no-locale", "--pgdata", data]);
     command(binaries.pgCtl, ["start", "-D", data, "-l", log, "-o", `-h 127.0.0.1 -p ${port}`, "-w"], { stdio: "ignore" }); started = true;
     const environment = { port };
-    psql(environment, "create role postgres login inherit nosuperuser nocreatedb createrole nobypassrls; grant create on database postgres to postgres;", "cluster_admin");
-    const setup = setupSql(scenario);
-    if (setup) psql(environment, setup, "cluster_admin");
+    psql(environment, "create role postgres login inherit nosuperuser nocreatedb createrole noreplication nobypassrls; grant create on database postgres to postgres;", "supabase_admin");
+    if (scenarios.includes(scenario)) {
+      setupScenario(environment, scenario);
+      assertScenarioMutation(environment, scenario);
+    }
     return await callback(environment);
   } finally {
     if (started) {
@@ -129,7 +182,7 @@ async function withCluster(scenario, callback) {
 
 async function positive(scenario) {
   return withCluster(scenario, async (environment) => {
-    if (scenario === "exact") psql(environment, createTargetSql());
+    if (scenario === "exact") psql(environment, createTargetSql(), "postgres");
     psql(environment, bootstrap);
     if (scenario === "exact") psql(environment, bootstrap);
     const payload = parseAttestationOutput(psql(environment, attestation).stdout);

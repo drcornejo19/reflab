@@ -9,8 +9,6 @@ with target_role as (
   select oid, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolinherit, rolbypassrls
   from pg_catalog.pg_roles
   where rolname = 'reflab_rls_owner'
-), installer_role as (
-  select oid from pg_catalog.pg_roles where rolname = 'postgres'
 ), ownership as (
   select
     (select pg_catalog.count(*) from pg_catalog.pg_class object, target_role where object.relowner = target_role.oid)
@@ -39,16 +37,44 @@ with target_role as (
 ), memberships as (
   select
     pg_catalog.count(*) filter (
-      where membership.roleid = target_role.oid and membership.member = installer_role.oid
-    ) as approved_count,
+      where granted_role.rolname = 'reflab_rls_owner'
+        and member_role.rolname = 'postgres'
+        and grantor_role.rolname = 'supabase_admin'
+        and membership.admin_option
+        and not membership.inherit_option
+        and not membership.set_option
+    ) as automatic_count,
     pg_catalog.count(*) filter (
-      where not (membership.roleid = target_role.oid and membership.member = installer_role.oid)
+      where granted_role.rolname = 'reflab_rls_owner'
+        and member_role.rolname = 'postgres'
+        and grantor_role.rolname = 'postgres'
+        and not membership.admin_option
+        and not membership.inherit_option
+        and membership.set_option
+    ) as explicit_count,
+    pg_catalog.count(*) filter (
+      where not (
+        granted_role.rolname = 'reflab_rls_owner'
+        and member_role.rolname = 'postgres'
+        and (
+          (grantor_role.rolname = 'supabase_admin'
+            and membership.admin_option
+            and not membership.inherit_option
+            and not membership.set_option)
+          or
+          (grantor_role.rolname = 'postgres'
+            and not membership.admin_option
+            and not membership.inherit_option
+            and membership.set_option)
+        )
+      )
     ) as unexpected_count
-  from (
-    select distinct membership.roleid, membership.member
-    from pg_catalog.pg_auth_members membership
-  ) membership, target_role, installer_role
-  where membership.roleid = target_role.oid or membership.member = target_role.oid
+  from pg_catalog.pg_auth_members membership
+  join pg_catalog.pg_roles granted_role on granted_role.oid = membership.roleid
+  join pg_catalog.pg_roles member_role on member_role.oid = membership.member
+  join pg_catalog.pg_roles grantor_role on grantor_role.oid = membership.grantor
+  where granted_role.rolname = 'reflab_rls_owner'
+    or member_role.rolname = 'reflab_rls_owner'
 ), effective_writes as (
   select
     (select pg_catalog.count(*)
@@ -83,7 +109,8 @@ select pg_catalog.json_build_object(
   'role_present', (select pg_catalog.count(*) = 1 from target_role),
   'attributes_exact', coalesce((select not rolcanlogin and not rolsuper and not rolcreatedb
     and not rolcreaterole and not rolinherit and not rolbypassrls from target_role), false),
-  'approved_memberships', (select approved_count from memberships),
+  'automatic_memberships', (select automatic_count from memberships),
+  'explicit_memberships', (select explicit_count from memberships),
   'unexpected_memberships', (select unexpected_count from memberships),
   'owned_objects', (select object_count from ownership),
   'direct_acl_entries', (select entry_count from direct_acl),

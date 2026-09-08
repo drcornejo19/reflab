@@ -4,7 +4,12 @@
 
 This bootstrap is a separately approved cluster-level action that precedes Phase 1. It creates only `reflab_rls_owner`; it does not apply migrations, discover pending SQL, write product data, create adoption schemas, or install a canonical marker.
 
-The committed canonical contract identifies `postgres` as the Supabase migration identity and permits exactly one role membership: `reflab_rls_owner` granted to `postgres`. That membership is needed later to transfer only reviewed helper functions to the dedicated owner. Any other membership is drift.
+The committed canonical contract identifies `postgres` as the Supabase migration identity. PostgreSQL 17 represents the approved relationship using exactly two `pg_auth_members` rows for the same role/member pair:
+
+- Automatic creator row: role `reflab_rls_owner`, member `postgres`, grantor `supabase_admin`, `ADMIN TRUE`, `INHERIT FALSE`, `SET FALSE`.
+- Explicit operational row: role `reflab_rls_owner`, member `postgres`, grantor `postgres`, `ADMIN FALSE`, `INHERIT FALSE`, `SET TRUE`.
+
+The first row is PostgreSQL 17's automatic grant to a non-superuser `CREATEROLE` creator. The bootstrap pins `createrole_self_grant` to its empty/default behavior. The second row supplies only the `SET ROLE` capability required by later reviewed ownership transfers, without inherited privileges. `supabase_admin` is the single approved managed-cluster bootstrap grantor; a different grantor fails closed. Any additional row or option drift is incompatible.
 
 ## Role contract
 
@@ -16,7 +21,7 @@ PostgreSQL role DDL (`CREATE ROLE`, role membership `GRANT`, and `COMMENT ON ROL
 
 The bootstrap runner accepts only the exact direct Production host or approved Session pooler, database `postgres`, SSL mode `require`, project `nagjddldrldwavmfaytc`, and installer identity `postgres`. It requires two independent opt-ins, an externally approved frozen HEAD, a clean worktree, and pinned hashes for both SQL artifacts before starting `psql`.
 
-For role bootstrap, the installer must be `LOGIN`, `INHERIT`, `CREATEROLE`, `NOSUPERUSER`, `NOCREATEDB`, and `NOBYPASSRLS`, with effective `CREATE` on the target database. These capabilities are observed, never granted by the runner. A platform identity that does not match this contract is a blocker.
+For role bootstrap, the installer must be `LOGIN`, `INHERIT`, `CREATEROLE`, `NOSUPERUSER`, `NOCREATEDB`, `NOREPLICATION`, and `NOBYPASSRLS`, with effective `CREATE` on the target database. These capabilities are observed, never granted by the runner. A platform identity that does not match this contract is a blocker.
 
 Phase 1 is a separate approval. Its first migration requires database `CREATE` and creates only its own schemas and state objects. Later adoption migrations additionally require ownership of the exact tables they alter and membership in `reflab_rls_owner` for reviewed helper ownership transfers. Those per-migration capabilities must be attested by a future artifact-specific runner; this bootstrap runner cannot execute Phase 1 or any arbitrary SQL path.
 
@@ -35,6 +40,19 @@ node scripts/production-adoption/bootstrap/run-production-role-bootstrap.mjs --p
 
 The runner passes only a sanitized environment to `psql`, never prints the URL or password, and records only project, host, database, installer, HEAD, artifact hash, prior role state, and result.
 
+## Read-only installer identity evidence
+
+Installer evidence uses the existing Production preflight credential mechanism and never accepts an installer credential. Supply the already-approved read-only values only in the invoking process:
+
+```powershell
+$env:ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT = "true"
+$env:REFLAB_PRODUCTION_PREFLIGHT_PROJECT_REF = "nagjddldrldwavmfaytc"
+$env:REFLAB_PRODUCTION_PREFLIGHT_DB_URL = "<SET_LOCALLY>"
+npm run attest:production-ddl-installer
+```
+
+The entrypoint does not load application `.env` files. The URL remains process-local, must identify `reflab_prod_preflight_ro`, and is passed through the existing exact target and SSL guard. Inherited `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGSSLMODE`, `PGOPTIONS`, `PGSERVICE`, `PGSERVICEFILE`, or `PGPASSFILE` abort before `psql`. The generated batch is `BEGIN READ ONLY`, timeout-bounded, `SELECT`-only, operationally verifies `transaction_read_only = on`, and always rolls back.
+
 ## PostgreSQL 17
 
-The bootstrap uses catalog fields and transactional role DDL available in PostgreSQL 17. No PostgreSQL 18-only catalog fields or syntax are used. Local execution should prefer PostgreSQL 17; when it is unavailable, the rehearsal may run on PostgreSQL 18 with a separate static PG17 compatibility assertion. This does not alter or weaken the PostgreSQL 18-pinned Wave 5 evidence contract.
+The bootstrap uses PostgreSQL 17 membership fields `admin_option`, `inherit_option`, and `set_option`. A non-superuser `CREATEROLE` creator receives an automatic grant from the bootstrap superuser with `ADMIN TRUE`, `INHERIT FALSE`, and `SET FALSE`; the explicit grant is separately pinned. Role DDL remains transactional, so any tuple mismatch rolls back creation, comment, and grants together. Local execution should prefer PostgreSQL 17; when it is unavailable, the rehearsal runs on PostgreSQL 18 with static PostgreSQL 17 contract assertions. This does not alter or weaken the PostgreSQL 18-pinned Wave 5 evidence contract.

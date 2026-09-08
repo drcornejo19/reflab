@@ -28,6 +28,17 @@ import {
 import { PRODUCTION_PROJECT_REF } from "../../production-preflight/manifest.mjs";
 import { assertReadOnlyBatch } from "../../production-preflight/sql-safety.mjs";
 import { createTargetSql } from "./run-production-role-bootstrap-postgres.mjs";
+import {
+  assertNoInheritedPgState,
+  classifyInstallerIdentity,
+  installerIdentityQuery,
+  runProductionInstallerIdentityAttestation,
+} from "./run-production-installer-identity-attestation.mjs";
+import {
+  PREFLIGHT_DATABASE_URL,
+  PREFLIGHT_OPT_IN,
+  PREFLIGHT_PROJECT_REF,
+} from "../../production-preflight/target.mjs";
 
 const root = resolve(import.meta.dirname, "..", "..", "..");
 const bootstrap = readFileSync(resolve(root, ROLE_BOOTSTRAP_ARTIFACT), "utf8");
@@ -36,7 +47,8 @@ const head = "a".repeat(40);
 const exactPayload = Object.freeze({
   role_present: true,
   attributes_exact: true,
-  approved_memberships: 1,
+  automatic_memberships: 1,
+  explicit_memberships: 1,
   unexpected_memberships: 0,
   owned_objects: 0,
   direct_acl_entries: 0,
@@ -63,17 +75,24 @@ function environment(overrides = {}) {
   };
 }
 
-test("role and installer contracts are exact and preserve the one canonical membership", () => {
+test("role and installer contracts pin one canonical relationship as two PG17 membership rows", () => {
   assert.deepEqual(ROLE_BOOTSTRAP_ROLE_ATTRIBUTES, {
     rolcanlogin: false, rolsuper: false, rolcreatedb: false,
     rolcreaterole: false, rolinherit: false, rolbypassrls: false,
   });
   assert.deepEqual(ROLE_BOOTSTRAP_INSTALLER_ATTRIBUTES, {
     rolcanlogin: true, rolsuper: false, rolcreatedb: false,
-    rolcreaterole: true, rolinherit: true, rolbypassrls: false,
+    rolcreaterole: true, rolinherit: true, rolreplication: false, rolbypassrls: false,
   });
   assert.deepEqual(ROLE_BOOTSTRAP_APPROVED_MEMBERSHIPS, [
-    { grantedRole: "reflab_rls_owner", memberRole: "postgres" },
+    {
+      grantedRole: "reflab_rls_owner", memberRole: "postgres", grantorRole: "supabase_admin",
+      adminOption: true, inheritOption: false, setOption: false,
+    },
+    {
+      grantedRole: "reflab_rls_owner", memberRole: "postgres", grantorRole: "postgres",
+      adminOption: false, inheritOption: false, setOption: true,
+    },
   ]);
 });
 
@@ -81,7 +100,9 @@ test("bootstrap is transactional, fail-closed, and does not alter incompatible r
   assert.match(bootstrap, /^--[\s\S]*\nbegin;/i);
   assert.match(bootstrap, /commit;\s*$/i);
   assert.match(bootstrap, /create role reflab_rls_owner[\s\S]*nologin[\s\S]*noinherit[\s\S]*nobypassrls/i);
-  assert.match(bootstrap, /grant reflab_rls_owner to postgres/i);
+  assert.match(bootstrap, /set local createrole_self_grant = ''/i);
+  assert.match(bootstrap, /grant reflab_rls_owner to postgres\s+with admin false, inherit false, set true\s+granted by postgres/i);
+  assert.match(bootstrap, /grantor_role[.]rolname = 'supabase_admin'[\s\S]*membership[.]admin_option[\s\S]*not membership[.]inherit_option[\s\S]*not membership[.]set_option/i);
   assert.doesNotMatch(bootstrap, /alter\s+role\s+reflab_rls_owner/i);
   assert.doesNotMatch(bootstrap, /\b(insert|update|delete|truncate)\b\s+(?:into|from|table)?\s*(?:public|storage)\./i);
   assert.doesNotMatch(bootstrap, /\b(bypassrls|login|superuser|createdb)\s*;/i);
@@ -173,6 +194,9 @@ test("runner fails before psql on wrong operation, target, dirty tree, or hash m
 
 test("bootstrap SQL is PostgreSQL 17 compatible and does not weaken the PG18 Wave 5 contract", () => {
   assert.doesNotMatch(`${bootstrap}\n${attestation}`, /\bindnullsnotdistinct\b|\bnulls\s+not\s+distinct\b/i);
+  assert.match(`${bootstrap}\n${attestation}`, /admin_option/);
+  assert.match(`${bootstrap}\n${attestation}`, /inherit_option/);
+  assert.match(`${bootstrap}\n${attestation}`, /set_option/);
   const wave5 = readFileSync(resolve(root, "scripts/production-adoption/phase4/phase4b-wave5-gate.sql"), "utf8");
   assert.match(wave5, /server_version_num[\s\S]*<> 18/i);
 });
@@ -192,4 +216,66 @@ test("rollback fingerprint does not schema-qualify PostgreSQL special forms", ()
   const harness = readFileSync(resolve(root, "scripts/production-adoption/bootstrap/run-production-role-bootstrap-postgres.mjs"), "utf8");
   assert.doesNotMatch(harness, /pg_catalog\.coalesce\s*\(/i);
   assert.match(harness, /pg_catalog\.md5\(coalesce\(/i);
+});
+
+test("installer identity attestation reuses the approved read-only target and SQL runner", () => {
+  const readOnlyEnvironment = {
+    [PREFLIGHT_OPT_IN]: "true",
+    [PREFLIGHT_PROJECT_REF]: PRODUCTION_PROJECT_REF,
+    [PREFLIGHT_DATABASE_URL]: `postgresql://reflab_prod_preflight_ro:secret@db.${PRODUCTION_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require`,
+  };
+  const payload = {
+    caller: "reflab_prod_preflight_ro",
+    session_user: "reflab_prod_preflight_ro",
+    server_version_num: 170000,
+    installer: {
+      rolname: "postgres", rolcanlogin: true, rolinherit: true, rolcreaterole: true,
+      rolsuper: false, rolcreatedb: false, rolbypassrls: false, rolreplication: false,
+    },
+    memberships: [],
+    database: { name: "postgres", owner: "postgres", postgres_has_create: true },
+    schemas: [],
+  };
+  let observedSql;
+  const result = runProductionInstallerIdentityAttestation(readOnlyEnvironment, {
+    execute: (sql, connectionEnvironment) => {
+      observedSql = sql;
+      assert.equal(connectionEnvironment.PGUSER, "reflab_prod_preflight_ro");
+      return new Map([["production_installer_identity", payload]]);
+    },
+  });
+  assert.doesNotThrow(() => assertReadOnlyBatch(observedSql));
+  assert.equal(result.readOnly, true);
+  assert.equal(result.classification.decision, "PASS");
+  assert.match(installerIdentityQuery.payloadSql, /pg_catalog\.pg_auth_members/);
+  assert.doesNotMatch(installerIdentityQuery.payloadSql, /rolpassword|set\s+role/i);
+});
+
+test("installer identity attestation fails closed for missing config, inherited PG state, and caller drift", () => {
+  assert.throws(() => runProductionInstallerIdentityAttestation({}), /explicit read-only opt-in/);
+  assert.throws(() => assertNoInheritedPgState({ PGOPTIONS: "unsafe" }), /PGOPTIONS/);
+  const readOnlyEnvironment = {
+    [PREFLIGHT_OPT_IN]: "true",
+    [PREFLIGHT_PROJECT_REF]: PRODUCTION_PROJECT_REF,
+    [PREFLIGHT_DATABASE_URL]: `postgresql://reflab_prod_preflight_ro:secret@db.${PRODUCTION_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require`,
+  };
+  assert.throws(() => runProductionInstallerIdentityAttestation(readOnlyEnvironment, {
+    execute: () => new Map([["production_installer_identity", {
+      caller: "another_role", session_user: "another_role",
+    }]]),
+  }), /caller contract/);
+});
+
+test("installer identity classification never passes unknown memberships or elevated attributes", () => {
+  const base = {
+    installer: {
+      rolname: "postgres", rolcanlogin: true, rolinherit: true, rolcreaterole: true,
+      rolsuper: false, rolcreatedb: false, rolbypassrls: false, rolreplication: false,
+    },
+    database: { postgres_has_create: true },
+    memberships: [],
+  };
+  assert.equal(classifyInstallerIdentity(base).decision, "PASS");
+  assert.equal(classifyInstallerIdentity({ ...base, memberships: [{ granted_role: "unexpected" }] }).decision, "UNKNOWN");
+  assert.equal(classifyInstallerIdentity({ ...base, installer: { ...base.installer, rolreplication: true } }).decision, "UNKNOWN");
 });
