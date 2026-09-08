@@ -10,7 +10,7 @@ export const ROLE_BOOTSTRAP_MANAGED_PROJECT_REF = "nagjddldrldwavmfaytc";
 export const ROLE_BOOTSTRAP_ARTIFACT = "scripts/production-adoption/bootstrap/reflab-rls-owner-bootstrap.sql";
 export const ROLE_BOOTSTRAP_ATTESTATION = "scripts/production-adoption/bootstrap/reflab-rls-owner-attestation.sql";
 export const ROLE_BOOTSTRAP_ARTIFACT_SHA256 = "51a9585ae9fef21c542dbb7e90962aed8de9e57f565ab84c9f69849d1d97397a";
-export const ROLE_BOOTSTRAP_ATTESTATION_SHA256 = "3acd2892f8e370b149130d0a2baba2d106bdbe94ffde4f91d510f4f69916b703";
+export const ROLE_BOOTSTRAP_ATTESTATION_SHA256 = "1a6020e532c6f32d7ed7a85fcf11d3c708c888ab028a3ef9ff277ac7936386ee";
 export const ROLE_BOOTSTRAP_APPROVED_MEMBERSHIPS = Object.freeze([
   Object.freeze({
     grantedRole: ROLE_BOOTSTRAP_ROLE,
@@ -115,6 +115,28 @@ export function assertRoleAttestation(payload) {
   for (const [field, value] of Object.entries(expected)) {
     if (payload?.[field] !== value) {
       throw new Error(`Production role bootstrap attestation failed: ${field}; expected=${value}; observed=${payload?.[field] ?? "MISSING"}.`);
+    }
+  }
+  return true;
+}
+
+export function assertAbsentRoleAttestation(payload) {
+  const expected = {
+    role_present: false,
+    attributes_exact: false,
+    automatic_memberships: 0,
+    explicit_memberships: 0,
+    unexpected_memberships: 0,
+    owned_objects: 0,
+    direct_acl_entries: 0,
+    effective_table_writes: 0,
+    effective_sequence_writes: 0,
+    effective_schema_create: 0,
+    comment_exact: false,
+  };
+  for (const [field, value] of Object.entries(expected)) {
+    if (payload?.[field] !== value) {
+      throw new Error(`Production role bootstrap absent-state attestation failed: ${field}; expected=${value}; observed=${payload?.[field] ?? "MISSING"}.`);
     }
   }
   return true;

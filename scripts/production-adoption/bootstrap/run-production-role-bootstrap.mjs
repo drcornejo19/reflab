@@ -11,6 +11,7 @@ import {
   ROLE_BOOTSTRAP_ATTESTATION,
   ROLE_BOOTSTRAP_FORMAT,
   ROLE_BOOTSTRAP_INSTALLER,
+  assertAbsentRoleAttestation,
   assertPinnedArtifacts,
   assertRoleAttestation,
 } from "./production-role-bootstrap-contract.mjs";
@@ -119,7 +120,11 @@ export function runProductionRoleBootstrap(environment = process.env, dependenci
   const spawn = dependencies.spawn ?? spawnSync;
 
   const before = parseAttestationOutput(executePsql(attestationSql, target.connectionEnvironment, environment, spawn));
-  if (before.role_present) assertRoleAttestation(before);
+  if (before.role_present) {
+    assertRoleAttestation(before);
+  } else {
+    assertAbsentRoleAttestation(before);
+  }
   executePsql(bootstrapSql, target.connectionEnvironment, environment, spawn);
   const after = parseAttestationOutput(executePsql(attestationSql, target.connectionEnvironment, environment, spawn));
   assertRoleAttestation(after);

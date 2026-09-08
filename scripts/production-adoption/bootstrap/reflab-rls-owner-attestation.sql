@@ -80,30 +80,33 @@ with target_role as (
     (select pg_catalog.count(*)
      from pg_catalog.pg_class relation
      join pg_catalog.pg_namespace namespace on namespace.oid = relation.relnamespace
+     cross join target_role
      where relation.relkind in ('r', 'p')
        and namespace.nspname not in ('pg_catalog', 'information_schema')
        and (
-         pg_catalog.has_table_privilege('reflab_rls_owner', relation.oid, 'INSERT')
-         or pg_catalog.has_table_privilege('reflab_rls_owner', relation.oid, 'UPDATE')
-         or pg_catalog.has_table_privilege('reflab_rls_owner', relation.oid, 'DELETE')
-         or pg_catalog.has_table_privilege('reflab_rls_owner', relation.oid, 'TRUNCATE')
-         or pg_catalog.has_table_privilege('reflab_rls_owner', relation.oid, 'REFERENCES')
-         or pg_catalog.has_table_privilege('reflab_rls_owner', relation.oid, 'TRIGGER')
+         pg_catalog.has_table_privilege(target_role.oid, relation.oid, 'INSERT')
+         or pg_catalog.has_table_privilege(target_role.oid, relation.oid, 'UPDATE')
+         or pg_catalog.has_table_privilege(target_role.oid, relation.oid, 'DELETE')
+         or pg_catalog.has_table_privilege(target_role.oid, relation.oid, 'TRUNCATE')
+         or pg_catalog.has_table_privilege(target_role.oid, relation.oid, 'REFERENCES')
+         or pg_catalog.has_table_privilege(target_role.oid, relation.oid, 'TRIGGER')
        )) as table_count,
     (select pg_catalog.count(*)
      from pg_catalog.pg_class sequence
      join pg_catalog.pg_namespace namespace on namespace.oid = sequence.relnamespace
+     cross join target_role
      where sequence.relkind = 'S'
        and namespace.nspname not in ('pg_catalog', 'information_schema')
        and (
-         pg_catalog.has_sequence_privilege('reflab_rls_owner', sequence.oid, 'USAGE')
-         or pg_catalog.has_sequence_privilege('reflab_rls_owner', sequence.oid, 'UPDATE')
+         pg_catalog.has_sequence_privilege(target_role.oid, sequence.oid, 'USAGE')
+         or pg_catalog.has_sequence_privilege(target_role.oid, sequence.oid, 'UPDATE')
        )) as sequence_count,
     (select pg_catalog.count(*)
      from pg_catalog.pg_namespace namespace
+     cross join target_role
      where namespace.nspname not like 'pg_%'
        and namespace.nspname <> 'information_schema'
-       and pg_catalog.has_schema_privilege('reflab_rls_owner', namespace.oid, 'CREATE')) as schema_create_count
+       and pg_catalog.has_schema_privilege(target_role.oid, namespace.oid, 'CREATE')) as schema_create_count
 )
 select pg_catalog.json_build_object(
   'role_present', (select pg_catalog.count(*) = 1 from target_role),

@@ -8,6 +8,7 @@ import {
   ROLE_BOOTSTRAP_ARTIFACT,
   ROLE_BOOTSTRAP_ATTESTATION,
   ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS,
+  assertAbsentRoleAttestation,
   assertRoleAttestation,
 } from "./production-role-bootstrap-contract.mjs";
 import { parseAttestationOutput } from "./run-production-role-bootstrap.mjs";
@@ -27,7 +28,9 @@ const binaries = Object.freeze({
 const targetScenarios = Object.freeze([
   "login", "inherit", "bypassrls", "superuser", "createdb", "createrole",
   "admin_option_drift", "set_option_drift", "inherit_option_drift", "incompatible_grantor",
-  "unexpected_membership", "unexpected_ownership", "unexpected_grant", "wrong_installer",
+  "unexpected_membership", "unexpected_ownership", "unexpected_grant",
+  "unsafe_table_privilege", "unsafe_sequence_privilege", "unsafe_schema_create",
+  "wrong_installer",
 ]);
 const managedInstallerScenarios = Object.freeze([
   "installer_createdb_drift", "installer_bypassrls_drift", "installer_replication_drift",
@@ -178,6 +181,12 @@ function setupScenario(environment, scenario) {
     psql(environment, "create schema unexpected_owned authorization reflab_rls_owner;", "supabase_admin");
   } else if (scenario === "unexpected_grant") {
     psql(environment, "alter default privileges for role supabase_admin grant select on tables to reflab_rls_owner;", "supabase_admin");
+  } else if (scenario === "unsafe_table_privilege") {
+    psql(environment, "create table unsafe_product_table(id integer); grant insert on table unsafe_product_table to reflab_rls_owner;", "supabase_admin");
+  } else if (scenario === "unsafe_sequence_privilege") {
+    psql(environment, "create sequence unsafe_product_sequence; grant usage on sequence unsafe_product_sequence to reflab_rls_owner;", "supabase_admin");
+  } else if (scenario === "unsafe_schema_create") {
+    psql(environment, "create schema unsafe_product_schema; grant create on schema unsafe_product_schema to reflab_rls_owner;", "supabase_admin");
   }
 }
 
@@ -235,6 +244,12 @@ function assertScenarioMutation(environment, scenario) {
     predicate = "exists(select 1 from pg_catalog.pg_namespace where nspname='unexpected_owned' and nspowner='reflab_rls_owner'::regrole)";
   } else if (scenario === "unexpected_grant") {
     predicate = "exists(select 1 from pg_catalog.pg_default_acl d cross join lateral pg_catalog.aclexplode(d.defaclacl) a where a.grantee='reflab_rls_owner'::regrole)";
+  } else if (scenario === "unsafe_table_privilege") {
+    predicate = "pg_catalog.has_table_privilege('reflab_rls_owner', 'unsafe_product_table', 'INSERT')";
+  } else if (scenario === "unsafe_sequence_privilege") {
+    predicate = "pg_catalog.has_sequence_privilege('reflab_rls_owner', 'unsafe_product_sequence', 'USAGE')";
+  } else if (scenario === "unsafe_schema_create") {
+    predicate = "pg_catalog.has_schema_privilege('reflab_rls_owner', 'unsafe_product_schema', 'CREATE')";
   } else if (scenario === "wrong_installer") {
     predicate = "exists(select 1 from pg_catalog.pg_roles where rolname='wrong_installer' and rolcanlogin and rolcreaterole and not rolsuper and not rolbypassrls)";
   }
@@ -270,20 +285,42 @@ async function withCluster(scenario, callback) {
 
 async function positive(scenario) {
   return withCluster(scenario, async (environment) => {
+    const before = parseAttestationOutput(psql(environment, attestation).stdout);
+    if (scenario === "absent") {
+      assertAbsentRoleAttestation(before);
+    }
     if (scenario === "exact") psql(environment, createTargetSql(), "postgres");
+    if (scenario === "exact") assertRoleAttestation(parseAttestationOutput(psql(environment, attestation).stdout));
     psql(environment, bootstrap);
     if (scenario === "exact") psql(environment, bootstrap);
     const payload = parseAttestationOutput(psql(environment, attestation).stdout);
     assertRoleAttestation(payload);
     const prerequisite = psql(environment, `select count(*)=1 and bool_and(not rolcanlogin and not rolsuper and not rolcreatedb and not rolcreaterole and not rolinherit and not rolbypassrls) from pg_catalog.pg_roles where rolname='reflab_rls_owner';`).stdout.trim();
     if (prerequisite !== "t") throw new Error("Phase 1 reflab_rls_owner prerequisite did not pass.");
-    return { scenario, bootstrap: "PASS", attestation: "PASS", phase1RolePrerequisite: "PASS", cleanup: "PASS" };
+    return {
+      scenario,
+      preBootstrapAttestation: scenario === "absent" ? "ABSENT_PASS" : "EXACT_PASS",
+      bootstrap: "PASS",
+      attestation: "PASS",
+      phase1RolePrerequisite: "PASS",
+      cleanup: "PASS",
+    };
   });
 }
 
 async function negative(scenario) {
   return withCluster(scenario, async (environment) => {
     const before = roleFingerprint(environment);
+    if (targetScenarios.includes(scenario) && scenario !== "wrong_installer") {
+      const unsafePayload = parseAttestationOutput(psql(environment, attestation).stdout);
+      let rejected = false;
+      try {
+        assertRoleAttestation(unsafePayload);
+      } catch {
+        rejected = true;
+      }
+      if (!rejected) throw new Error(`Attestation did not detect unsafe state: ${scenario}`);
+    }
     const result = psql(environment, bootstrap, scenario === "wrong_installer" ? "wrong_installer" : "postgres", true);
     if (result.status === 0) throw new Error(`Negative did not abort: ${scenario}`);
     const match = String(result.stderr).match(/(?:ERROR|FATAL):\s+([0-9A-Z]{5}):/);

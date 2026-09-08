@@ -14,6 +14,7 @@ import {
   ROLE_BOOTSTRAP_REQUIRED_CAPABILITIES,
   ROLE_BOOTSTRAP_ROLE_ATTRIBUTES,
   artifactHash,
+  assertAbsentRoleAttestation,
   assertPinnedArtifacts,
   assertRoleAttestation,
 } from "./production-role-bootstrap-contract.mjs";
@@ -60,7 +61,19 @@ const exactPayload = Object.freeze({
   effective_schema_create: 0,
   comment_exact: true,
 });
-const absentPayload = Object.freeze({ role_present: false });
+const absentPayload = Object.freeze({
+  role_present: false,
+  attributes_exact: false,
+  automatic_memberships: 0,
+  explicit_memberships: 0,
+  unexpected_memberships: 0,
+  owned_objects: 0,
+  direct_acl_entries: 0,
+  effective_table_writes: 0,
+  effective_sequence_writes: 0,
+  effective_schema_create: 0,
+  comment_exact: false,
+});
 const managedMemberships = ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS.map((membership) => ({
   granted_role: membership.grantedRole,
   member_role: membership.memberRole,
@@ -165,6 +178,10 @@ test("attestation is deterministic read-only catalog SQL", () => {
   assert.doesNotThrow(() => assertReadOnlyBatch(attestation));
   assert.match(attestation, /aclexplode\(object\.defaclacl\)/i);
   assert.doesNotMatch(attestation, /select\s+object\.defaclrole\s+as\s+grantee/i);
+  assert.doesNotMatch(attestation, /has_(?:table|sequence|schema)_privilege\('reflab_rls_owner'/i);
+  assert.match(attestation, /cross join target_role[\s\S]*has_table_privilege\(target_role\.oid/i);
+  assert.match(attestation, /cross join target_role[\s\S]*has_sequence_privilege\(target_role\.oid/i);
+  assert.match(attestation, /cross join target_role[\s\S]*has_schema_privilege\(target_role\.oid/i);
   assert.equal(parseAttestationOutput(`on\n${JSON.stringify(exactPayload)}\n`).role_present, true);
   assert.throws(() => parseAttestationOutput(`off\n${JSON.stringify(exactPayload)}\n`), /malformed/);
 });
@@ -183,6 +200,11 @@ test("role attestation rejects every unsafe field", () => {
   for (const field of Object.keys(exactPayload)) {
     const invalid = { ...exactPayload, [field]: typeof exactPayload[field] === "boolean" ? !exactPayload[field] : exactPayload[field] + 1 };
     assert.throws(() => assertRoleAttestation(invalid), new RegExp(field));
+  }
+  assert.equal(assertAbsentRoleAttestation(absentPayload), true);
+  for (const field of Object.keys(absentPayload)) {
+    const invalid = { ...absentPayload, [field]: typeof absentPayload[field] === "boolean" ? !absentPayload[field] : absentPayload[field] + 1 };
+    assert.throws(() => assertAbsentRoleAttestation(invalid), new RegExp(field));
   }
 });
 
@@ -224,6 +246,20 @@ test("runner has exactly one write artifact and sanitizes inherited PG variables
     assert.equal(call.env.PGSERVICE, undefined);
     assert.notEqual(call.env.PGPASSWORD, "must-not-be-inherited");
   }
+});
+
+test("runner reaches bootstrap only after a complete valid ABSENT attestation", () => {
+  let bootstrapCalls = 0;
+  const spawn = (_command, _args, options) => {
+    if (options.input === bootstrap) bootstrapCalls += 1;
+    return { status: 0, stdout: `on\n${JSON.stringify({ role_present: false })}\n`, stderr: "" };
+  };
+  assert.throws(() => runProductionRoleBootstrap(environment(), {
+    argument: "--production-role-bootstrap",
+    git: (args) => args[0] === "rev-parse" ? `${head}\n` : "",
+    spawn,
+  }), /absent-state attestation failed/);
+  assert.equal(bootstrapCalls, 0);
 });
 
 test("runner fails before psql on wrong operation, target, dirty tree, or hash mismatch", () => {
