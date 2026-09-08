@@ -72,7 +72,24 @@ npm run attest:production-ddl-installer
 
 The entrypoint does not load application `.env` files. The URL remains process-local, must identify `reflab_prod_preflight_ro`, and is passed through the existing exact target and SSL guard. Inherited `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGSSLMODE`, `PGOPTIONS`, `PGSERVICE`, `PGSERVICEFILE`, or `PGPASSFILE` abort before `psql`. The generated batch is `BEGIN READ ONLY`, timeout-bounded, `SELECT`-only, operationally verifies `transaction_read_only = on`, and always rolls back.
 
-The catalog query selects every `pg_auth_members` row where `postgres` is either the granted role or the member. Its result includes total, member-side, and granted-role-side counts. `DDL_INSTALLER_MANAGED_PROFILE=READY` is possible only when the full result contains exactly the ten rows above, with ten member-side rows and zero granted-role-side rows. Missing summary fields are `UNKNOWN`; any complete but different fingerprint is `BLOCKER`.
+The catalog query selects every `pg_auth_members` row where `postgres` is either the granted role or the member. Its result includes total, member-side, and granted-role-side counts. `PRE_BOOTSTRAP` is `READY` only when the full result contains exactly the ten rows above, with ten member-side rows and zero granted-role-side rows. Missing summary fields are `UNKNOWN`; any complete but unreviewed fingerprint is `BLOCKER`.
+
+The installer profile is lifecycle-aware. `PRE_BOOTSTRAP` requires the protected role to be absent and exactly the ten ambient memberships above. `POST_BOOTSTRAP` requires the protected role attributes to be exact and exactly twelve memberships: the unchanged ten ambient rows plus the two reviewed PostgreSQL 17 creator/operational rows. Both exact states are `READY`; partial or hybrid states are `BLOCKER`, and incomplete catalog evidence is `UNKNOWN`.
+
+## Phase 1 entry attestation
+
+Phase 1 has a dedicated read-only entry gate. It reuses the Production preflight target and credential mechanism, accepts only `reflab_prod_preflight_ro`, requires PostgreSQL 17 and `transaction_read_only=on`, pins the foundation artifact hash, and proves the exact `POST_BOOTSTRAP` role/profile state. It also requires `reflab_meta`, `reflab_private`, `reflab_audit`, both state tables, the canonical marker, Development identity objects, and temporary adoption owners to be absent.
+
+The future read-only invocation is:
+
+```powershell
+$env:ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT = "true"
+$env:REFLAB_PRODUCTION_PREFLIGHT_PROJECT_REF = "nagjddldrldwavmfaytc"
+$env:REFLAB_PRODUCTION_PREFLIGHT_DB_URL = "<SET_LOCALLY>"
+npm run attest:production-phase1-entry
+```
+
+The runner does not accept installer credentials and cannot execute the foundation migration.
 
 ## PostgreSQL 17
 

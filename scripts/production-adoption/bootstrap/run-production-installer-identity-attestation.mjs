@@ -5,9 +5,12 @@ import { authorizeProductionPreflightTarget } from "../../production-preflight/t
 import {
   ROLE_BOOTSTRAP_INSTALLER,
   ROLE_BOOTSTRAP_MANAGED_INSTALLER_ATTRIBUTES,
-  ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS,
   ROLE_BOOTSTRAP_MANAGED_PROFILE_FORMAT,
   ROLE_BOOTSTRAP_MANAGED_PROJECT_REF,
+  ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS,
+  ROLE_BOOTSTRAP_PRE_BOOTSTRAP_MEMBERSHIPS,
+  ROLE_BOOTSTRAP_ROLE,
+  ROLE_BOOTSTRAP_ROLE_ATTRIBUTES,
 } from "./production-role-bootstrap-contract.mjs";
 
 export const INSTALLER_IDENTITY_QUERY_ID = "production_installer_identity";
@@ -28,6 +31,12 @@ export const installerIdentityQuery = jsonQuery(
       from pg_catalog.pg_roles role
       where role.rolname = 'postgres'
     ) role_contract), 'null'::json),
+    'protected_role', coalesce((select pg_catalog.row_to_json(role_contract) from (
+      select role.rolname, role.rolcanlogin, role.rolinherit, role.rolcreaterole,
+        role.rolsuper, role.rolcreatedb, role.rolbypassrls
+      from pg_catalog.pg_roles role
+      where role.rolname = 'reflab_rls_owner'
+    ) role_contract), 'null'::json),
     'memberships', coalesce((select pg_catalog.json_agg(membership_contract
       order by membership_contract.granted_role, membership_contract.member_role,
         membership_contract.grantor_role) from (
@@ -41,7 +50,8 @@ export const installerIdentityQuery = jsonQuery(
       join pg_catalog.pg_roles granted_role on granted_role.oid = membership.roleid
       join pg_catalog.pg_roles member_role on member_role.oid = membership.member
       join pg_catalog.pg_roles grantor_role on grantor_role.oid = membership.grantor
-      where granted_role.rolname = 'postgres' or member_role.rolname = 'postgres'
+      where granted_role.rolname in ('postgres', 'reflab_rls_owner')
+        or member_role.rolname in ('postgres', 'reflab_rls_owner')
     ) membership_contract), '[]'::json),
     'membership_summary', (select pg_catalog.json_build_object(
       'total_count', pg_catalog.count(*),
@@ -51,7 +61,8 @@ export const installerIdentityQuery = jsonQuery(
       from pg_catalog.pg_auth_members membership
       join pg_catalog.pg_roles granted_role on granted_role.oid = membership.roleid
       join pg_catalog.pg_roles member_role on member_role.oid = membership.member
-      where granted_role.rolname = 'postgres' or member_role.rolname = 'postgres'),
+      where granted_role.rolname in ('postgres', 'reflab_rls_owner')
+        or member_role.rolname in ('postgres', 'reflab_rls_owner')),
     'database', (select pg_catalog.json_build_object(
       'name', database.datname,
       'owner', owner_role.rolname,
@@ -82,6 +93,24 @@ function membershipKey(membership) {
   ].join("\u0000");
 }
 
+function expectedMembershipKeys(memberships) {
+  return new Set(memberships.map((membership) => membershipKey({
+    granted_role: membership.grantedRole,
+    member_role: membership.memberRole,
+    grantor_role: membership.grantorRole,
+    admin_option: membership.adminOption,
+    inherit_option: membership.inheritOption,
+    set_option: membership.setOption,
+  })));
+}
+
+function membershipsMatch(observedMembershipKeys, observedCount, expectedMemberships) {
+  const expected = expectedMembershipKeys(expectedMemberships);
+  return observedCount === expected.size
+    && observedMembershipKeys.size === expected.size
+    && [...expected].every((key) => observedMembershipKeys.has(key));
+}
+
 export function classifyInstallerIdentity(payload) {
   const installer = payload?.installer;
   const attributeEntries = Object.entries(ROLE_BOOTSTRAP_MANAGED_INSTALLER_ATTRIBUTES);
@@ -103,31 +132,50 @@ export function classifyInstallerIdentity(payload) {
     && typeof membership?.set_option === "boolean");
   const membershipCompletenessProven = membershipShapeExact
     && summary?.total_count === memberships.length
-    && summary?.as_member_count === memberships.length
-    && summary?.as_granted_role_count === 0;
-  const expectedMembershipKeys = new Set(ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS.map((membership) =>
-    membershipKey({
-      granted_role: membership.grantedRole,
-      member_role: membership.memberRole,
-      grantor_role: membership.grantorRole,
-      admin_option: membership.adminOption,
-      inherit_option: membership.inheritOption,
-      set_option: membership.setOption,
-    })));
+    && Number.isInteger(summary?.as_member_count)
+    && Number.isInteger(summary?.as_granted_role_count)
+    && summary.as_member_count <= memberships.length
+    && summary.as_granted_role_count <= memberships.length;
   const observedMembershipKeys = memberships === null ? new Set() : new Set(memberships.map(membershipKey));
-  const membershipFingerprintExact = membershipCompletenessProven
-    && memberships.length === expectedMembershipKeys.size
-    && observedMembershipKeys.size === expectedMembershipKeys.size
-    && [...expectedMembershipKeys].every((key) => observedMembershipKeys.has(key));
+  const protectedRoleEvidencePresent = Object.hasOwn(payload ?? {}, "protected_role");
+  const protectedRole = payload?.protected_role;
+  const protectedRoleAbsent = protectedRoleEvidencePresent && protectedRole === null;
+  const protectedRoleObservable = Boolean(protectedRole)
+    && protectedRole.rolname === ROLE_BOOTSTRAP_ROLE
+    && Object.keys(ROLE_BOOTSTRAP_ROLE_ATTRIBUTES).every((attribute) =>
+      typeof protectedRole[attribute] === "boolean");
+  const protectedRoleExact = protectedRoleObservable
+    && Object.entries(ROLE_BOOTSTRAP_ROLE_ATTRIBUTES).every(([attribute, expected]) =>
+      protectedRole[attribute] === expected);
+  const preBootstrapMembershipsExact = membershipCompletenessProven
+    && membershipsMatch(
+      observedMembershipKeys,
+      memberships.length,
+      ROLE_BOOTSTRAP_PRE_BOOTSTRAP_MEMBERSHIPS,
+    );
+  const postBootstrapMembershipsExact = membershipCompletenessProven
+    && membershipsMatch(
+      observedMembershipKeys,
+      memberships.length,
+      ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS,
+    );
+  const lifecycleState = protectedRoleAbsent && preBootstrapMembershipsExact
+    ? "PRE_BOOTSTRAP"
+    : protectedRoleExact && postBootstrapMembershipsExact
+      ? "POST_BOOTSTRAP"
+      : "UNKNOWN";
+  const membershipFingerprintExact = lifecycleState !== "UNKNOWN";
   const postgresMajorExact = Number.isInteger(payload?.server_version_num)
     && Math.trunc(payload.server_version_num / 10000) === 17;
   const observable = attributesObservable
     && typeof payload?.database?.postgres_has_create === "boolean"
     && membershipCompletenessProven
-    && Number.isInteger(payload?.server_version_num);
+    && Number.isInteger(payload?.server_version_num)
+    && (protectedRoleAbsent || protectedRoleObservable);
   const decision = !observable
     ? "UNKNOWN"
-    : requiredAttributesExact && databaseCreate && membershipFingerprintExact && postgresMajorExact
+    : requiredAttributesExact && databaseCreate && membershipFingerprintExact
+        && postgresMajorExact && (protectedRoleAbsent || protectedRoleExact)
       ? "PASS"
       : "BLOCKER";
   return {
@@ -136,9 +184,15 @@ export function classifyInstallerIdentity(payload) {
     installerNameExact,
     requiredAttributesExact,
     databaseCreate,
+    lifecycleState,
+    protectedRoleExact: protectedRoleAbsent ? null : protectedRoleExact,
     membershipCompletenessProven,
     membershipFingerprintExact,
-    expectedMembershipCount: ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS.length,
+    expectedMembershipCount: lifecycleState === "PRE_BOOTSTRAP"
+      ? ROLE_BOOTSTRAP_PRE_BOOTSTRAP_MEMBERSHIPS.length
+      : lifecycleState === "POST_BOOTSTRAP"
+        ? ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS.length
+        : null,
     observedMembershipCount: memberships?.length ?? null,
     postgresMajorExact,
     decision,

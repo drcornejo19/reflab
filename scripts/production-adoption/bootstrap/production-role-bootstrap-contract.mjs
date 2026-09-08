@@ -78,6 +78,12 @@ export const ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS = Object.freeze([
   setOption,
 })));
 
+export const ROLE_BOOTSTRAP_PRE_BOOTSTRAP_MEMBERSHIPS = ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS;
+export const ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS = Object.freeze([
+  ...ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS,
+  ...ROLE_BOOTSTRAP_APPROVED_MEMBERSHIPS,
+]);
+
 export function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }

@@ -11,6 +11,8 @@ import {
   ROLE_BOOTSTRAP_MANAGED_INSTALLER_ATTRIBUTES,
   ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS,
   ROLE_BOOTSTRAP_MANAGED_PROJECT_REF,
+  ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS,
+  ROLE_BOOTSTRAP_PRE_BOOTSTRAP_MEMBERSHIPS,
   ROLE_BOOTSTRAP_REQUIRED_CAPABILITIES,
   ROLE_BOOTSTRAP_ROLE_ATTRIBUTES,
   artifactHash,
@@ -83,12 +85,37 @@ const managedMemberships = ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS.map((mem
   set_option: membership.setOption,
 }));
 
+function catalogMemberships(memberships) {
+  return memberships.map((membership) => ({
+    granted_role: membership.grantedRole,
+    member_role: membership.memberRole,
+    grantor_role: membership.grantorRole,
+    admin_option: membership.adminOption,
+    inherit_option: membership.inheritOption,
+    set_option: membership.setOption,
+  }));
+}
+
+function withMemberships(payload, memberships, protectedRole = payload.protected_role) {
+  return {
+    ...payload,
+    protected_role: protectedRole,
+    memberships,
+    membership_summary: {
+      total_count: memberships.length,
+      as_member_count: memberships.filter((membership) => membership.member_role === "postgres").length,
+      as_granted_role_count: memberships.filter((membership) => membership.granted_role === "postgres").length,
+    },
+  };
+}
+
 function managedInstallerPayload(overrides = {}) {
   return {
     caller: "reflab_prod_preflight_ro",
     session_user: "reflab_prod_preflight_ro",
     server_version_num: 170000,
     installer: { rolname: "postgres", ...ROLE_BOOTSTRAP_MANAGED_INSTALLER_ATTRIBUTES },
+    protected_role: null,
     memberships: managedMemberships,
     membership_summary: {
       total_count: 10,
@@ -131,6 +158,8 @@ test("role, minimum capability, managed installer, and target membership contrac
     rolcreatedb: true, rolbypassrls: true, rolreplication: true,
   });
   assert.equal(ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS.length, 10);
+  assert.equal(ROLE_BOOTSTRAP_PRE_BOOTSTRAP_MEMBERSHIPS.length, 10);
+  assert.equal(ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS.length, 12);
   assert.deepEqual(ROLE_BOOTSTRAP_APPROVED_MEMBERSHIPS, [
     {
       grantedRole: "reflab_rls_owner", memberRole: "postgres", grantorRole: "supabase_admin",
@@ -374,6 +403,58 @@ test("installer identity classification pins every managed attribute and members
   }).decision, "BLOCKER");
   assert.equal(classifyInstallerIdentity({ ...base, membership_summary: undefined }).decision, "UNKNOWN");
   assert.equal(classifyInstallerIdentity({ ...base, server_version_num: 180000 }).decision, "BLOCKER");
+});
+
+test("installer identity lifecycle accepts only exact PRE and POST bootstrap states", () => {
+  const pre = managedInstallerPayload();
+  const exactProtectedRole = { rolname: "reflab_rls_owner", ...ROLE_BOOTSTRAP_ROLE_ATTRIBUTES };
+  const postMemberships = catalogMemberships(ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS);
+  const post = withMemberships(pre, postMemberships, exactProtectedRole);
+
+  assert.equal(classifyInstallerIdentity(pre).lifecycleState, "PRE_BOOTSTRAP");
+  assert.equal(classifyInstallerIdentity(pre).managedProfile, "READY");
+  assert.equal(classifyInstallerIdentity(post).lifecycleState, "POST_BOOTSTRAP");
+  assert.equal(classifyInstallerIdentity(post).managedProfile, "READY");
+
+  const hybridCases = [
+    withMemberships(pre, postMemberships, null),
+    withMemberships(pre, managedMemberships, exactProtectedRole),
+    withMemberships(pre, postMemberships.slice(0, 11), exactProtectedRole),
+    withMemberships(pre, [...postMemberships, {
+      granted_role: "unexpected_role", member_role: "postgres", grantor_role: "supabase_admin",
+      admin_option: false, inherit_option: false, set_option: false,
+    }], exactProtectedRole),
+    withMemberships(pre, postMemberships.map((membership, index) => index === 10
+      ? { ...membership, grantor_role: "wrong_grantor" }
+      : membership), exactProtectedRole),
+    withMemberships(pre, postMemberships.map((membership, index) => index === 11
+      ? { ...membership, set_option: false }
+      : membership), exactProtectedRole),
+    withMemberships(pre, [...postMemberships, {
+      granted_role: "postgres", member_role: "unexpected_member", grantor_role: "supabase_admin",
+      admin_option: false, inherit_option: false, set_option: false,
+    }], exactProtectedRole),
+    withMemberships(pre, [...postMemberships, {
+      granted_role: "reflab_rls_owner", member_role: "unexpected_member", grantor_role: "postgres",
+      admin_option: false, inherit_option: false, set_option: true,
+    }], exactProtectedRole),
+    withMemberships(pre, [...postMemberships, {
+      granted_role: "unexpected_parent", member_role: "reflab_rls_owner", grantor_role: "postgres",
+      admin_option: false, inherit_option: false, set_option: true,
+    }], exactProtectedRole),
+    withMemberships(pre, postMemberships.map((membership, index) => index === 0
+      ? { ...membership, admin_option: !membership.admin_option }
+      : membership), exactProtectedRole),
+  ];
+  for (const payload of hybridCases) {
+    assert.equal(classifyInstallerIdentity(payload).lifecycleState, "UNKNOWN");
+    assert.equal(classifyInstallerIdentity(payload).managedProfile, "BLOCKER");
+  }
+  assert.equal(classifyInstallerIdentity({
+    ...post,
+    protected_role: { ...exactProtectedRole, rolbypassrls: true },
+  }).managedProfile, "BLOCKER");
+  assert.equal(classifyInstallerIdentity({ ...post, membership_summary: undefined }).managedProfile, "UNKNOWN");
 });
 
 test("installer attestation target and role guards reject wrong project and installer", () => {

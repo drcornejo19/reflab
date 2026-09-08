@@ -14,7 +14,7 @@ import {
 import { parseAttestationOutput } from "./run-production-role-bootstrap.mjs";
 
 const root = resolve(import.meta.dirname, "..", "..", "..");
-const bootstrap = readFileSync(resolve(root, ROLE_BOOTSTRAP_ARTIFACT), "utf8");
+export const roleBootstrapSql = readFileSync(resolve(root, ROLE_BOOTSTRAP_ARTIFACT), "utf8");
 const attestation = readFileSync(resolve(root, ROLE_BOOTSTRAP_ATTESTATION), "utf8");
 const pg17 = "C:\\Program Files\\PostgreSQL\\17\\bin";
 const pg18 = process.env.POSTGRES_BIN ?? "C:\\Program Files\\PostgreSQL\\18\\bin";
@@ -56,7 +56,7 @@ function command(binary, args, options = {}) {
   return execFileSync(binary, args, { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"], ...options });
 }
 
-function psql(environment, sql, user = "postgres", allowFailure = false) {
+export function psql(environment, sql, user = "postgres", allowFailure = false) {
   const result = spawnSync(binaries.psql, ["-X", "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "--set", "VERBOSITY=verbose", "--quiet", "--tuples-only", "--no-align"], {
     input: sql, encoding: "utf8", windowsHide: true,
     env: { SystemRoot: process.env.SystemRoot, WINDIR: process.env.WINDIR, PATH: process.env.PATH,
@@ -257,7 +257,7 @@ function assertScenarioMutation(environment, scenario) {
   if (observed !== "t") throw new Error(`HARNESS_SETUP_FAIL: mutation was not installed for ${scenario}`);
 }
 
-async function withCluster(scenario, callback) {
+export async function withCluster(scenario, callback) {
   const temporary = mkdtempSync(join(tmpdir(), "reflab-role-bootstrap-"));
   const data = join(temporary, "data");
   const log = join(temporary, "postgres.log");
@@ -291,8 +291,8 @@ async function positive(scenario) {
     }
     if (scenario === "exact") psql(environment, createTargetSql(), "postgres");
     if (scenario === "exact") assertRoleAttestation(parseAttestationOutput(psql(environment, attestation).stdout));
-    psql(environment, bootstrap);
-    if (scenario === "exact") psql(environment, bootstrap);
+    psql(environment, roleBootstrapSql);
+    if (scenario === "exact") psql(environment, roleBootstrapSql);
     const payload = parseAttestationOutput(psql(environment, attestation).stdout);
     assertRoleAttestation(payload);
     const prerequisite = psql(environment, `select count(*)=1 and bool_and(not rolcanlogin and not rolsuper and not rolcreatedb and not rolcreaterole and not rolinherit and not rolbypassrls) from pg_catalog.pg_roles where rolname='reflab_rls_owner';`).stdout.trim();
@@ -321,7 +321,7 @@ async function negative(scenario) {
       }
       if (!rejected) throw new Error(`Attestation did not detect unsafe state: ${scenario}`);
     }
-    const result = psql(environment, bootstrap, scenario === "wrong_installer" ? "wrong_installer" : "postgres", true);
+    const result = psql(environment, roleBootstrapSql, scenario === "wrong_installer" ? "wrong_installer" : "postgres", true);
     if (result.status === 0) throw new Error(`Negative did not abort: ${scenario}`);
     const match = String(result.stderr).match(/(?:ERROR|FATAL):\s+([0-9A-Z]{5}):/);
     const expected = scenario === "wrong_installer" || managedInstallerScenarios.includes(scenario)
