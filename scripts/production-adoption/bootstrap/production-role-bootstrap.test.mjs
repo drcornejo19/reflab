@@ -8,7 +8,10 @@ import {
   ROLE_BOOTSTRAP_ATTESTATION,
   ROLE_BOOTSTRAP_ATTESTATION_SHA256,
   ROLE_BOOTSTRAP_APPROVED_MEMBERSHIPS,
-  ROLE_BOOTSTRAP_INSTALLER_ATTRIBUTES,
+  ROLE_BOOTSTRAP_MANAGED_INSTALLER_ATTRIBUTES,
+  ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS,
+  ROLE_BOOTSTRAP_MANAGED_PROJECT_REF,
+  ROLE_BOOTSTRAP_REQUIRED_CAPABILITIES,
   ROLE_BOOTSTRAP_ROLE_ATTRIBUTES,
   artifactHash,
   assertPinnedArtifacts,
@@ -27,7 +30,7 @@ import {
 } from "./run-production-role-bootstrap.mjs";
 import { PRODUCTION_PROJECT_REF } from "../../production-preflight/manifest.mjs";
 import { assertReadOnlyBatch } from "../../production-preflight/sql-safety.mjs";
-import { createTargetSql } from "./run-production-role-bootstrap-postgres.mjs";
+import { createManagedInstallerSql, createTargetSql } from "./run-production-role-bootstrap-postgres.mjs";
 import {
   assertNoInheritedPgState,
   classifyInstallerIdentity,
@@ -58,6 +61,32 @@ const exactPayload = Object.freeze({
   comment_exact: true,
 });
 const absentPayload = Object.freeze({ role_present: false });
+const managedMemberships = ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS.map((membership) => ({
+  granted_role: membership.grantedRole,
+  member_role: membership.memberRole,
+  grantor_role: membership.grantorRole,
+  admin_option: membership.adminOption,
+  inherit_option: membership.inheritOption,
+  set_option: membership.setOption,
+}));
+
+function managedInstallerPayload(overrides = {}) {
+  return {
+    caller: "reflab_prod_preflight_ro",
+    session_user: "reflab_prod_preflight_ro",
+    server_version_num: 170000,
+    installer: { rolname: "postgres", ...ROLE_BOOTSTRAP_MANAGED_INSTALLER_ATTRIBUTES },
+    memberships: managedMemberships,
+    membership_summary: {
+      total_count: 10,
+      as_member_count: 10,
+      as_granted_role_count: 0,
+    },
+    database: { name: "postgres", owner: "postgres", postgres_has_create: true },
+    schemas: [],
+    ...overrides,
+  };
+}
 
 function environment(overrides = {}) {
   return {
@@ -75,15 +104,20 @@ function environment(overrides = {}) {
   };
 }
 
-test("role and installer contracts pin one canonical relationship as two PG17 membership rows", () => {
+test("role, minimum capability, managed installer, and target membership contracts are distinct", () => {
   assert.deepEqual(ROLE_BOOTSTRAP_ROLE_ATTRIBUTES, {
     rolcanlogin: false, rolsuper: false, rolcreatedb: false,
     rolcreaterole: false, rolinherit: false, rolbypassrls: false,
   });
-  assert.deepEqual(ROLE_BOOTSTRAP_INSTALLER_ATTRIBUTES, {
-    rolcanlogin: true, rolsuper: false, rolcreatedb: false,
-    rolcreaterole: true, rolinherit: true, rolreplication: false, rolbypassrls: false,
+  assert.equal(ROLE_BOOTSTRAP_MANAGED_PROJECT_REF, PRODUCTION_PROJECT_REF);
+  assert.deepEqual(ROLE_BOOTSTRAP_REQUIRED_CAPABILITIES, {
+    rolcanlogin: true, rolsuper: false, rolcreaterole: true, databaseCreate: true,
   });
+  assert.deepEqual(ROLE_BOOTSTRAP_MANAGED_INSTALLER_ATTRIBUTES, {
+    rolcanlogin: true, rolinherit: true, rolcreaterole: true, rolsuper: false,
+    rolcreatedb: true, rolbypassrls: true, rolreplication: true,
+  });
+  assert.equal(ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS.length, 10);
   assert.deepEqual(ROLE_BOOTSTRAP_APPROVED_MEMBERSHIPS, [
     {
       grantedRole: "reflab_rls_owner", memberRole: "postgres", grantorRole: "supabase_admin",
@@ -108,6 +142,20 @@ test("bootstrap is transactional, fail-closed, and does not alter incompatible r
   assert.doesNotMatch(bootstrap, /\b(bypassrls|login|superuser|createdb)\s*;/i);
   assert.match(bootstrap, /ownership or direct privileges/);
   assert.match(bootstrap, /unexpected effective write privileges/);
+  assert.match(bootstrap, /not installer[.]rolcreatedb/);
+  assert.match(bootstrap, /not installer[.]rolreplication/);
+  assert.match(bootstrap, /not installer[.]rolbypassrls/);
+  for (const membership of ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS) {
+    assert.match(bootstrap, new RegExp(`'${membership.grantedRole}'::text`));
+  }
+});
+
+test("local managed installer fixture models the exact Production fingerprint", () => {
+  const sql = createManagedInstallerSql();
+  assert.match(sql, /create role postgres login inherit nosuperuser createdb createrole replication bypassrls/i);
+  for (const membership of ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS) {
+    assert.match(sql, new RegExp(`grant ${membership.grantedRole} to postgres`, "i"));
+  }
 });
 
 test("attestation is deterministic read-only catalog SQL", () => {
@@ -224,18 +272,7 @@ test("installer identity attestation reuses the approved read-only target and SQ
     [PREFLIGHT_PROJECT_REF]: PRODUCTION_PROJECT_REF,
     [PREFLIGHT_DATABASE_URL]: `postgresql://reflab_prod_preflight_ro:secret@db.${PRODUCTION_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require`,
   };
-  const payload = {
-    caller: "reflab_prod_preflight_ro",
-    session_user: "reflab_prod_preflight_ro",
-    server_version_num: 170000,
-    installer: {
-      rolname: "postgres", rolcanlogin: true, rolinherit: true, rolcreaterole: true,
-      rolsuper: false, rolcreatedb: false, rolbypassrls: false, rolreplication: false,
-    },
-    memberships: [],
-    database: { name: "postgres", owner: "postgres", postgres_has_create: true },
-    schemas: [],
-  };
+  const payload = managedInstallerPayload();
   let observedSql;
   const result = runProductionInstallerIdentityAttestation(readOnlyEnvironment, {
     execute: (sql, connectionEnvironment) => {
@@ -247,6 +284,8 @@ test("installer identity attestation reuses the approved read-only target and SQ
   assert.doesNotThrow(() => assertReadOnlyBatch(observedSql));
   assert.equal(result.readOnly, true);
   assert.equal(result.classification.decision, "PASS");
+  assert.equal(result.classification.managedProfile, "READY");
+  assert.equal(result.classification.membershipCompletenessProven, true);
   assert.match(installerIdentityQuery.payloadSql, /pg_catalog\.pg_auth_members/);
   assert.doesNotMatch(installerIdentityQuery.payloadSql, /rolpassword|set\s+role/i);
 });
@@ -266,16 +305,53 @@ test("installer identity attestation fails closed for missing config, inherited 
   }), /caller contract/);
 });
 
-test("installer identity classification never passes unknown memberships or elevated attributes", () => {
-  const base = {
-    installer: {
-      rolname: "postgres", rolcanlogin: true, rolinherit: true, rolcreaterole: true,
-      rolsuper: false, rolcreatedb: false, rolbypassrls: false, rolreplication: false,
-    },
-    database: { postgres_has_create: true },
-    memberships: [],
-  };
+test("installer identity classification pins every managed attribute and membership field", () => {
+  const base = managedInstallerPayload();
   assert.equal(classifyInstallerIdentity(base).decision, "PASS");
-  assert.equal(classifyInstallerIdentity({ ...base, memberships: [{ granted_role: "unexpected" }] }).decision, "UNKNOWN");
-  assert.equal(classifyInstallerIdentity({ ...base, installer: { ...base.installer, rolreplication: true } }).decision, "UNKNOWN");
+  for (const attribute of ["rolcreatedb", "rolbypassrls", "rolreplication"]) {
+    assert.equal(classifyInstallerIdentity({
+      ...base,
+      installer: { ...base.installer, [attribute]: !base.installer[attribute] },
+    }).decision, "BLOCKER");
+  }
+  assert.equal(classifyInstallerIdentity({
+    ...base, installer: { ...base.installer, rolsuper: true },
+  }).decision, "BLOCKER");
+  for (const field of ["grantor_role", "admin_option", "inherit_option", "set_option"]) {
+    const memberships = base.memberships.map((membership, index) => index === 0
+      ? { ...membership, [field]: typeof membership[field] === "boolean" ? !membership[field] : "wrong_grantor" }
+      : membership);
+    assert.equal(classifyInstallerIdentity({ ...base, memberships }).decision, "BLOCKER");
+  }
+  assert.equal(classifyInstallerIdentity({
+    ...base,
+    memberships: base.memberships.slice(1),
+    membership_summary: { total_count: 9, as_member_count: 9, as_granted_role_count: 0 },
+  }).decision, "BLOCKER");
+  assert.equal(classifyInstallerIdentity({
+    ...base,
+    memberships: [...base.memberships, {
+      granted_role: "unexpected", member_role: "postgres", grantor_role: "supabase_admin",
+      admin_option: false, inherit_option: false, set_option: false,
+    }],
+    membership_summary: { total_count: 11, as_member_count: 11, as_granted_role_count: 0 },
+  }).decision, "BLOCKER");
+  assert.equal(classifyInstallerIdentity({ ...base, membership_summary: undefined }).decision, "UNKNOWN");
+  assert.equal(classifyInstallerIdentity({ ...base, server_version_num: 180000 }).decision, "BLOCKER");
+});
+
+test("installer attestation target and role guards reject wrong project and installer", () => {
+  const readOnlyEnvironment = {
+    [PREFLIGHT_OPT_IN]: "true",
+    [PREFLIGHT_PROJECT_REF]: PRODUCTION_PROJECT_REF,
+    [PREFLIGHT_DATABASE_URL]: `postgresql://reflab_prod_preflight_ro:secret@db.${PRODUCTION_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require`,
+  };
+  assert.throws(() => runProductionInstallerIdentityAttestation({
+    ...readOnlyEnvironment,
+    [PREFLIGHT_PROJECT_REF]: "wrong-project",
+  }), /not allowlisted/);
+  assert.equal(classifyInstallerIdentity({
+    ...managedInstallerPayload(),
+    installer: { ...managedInstallerPayload().installer, rolname: "another_installer" },
+  }).decision, "BLOCKER");
 });

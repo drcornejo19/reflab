@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 import {
   ROLE_BOOTSTRAP_ARTIFACT,
   ROLE_BOOTSTRAP_ATTESTATION,
+  ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS,
   assertRoleAttestation,
 } from "./production-role-bootstrap-contract.mjs";
 import { parseAttestationOutput } from "./run-production-role-bootstrap.mjs";
@@ -23,11 +24,18 @@ const binaries = Object.freeze({
   psql: join(postgresBin, "psql.exe"),
 });
 
-const scenarios = Object.freeze([
+const targetScenarios = Object.freeze([
   "login", "inherit", "bypassrls", "superuser", "createdb", "createrole",
   "admin_option_drift", "set_option_drift", "inherit_option_drift", "incompatible_grantor",
   "unexpected_membership", "unexpected_ownership", "unexpected_grant", "wrong_installer",
 ]);
+const managedInstallerScenarios = Object.freeze([
+  "installer_createdb_drift", "installer_bypassrls_drift", "installer_replication_drift",
+  "installer_superuser_drift", "installer_missing_membership", "installer_extra_membership",
+  "installer_wrong_grantor", "installer_admin_option_drift",
+  "installer_inherit_option_drift", "installer_set_option_drift",
+]);
+const scenarios = Object.freeze([...targetScenarios, ...managedInstallerScenarios]);
 
 function reservePort() {
   return new Promise((resolvePort, reject) => {
@@ -86,6 +94,21 @@ export function createTargetSql(overrides = {}) {
     comment on role reflab_rls_owner is ${sqlLiteral("NOLOGIN owner for audited RefLab RLS helper functions. It owns no product tables and has read-only access to authorization tables.")};`;
 }
 
+export function createManagedInstallerSql() {
+  const customRoles = [
+    "anon", "authenticated", "authenticator", "reflab_prod_preflight_ro",
+    "service_role", "supabase_privileged_role",
+  ];
+  const statements = [
+    "create role postgres login inherit nosuperuser createdb createrole replication bypassrls",
+    ...customRoles.map((role) => `create role ${role} nologin`),
+    "grant create on database postgres to postgres",
+    ...ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS.map((membership) =>
+      `grant ${membership.grantedRole} to postgres with admin ${membership.adminOption}, inherit ${membership.inheritOption}, set ${membership.setOption} granted by supabase_admin`),
+  ];
+  return `${statements.join(";\n")};`;
+}
+
 function setupScenario(environment, scenario) {
   if (scenario === "wrong_installer") {
     psql(environment, "create role wrong_installer login inherit createrole nosuperuser nocreatedb noreplication nobypassrls; grant create on database postgres to wrong_installer;", "supabase_admin");
@@ -93,6 +116,46 @@ function setupScenario(environment, scenario) {
   }
 
   psql(environment, createTargetSql(), "postgres");
+  if (scenario === "installer_createdb_drift") {
+    psql(environment, "alter role postgres nocreatedb;", "supabase_admin");
+    return;
+  }
+  if (scenario === "installer_bypassrls_drift") {
+    psql(environment, "alter role postgres nobypassrls;", "supabase_admin");
+    return;
+  }
+  if (scenario === "installer_replication_drift") {
+    psql(environment, "alter role postgres noreplication;", "supabase_admin");
+    return;
+  }
+  if (scenario === "installer_superuser_drift") {
+    psql(environment, "alter role postgres superuser;", "supabase_admin");
+    return;
+  }
+  if (scenario === "installer_missing_membership") {
+    psql(environment, "revoke anon from postgres granted by supabase_admin;", "supabase_admin");
+    return;
+  }
+  if (scenario === "installer_extra_membership") {
+    psql(environment, "create role unexpected_ambient_role nologin; grant unexpected_ambient_role to postgres with admin false, inherit false, set false granted by supabase_admin;", "supabase_admin");
+    return;
+  }
+  if (scenario === "installer_wrong_grantor") {
+    psql(environment, "revoke anon from postgres granted by supabase_admin; create role unexpected_ambient_grantor nologin; grant anon to unexpected_ambient_grantor with admin true, inherit false, set true granted by supabase_admin; grant anon to postgres with admin true, inherit true, set true granted by unexpected_ambient_grantor;", "supabase_admin");
+    return;
+  }
+  if (scenario === "installer_admin_option_drift") {
+    psql(environment, "grant anon to postgres with admin false, inherit true, set true granted by supabase_admin;", "supabase_admin");
+    return;
+  }
+  if (scenario === "installer_inherit_option_drift") {
+    psql(environment, "grant anon to postgres with admin true, inherit false, set true granted by supabase_admin;", "supabase_admin");
+    return;
+  }
+  if (scenario === "installer_set_option_drift") {
+    psql(environment, "grant anon to postgres with admin true, inherit true, set false granted by supabase_admin;", "supabase_admin");
+    return;
+  }
   const attribute = ["login", "inherit", "bypassrls", "superuser", "createdb", "createrole"].find(
     (candidate) => candidate === scenario,
   );
@@ -120,19 +183,44 @@ function setupScenario(environment, scenario) {
 
 function roleFingerprint(environment) {
   return psql(environment, `select pg_catalog.md5(coalesce(pg_catalog.json_agg(x order by x.kind,x.value)::text,'')) from (
-    select 'role' kind, pg_catalog.concat_ws(':',rolname,rolcanlogin,rolsuper,rolcreatedb,rolcreaterole,rolinherit,rolbypassrls) value from pg_catalog.pg_roles where rolname='reflab_rls_owner'
-    union all select 'membership',pg_catalog.concat_ws(':',roleid,member,grantor,admin_option,inherit_option,set_option) from pg_catalog.pg_auth_members where roleid=pg_catalog.to_regrole('reflab_rls_owner') or member=pg_catalog.to_regrole('reflab_rls_owner')
+    select 'role' kind, pg_catalog.concat_ws(':',rolname,rolcanlogin,rolsuper,rolcreatedb,rolcreaterole,rolinherit,rolreplication,rolbypassrls) value from pg_catalog.pg_roles where rolname in ('postgres','reflab_rls_owner')
+    union all select 'membership',pg_catalog.concat_ws(':',granted.rolname,member_role.rolname,grantor.rolname,m.admin_option,m.inherit_option,m.set_option)
+      from pg_catalog.pg_auth_members m
+      join pg_catalog.pg_roles granted on granted.oid=m.roleid
+      join pg_catalog.pg_roles member_role on member_role.oid=m.member
+      join pg_catalog.pg_roles grantor on grantor.oid=m.grantor
+      where granted.rolname in ('postgres','reflab_rls_owner') or member_role.rolname in ('postgres','reflab_rls_owner')
   ) x;`).stdout.trim();
 }
 
 function assertScenarioMutation(environment, scenario) {
+  const installerAttribute = {
+    installer_createdb_drift: "not rolcreatedb",
+    installer_bypassrls_drift: "not rolbypassrls",
+    installer_replication_drift: "not rolreplication",
+    installer_superuser_drift: "rolsuper",
+  }[scenario];
   const roleAttribute = {
     login: "rolcanlogin", inherit: "rolinherit", bypassrls: "rolbypassrls",
     superuser: "rolsuper", createdb: "rolcreatedb", createrole: "rolcreaterole",
   }[scenario];
   let predicate;
-  if (roleAttribute) {
+  if (installerAttribute) {
+    predicate = `exists(select 1 from pg_catalog.pg_roles where rolname='postgres' and ${installerAttribute})`;
+  } else if (roleAttribute) {
     predicate = `exists(select 1 from pg_catalog.pg_roles where rolname='reflab_rls_owner' and ${roleAttribute})`;
+  } else if (scenario === "installer_missing_membership") {
+    predicate = "not exists(select 1 from pg_catalog.pg_auth_members m join pg_catalog.pg_roles r on r.oid=m.roleid join pg_catalog.pg_roles g on g.oid=m.grantor where r.rolname='anon' and m.member='postgres'::regrole and g.rolname='supabase_admin')";
+  } else if (scenario === "installer_extra_membership") {
+    predicate = "exists(select 1 from pg_catalog.pg_auth_members m where m.roleid='unexpected_ambient_role'::regrole and m.member='postgres'::regrole)";
+  } else if (scenario === "installer_wrong_grantor") {
+    predicate = "exists(select 1 from pg_catalog.pg_auth_members m join pg_catalog.pg_roles r on r.oid=m.roleid join pg_catalog.pg_roles g on g.oid=m.grantor where r.rolname='anon' and m.member='postgres'::regrole and g.rolname='unexpected_ambient_grantor')";
+  } else if (scenario === "installer_admin_option_drift") {
+    predicate = "exists(select 1 from pg_catalog.pg_auth_members m join pg_catalog.pg_roles r on r.oid=m.roleid join pg_catalog.pg_roles g on g.oid=m.grantor where r.rolname='anon' and m.member='postgres'::regrole and g.rolname='supabase_admin' and not m.admin_option)";
+  } else if (scenario === "installer_inherit_option_drift") {
+    predicate = "exists(select 1 from pg_catalog.pg_auth_members m join pg_catalog.pg_roles r on r.oid=m.roleid join pg_catalog.pg_roles g on g.oid=m.grantor where r.rolname='anon' and m.member='postgres'::regrole and g.rolname='supabase_admin' and not m.inherit_option)";
+  } else if (scenario === "installer_set_option_drift") {
+    predicate = "exists(select 1 from pg_catalog.pg_auth_members m join pg_catalog.pg_roles r on r.oid=m.roleid join pg_catalog.pg_roles g on g.oid=m.grantor where r.rolname='anon' and m.member='postgres'::regrole and g.rolname='supabase_admin' and not m.set_option)";
   } else if (scenario === "admin_option_drift") {
     predicate = "exists(select 1 from pg_catalog.pg_auth_members m join pg_catalog.pg_roles g on g.oid=m.grantor where m.roleid='reflab_rls_owner'::regrole and m.member='postgres'::regrole and g.rolname='supabase_admin' and not m.admin_option and not m.inherit_option and not m.set_option)";
   } else if (scenario === "set_option_drift") {
@@ -165,7 +253,7 @@ async function withCluster(scenario, callback) {
     command(binaries.initdb, ["--auth=trust", "--username=supabase_admin", "--encoding=UTF8", "--no-locale", "--pgdata", data]);
     command(binaries.pgCtl, ["start", "-D", data, "-l", log, "-o", `-h 127.0.0.1 -p ${port}`, "-w"], { stdio: "ignore" }); started = true;
     const environment = { port };
-    psql(environment, "create role postgres login inherit nosuperuser nocreatedb createrole noreplication nobypassrls; grant create on database postgres to postgres;", "supabase_admin");
+    psql(environment, createManagedInstallerSql(), "supabase_admin");
     if (scenarios.includes(scenario)) {
       setupScenario(environment, scenario);
       assertScenarioMutation(environment, scenario);
@@ -199,7 +287,9 @@ async function negative(scenario) {
     const result = psql(environment, bootstrap, scenario === "wrong_installer" ? "wrong_installer" : "postgres", true);
     if (result.status === 0) throw new Error(`Negative did not abort: ${scenario}`);
     const match = String(result.stderr).match(/(?:ERROR|FATAL):\s+([0-9A-Z]{5}):/);
-    const expected = scenario === "wrong_installer" ? "42501" : "55000";
+    const expected = scenario === "wrong_installer" || managedInstallerScenarios.includes(scenario)
+      ? "42501"
+      : "55000";
     if (match?.[1] !== expected) throw new Error(`Unexpected SQLSTATE for ${scenario}: ${match?.[1] ?? "UNKNOWN"}`);
     const after = roleFingerprint(environment);
     if (before !== after) throw new Error(`Rollback changed role state: ${scenario}`);

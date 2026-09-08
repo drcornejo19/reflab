@@ -17,6 +17,8 @@ declare
   unsafe_membership_count bigint;
   automatic_membership_count bigint;
   explicit_membership_count bigint;
+  ambient_missing_count bigint;
+  ambient_unexpected_count bigint;
 begin
   if current_user <> 'postgres' or session_user <> 'postgres' then
     raise exception 'Production role bootstrap installer identity is not approved'
@@ -32,13 +34,83 @@ begin
   if not found
      or not installer.rolcanlogin
      or installer.rolsuper
-     or installer.rolcreatedb
+     or not installer.rolcreatedb
      or not installer.rolcreaterole
      or not installer.rolinherit
-     or installer.rolreplication
-     or installer.rolbypassrls
+     or not installer.rolreplication
+     or not installer.rolbypassrls
      or not pg_catalog.has_database_privilege(current_user, pg_catalog.current_database(), 'CREATE') then
-    raise exception 'Production role bootstrap installer privilege contract is not approved'
+    raise exception 'Production role bootstrap managed installer attribute contract is not approved'
+      using errcode = '42501';
+  end if;
+
+  with expected(granted_role, admin_option, inherit_option, set_option) as (
+    values
+      ('anon'::text, true, true, true),
+      ('authenticated'::text, true, true, true),
+      ('authenticator'::text, true, true, true),
+      ('pg_create_subscription'::text, true, true, true),
+      ('pg_monitor'::text, true, true, true),
+      ('pg_read_all_data'::text, true, true, true),
+      ('pg_signal_backend'::text, true, true, true),
+      ('reflab_prod_preflight_ro'::text, true, false, false),
+      ('service_role'::text, true, true, true),
+      ('supabase_privileged_role'::text, false, true, true)
+  )
+  select pg_catalog.count(*)
+  into ambient_missing_count
+  from expected
+  where not exists (
+    select 1
+    from pg_catalog.pg_auth_members membership
+    join pg_catalog.pg_roles granted_role on granted_role.oid = membership.roleid
+    join pg_catalog.pg_roles member_role on member_role.oid = membership.member
+    join pg_catalog.pg_roles grantor_role on grantor_role.oid = membership.grantor
+    where granted_role.rolname = expected.granted_role
+      and member_role.rolname = 'postgres'
+      and grantor_role.rolname = 'supabase_admin'
+      and membership.admin_option = expected.admin_option
+      and membership.inherit_option = expected.inherit_option
+      and membership.set_option = expected.set_option
+  );
+
+  with expected(granted_role, admin_option, inherit_option, set_option) as (
+    values
+      ('anon'::text, true, true, true),
+      ('authenticated'::text, true, true, true),
+      ('authenticator'::text, true, true, true),
+      ('pg_create_subscription'::text, true, true, true),
+      ('pg_monitor'::text, true, true, true),
+      ('pg_read_all_data'::text, true, true, true),
+      ('pg_signal_backend'::text, true, true, true),
+      ('reflab_prod_preflight_ro'::text, true, false, false),
+      ('service_role'::text, true, true, true),
+      ('supabase_privileged_role'::text, false, true, true)
+  )
+  select pg_catalog.count(*)
+  into ambient_unexpected_count
+  from pg_catalog.pg_auth_members membership
+  join pg_catalog.pg_roles granted_role on granted_role.oid = membership.roleid
+  join pg_catalog.pg_roles member_role on member_role.oid = membership.member
+  join pg_catalog.pg_roles grantor_role on grantor_role.oid = membership.grantor
+  where (granted_role.rolname = 'postgres' or member_role.rolname = 'postgres')
+    and not (
+      granted_role.rolname = 'reflab_rls_owner'
+      and member_role.rolname = 'postgres'
+    )
+    and not exists (
+      select 1
+      from expected
+      where granted_role.rolname = expected.granted_role
+        and member_role.rolname = 'postgres'
+        and grantor_role.rolname = 'supabase_admin'
+        and membership.admin_option = expected.admin_option
+        and membership.inherit_option = expected.inherit_option
+        and membership.set_option = expected.set_option
+    );
+
+  if ambient_missing_count <> 0 or ambient_unexpected_count <> 0 then
+    raise exception 'Production role bootstrap managed installer membership fingerprint is not approved'
       using errcode = '42501';
   end if;
 

@@ -21,7 +21,26 @@ PostgreSQL role DDL (`CREATE ROLE`, role membership `GRANT`, and `COMMENT ON ROL
 
 The bootstrap runner accepts only the exact direct Production host or approved Session pooler, database `postgres`, SSL mode `require`, project `nagjddldrldwavmfaytc`, and installer identity `postgres`. It requires two independent opt-ins, an externally approved frozen HEAD, a clean worktree, and pinned hashes for both SQL artifacts before starting `psql`.
 
-For role bootstrap, the installer must be `LOGIN`, `INHERIT`, `CREATEROLE`, `NOSUPERUSER`, `NOCREATEDB`, `NOREPLICATION`, and `NOBYPASSRLS`, with effective `CREATE` on the target database. These capabilities are observed, never granted by the runner. A platform identity that does not match this contract is a blocker.
+The minimum RefLab capabilities consumed by this step are `LOGIN`, `CREATEROLE`, `NOSUPERUSER`, and effective `CREATE` on the target database. `CREATEDB`, `BYPASSRLS`, `REPLICATION`, and the managed memberships are not RefLab requirements and must never be granted to make the bootstrap pass.
+
+For the single managed Production project `nagjddldrldwavmfaytc`, the real `postgres` identity is pinned separately as ambient platform state: `LOGIN`, `INHERIT`, `CREATEROLE`, `NOSUPERUSER`, `CREATEDB`, `BYPASSRLS`, and `REPLICATION`. Exact matching is a safety fingerprint, not approval for the bootstrap to use those elevated capabilities.
+
+The complete ambient membership inventory involving `postgres` contains exactly ten rows, all with `postgres` as member and `supabase_admin` as grantor:
+
+| Granted role | ADMIN | INHERIT | SET |
+| --- | --- | --- | --- |
+| `anon` | true | true | true |
+| `authenticated` | true | true | true |
+| `authenticator` | true | true | true |
+| `pg_create_subscription` | true | true | true |
+| `pg_monitor` | true | true | true |
+| `pg_read_all_data` | true | true | true |
+| `pg_signal_backend` | true | true | true |
+| `reflab_prod_preflight_ro` | true | false | false |
+| `service_role` | true | true | true |
+| `supabase_privileged_role` | false | true | true |
+
+No row may have `postgres` as the granted role, and no additional row, grantor, or option combination is accepted. The bootstrap validates this fingerprint before role DDL. It does not issue `ALTER ROLE`, `REVOKE`, or ambient membership `GRANT` statements.
 
 Phase 1 is a separate approval. Its first migration requires database `CREATE` and creates only its own schemas and state objects. Later adoption migrations additionally require ownership of the exact tables they alter and membership in `reflab_rls_owner` for reviewed helper ownership transfers. Those per-migration capabilities must be attested by a future artifact-specific runner; this bootstrap runner cannot execute Phase 1 or any arbitrary SQL path.
 
@@ -52,6 +71,8 @@ npm run attest:production-ddl-installer
 ```
 
 The entrypoint does not load application `.env` files. The URL remains process-local, must identify `reflab_prod_preflight_ro`, and is passed through the existing exact target and SSL guard. Inherited `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGSSLMODE`, `PGOPTIONS`, `PGSERVICE`, `PGSERVICEFILE`, or `PGPASSFILE` abort before `psql`. The generated batch is `BEGIN READ ONLY`, timeout-bounded, `SELECT`-only, operationally verifies `transaction_read_only = on`, and always rolls back.
+
+The catalog query selects every `pg_auth_members` row where `postgres` is either the granted role or the member. Its result includes total, member-side, and granted-role-side counts. `DDL_INSTALLER_MANAGED_PROFILE=READY` is possible only when the full result contains exactly the ten rows above, with ten member-side rows and zero granted-role-side rows. Missing summary fields are `UNKNOWN`; any complete but different fingerprint is `BLOCKER`.
 
 ## PostgreSQL 17
 

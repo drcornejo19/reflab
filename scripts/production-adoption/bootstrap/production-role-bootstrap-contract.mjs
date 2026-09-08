@@ -3,11 +3,13 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 export const ROLE_BOOTSTRAP_FORMAT = "REFLAB_PRODUCTION_ROLE_BOOTSTRAP_V1";
+export const ROLE_BOOTSTRAP_MANAGED_PROFILE_FORMAT = "REFLAB_PRODUCTION_MANAGED_INSTALLER_PROFILE_V1";
 export const ROLE_BOOTSTRAP_ROLE = "reflab_rls_owner";
 export const ROLE_BOOTSTRAP_INSTALLER = "postgres";
+export const ROLE_BOOTSTRAP_MANAGED_PROJECT_REF = "nagjddldrldwavmfaytc";
 export const ROLE_BOOTSTRAP_ARTIFACT = "scripts/production-adoption/bootstrap/reflab-rls-owner-bootstrap.sql";
 export const ROLE_BOOTSTRAP_ATTESTATION = "scripts/production-adoption/bootstrap/reflab-rls-owner-attestation.sql";
-export const ROLE_BOOTSTRAP_ARTIFACT_SHA256 = "0f086e9f5088b6b626b43ef57971b184c2de9d29574cf771fed0a1100fc9af79";
+export const ROLE_BOOTSTRAP_ARTIFACT_SHA256 = "51a9585ae9fef21c542dbb7e90962aed8de9e57f565ab84c9f69849d1d97397a";
 export const ROLE_BOOTSTRAP_ATTESTATION_SHA256 = "3acd2892f8e370b149130d0a2baba2d106bdbe94ffde4f91d510f4f69916b703";
 export const ROLE_BOOTSTRAP_APPROVED_MEMBERSHIPS = Object.freeze([
   Object.freeze({
@@ -37,15 +39,44 @@ export const ROLE_BOOTSTRAP_ROLE_ATTRIBUTES = Object.freeze({
   rolbypassrls: false,
 });
 
-export const ROLE_BOOTSTRAP_INSTALLER_ATTRIBUTES = Object.freeze({
+// These are the capabilities RefLab actually consumes during bootstrap. The
+// remaining installer attributes are pinned ambient managed-platform state.
+export const ROLE_BOOTSTRAP_REQUIRED_CAPABILITIES = Object.freeze({
   rolcanlogin: true,
   rolsuper: false,
-  rolcreatedb: false,
   rolcreaterole: true,
-  rolinherit: true,
-  rolreplication: false,
-  rolbypassrls: false,
+  databaseCreate: true,
 });
+
+export const ROLE_BOOTSTRAP_MANAGED_INSTALLER_ATTRIBUTES = Object.freeze({
+  rolcanlogin: true,
+  rolinherit: true,
+  rolcreaterole: true,
+  rolsuper: false,
+  rolcreatedb: true,
+  rolbypassrls: true,
+  rolreplication: true,
+});
+
+export const ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS = Object.freeze([
+  ["anon", true, true, true],
+  ["authenticated", true, true, true],
+  ["authenticator", true, true, true],
+  ["pg_create_subscription", true, true, true],
+  ["pg_monitor", true, true, true],
+  ["pg_read_all_data", true, true, true],
+  ["pg_signal_backend", true, true, true],
+  ["reflab_prod_preflight_ro", true, false, false],
+  ["service_role", true, true, true],
+  ["supabase_privileged_role", false, true, true],
+].map(([grantedRole, adminOption, inheritOption, setOption]) => Object.freeze({
+  grantedRole,
+  memberRole: ROLE_BOOTSTRAP_INSTALLER,
+  grantorRole: "supabase_admin",
+  adminOption,
+  inheritOption,
+  setOption,
+})));
 
 export function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
