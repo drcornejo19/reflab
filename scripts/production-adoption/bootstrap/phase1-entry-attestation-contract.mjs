@@ -202,7 +202,7 @@ const expectedAbsence = Object.freeze({
   development_objects_absent: true,
 });
 
-export function classifyPhase1Entry(payload, installerClassification) {
+function classifyPhase1State(payload, installerClassification, expectedCaller) {
   const role = payload?.role_attestation;
   const absence = payload?.absence;
   const complete = Boolean(payload)
@@ -221,8 +221,8 @@ export function classifyPhase1Entry(payload, installerClassification) {
     return { decision: "UNKNOWN", phase1Entry: "UNKNOWN" };
   }
 
-  const callerExact = payload.caller === "reflab_prod_preflight_ro"
-    && payload.session_user === "reflab_prod_preflight_ro";
+  const callerExact = payload.caller === expectedCaller
+    && payload.session_user === expectedCaller;
   const readOnlyExact = payload.transaction_read_only === "on";
   const postgresMajorExact = Math.trunc(payload.server_version_num / 10000) === 17;
   const roleExact = Object.entries(expectedRoleAttestation).every(([field, expected]) =>
@@ -246,4 +246,12 @@ export function classifyPhase1Entry(payload, installerClassification) {
     noPartialAdoption,
     installerPostBootstrapReady,
   };
+}
+
+export function classifyPhase1Entry(payload, installerClassification) {
+  return classifyPhase1State(payload, installerClassification, "reflab_prod_preflight_ro");
+}
+
+export function classifyPhase1DdlEntry(payload, installerClassification) {
+  return classifyPhase1State(payload, installerClassification, "postgres");
 }

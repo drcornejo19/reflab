@@ -26,11 +26,12 @@ export const PRODUCTION_DDL_PROJECT_REF = "REFLAB_PRODUCTION_DDL_PROJECT_REF";
 export const PRODUCTION_DDL_DATABASE_URL = "REFLAB_PRODUCTION_DDL_DB_URL";
 export const PRODUCTION_DDL_APPROVED_HEAD = "REFLAB_PRODUCTION_DDL_APPROVED_HEAD";
 
-export function authorizeProductionDdlTarget(environment = process.env) {
+export function authorizeProductionDdlTarget(environment = process.env, options = {}) {
+  const operationOptIn = options.operationOptIn ?? ROLE_BOOTSTRAP_OPT_IN;
   if (Object.values(environment).some((value) => typeof value === "string" && value.includes(DEVELOPMENT_PROJECT_REF))) {
     throw new Error("Production DDL aborted: Development project reference detected.");
   }
-  if (environment[ROLE_BOOTSTRAP_OPT_IN] !== "true" || environment[PRODUCTION_DDL_OPT_IN] !== "true") {
+  if (environment[operationOptIn] !== "true" || environment[PRODUCTION_DDL_OPT_IN] !== "true") {
     throw new Error("Production DDL requires both explicit opt-ins.");
   }
   if (environment[PRODUCTION_DDL_PROJECT_REF] !== PRODUCTION_PROJECT_REF) {

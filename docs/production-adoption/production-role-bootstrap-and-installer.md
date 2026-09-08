@@ -91,6 +91,23 @@ npm run attest:production-phase1-entry
 
 The runner does not accept installer credentials and cannot execute the foundation migration.
 
+## Phase 1 foundation DDL runner
+
+The Phase 1 foundation has a separate artifact-specific Production runner. It accepts only `--production-phase1-foundation`, requires both `ALLOW_PRODUCTION_DDL=true` and `ALLOW_PRODUCTION_PHASE1_FOUNDATION=true`, and reads only `supabase/migrations/202608310001_production_adoption_foundation.sql` after its SHA-256 and static scope are verified. It does not discover migrations, accept SQL paths, or authorize Phase 2.
+
+After a separately approved committed HEAD is frozen, the invocation shape is:
+
+```powershell
+$env:ALLOW_PRODUCTION_DDL = "true"
+$env:ALLOW_PRODUCTION_PHASE1_FOUNDATION = "true"
+$env:REFLAB_PRODUCTION_DDL_PROJECT_REF = "nagjddldrldwavmfaytc"
+$env:REFLAB_PRODUCTION_DDL_APPROVED_HEAD = "<APPROVED_COMMITTED_HEAD>"
+$env:REFLAB_PRODUCTION_DDL_DB_URL = "<SET_LOCALLY>"
+npm run run:production-phase1-foundation
+```
+
+The runner re-attests the exact `POST_BOOTSTRAP` installer profile, protected role, PostgreSQL 17, Phase 1 absence state, and historical count fingerprint immediately before DDL. After the migration it re-attests the exact foundation objects, empty schema-state, `foundation/1` ledger, unchanged historical counts, absent Phase 2/Development infrastructure, and unchanged role safety. Any failure stops without authorizing another migration.
+
 ## PostgreSQL 17
 
 The bootstrap uses PostgreSQL 17 membership fields `admin_option`, `inherit_option`, and `set_option`. A non-superuser `CREATEROLE` creator receives an automatic grant from the bootstrap superuser with `ADMIN TRUE`, `INHERIT FALSE`, and `SET FALSE`; the explicit grant is separately pinned. Role DDL remains transactional, so any tuple mismatch rolls back creation, comment, and grants together. Local execution should prefer PostgreSQL 17; when it is unavailable, the rehearsal runs on PostgreSQL 18 with static PostgreSQL 17 contract assertions. This does not alter or weaken the PostgreSQL 18-pinned Wave 5 evidence contract.
