@@ -307,7 +307,7 @@ export const phase1ExamTrainingEntryQuery = jsonQuery(
   ))`,
 );
 
-export function classifyPhase1ExamTrainingEntry(payload, installerClassification) {
+function classifyPhase1ExamTrainingEntryForCaller(payload, installerClassification, expectedCaller) {
   const checks = payload?.checks;
   const complete = Boolean(payload)
     && typeof payload.caller === "string"
@@ -322,8 +322,8 @@ export function classifyPhase1ExamTrainingEntry(payload, installerClassification
     return { classification: "UNKNOWN", nextAllowedRemoteOperation: "NONE" };
   }
 
-  const callerExact = payload.caller === "reflab_prod_preflight_ro"
-    && payload.session_user === "reflab_prod_preflight_ro";
+  const callerExact = payload.caller === expectedCaller
+    && payload.session_user === expectedCaller;
   const readOnlyExact = payload.transaction_read_only === "on";
   const postgresMajorExact = Math.trunc(payload.server_version_num / 10000) === 17;
   const installerReady = installerClassification.managedProfile === "READY"
@@ -341,4 +341,16 @@ export function classifyPhase1ExamTrainingEntry(payload, installerClassification
     checks: Object.fromEntries(requiredChecks.map((field) => [field, checks[field]])),
     nextAllowedRemoteOperation: pass ? PHASE1_EXAM_TRAINING_NEXT_REVIEW : "NONE",
   };
+}
+
+export function classifyPhase1ExamTrainingEntry(payload, installerClassification) {
+  return classifyPhase1ExamTrainingEntryForCaller(
+    payload,
+    installerClassification,
+    "reflab_prod_preflight_ro",
+  );
+}
+
+export function classifyPhase1ExamTrainingInstallerEntry(payload, installerClassification) {
+  return classifyPhase1ExamTrainingEntryForCaller(payload, installerClassification, "postgres");
 }
