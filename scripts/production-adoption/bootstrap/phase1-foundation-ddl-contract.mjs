@@ -12,6 +12,11 @@ export const PHASE1_FOUNDATION_OPERATION = "--production-phase1-foundation";
 export const PHASE1_FOUNDATION_OPT_IN = "ALLOW_PRODUCTION_PHASE1_FOUNDATION";
 export const PHASE1_PRODUCT_FINGERPRINT_QUERY_ID = "phase1_product_fingerprint";
 export const PHASE1_POST_ATTESTATION_QUERY_ID = "phase1_foundation_post_attestation";
+export const PHASE1_HISTORICAL_FINGERPRINT = Object.freeze({
+  attempts: 37,
+  exam_results: 6,
+  notification_events: 60,
+});
 
 export function phase1FoundationHash(repositoryRoot) {
   return createHash("sha256")
@@ -90,9 +95,15 @@ export const phase1ProductFingerprintQuery = jsonQuery(
   `pg_catalog.json_build_object(
     'attempts', (select pg_catalog.count(*) from public.attempts),
     'exam_results', (select pg_catalog.count(*) from public.exam_results),
-    'notifications', (select pg_catalog.count(*) from public.notifications)
+    'notification_events', (select pg_catalog.count(*) from public.notification_events)
   )`,
 );
+
+export function phase1HistoricalFingerprintExact(fingerprint) {
+  return Boolean(fingerprint)
+    && Object.entries(PHASE1_HISTORICAL_FINGERPRINT).every(([field, expected]) =>
+      Number.isInteger(fingerprint[field]) && fingerprint[field] === expected);
+}
 
 export const phase1PostAttestationQuery = jsonQuery(
   PHASE1_POST_ATTESTATION_QUERY_ID,
@@ -277,7 +288,7 @@ export function classifyPhase1PostAttestation(payload, installerClassification, 
     && expectedPostZeros.every((field) => Number.isInteger(payload[field]))
     && Number.isInteger(payload.ledger_rows)
     && beforeFingerprint && afterFingerprint
-    && ["attempts", "exam_results", "notifications"].every((field) =>
+    && Object.keys(PHASE1_HISTORICAL_FINGERPRINT).every((field) =>
       Number.isInteger(beforeFingerprint[field]) && Number.isInteger(afterFingerprint[field]))
     && typeof installerClassification?.managedProfile === "string"
     && typeof installerClassification?.lifecycleState === "string";
@@ -289,8 +300,9 @@ export function classifyPhase1PostAttestation(payload, installerClassification, 
   const booleansExact = Object.entries(expectedPostBooleans).every(([field, expected]) => payload[field] === expected);
   const zerosExact = expectedPostZeros.every((field) => payload[field] === 0);
   const ledgerExact = payload.ledger_rows === 1;
-  const productFingerprintPreserved = ["attempts", "exam_results", "notifications"]
-    .every((field) => beforeFingerprint[field] === afterFingerprint[field]);
+  const productFingerprintPreserved = Object.entries(PHASE1_HISTORICAL_FINGERPRINT)
+    .every(([field, expected]) => beforeFingerprint[field] === expected
+      && afterFingerprint[field] === expected);
   const installerReady = installerClassification.managedProfile === "READY"
     && installerClassification.lifecycleState === "POST_BOOTSTRAP";
   const ready = callerExact && readOnlyExact && postgresMajorExact && booleansExact

@@ -31,11 +31,18 @@ function createHistoricalFingerprintFixture(environment) {
   psql(environment, `
     create table public.attempts(id integer primary key);
     create table public.exam_results(id integer primary key);
-    create table public.notifications(id integer primary key);
+    create table public.notification_events(id integer primary key);
     insert into public.attempts select value from pg_catalog.generate_series(1, 37) value;
     insert into public.exam_results select value from pg_catalog.generate_series(1, 6) value;
-    insert into public.notifications select value from pg_catalog.generate_series(1, 60) value;
+    insert into public.notification_events select value from pg_catalog.generate_series(1, 60) value;
   `, "supabase_admin");
+  const relationContract = psql(environment, `
+    select pg_catalog.to_regclass('public.notification_events') is not null
+      and pg_catalog.to_regclass('public.' || 'notifications') is null;
+  `).stdout.trim();
+  if (relationContract !== "t") {
+    throw new Error("Phase 1 historical relation fixture is not exact.");
+  }
 }
 
 function assertPg18VersionOnlyBlock(classification, label) {
@@ -121,7 +128,7 @@ commit;
       and pg_catalog.to_regnamespace('reflab_private') is null;`).stdout.trim();
     const fingerprint = payload(environment, phase1ProductFingerprintQuery);
     if (absence !== "t" || fingerprint.attempts !== 37
-        || fingerprint.exam_results !== 6 || fingerprint.notifications !== 60) {
+        || fingerprint.exam_results !== 6 || fingerprint.notification_events !== 60) {
       throw new Error("Phase 1 rollback did not preserve the pre-DDL state.");
     }
     return { expectedSqlstate: "55000", observedSqlstate: sqlstate, abort: "PASS", rollback: "PASS", cleanup: "PASS" };

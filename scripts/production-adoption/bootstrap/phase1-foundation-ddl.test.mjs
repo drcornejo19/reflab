@@ -22,6 +22,7 @@ import {
 import {
   PHASE1_FOUNDATION_OPERATION,
   PHASE1_FOUNDATION_OPT_IN,
+  PHASE1_HISTORICAL_FINGERPRINT,
   PHASE1_POST_ATTESTATION_QUERY_ID,
   PHASE1_PRODUCT_FINGERPRINT_QUERY_ID,
   assertPhase1FoundationArtifact,
@@ -93,7 +94,7 @@ function postPayload(overrides = {}) {
   };
 }
 
-const fingerprint = Object.freeze({ attempts: 37, exam_results: 6, notifications: 60 });
+const fingerprint = PHASE1_HISTORICAL_FINGERPRINT;
 
 function environment(overrides = {}) {
   return {
@@ -108,12 +109,18 @@ function environment(overrides = {}) {
   };
 }
 
-function resultMaps({ installer = installerPayload(), entry = phase1EntryPayload(), post = postPayload(), after = fingerprint } = {}) {
+function resultMaps({
+  installer = installerPayload(),
+  entry = phase1EntryPayload(),
+  post = postPayload(),
+  before = fingerprint,
+  after = fingerprint,
+} = {}) {
   return {
     pre: new Map([
       ["production_installer_identity", installer],
       ["production_phase1_entry", entry],
-      [PHASE1_PRODUCT_FINGERPRINT_QUERY_ID, fingerprint],
+      [PHASE1_PRODUCT_FINGERPRINT_QUERY_ID, before],
     ]),
     post: new Map([
       ["production_installer_identity", installer],
@@ -152,6 +159,62 @@ test("exact Production-like pre-state executes only Phase 1 and post-state is ex
   assert.equal(result.preDdl.phase1Entry, "READY");
   assert.equal(result.postDdl.phase1PostState, "EXACT");
   assert.equal(result.nextMigration, "NOT_AUTHORIZED");
+});
+
+test("historical fingerprint contract uses notification_events and no stale relation", () => {
+  assert.deepEqual(PHASE1_HISTORICAL_FINGERPRINT, {
+    attempts: 37,
+    exam_results: 6,
+    notification_events: 60,
+  });
+  const staleRelation = ["public", "notifications"].join(".");
+  for (const relativePath of [
+    "scripts/production-adoption/bootstrap/phase1-foundation-ddl-contract.mjs",
+    "scripts/production-adoption/bootstrap/run-production-phase1-foundation.mjs",
+    "scripts/production-adoption/bootstrap/run-production-phase1-foundation-postgres.mjs",
+  ]) {
+    const source = readFileSync(resolve(root, relativePath), "utf8");
+    assert.equal(source.includes(staleRelation), false, `${relativePath} contains the stale relation`);
+  }
+  const rehearsalSource = readFileSync(
+    resolve(root, "scripts/production-adoption/bootstrap/run-production-phase1-foundation-postgres.mjs"),
+    "utf8",
+  );
+  assert.match(rehearsalSource, /create table public\.notification_events\b/);
+});
+
+for (const [name, before] of [
+  ["notification_events count 59", { ...fingerprint, notification_events: 59 }],
+  ["notification_events count 61", { ...fingerprint, notification_events: 61 }],
+  ["attempts count drift", { ...fingerprint, attempts: 38 }],
+  ["exam_results count drift", { ...fingerprint, exam_results: 7 }],
+]) {
+  test(`${name} blocks before migration invocation`, () => {
+    let migrationInvocations = 0;
+    assert.throws(() => run({
+      maps: resultMaps({ before }),
+      executeMigration: () => { migrationInvocations += 1; },
+    }), /pre-DDL/);
+    assert.equal(migrationInvocations, 0);
+  });
+}
+
+test("missing notification_events fails closed before migration invocation", () => {
+  let migrationInvocations = 0;
+  assert.throws(() => run({
+    executeReadOnly: () => { throw new Error("required historical relation is missing"); },
+    executeMigration: () => { migrationInvocations += 1; },
+  }), /required historical relation is missing/);
+  assert.equal(migrationInvocations, 0);
+});
+
+test("any before-attestation failure invokes no migration", () => {
+  let migrationInvocations = 0;
+  assert.throws(() => run({
+    maps: resultMaps({ entry: phase1EntryPayload({ partial_adoption_object_count: 1 }) }),
+    executeMigration: () => { migrationInvocations += 1; },
+  }), /pre-DDL/);
+  assert.equal(migrationInvocations, 0);
 });
 
 for (const [name, options, pattern] of [
@@ -208,10 +271,17 @@ test("post-attestation mismatch fails closed", () => {
   assert.throws(() => run({ maps: resultMaps({ post: postPayload({ ledger_rows: 2 }) }) }), /post-DDL/);
 });
 
-test("post classifier preserves product counts and rejects count drift", () => {
+test("post classifier preserves exact product counts and rejects every count drift", () => {
   const installer = { managedProfile: "READY", lifecycleState: "POST_BOOTSTRAP" };
   assert.equal(classifyPhase1PostAttestation(postPayload(), installer, fingerprint, fingerprint).phase1PostState, "EXACT");
-  assert.equal(classifyPhase1PostAttestation(postPayload(), installer, fingerprint, { ...fingerprint, attempts: 38 }).phase1PostState, "BLOCKER");
+  for (const after of [
+    { ...fingerprint, attempts: 38 },
+    { ...fingerprint, exam_results: 7 },
+    { ...fingerprint, notification_events: 59 },
+    { ...fingerprint, notification_events: 61 },
+  ]) {
+    assert.equal(classifyPhase1PostAttestation(postPayload(), installer, fingerprint, after).phase1PostState, "BLOCKER");
+  }
 });
 
 test("artifact pin and static DDL scope are exact", () => {

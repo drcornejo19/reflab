@@ -29,6 +29,7 @@ import {
   PHASE1_PRODUCT_FINGERPRINT_QUERY_ID,
   assertPhase1FoundationArtifact,
   classifyPhase1PostAttestation,
+  phase1HistoricalFingerprintExact,
   phase1PostAttestationQuery,
   phase1ProductFingerprintQuery,
 } from "./phase1-foundation-ddl-contract.mjs";
@@ -69,8 +70,7 @@ function preDdlAttestation(results) {
   const installer = classifyInstallerIdentity(results.get(installerIdentityQuery.id));
   const phase1 = classifyPhase1DdlEntry(results.get(phase1EntryQuery.id), installer);
   const fingerprint = results.get(PHASE1_PRODUCT_FINGERPRINT_QUERY_ID);
-  const fingerprintExact = fingerprint
-    && ["attempts", "exam_results", "notifications"].every((field) => Number.isInteger(fingerprint[field]));
+  const fingerprintExact = phase1HistoricalFingerprintExact(fingerprint);
   if (installer.managedProfile !== "READY" || installer.lifecycleState !== "POST_BOOTSTRAP"
       || phase1.phase1Entry !== "READY" || !fingerprintExact) {
     throw new Error("Production Phase 1 foundation pre-DDL attestation failed.");
@@ -166,4 +166,3 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
       process.exitCode = 1;
     });
 }
-
