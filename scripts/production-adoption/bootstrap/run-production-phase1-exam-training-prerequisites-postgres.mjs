@@ -23,6 +23,20 @@ import { psql, roleBootstrapSql, withCluster } from "./run-production-role-boots
 
 const root = resolve(import.meta.dirname, "..", "..", "..");
 const installerReady = Object.freeze({ managedProfile: "READY", lifecycleState: "POST_BOOTSTRAP" });
+export const PHASE1_EXAM_TRAINING_REQUIRED_POSTGRES_MAJOR = 17;
+
+export function classifyDisposablePostgresRuntime(serverVersionNum) {
+  if (!Number.isInteger(serverVersionNum)) {
+    return Object.freeze({ actualMajor: null, mode: "UNKNOWN" });
+  }
+  const actualMajor = Math.trunc(serverVersionNum / 10000);
+  return Object.freeze({
+    actualMajor,
+    mode: actualMajor === PHASE1_EXAM_TRAINING_REQUIRED_POSTGRES_MAJOR
+      ? "PG17_POSITIVE"
+      : "NON_PG17_REJECTION",
+  });
+}
 
 function payload(environment, query) {
   const output = psql(
@@ -63,6 +77,22 @@ function assertVersionOnlyBlock(classification, label) {
   }
 }
 
+function assertPg17Pass(classification, label) {
+  const decision = classification.decision ?? classification.classification;
+  if (classification.postgresMajorExact !== true || decision !== "PASS") {
+    throw new Error(`${label} did not pass the PostgreSQL 17 gate.`);
+  }
+  for (const [field, value] of Object.entries(classification)) {
+    if ([
+      "classification", "decision", "phase1PostState", "postState",
+      "checks", "nextAllowedRemoteOperation",
+    ].includes(field)) continue;
+    if (typeof value === "boolean" && value !== true) {
+      throw new Error(`${label} failed field ${field}.`);
+    }
+  }
+}
+
 function prepareFoundation(environment) {
   psql(environment, roleBootstrapSql);
   createHistoricalFixture(environment);
@@ -70,18 +100,24 @@ function prepareFoundation(environment) {
   psql(environment, foundation.sql, "postgres");
 }
 
-async function positive() {
+async function rehearseObservedRuntime() {
   return withCluster("absent", async (environment) => {
     prepareFoundation(environment);
     const artifact = assertPhase1ExamTrainingDdlArtifact(root);
     const beforeFingerprint = payload(environment, phase1ProductFingerprintQuery);
-    const installer = classifyInstallerIdentity(payload(environment, installerIdentityQuery));
+    const installerPayload = payload(environment, installerIdentityQuery);
+    const runtime = classifyDisposablePostgresRuntime(installerPayload.server_version_num);
+    if (runtime.mode === "UNKNOWN") {
+      throw new Error("310002 disposable PostgreSQL version is not observable.");
+    }
+    const installer = classifyInstallerIdentity(installerPayload);
+    const expectedMajorExact = runtime.mode === "PG17_POSITIVE";
     if (installer.lifecycleState !== "POST_BOOTSTRAP"
         || installer.requiredAttributesExact !== true
         || installer.membershipFingerprintExact !== true
         || installer.databaseCreate !== true
         || installer.protectedRoleExact !== true
-        || installer.postgresMajorExact !== false) {
+        || installer.postgresMajorExact !== expectedMajorExact) {
       throw new Error("310002 local installer fixture is not structurally exact.");
     }
     const foundation = classifyPhase1PostAttestation(
@@ -94,8 +130,24 @@ async function positive() {
       payload(environment, phase1ExamTrainingEntryQuery),
       installerReady,
     );
-    assertVersionOnlyBlock(foundation, "Foundation pre-state");
-    assertVersionOnlyBlock(entry, "310002 entry");
+    if (runtime.mode === "NON_PG17_REJECTION") {
+      assertVersionOnlyBlock(installer, "Installer identity");
+      assertVersionOnlyBlock(foundation, "Foundation pre-state");
+      assertVersionOnlyBlock(entry, "310002 entry");
+      return {
+        mode: runtime.mode,
+        postgresMajor: runtime.actualMajor,
+        serverVersionEvidence: "current_setting('server_version_num')",
+        productionVersionGate: "BLOCKER_NON_PG17",
+        migration: "NOT_EXECUTED",
+        migrationInvocationCount: 0,
+        cleanup: "PASS",
+      };
+    }
+
+    assertPg17Pass(installer, "Installer identity");
+    assertPg17Pass(foundation, "Foundation pre-state");
+    assertPg17Pass(entry, "310002 entry");
 
     psql(environment, artifact.sql, "postgres");
 
@@ -107,7 +159,7 @@ async function positive() {
       beforeFingerprint,
       afterFingerprint,
     );
-    assertVersionOnlyBlock(post, "310002 post-state");
+    assertPg17Pass(post, "310002 post-state");
     if (postPayload.counts.target_columns !== 6
         || postPayload.counts.target_indexes !== 3
         || postPayload.counts.target_constraints !== 20
@@ -131,6 +183,7 @@ async function positive() {
     if (legacyCounts !== "37|6|60") throw new Error("310002 legacy write rollback changed historical counts.");
 
     return {
+      mode: runtime.mode,
       migration: "PASS",
       exactPostcondition: "PASS",
       targetTableRows: 0,
@@ -142,8 +195,10 @@ async function positive() {
       legacyWrites: "PASS",
       schemaStateRows: 0,
       marker: "ABSENT",
-      postgresMajor: Math.trunc(postPayload.server_version_num / 10000),
-      productionVersionGate: "EXPECTED_BLOCKER_NON_PG17",
+      postgresMajor: runtime.actualMajor,
+      serverVersionEvidence: "current_setting('server_version_num')",
+      productionVersionGate: "PASS_PG17",
+      migrationInvocationCount: 1,
       cleanup: "PASS",
     };
   });
@@ -152,6 +207,11 @@ async function positive() {
 async function rollback() {
   return withCluster("absent", async (environment) => {
     prepareFoundation(environment);
+    const installerPayload = payload(environment, installerIdentityQuery);
+    const runtime = classifyDisposablePostgresRuntime(installerPayload.server_version_num);
+    if (runtime.mode !== "PG17_POSITIVE") {
+      throw new Error("310002 rollback rehearsal requires a real PostgreSQL 17 server.");
+    }
     const artifact = assertPhase1ExamTrainingDdlArtifact(root);
     const failingSql = artifact.sql.replace(/\ncommit;\s*$/i, `
 do $forced_failure$ begin
@@ -196,10 +256,14 @@ commit;
 }
 
 export async function runPhase1ExamTrainingPrerequisitesPostgres() {
+  const observedRuntime = await rehearseObservedRuntime();
+  const pg17 = observedRuntime.mode === "PG17_POSITIVE";
   return {
     localOnly: true,
-    positive: await positive(),
-    rollback: await rollback(),
+    pg17Runtime: pg17 ? "AVAILABLE" : "NOT_AVAILABLE",
+    positive: pg17 ? observedRuntime : "NOT_EXECUTED_NON_PG17",
+    nonPg17Rejection: pg17 ? "NOT_APPLICABLE" : observedRuntime,
+    rollback: pg17 ? await rollback() : "NOT_EXECUTED_NON_PG17",
     cleanup: "PASS",
   };
 }

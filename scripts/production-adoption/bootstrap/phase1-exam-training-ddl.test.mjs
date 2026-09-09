@@ -27,6 +27,10 @@ import {
   assertPhase1ExamTrainingDdlArtifact,
 } from "./phase1-exam-training-ddl-contract.mjs";
 import { runProductionPhase1ExamTrainingPrerequisites } from "./run-production-phase1-exam-training-prerequisites.mjs";
+import {
+  PHASE1_EXAM_TRAINING_REQUIRED_POSTGRES_MAJOR,
+  classifyDisposablePostgresRuntime,
+} from "./run-production-phase1-exam-training-prerequisites-postgres.mjs";
 
 const root = resolve(import.meta.dirname, "..", "..", "..");
 const head = "a".repeat(40);
@@ -295,4 +299,48 @@ test("runner cannot accept arbitrary SQL, globs, or continue to 310003", () => {
   assert.doesNotMatch(source, /202608310003|064236|064245|064249/);
   assert.match(source, /PHASE1_EXAM_TRAINING_OPERATION/);
   assert.match(source, /nextMigration:\s*"NOT_AUTHORIZED"/);
+});
+
+test("disposable rehearsal separates real PG17 positive evidence from non-PG17 rejection", () => {
+  assert.equal(PHASE1_EXAM_TRAINING_REQUIRED_POSTGRES_MAJOR, 17);
+  assert.deepEqual(classifyDisposablePostgresRuntime(170000), {
+    actualMajor: 17,
+    mode: "PG17_POSITIVE",
+  });
+  assert.deepEqual(classifyDisposablePostgresRuntime(180006), {
+    actualMajor: 18,
+    mode: "NON_PG17_REJECTION",
+  });
+  assert.deepEqual(classifyDisposablePostgresRuntime(undefined), {
+    actualMajor: null,
+    mode: "UNKNOWN",
+  });
+});
+
+test("disposable rehearsal derives the major only from observed PostgreSQL catalog evidence", () => {
+  const source = readFileSync(
+    resolve(root, "scripts/production-adoption/bootstrap/run-production-phase1-exam-training-prerequisites-postgres.mjs"),
+    "utf8",
+  );
+  assert.match(source, /installerPayload\.server_version_num/);
+  assert.match(source, /current_setting\('server_version_num'\)/);
+  assert.doesNotMatch(source, /process\.env/);
+  assert.doesNotMatch(source, /process\.argv[^\n]*(?:major|version)/i);
+  assert.match(source, /migrationInvocationCount:\s*0/);
+  assert.match(source, /productionVersionGate:\s*"BLOCKER_NON_PG17"/);
+  assert.match(source, /productionVersionGate:\s*"PASS_PG17"/);
+});
+
+test("Production authorization remains fail-closed on every non-17 major", () => {
+  const maps = resultMaps({
+    installer: installerPayload({ server_version_num: 180000 }),
+    foundation: foundationPayload({ server_version_num: 180000 }),
+    entry: entryPayload({ server_version_num: 180000 }),
+  });
+  let migrationCount = 0;
+  assert.throws(() => run({
+    maps,
+    executeMigration: () => { migrationCount += 1; },
+  }), /pre-DDL/);
+  assert.equal(migrationCount, 0);
 });
