@@ -25,6 +25,7 @@ import {
   PHASE1_EXAM_TRAINING_OPERATION,
   PHASE1_EXAM_TRAINING_OPT_IN,
   assertPhase1ExamTrainingDdlArtifact,
+  phase1ExamTrainingPostQuery,
 } from "./phase1-exam-training-ddl-contract.mjs";
 import { runProductionPhase1ExamTrainingPrerequisites } from "./run-production-phase1-exam-training-prerequisites.mjs";
 import {
@@ -50,16 +51,23 @@ const exactEntryChecks = Object.freeze({
 const exactPostChecks = Object.freeze({
   foundationStatePreserved: true,
   targetTableExact: true,
+  targetTableColumnsExact: true,
+  targetPrimaryKeyExact: true,
   targetTableEmpty: true,
+  targetAclExact: true,
   targetColumnsExact: true,
   targetColumnsNullable: true,
   targetIndexesExact: true,
   targetConstraintsExact: true,
+  targetCheckSemanticsExact: true,
+  targetFkSemanticsExact: true,
+  targetUniqueSemanticsExact: true,
   ledgerExact: true,
   schemaStateEmpty: true,
   canonicalMarkerAbsent: true,
   identityLinksAbsent: true,
   developmentObjectsAbsent: true,
+  laterPhaseInfrastructureAbsent: true,
   fabricatedAssociationsAbsent: true,
 });
 
@@ -205,6 +213,23 @@ test("310002 artifact hash and DDL scope are exact", () => {
   assert.equal(PHASE1_EXAM_TRAINING_DDL_SCOPE.constraints.unique.length, 2);
 });
 
+test("post-DDL attestation uses strict catalogs for ACL, table, constraints, and later-phase absence", () => {
+  const source = phase1ExamTrainingPostQuery.payloadSql;
+  assert.match(source, /pg_catalog\.aclexplode\(relation\.relacl\)/);
+  assert.match(source, /attribute\.attacl is not null/);
+  assert.match(source, /pg_catalog\.pg_get_expr/);
+  assert.match(source, /constraint_record\.confmatchtype/);
+  assert.match(source, /constraint_record\.confupdtype/);
+  assert.match(source, /constraint_record\.confdeltype/);
+  assert.match(source, /constraint_record\.condeferrable/);
+  assert.match(source, /index_record\.indclass/);
+  assert.match(source, /index_record\.indoption/);
+  assert.match(source, /public\.psychology_modules/);
+  assert.match(source, /notification_events_deduplication_unique/);
+  assert.match(source, /state\.phase_order >= 3/);
+  assert.doesNotMatch(source, /information_schema/i);
+});
+
 test("migration failure proves rollback through the exact precondition", () => {
   const maps = resultMaps();
   let reads = 0;
@@ -289,6 +314,22 @@ test("postcondition and historical fingerprint drift fail closed", () => {
     after: { ...PHASE1_HISTORICAL_FINGERPRINT, attempts: 38 },
   }) }), /post-DDL/);
 });
+
+for (const check of [
+  "targetTableColumnsExact",
+  "targetPrimaryKeyExact",
+  "targetAclExact",
+  "targetCheckSemanticsExact",
+  "targetFkSemanticsExact",
+  "targetUniqueSemanticsExact",
+  "laterPhaseInfrastructureAbsent",
+]) {
+  test(`${check} drift fails the post-DDL attestation`, () => {
+    assert.throws(() => run({ maps: resultMaps({
+      post: postPayload({ checks: { ...exactPostChecks, [check]: false } }),
+    }) }), /post-DDL/);
+  });
+}
 
 test("runner cannot accept arbitrary SQL, globs, or continue to 310003", () => {
   const source = readFileSync(

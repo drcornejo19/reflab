@@ -47,6 +47,18 @@ function payload(environment, query) {
   return JSON.parse(output);
 }
 
+function payloadWithMutation(environment, query, mutationSql) {
+  const output = psql(
+    environment,
+    `begin;
+${mutationSql}
+select (${query.payloadSql})::text;
+rollback;`,
+    "postgres",
+  ).stdout.trim();
+  return JSON.parse(output);
+}
+
 function createHistoricalFixture(environment) {
   psql(environment, "grant create on schema public to postgres;", "supabase_admin");
   psql(environment, `
@@ -80,7 +92,11 @@ function assertVersionOnlyBlock(classification, label) {
 function assertPg17Pass(classification, label) {
   const decision = classification.decision ?? classification.classification;
   if (classification.postgresMajorExact !== true || decision !== "PASS") {
-    throw new Error(`${label} did not pass the PostgreSQL 17 gate.`);
+    const failed = Object.entries(classification.checks ?? {})
+      .filter(([, value]) => value !== true)
+      .map(([field]) => field)
+      .join(",");
+    throw new Error(`${label} did not pass the PostgreSQL 17 gate${failed ? `: ${failed}` : ""}.`);
   }
   for (const [field, value] of Object.entries(classification)) {
     if ([
@@ -186,6 +202,10 @@ async function rehearseObservedRuntime() {
       mode: runtime.mode,
       migration: "PASS",
       exactPostcondition: "PASS",
+      aclExact: "PASS",
+      tableContractExact: "PASS",
+      constraintSemanticsExact: "PASS",
+      laterPhaseInfrastructureAbsent: "PASS",
       targetTableRows: 0,
       nullableColumns: 6,
       indexes: 3,
@@ -202,6 +222,149 @@ async function rehearseObservedRuntime() {
       cleanup: "PASS",
     };
   });
+}
+
+const postDdlNegativeScenarios = Object.freeze([
+  {
+    name: "extra_anon_select",
+    expectedCheck: "targetAclExact",
+    mutationSql: "grant select on public.referee_exam_sessions to anon;",
+  },
+  {
+    name: "extra_authenticated_select",
+    expectedCheck: "targetAclExact",
+    mutationSql: "grant select on public.referee_exam_sessions to authenticated;",
+  },
+  {
+    name: "unexpected_service_role_privilege",
+    expectedCheck: "targetAclExact",
+    mutationSql: "grant insert on public.referee_exam_sessions to service_role;",
+  },
+  {
+    name: "extra_table_level_grant",
+    expectedCheck: "targetAclExact",
+    mutationSql: "grant select on public.referee_exam_sessions to reflab_prod_preflight_ro;",
+  },
+  {
+    name: "wrong_column_type",
+    expectedCheck: "targetTableColumnsExact",
+    mutationSql: "alter table public.referee_exam_sessions alter column season type varchar(32);",
+  },
+  {
+    name: "wrong_default",
+    expectedCheck: "targetTableColumnsExact",
+    mutationSql: "alter table public.referee_exam_sessions alter column status set default 'created';",
+  },
+  {
+    name: "wrong_not_null",
+    expectedCheck: "targetTableColumnsExact",
+    mutationSql: "alter table public.referee_exam_sessions alter column season set not null;",
+  },
+  {
+    name: "missing_column",
+    expectedCheck: "targetTableColumnsExact",
+    mutationSql: "alter table public.referee_exam_sessions drop column source_version;",
+  },
+  {
+    name: "extra_column",
+    expectedCheck: "targetTableColumnsExact",
+    mutationSql: "alter table public.referee_exam_sessions add column unexpected_column text;",
+  },
+  {
+    name: "wrong_check_expression",
+    expectedCheck: "targetCheckSemanticsExact",
+    mutationSql: `alter table public.referee_exam_sessions
+      drop constraint referee_exam_sessions_context_type_check;
+    alter table public.referee_exam_sessions
+      add constraint referee_exam_sessions_context_type_check check (context_type = 'individual');`,
+  },
+  {
+    name: "wrong_check_validation_state",
+    expectedCheck: "targetCheckSemanticsExact",
+    mutationSql: `alter table public.exam_results drop constraint exam_results_payload_hash_check;
+    alter table public.exam_results add constraint exam_results_payload_hash_check
+      check ((payload_hash is null) or (payload_hash ~ '^[0-9a-f]{64}$'::text)) not valid;`,
+  },
+  {
+    name: "wrong_fk_referenced_table",
+    expectedCheck: "targetFkSemanticsExact",
+    mutationSql: `alter table public.referee_exam_sessions drop constraint referee_exam_sessions_group_fk;
+    alter table public.referee_exam_sessions add constraint referee_exam_sessions_group_fk
+      foreign key (institution_group_id) references public.institutions(id) on delete set null;`,
+  },
+  {
+    name: "wrong_fk_referenced_column",
+    expectedCheck: "targetFkSemanticsExact",
+    mutationSql: `alter table public.institutions add column alternate_id uuid unique;
+    alter table public.referee_exam_sessions drop constraint referee_exam_sessions_institution_fk;
+    alter table public.referee_exam_sessions add constraint referee_exam_sessions_institution_fk
+      foreign key (institution_id) references public.institutions(alternate_id) on delete cascade;`,
+  },
+  {
+    name: "wrong_fk_action",
+    expectedCheck: "targetFkSemanticsExact",
+    mutationSql: `alter table public.referee_exam_sessions drop constraint referee_exam_sessions_institution_fk;
+    alter table public.referee_exam_sessions add constraint referee_exam_sessions_institution_fk
+      foreign key (institution_id) references public.institutions(id) on delete restrict;`,
+  },
+  {
+    name: "wrong_fk_deferrability",
+    expectedCheck: "targetFkSemanticsExact",
+    mutationSql: `alter table public.referee_exam_sessions
+      alter constraint referee_exam_sessions_institution_fk deferrable initially immediate;`,
+  },
+  {
+    name: "wrong_unique_key_order",
+    expectedCheck: "targetUniqueSemanticsExact",
+    mutationSql: `alter table public.referee_exam_sessions
+      drop constraint referee_exam_sessions_user_submission_unique;
+    alter table public.referee_exam_sessions
+      add constraint referee_exam_sessions_user_submission_unique unique (submission_id, user_id);`,
+  },
+  {
+    name: "partial_310003_object",
+    expectedCheck: "laterPhaseInfrastructureAbsent",
+    mutationSql: "create table public.psychology_modules(test_only integer);",
+  },
+]);
+
+async function postDdlNegatives() {
+  const results = [];
+  for (const scenario of postDdlNegativeScenarios) {
+    results.push(await withCluster("absent", async (environment) => {
+      prepareFoundation(environment);
+      const artifact = assertPhase1ExamTrainingDdlArtifact(root);
+      psql(environment, artifact.sql, "postgres");
+      const beforeFingerprint = payload(environment, phase1ProductFingerprintQuery);
+      const mutated = payloadWithMutation(environment, phase1ExamTrainingPostQuery, scenario.mutationSql);
+      if (mutated.checks?.[scenario.expectedCheck] !== false) {
+        throw new Error(`${scenario.name} mutation assertion did not fail ${scenario.expectedCheck}.`);
+      }
+      const classification = classifyPhase1ExamTrainingPost(
+        mutated,
+        installerReady,
+        beforeFingerprint,
+        beforeFingerprint,
+      );
+      if (classification.classification !== "BLOCKER") {
+        throw new Error(`${scenario.name} did not classify as BLOCKER.`);
+      }
+      const restored = classifyPhase1ExamTrainingPost(
+        payload(environment, phase1ExamTrainingPostQuery),
+        installerReady,
+        beforeFingerprint,
+        payload(environment, phase1ProductFingerprintQuery),
+      );
+      assertPg17Pass(restored, `${scenario.name} rollback state`);
+      return {
+        scenario: scenario.name,
+        mutationAssertion: "PASS",
+        classification: "BLOCKER",
+        rollback: "PASS",
+      };
+    }));
+  }
+  return results;
 }
 
 async function rollback() {
@@ -258,12 +421,18 @@ commit;
 export async function runPhase1ExamTrainingPrerequisitesPostgres() {
   const observedRuntime = await rehearseObservedRuntime();
   const pg17 = observedRuntime.mode === "PG17_POSITIVE";
+  const negatives = pg17 ? await postDdlNegatives() : "NOT_EXECUTED_NON_PG17";
   return {
     localOnly: true,
     pg17Runtime: pg17 ? "AVAILABLE" : "NOT_AVAILABLE",
     positive: pg17 ? observedRuntime : "NOT_EXECUTED_NON_PG17",
     nonPg17Rejection: pg17 ? "NOT_APPLICABLE" : observedRuntime,
     rollback: pg17 ? await rollback() : "NOT_EXECUTED_NON_PG17",
+    negatives,
+    negativeCount: pg17 ? negatives.length : 0,
+    negativeRollbackCount: pg17
+      ? negatives.filter((result) => result.rollback === "PASS").length
+      : 0,
     cleanup: "PASS",
   };
 }
