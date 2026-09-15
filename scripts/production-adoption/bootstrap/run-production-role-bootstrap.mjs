@@ -2,8 +2,6 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { DEVELOPMENT_PROJECT_REF, PRODUCTION_PROJECT_REF } from "../../production-preflight/manifest.mjs";
-import { PRODUCTION_SESSION_POOLER_HOST } from "../../production-preflight/target.mjs";
 import { buildPsqlEnvironment, sanitizeProcessOutput } from "../../production-preflight/run.mjs";
 import {
   ROLE_BOOTSTRAP_ARTIFACT,
@@ -15,6 +13,12 @@ import {
   assertPinnedArtifacts,
   assertRoleAttestation,
 } from "./production-role-bootstrap-contract.mjs";
+import {
+  assertRepositoryAttestation,
+  resolveProductionManagedPostgresTarget,
+} from "./production-managed-postgres-target.mjs";
+
+export { assertRepositoryAttestation, resolveProductionManagedPostgresTarget };
 
 const root = resolve(import.meta.dirname, "..", "..", "..");
 const bootstrapSql = readFileSync(resolve(root, ROLE_BOOTSTRAP_ARTIFACT), "utf8");
@@ -28,55 +32,14 @@ export const PRODUCTION_DDL_APPROVED_HEAD = "REFLAB_PRODUCTION_DDL_APPROVED_HEAD
 
 export function authorizeProductionDdlTarget(environment = process.env, options = {}) {
   const operationOptIn = options.operationOptIn ?? ROLE_BOOTSTRAP_OPT_IN;
-  if (Object.values(environment).some((value) => typeof value === "string" && value.includes(DEVELOPMENT_PROJECT_REF))) {
-    throw new Error("Production DDL aborted: Development project reference detected.");
-  }
   if (environment[operationOptIn] !== "true" || environment[PRODUCTION_DDL_OPT_IN] !== "true") {
     throw new Error("Production DDL requires both explicit opt-ins.");
   }
-  if (environment[PRODUCTION_DDL_PROJECT_REF] !== PRODUCTION_PROJECT_REF) {
-    throw new Error("Production DDL project reference is not allowlisted.");
-  }
-  let parsed;
-  try {
-    parsed = new URL(environment[PRODUCTION_DDL_DATABASE_URL] ?? "");
-  } catch {
-    throw new Error("Production DDL database URL is invalid.");
-  }
-  const directHost = `db.${PRODUCTION_PROJECT_REF}.supabase.co`;
-  const targets = new Map([
-    [directHost, { username: ROLE_BOOTSTRAP_INSTALLER, ports: new Set(["", "5432"]) }],
-    [PRODUCTION_SESSION_POOLER_HOST, { username: `${ROLE_BOOTSTRAP_INSTALLER}.${PRODUCTION_PROJECT_REF}`, ports: new Set(["5432"]) }],
-  ]);
-  const host = parsed.hostname.toLowerCase();
-  const target = targets.get(host);
-  if (!["postgres:", "postgresql:"].includes(parsed.protocol)
-      || !target || !target.ports.has(parsed.port) || parsed.pathname !== "/postgres"
-      || parsed.hash || parsed.username !== target.username || !parsed.password
-      || [...parsed.searchParams.keys()].some((key) => key !== "sslmode")
-      || parsed.searchParams.get("sslmode") !== "require") {
-    throw new Error("Production DDL database target is not the exact allowlisted host.");
-  }
-  return {
-    projectRef: PRODUCTION_PROJECT_REF,
-    host,
-    connectionEnvironment: {
-      PGHOST: host,
-      PGPORT: parsed.port || "5432",
-      PGDATABASE: "postgres",
-      PGUSER: target.username,
-      PGPASSWORD: decodeURIComponent(parsed.password),
-      PGSSLMODE: "require",
-    },
-  };
-}
-
-export function assertRepositoryAttestation({ expectedHead, actualHead, status }) {
-  if (!/^[0-9a-f]{40}$/.test(expectedHead ?? "") || actualHead !== expectedHead) {
-    throw new Error("Production DDL frozen HEAD attestation failed.");
-  }
-  if (String(status).trim()) throw new Error("Production DDL requires a clean worktree.");
-  return true;
+  return resolveProductionManagedPostgresTarget(environment, {
+    projectRefVariable: PRODUCTION_DDL_PROJECT_REF,
+    databaseUrlVariable: PRODUCTION_DDL_DATABASE_URL,
+    operationLabel: "Production DDL",
+  });
 }
 
 export function parseAttestationOutput(output) {
