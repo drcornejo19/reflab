@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -34,7 +35,9 @@ import {
   shouldRunPrivilegedPsychologyReconciliationAggregate,
 } from "./psychology-module-reconciliation-privileged-evidence-contract.mjs";
 import {
+  PRIVILEGED_PSYCHOLOGY_EVIDENCE_FAILURE_PREFIX,
   authorizePrivilegedPsychologyReconciliationEvidenceTarget,
+  formatPrivilegedPsychologyEvidenceFailure,
   runProductionPsychologyModuleReconciliationPrivilegedEvidence,
 } from "./run-production-psychology-module-reconciliation-privileged-evidence.mjs";
 
@@ -342,7 +345,54 @@ test("runner is fixed, clean-HEAD pinned, aggregate-gated, and emits no secret",
   ));
   assert.throws(() => runProductionPsychologyModuleReconciliationPrivilegedEvidence(
     environment(), { ...dependencies, assertArtifacts: () => { throw new Error("hash mismatch"); } },
-  ), /hash mismatch/);
+  ), (error) => error.stage === "SQL_BUILD" && error.reason === "PINNED_ARTIFACT_REJECTED");
+});
+
+test("database and framing failures receive finite safe stages without raw stderr", () => {
+  const maps = evidenceMaps();
+  const base = {
+    argument: PRIVILEGED_PSYCHOLOGY_RECONCILIATION_EVIDENCE_OPERATION,
+    git: (args) => args[0] === "rev-parse" ? `${head}\n` : "",
+    assertArtifacts: () => ({ provider: {}, target: {} }),
+    authorize: () => ({ projectRef: PRODUCTION_PROJECT_REF, host: "db.example", connectionEnvironment: {} }),
+  };
+  assert.throws(() => runProductionPsychologyModuleReconciliationPrivilegedEvidence(
+    environment(), { ...base, execute: () => { throw new Error(""); } },
+  ), (error) => error.stage === "PSQL_EXECUTION" && error.reason === "CATALOG_BATCH_FAILED");
+  assert.throws(() => runProductionPsychologyModuleReconciliationPrivilegedEvidence(
+    environment(), { ...base, execute: () => { throw new Error("invalid result frame for query x"); } },
+  ), (error) => error.stage === "QUERY_RESULT_PARSE" && error.reason === "CATALOG_BATCH_FAILED");
+  assert.doesNotMatch(formatPrivilegedPsychologyEvidenceFailure(new Error("postgresql://secret")), /postgresql|secret/i);
+  assert.match(formatPrivilegedPsychologyEvidenceFailure(new Error("")), /stage=ERROR_SANITIZATION\nreason=SAFE_DIAGNOSTIC_UNAVAILABLE/);
+
+  let calls = 0;
+  const aggregateFailure = () => {
+    calls += 1;
+    if (calls === 1) return maps.catalog;
+    throw new Error("sensitive raw stderr must not escape");
+  };
+  assert.throws(() => runProductionPsychologyModuleReconciliationPrivilegedEvidence(
+    environment(), { ...base, execute: aggregateFailure },
+  ), (error) => error.stage === "PSQL_EXECUTION" && error.reason === "AGGREGATE_BATCH_FAILED");
+});
+
+test("CLI exit 1 always includes a safe stage and reason", () => {
+  const runner = resolve(root,
+    "scripts/production-adoption/bootstrap/run-production-psychology-module-reconciliation-privileged-evidence.mjs");
+  const result = spawnSync(process.execPath, [
+    runner,
+    PRIVILEGED_PSYCHOLOGY_RECONCILIATION_EVIDENCE_OPERATION,
+  ], {
+    cwd: root,
+    encoding: "utf8",
+    windowsHide: true,
+    env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot },
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, new RegExp(`^${PRIVILEGED_PSYCHOLOGY_EVIDENCE_FAILURE_PREFIX}:`));
+  assert.match(result.stderr, /stage=(?:HEAD_ATTESTATION|TARGET_GUARD)/);
+  assert.match(result.stderr, /reason=[A-Z][A-Z0-9_]+/);
+  assert.doesNotMatch(result.stderr, /postgresql:\/\/|password|secret/i);
 });
 
 test("runner source has no DDL, arbitrary SQL, migration, or SET ROLE path", () => {
