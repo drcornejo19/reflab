@@ -8,6 +8,10 @@ export const PHASE1_PSYCHOLOGY_NOTIFICATIONS_ENTRY_FORMAT =
   "REFLAB_PRODUCTION_PHASE1_PSYCHOLOGY_NOTIFICATIONS_ENTRY_ATTESTATION_V1";
 export const PHASE1_PSYCHOLOGY_NOTIFICATIONS_QUERY_ID =
   "production_phase1_psychology_notifications_entry";
+export const PHASE1_PSYCHOLOGY_NOTIFICATIONS_CATALOG_QUERY_ID =
+  "production_phase1_psychology_notifications_entry_catalog";
+export const PHASE1_PSYCHOLOGY_NOTIFICATIONS_DATA_QUERY_ID =
+  "production_phase1_psychology_notifications_data_audit";
 export const PHASE1_PSYCHOLOGY_NOTIFICATIONS_ARTIFACT =
   "supabase/migrations/202608310003_production_adoption_psychology_notifications_prerequisites.sql";
 export const PHASE1_PSYCHOLOGY_NOTIFICATIONS_SHA256 =
@@ -169,9 +173,20 @@ export function classifyExamTrainingPreState(payload, fingerprint, visibilityExa
   return exact ? "EXACT" : "BLOCKER";
 }
 
-export const phase1PsychologyNotificationsEntryQuery = jsonQuery(
-  PHASE1_PSYCHOLOGY_NOTIFICATIONS_QUERY_ID,
-  `(with required_tables(schema_name, table_name) as (
+const psychologyDataAuditSql = `select
+      (select pg_catalog.count(*) from public.psychology_checkins
+        where module_slug is not null and not (module_slug::text = any (${allowedModuleSql})))
+      + (select pg_catalog.count(*) from public.psychology_wellbeing_assessments
+        where module_slug is not null and not (module_slug::text = any (${allowedModuleSql})))
+      + (select pg_catalog.count(*) from public.psychology_exercise_sessions
+        where module_slug is not null and not (module_slug::text = any (${allowedModuleSql})))
+      as unsupported_module_slug_count`;
+
+function psychologyNotificationsEntryPayloadSql(includeDataAudit) {
+  const dataAuditSql = includeDataAudit
+    ? psychologyDataAuditSql
+    : "select null::bigint as unsupported_module_slug_count";
+  return `(with required_tables(schema_name, table_name) as (
     values ${requiredTableValues}
   ), required_table_state as (
     select expected.*, relation.oid,
@@ -194,14 +209,7 @@ export const phase1PsychologyNotificationsEntryQuery = jsonQuery(
     left join pg_catalog.pg_attribute attribute on attribute.attrelid = relation.oid
       and attribute.attname = expected.column_name and attribute.attnum > 0 and not attribute.attisdropped
   ), data_audit as (
-    select
-      (select pg_catalog.count(*) from public.psychology_checkins
-        where module_slug is not null and not (module_slug::text = any (${allowedModuleSql})))
-      + (select pg_catalog.count(*) from public.psychology_wellbeing_assessments
-        where module_slug is not null and not (module_slug::text = any (${allowedModuleSql})))
-      + (select pg_catalog.count(*) from public.psychology_exercise_sessions
-        where module_slug is not null and not (module_slug::text = any (${allowedModuleSql})))
-      as unsupported_module_slug_count
+    ${dataAuditSql}
   ), prior_state_relations(schema_name, table_name) as (
     values
       ('public', 'attempts'),
@@ -227,9 +235,11 @@ export const phase1PsychologyNotificationsEntryQuery = jsonQuery(
         and pg_catalog.bool_and(owner_name = 'postgres') from required_table_state),
       'postgresCanCreatePublic', pg_catalog.has_schema_privilege('postgres', 'public', 'CREATE'),
       'requiredColumnTypesExact', (select pg_catalog.count(*) = ${PHASE1_PSYCHOLOGY_NOTIFICATIONS_REQUIRED_COLUMNS.length}
-        and pg_catalog.bool_and(observed_type = expected_type) from required_column_state),
+        and pg_catalog.bool_and(observed_type is not null and observed_type = expected_type)
+        from required_column_state),
       'futureFkTypeCompatibilityExact', (select pg_catalog.count(*) = 3
-        and pg_catalog.bool_and(observed_type = 'text') from required_column_state
+        and pg_catalog.bool_and(observed_type is not null and observed_type = 'text')
+        from required_column_state
         where table_name like 'psychology_%' and column_name = 'module_slug'),
       'targetTableAbsent', pg_catalog.to_regclass('public.psychology_modules') is null,
       'targetColumnAbsent', not exists (
@@ -292,7 +302,29 @@ export const phase1PsychologyNotificationsEntryQuery = jsonQuery(
       'required_column_count', (select pg_catalog.count(*) from required_column_state where observed_type is not null),
       'unsupported_module_slug_count', (select unsupported_module_slug_count from data_audit)
     )
-  ) from calculated)`,
+  ) from calculated)`;
+}
+
+export const phase1PsychologyNotificationsEntryQuery = jsonQuery(
+  PHASE1_PSYCHOLOGY_NOTIFICATIONS_QUERY_ID,
+  psychologyNotificationsEntryPayloadSql(true),
+);
+
+export const phase1PsychologyNotificationsCatalogQuery = jsonQuery(
+  PHASE1_PSYCHOLOGY_NOTIFICATIONS_CATALOG_QUERY_ID,
+  psychologyNotificationsEntryPayloadSql(false),
+);
+
+export const phase1PsychologyNotificationsDataAuditQuery = jsonQuery(
+  PHASE1_PSYCHOLOGY_NOTIFICATIONS_DATA_QUERY_ID,
+  `pg_catalog.json_build_object(
+    'caller', current_user,
+    'session_user', session_user,
+    'transaction_read_only', pg_catalog.current_setting('transaction_read_only'),
+    'unsupported_module_slug_count', (select unsupported_module_slug_count from (
+      ${psychologyDataAuditSql}
+    ) data_audit)
+  )`,
 );
 
 export function classifyPhase1PsychologyNotificationsEntry(payload, installer, examTrainingState) {

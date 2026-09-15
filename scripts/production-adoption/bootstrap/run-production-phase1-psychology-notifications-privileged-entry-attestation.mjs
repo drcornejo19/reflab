@@ -19,7 +19,9 @@ import {
   PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_PROJECT_REF,
   assertPhase1PsychologyNotificationsPrivilegedArtifacts,
   buildPhase1PsychologyNotificationsPrivilegedBatch,
+  buildPhase1PsychologyNotificationsPrivilegedDataBatch,
   classifyPhase1PsychologyNotificationsPrivilegedEntry,
+  shouldRunPhase1PsychologyNotificationsDataAudit,
 } from "./phase1-psychology-notifications-privileged-entry-attestation-contract.mjs";
 
 const root = resolve(import.meta.dirname, "..", "..", "..");
@@ -63,12 +65,22 @@ export function runProductionPhase1PsychologyNotificationsPrivilegedEntryAttesta
   const authorize = dependencies.authorize ?? authorizeProductionPrivilegedReadOnlyTarget;
   const execute = dependencies.execute ?? executeReadOnlyBatch;
   const target = authorize(environment);
-  const results = execute(
+  const catalogResults = execute(
     buildPhase1PsychologyNotificationsPrivilegedBatch(),
     target.connectionEnvironment,
     { processEnvironment: environment },
   );
-  const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(results);
+  const dataResults = shouldRunPhase1PsychologyNotificationsDataAudit(catalogResults)
+    ? execute(
+      buildPhase1PsychologyNotificationsPrivilegedDataBatch(),
+      target.connectionEnvironment,
+      { processEnvironment: environment },
+    )
+    : undefined;
+  const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(
+    catalogResults,
+    dataResults,
+  );
 
   return {
     format: PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_FORMAT,

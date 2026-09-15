@@ -14,7 +14,8 @@ import {
 } from "./phase1-exam-training-ddl-contract.mjs";
 import {
   PHASE1_PSYCHOLOGY_NOTIFICATIONS_ARTIFACT,
-  PHASE1_PSYCHOLOGY_NOTIFICATIONS_QUERY_ID,
+  PHASE1_PSYCHOLOGY_NOTIFICATIONS_CATALOG_QUERY_ID,
+  PHASE1_PSYCHOLOGY_NOTIFICATIONS_DATA_QUERY_ID,
   PHASE1_PSYCHOLOGY_NOTIFICATIONS_SHA256,
 } from "./phase1-psychology-notifications-entry-attestation-contract.mjs";
 import {
@@ -26,7 +27,9 @@ import {
   PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_QUERY_IDS,
   assertPhase1PsychologyNotificationsPrivilegedArtifacts,
   buildPhase1PsychologyNotificationsPrivilegedBatch,
+  buildPhase1PsychologyNotificationsPrivilegedDataBatch,
   classifyPhase1PsychologyNotificationsPrivilegedEntry,
+  shouldRunPhase1PsychologyNotificationsDataAudit,
 } from "./phase1-psychology-notifications-privileged-entry-attestation-contract.mjs";
 import {
   ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS,
@@ -135,8 +138,8 @@ function entryPayload(overrides = {}) {
     session_user: "postgres",
     transaction_read_only: "on",
     server_version_num: 170006,
-    checks: entryChecks,
-    evidence: { required_table_count: 4, required_column_count: 4, unsupported_module_slug_count: 0 },
+    checks: { ...entryChecks, psychologyDataCompatible: null },
+    evidence: { required_table_count: 4, required_column_count: 4, unsupported_module_slug_count: null },
     ...overrides,
   };
 }
@@ -146,8 +149,21 @@ function resultMap(overrides = {}) {
     [INSTALLER_IDENTITY_QUERY_ID, overrides.installer ?? installerPayload()],
     [phase1ProductFingerprintQuery.id, overrides.fingerprint ?? PHASE1_HISTORICAL_FINGERPRINT],
     [PHASE1_EXAM_TRAINING_POST_QUERY_ID, overrides.exam ?? examPayload()],
-    [PHASE1_PSYCHOLOGY_NOTIFICATIONS_QUERY_ID, overrides.entry ?? entryPayload()],
+    [PHASE1_PSYCHOLOGY_NOTIFICATIONS_CATALOG_QUERY_ID, overrides.entry ?? entryPayload()],
   ]);
+}
+
+function dataResultMap(overrides = {}) {
+  return new Map([[
+    PHASE1_PSYCHOLOGY_NOTIFICATIONS_DATA_QUERY_ID,
+    {
+      caller: "postgres",
+      session_user: "postgres",
+      transaction_read_only: "on",
+      unsupported_module_slug_count: 0,
+      ...overrides,
+    },
+  ]]);
 }
 
 function environment(overrides = {}) {
@@ -175,9 +191,11 @@ test("fixed query inventory is exact and cannot accept arbitrary SQL", () => {
     "production_installer_identity",
     "phase1_product_fingerprint",
     "phase1_exam_training_prerequisites_post_attestation",
-    "production_phase1_psychology_notifications_entry",
+    "production_phase1_psychology_notifications_entry_catalog",
+    "production_phase1_psychology_notifications_data_audit",
   ]);
   assert.equal(buildPhase1PsychologyNotificationsPrivilegedBatch.length, 0);
+  assert.equal(buildPhase1PsychologyNotificationsPrivilegedDataBatch.length, 0);
 });
 
 test("privileged batch is bounded SELECT/SHOW only and always rolls back", () => {
@@ -187,6 +205,12 @@ test("privileged batch is bounded SELECT/SHOW only and always rolls back", () =>
   assert.equal(statements[0].toLowerCase(), "begin read only");
   assert.equal(statements.at(-1).toLowerCase(), "rollback");
   assert.doesNotMatch(sql, /\bset\s+role\b|\bcreate\s+temp\b/i);
+  assert.doesNotMatch(sql, /\bmodule_slug\s+is\s+not\s+null/i);
+  assert.match(sql, /bool_and\(observed_type is not null and observed_type = expected_type\)/i);
+  assert.match(sql, /bool_and\(observed_type is not null and observed_type = 'text'\)/i);
+  assert.doesNotThrow(() => assertReadOnlyBatch(
+    buildPhase1PsychologyNotificationsPrivilegedDataBatch(),
+  ));
 });
 
 test("write SQL injection is rejected before execution", () => {
@@ -198,7 +222,9 @@ test("write SQL injection is rejected before execution", () => {
 });
 
 test("exact privileged post-310002 state is PASS", () => {
-  const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(resultMap());
+  const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(
+    resultMap(), dataResultMap(),
+  );
   assert.equal(decision.catalogAttestation, "PASS");
   assert.equal(decision.protectedStateAttestation, "PASS");
   assert.equal(decision.examTrainingState, "EXACT");
@@ -217,7 +243,7 @@ for (const [name, field] of [
   test(`${name} is BLOCKER`, () => {
     const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(resultMap({
       entry: entryPayload({ checks: { ...entryChecks, [field]: false } }),
-    }));
+    }), dataResultMap());
     assert.equal(decision.classification, "BLOCKER");
     assert.equal(decision.nextAllowedRemoteOperation, "NONE");
   });
@@ -226,14 +252,14 @@ for (const [name, field] of [
 test("310002 structural drift is BLOCKER", () => {
   const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(resultMap({
     exam: examPayload({ checks: { ...examChecks, targetIndexesExact: false } }),
-  }));
+  }), dataResultMap());
   assert.equal(decision.classification, "BLOCKER");
 });
 
 test("product fingerprint mismatch is BLOCKER", () => {
   const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(resultMap({
     fingerprint: { ...PHASE1_HISTORICAL_FINGERPRINT, attempts: 38 },
-  }));
+  }), dataResultMap());
   assert.equal(decision.classification, "BLOCKER");
 });
 
@@ -242,7 +268,7 @@ test("installer profile mismatch is BLOCKER", () => {
     installer: installerPayload({
       installer: { ...installerPayload().installer, rolcreatedb: false },
     }),
-  }));
+  }), dataResultMap());
   assert.equal(decision.classification, "BLOCKER");
 });
 
@@ -254,7 +280,7 @@ for (const [name, overrides] of [
   test(`${name} is BLOCKER`, () => {
     const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(resultMap({
       entry: entryPayload(overrides),
-    }));
+    }), dataResultMap());
     assert.equal(decision.classification, "BLOCKER");
   });
 }
@@ -262,9 +288,31 @@ for (const [name, overrides] of [
 test("incomplete protected evidence remains UNKNOWN", () => {
   const results = resultMap();
   results.delete(PHASE1_EXAM_TRAINING_POST_QUERY_ID);
-  const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(results);
+  const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(results, dataResultMap());
   assert.equal(decision.classification, "UNKNOWN");
   assert.equal(decision.nextAllowedRemoteOperation, "NONE");
+});
+
+test("missing module_slug is a catalog BLOCKER and skips the data query", () => {
+  const results = resultMap({
+    entry: entryPayload({
+      checks: { ...entryChecks, requiredColumnTypesExact: false, futureFkTypeCompatibilityExact: false },
+      evidence: { required_table_count: 4, required_column_count: 1, unsupported_module_slug_count: null },
+    }),
+  });
+  assert.equal(shouldRunPhase1PsychologyNotificationsDataAudit(results), false);
+  const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(results);
+  assert.equal(decision.classification, "BLOCKER");
+  assert.equal(decision.nextAllowedRemoteOperation, "NONE");
+});
+
+test("partial psychology_modules state is BLOCKER without executing the data query", () => {
+  const results = resultMap({
+    entry: entryPayload({ checks: { ...entryChecks, targetTableAbsent: false } }),
+  });
+  assert.equal(shouldRunPhase1PsychologyNotificationsDataAudit(results), true);
+  const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(results, dataResultMap());
+  assert.equal(decision.classification, "BLOCKER");
 });
 
 test("privileged target requires independent plus read-only opt-ins", () => {
@@ -309,13 +357,13 @@ test("runner enforces operation, HEAD, clean tree, hashes, and fixed batch", () 
     execute: (sql) => {
       executions += 1;
       assert.doesNotThrow(() => assertReadOnlyBatch(sql));
-      return resultMap();
+      return executions === 1 ? resultMap() : dataResultMap();
     },
   };
   const result = runProductionPhase1PsychologyNotificationsPrivilegedEntryAttestation(
     environment(), dependencies,
   );
-  assert.equal(executions, 1);
+  assert.equal(executions, 2);
   assert.equal(result.classification, "PASS");
   assert.equal(result.target.caller, "postgres");
   assert.equal(result.nextAllowedRemoteOperation, "310003_EXECUTION_REVIEW");
@@ -331,7 +379,7 @@ test("runner enforces operation, HEAD, clean tree, hashes, and fixed batch", () 
       environment(), badDependencies,
     ));
   }
-  assert.equal(executions, 1);
+  assert.equal(executions, 2);
 });
 
 test("inherited PostgreSQL state fails before SQL", () => {
@@ -353,6 +401,6 @@ test("runner source has no DDL, arbitrary SQL, or migration continuation path", 
   ), "utf8");
   assert.match(source, /executeReadOnlyBatch/);
   assert.match(source, /buildPhase1PsychologyNotificationsPrivilegedBatch\(\)/);
+  assert.match(source, /shouldRunPhase1PsychologyNotificationsDataAudit/);
   assert.doesNotMatch(source, /ALLOW_PRODUCTION_DDL|executeMigration|310004|migration\s+(?:up|apply)|supabase\s+db/i);
 });
-

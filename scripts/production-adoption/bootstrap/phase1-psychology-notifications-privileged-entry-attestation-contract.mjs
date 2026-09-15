@@ -9,11 +9,13 @@ import {
   phase1ExamTrainingPostQuery,
 } from "./phase1-exam-training-ddl-contract.mjs";
 import {
-  PHASE1_PSYCHOLOGY_NOTIFICATIONS_QUERY_ID,
+  PHASE1_PSYCHOLOGY_NOTIFICATIONS_CATALOG_QUERY_ID,
+  PHASE1_PSYCHOLOGY_NOTIFICATIONS_DATA_QUERY_ID,
   PHASE1_PSYCHOLOGY_NOTIFICATIONS_REQUIRED_CHECKS,
   assertPhase1PsychologyNotificationsArtifact,
   classifyExamTrainingPreState,
-  phase1PsychologyNotificationsEntryQuery,
+  phase1PsychologyNotificationsCatalogQuery,
+  phase1PsychologyNotificationsDataAuditQuery,
 } from "./phase1-psychology-notifications-entry-attestation-contract.mjs";
 import {
   assertPinnedArtifacts,
@@ -41,7 +43,8 @@ export const PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_QUERY_IDS = Object.freez
   INSTALLER_IDENTITY_QUERY_ID,
   phase1ProductFingerprintQuery.id,
   PHASE1_EXAM_TRAINING_POST_QUERY_ID,
-  PHASE1_PSYCHOLOGY_NOTIFICATIONS_QUERY_ID,
+  PHASE1_PSYCHOLOGY_NOTIFICATIONS_CATALOG_QUERY_ID,
+  PHASE1_PSYCHOLOGY_NOTIFICATIONS_DATA_QUERY_ID,
 ]);
 
 export const PHASE1_PSYCHOLOGY_NOTIFICATIONS_CATALOG_CHECKS = Object.freeze([
@@ -90,8 +93,19 @@ export function buildPhase1PsychologyNotificationsPrivilegedBatch() {
     installerIdentityQuery,
     phase1ProductFingerprintQuery,
     phase1ExamTrainingPostQuery,
-    phase1PsychologyNotificationsEntryQuery,
+    phase1PsychologyNotificationsCatalogQuery,
   ]);
+}
+
+export function buildPhase1PsychologyNotificationsPrivilegedDataBatch() {
+  return buildSqlBatch([phase1PsychologyNotificationsDataAuditQuery]);
+}
+
+export function shouldRunPhase1PsychologyNotificationsDataAudit(results) {
+  const checks = results?.get(PHASE1_PSYCHOLOGY_NOTIFICATIONS_CATALOG_QUERY_ID)?.checks;
+  return checks?.requiredTablesExist === true
+    && checks?.requiredColumnTypesExact === true
+    && checks?.dataVisibilityExact === true;
 }
 
 function historicalFingerprintExact(fingerprint) {
@@ -100,20 +114,21 @@ function historicalFingerprintExact(fingerprint) {
   );
 }
 
-export function classifyPhase1PsychologyNotificationsPrivilegedEntry(results) {
-  if (!(results instanceof Map)) {
+export function classifyPhase1PsychologyNotificationsPrivilegedEntry(results, dataResults) {
+  if (!(results instanceof Map) || (dataResults !== undefined && !(dataResults instanceof Map))) {
     return { classification: "UNKNOWN", nextAllowedRemoteOperation: "NONE" };
   }
   const installerPayload = results.get(INSTALLER_IDENTITY_QUERY_ID);
   const fingerprint = results.get(phase1ProductFingerprintQuery.id);
   const examTrainingPayload = results.get(PHASE1_EXAM_TRAINING_POST_QUERY_ID);
-  const entryPayload = results.get(PHASE1_PSYCHOLOGY_NOTIFICATIONS_QUERY_ID);
+  const entryPayload = results.get(PHASE1_PSYCHOLOGY_NOTIFICATIONS_CATALOG_QUERY_ID);
+  const dataPayload = dataResults?.get(PHASE1_PSYCHOLOGY_NOTIFICATIONS_DATA_QUERY_ID);
   const checks = entryPayload?.checks;
   const complete = Boolean(installerPayload) && Boolean(fingerprint)
     && Boolean(examTrainingPayload) && Boolean(entryPayload) && Boolean(checks)
-    && PHASE1_PSYCHOLOGY_NOTIFICATIONS_REQUIRED_CHECKS.every(
-      (field) => typeof checks[field] === "boolean",
-    )
+    && PHASE1_PSYCHOLOGY_NOTIFICATIONS_REQUIRED_CHECKS
+      .filter((field) => field !== "psychologyDataCompatible")
+      .every((field) => typeof checks[field] === "boolean")
     && typeof entryPayload.caller === "string"
     && typeof entryPayload.session_user === "string"
     && typeof entryPayload.transaction_read_only === "string"
@@ -126,9 +141,12 @@ export function classifyPhase1PsychologyNotificationsPrivilegedEntry(results) {
   const callerExact = entryPayload.caller === "postgres"
     && entryPayload.session_user === "postgres"
     && installerPayload.caller === "postgres"
-    && installerPayload.session_user === "postgres";
+    && installerPayload.session_user === "postgres"
+    && (dataPayload === undefined
+      || (dataPayload.caller === "postgres" && dataPayload.session_user === "postgres"));
   const readOnlyExact = entryPayload.transaction_read_only === "on"
-    && examTrainingPayload.transaction_read_only === "on";
+    && examTrainingPayload.transaction_read_only === "on"
+    && (dataPayload === undefined || dataPayload.transaction_read_only === "on");
   const postgresMajorExact = Math.trunc(entryPayload.server_version_num / 10000) === 17
     && Math.trunc(examTrainingPayload.server_version_num / 10000) === 17;
   const installerExact = installer.managedProfile === "READY"
@@ -136,22 +154,76 @@ export function classifyPhase1PsychologyNotificationsPrivilegedEntry(results) {
   const catalogAttestation = PHASE1_PSYCHOLOGY_NOTIFICATIONS_CATALOG_CHECKS.every(
     (field) => checks[field] === true,
   ) ? "PASS" : "BLOCKER";
-  const protectedChecksExact = PHASE1_PSYCHOLOGY_NOTIFICATIONS_PROTECTED_CHECKS.every(
-    (field) => checks[field] === true,
-  );
+  const protectedCatalogChecksExact = PHASE1_PSYCHOLOGY_NOTIFICATIONS_PROTECTED_CHECKS
+    .filter((field) => field !== "psychologyDataCompatible")
+    .every((field) => checks[field] === true);
+  const dataAuditComplete = Boolean(dataPayload)
+    && Number.isInteger(dataPayload.unsupported_module_slug_count);
+  const psychologyDataCompatible = dataAuditComplete
+    ? dataPayload.unsupported_module_slug_count === 0
+    : null;
   const fingerprintExact = historicalFingerprintExact(fingerprint);
   const examTrainingState = classifyExamTrainingPreState(
     examTrainingPayload,
     fingerprint,
     checks.priorStateVisibilityExact,
   );
-  const protectedStateAttestation = protectedChecksExact
+  const protectedStateAttestation = protectedCatalogChecksExact
+    && psychologyDataCompatible === true
     && fingerprintExact
     && examTrainingState === "EXACT"
     ? "PASS"
-    : "BLOCKER";
+    : catalogAttestation === "BLOCKER" || psychologyDataCompatible === false
+      || !protectedCatalogChecksExact || !fingerprintExact || examTrainingState === "BLOCKER"
+      ? "BLOCKER"
+      : "UNKNOWN";
   const pass = callerExact && readOnlyExact && postgresMajorExact && installerExact
     && catalogAttestation === "PASS" && protectedStateAttestation === "PASS";
+
+  if (!callerExact || !readOnlyExact || !postgresMajorExact || !installerExact
+      || catalogAttestation === "BLOCKER" || protectedStateAttestation === "BLOCKER") {
+    return {
+      classification: "BLOCKER",
+      nextAllowedRemoteOperation: "NONE",
+      callerExact,
+      readOnlyExact,
+      postgresMajorExact,
+      installerExact,
+      catalogAttestation,
+      protectedStateAttestation,
+      examTrainingState,
+      fingerprintExact,
+      dataAuditComplete,
+      checks: {
+        ...Object.fromEntries(PHASE1_PSYCHOLOGY_NOTIFICATIONS_REQUIRED_CHECKS.map(
+          (field) => [field, checks[field]],
+        )),
+        psychologyDataCompatible,
+      },
+    };
+  }
+
+  if (!dataAuditComplete || protectedStateAttestation === "UNKNOWN") {
+    return {
+      classification: "UNKNOWN",
+      nextAllowedRemoteOperation: "NONE",
+      callerExact,
+      readOnlyExact,
+      postgresMajorExact,
+      installerExact,
+      catalogAttestation,
+      protectedStateAttestation,
+      examTrainingState,
+      fingerprintExact,
+      dataAuditComplete,
+      checks: {
+        ...Object.fromEntries(PHASE1_PSYCHOLOGY_NOTIFICATIONS_REQUIRED_CHECKS.map(
+          (field) => [field, checks[field]],
+        )),
+        psychologyDataCompatible,
+      },
+    };
+  }
 
   return {
     classification: pass ? "PASS" : "BLOCKER",
@@ -164,9 +236,12 @@ export function classifyPhase1PsychologyNotificationsPrivilegedEntry(results) {
     protectedStateAttestation,
     examTrainingState,
     fingerprintExact,
-    checks: Object.fromEntries(PHASE1_PSYCHOLOGY_NOTIFICATIONS_REQUIRED_CHECKS.map(
-      (field) => [field, checks[field]],
-    )),
+    dataAuditComplete,
+    checks: {
+      ...Object.fromEntries(PHASE1_PSYCHOLOGY_NOTIFICATIONS_REQUIRED_CHECKS.map(
+        (field) => [field, checks[field]],
+      )),
+      psychologyDataCompatible,
+    },
   };
 }
-

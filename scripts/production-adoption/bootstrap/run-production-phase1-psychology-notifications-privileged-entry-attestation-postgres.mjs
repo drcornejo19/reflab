@@ -6,7 +6,9 @@ import {
 import {
   PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_OPERATION,
   buildPhase1PsychologyNotificationsPrivilegedBatch,
+  buildPhase1PsychologyNotificationsPrivilegedDataBatch,
   classifyPhase1PsychologyNotificationsPrivilegedEntry,
+  shouldRunPhase1PsychologyNotificationsDataAudit,
 } from "./phase1-psychology-notifications-privileged-entry-attestation-contract.mjs";
 import {
   prepareExamTrainingState,
@@ -19,18 +21,32 @@ const postgresScenarios = Object.freeze([
   ["schema_state_nonempty", "schemaStateEmpty"],
   ["310002_structural_drift", "examTrainingState"],
   ["310003_partial_object", "targetColumnAbsent"],
+  ["module_slug_absent", "requiredColumnTypesExact"],
+  ["partial_psychology_modules", "targetTableAbsent"],
+  ["wrong_psychology_modules_contract", "targetTableAbsent"],
   ["310004_sidecar_present", "laterPhaseInfrastructureAbsent"],
   ["product_fingerprint_mismatch", "fingerprintExact"],
   ["installer_profile_mismatch", "installerExact"],
 ]);
 
 function collect(environment) {
-  const result = psql(
+  const catalogResults = parseJsonResults(psql(
     environment,
     buildPhase1PsychologyNotificationsPrivilegedBatch(),
     "postgres",
-  );
-  return parseJsonResults(result.stdout);
+  ).stdout);
+  const dataResults = shouldRunPhase1PsychologyNotificationsDataAudit(catalogResults)
+    ? parseJsonResults(psql(
+      environment,
+      buildPhase1PsychologyNotificationsPrivilegedDataBatch(),
+      "postgres",
+    ).stdout)
+    : undefined;
+  return {
+    catalogResults,
+    dataResults,
+    batchCount: dataResults === undefined ? 1 : 2,
+  };
 }
 
 function rowCounts(environment) {
@@ -62,6 +78,10 @@ function applyMutation(environment, scenario) {
     ) values ('test-marker', repeat('0',64), repeat('1',64), 'test', '17', 1, 'installed')`,
     "310002_structural_drift": "drop index public.referee_exam_sessions_user_status_idx",
     "310003_partial_object": "alter table public.notification_events add column deduplication_key text",
+    module_slug_absent: "alter table public.psychology_checkins drop column module_slug",
+    partial_psychology_modules: "create table public.psychology_modules(slug text)",
+    wrong_psychology_modules_contract:
+      "create table public.psychology_modules(slug integer, unexpected_column boolean)",
     "310004_sidecar_present": "create schema reflab_audit",
     product_fingerprint_mismatch: "insert into public.attempts(id, exam_result_id) values (38, null)",
     installer_profile_mismatch: "alter role postgres nocreatedb",
@@ -86,7 +106,11 @@ async function positive() {
       "postgres",
     ).stdout.trim());
     const before = rowCounts(environment);
-    const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(collect(environment));
+    const collected = collect(environment);
+    const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(
+      collected.catalogResults,
+      collected.dataResults,
+    );
     const after = rowCounts(environment);
     if (Math.trunc(version / 10000) !== 17
         || decision.classification !== "PASS"
@@ -100,13 +124,14 @@ async function positive() {
     return {
       postgresVersionNum: version,
       postgresMajor: Math.trunc(version / 10000),
-      fixedQueryCount: 4,
+      fixedQueryCount: 5,
       catalogAttestation: decision.catalogAttestation,
       protectedStateAttestation: decision.protectedStateAttestation,
       examTrainingState: decision.examTrainingState,
       historicalFingerprint: after,
       transactionReadOnly: "PASS",
       rollback: "PASS",
+      rollbackCount: collected.batchCount,
       classification: decision.classification,
     };
   });
@@ -117,7 +142,11 @@ async function negative(scenario, expectedField) {
     prepareExamTrainingState(environment);
     applyMutation(environment, scenario);
     const before = rowCounts(environment);
-    const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(collect(environment));
+    const collected = collect(environment);
+    const decision = classifyPhase1PsychologyNotificationsPrivilegedEntry(
+      collected.catalogResults,
+      collected.dataResults,
+    );
     const after = rowCounts(environment);
     if (!mutationObserved(decision, scenario, expectedField)) {
       throw new Error(`HARNESS_SETUP_FAIL: ${scenario} did not change ${expectedField}.`);
@@ -134,6 +163,7 @@ async function negative(scenario, expectedField) {
       mutationAssertion: "PASS",
       classification: "BLOCKER",
       readOnlyRollback: "PASS",
+      rollbackCount: collected.batchCount,
     };
   });
 }
@@ -142,7 +172,11 @@ export async function runPhase1PsychologyNotificationsPrivilegedEntryPostgresReh
   const positiveResult = await positive();
   const negatives = [];
   for (const [scenario, expectedField] of postgresScenarios) {
-    negatives.push(await negative(scenario, expectedField));
+    try {
+      negatives.push(await negative(scenario, expectedField));
+    } catch (error) {
+      throw new Error(`${scenario}: ${error.message}`);
+    }
   }
   return {
     localOnly: true,
@@ -151,7 +185,8 @@ export async function runPhase1PsychologyNotificationsPrivilegedEntryPostgresReh
     negatives,
     negativeCount: negatives.length,
     negativeBlockCount: negatives.filter((result) => result.classification === "BLOCKER").length,
-    rollbackCount: negatives.filter((result) => result.readOnlyRollback === "PASS").length + 1,
+    rollbackCount: positiveResult.rollbackCount
+      + negatives.reduce((sum, result) => sum + result.rollbackCount, 0),
     cleanup: "PASS",
   };
 }
@@ -164,4 +199,3 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
       process.exitCode = 1;
     });
 }
-
