@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -18,9 +19,12 @@ import {
   generateSemanticAuditTeardown,
 } from "./phase2a-semantic-audit-ddl-contract.mjs";
 import {
+  PHASE2A_FAILURE_STAGES,
   buildPhase2aSemanticAuditPostBatch,
   buildPhase2aSemanticAuditPreBatch,
+  formatPhase2aFailureDiagnostic,
   runProductionPhase2aSemanticAudit,
+  runProductionPhase2aSemanticAuditCli,
 } from "./run-production-phase2a-semantic-audit.mjs";
 import {
   SEMANTIC_AUDIT_SNAPSHOT_OPERATION,
@@ -139,6 +143,80 @@ test("runner rejects missing operation, inherited PG state, wrong HEAD and dirty
   let calls = 0;
   assert.throws(() => runProductionPhase2aSemanticAudit(environment, { argument: PHASE2A_SEMANTIC_AUDIT_OPERATION,
     git: () => (++calls === 1 ? "a".repeat(40) : " M unsafe") }), /clean worktree/);
+});
+
+test("every required failure stage emits a finite non-secret diagnostic", async () => {
+  const stages = ["TARGET_GUARD", "HEAD_GUARD", "WORKTREE_GUARD", "ARTIFACT_HASH",
+    "INSTALLER_PROFILE", "PRE_DDL_ATTESTATION", "SQL_BUILD", "PSQL_EXECUTION",
+    "MIGRATION_SQL", "POST_DDL_ATTESTATION", "ROLLBACK_ATTESTATION", "RESULT_PARSE",
+    "OUTPUT_SERIALIZATION", "ERROR_SANITIZATION", "OTHER"];
+  for (const stage of stages) {
+    let stderr = "";
+    const failure = Object.assign(new Error("postgresql://unsafe:secret@example.invalid/postgres"), {
+      stage,
+      reason: stage === "MIGRATION_SQL" ? "SQLSTATE_42501" : `${stage}_TEST_FAILURE`,
+      rollback: stage === "MIGRATION_SQL" ? "PASS" : undefined,
+    });
+    const exitCode = await runProductionPhase2aSemanticAuditCli({}, {
+      run: () => { throw failure; },
+      writeStdout: () => { throw new Error("unexpected stdout"); },
+      writeStderr: (value) => { stderr += value; },
+    });
+    assert.equal(exitCode, 1);
+    assert.match(stderr, /^PHASE2A_SEMANTIC_AUDIT_FAIL:\nstage=[A-Z0-9_]+\nreason=[A-Z0-9_]+/);
+    assert.match(stderr, new RegExp(`stage=${stage}`));
+    assert.doesNotMatch(stderr, /unsafe|secret|example\.invalid|postgresql:\/\//i);
+  }
+  assert.deepEqual(new Set(PHASE2A_FAILURE_STAGES), new Set(["OPERATION_GUARD", ...stages]));
+});
+
+test("empty errors, serialization failures, and diagnostic-write failures remain observable", async () => {
+  let emptyDiagnostic = "";
+  assert.equal(await runProductionPhase2aSemanticAuditCli({}, {
+    run: () => { throw undefined; },
+    writeStderr: (value) => { emptyDiagnostic += value; },
+  }), 1);
+  assert.equal(emptyDiagnostic,
+    "PHASE2A_SEMANTIC_AUDIT_FAIL:\nstage=OTHER\nreason=UNCLASSIFIED_FAILURE\n");
+
+  const circular = {};
+  circular.self = circular;
+  let serializationDiagnostic = "";
+  assert.equal(await runProductionPhase2aSemanticAuditCli({}, {
+    run: () => circular,
+    writeStderr: (value) => { serializationDiagnostic += value; },
+  }), 1);
+  assert.match(serializationDiagnostic, /stage=OUTPUT_SERIALIZATION\nreason=OUTPUT_SERIALIZATION_FAILED/);
+
+  let fallback = "";
+  assert.equal(await runProductionPhase2aSemanticAuditCli({}, {
+    run: () => { throw new Error("empty diagnostic path"); },
+    writeStderr: () => { throw new Error("stderr unavailable"); },
+    writeStdout: (value) => { fallback += value; },
+  }), 1);
+  assert.equal(fallback,
+    "PHASE2A_SEMANTIC_AUDIT_FAIL:\nstage=ERROR_SANITIZATION\nreason=DIAGNOSTIC_WRITE_FAILED\n");
+});
+
+test("safe diagnostic formatting retains only an approved SQLSTATE", () => {
+  const error = Object.assign(new Error("password=secret raw statement"), {
+    stage: "MIGRATION_SQL", reason: "SQLSTATE_42501", rollback: "PASS",
+  });
+  assert.equal(formatPhase2aFailureDiagnostic(error),
+    "PHASE2A_SEMANTIC_AUDIT_FAIL:\nstage=MIGRATION_SQL\nreason=SQLSTATE_42501\nrollback=PASS\n");
+  assert.equal(formatPhase2aFailureDiagnostic(Object.assign(
+    new Error("ERROR: 42501: password=secret raw statement"), { stage: "PSQL_EXECUTION" },
+  )), "PHASE2A_SEMANTIC_AUDIT_FAIL:\nstage=PSQL_EXECUTION\nreason=SQLSTATE_42501\n");
+});
+
+test("the real CLI cannot exit one without a safe diagnostic", () => {
+  const result = spawnSync(process.execPath,
+    [resolve(import.meta.dirname, "run-production-phase2a-semantic-audit.mjs")],
+    { encoding: "utf8", windowsHide: true });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr,
+    /^PHASE2A_SEMANTIC_AUDIT_FAIL:\r?\nstage=OPERATION_GUARD\r?\nreason=OPERATION_NOT_AUTHORIZED\r?\n$/);
+  assert.equal(result.stdout, "");
 });
 
 test("artifact hash drift aborts before target authorization or SQL", () => {
