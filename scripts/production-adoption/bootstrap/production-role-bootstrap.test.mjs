@@ -12,9 +12,12 @@ import {
   ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS,
   ROLE_BOOTSTRAP_MANAGED_PROJECT_REF,
   ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS,
+  ROLE_BOOTSTRAP_POST_PHASE2A_MEMBERSHIPS,
   ROLE_BOOTSTRAP_PRE_BOOTSTRAP_MEMBERSHIPS,
   ROLE_BOOTSTRAP_REQUIRED_CAPABILITIES,
   ROLE_BOOTSTRAP_ROLE_ATTRIBUTES,
+  ROLE_BOOTSTRAP_SEMANTIC_AUDIT_MEMBERSHIP,
+  ROLE_BOOTSTRAP_SEMANTIC_AUDIT_OWNER_ATTRIBUTES,
   artifactHash,
   assertAbsentRoleAttestation,
   assertPinnedArtifacts,
@@ -160,6 +163,11 @@ test("role, minimum capability, managed installer, and target membership contrac
   assert.equal(ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS.length, 10);
   assert.equal(ROLE_BOOTSTRAP_PRE_BOOTSTRAP_MEMBERSHIPS.length, 10);
   assert.equal(ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS.length, 12);
+  assert.equal(ROLE_BOOTSTRAP_POST_PHASE2A_MEMBERSHIPS.length, 13);
+  assert.deepEqual(ROLE_BOOTSTRAP_SEMANTIC_AUDIT_MEMBERSHIP, {
+    grantedRole: "reflab_preflight_audit_owner", memberRole: "postgres", grantorRole: "supabase_admin",
+    adminOption: true, inheritOption: false, setOption: false,
+  });
   assert.deepEqual(ROLE_BOOTSTRAP_APPROVED_MEMBERSHIPS, [
     {
       grantedRole: "reflab_rls_owner", memberRole: "postgres", grantorRole: "supabase_admin",
@@ -455,6 +463,36 @@ test("installer identity lifecycle accepts only exact PRE and POST bootstrap sta
     protected_role: { ...exactProtectedRole, rolbypassrls: true },
   }).managedProfile, "BLOCKER");
   assert.equal(classifyInstallerIdentity({ ...post, membership_summary: undefined }).managedProfile, "UNKNOWN");
+});
+
+test("installer identity lifecycle accepts only the exact Phase 2A creator-admin extension", () => {
+  const pre = managedInstallerPayload();
+  const exactProtectedRole = { rolname: "reflab_rls_owner", ...ROLE_BOOTSTRAP_ROLE_ATTRIBUTES };
+  const exactAuditRole = { rolname: "reflab_preflight_audit_owner", ...ROLE_BOOTSTRAP_SEMANTIC_AUDIT_OWNER_ATTRIBUTES };
+  const memberships = catalogMemberships(ROLE_BOOTSTRAP_POST_PHASE2A_MEMBERSHIPS);
+  const exact = { ...withMemberships(pre, memberships, exactProtectedRole), semantic_audit_role: exactAuditRole };
+  const result = classifyInstallerIdentity(exact);
+  assert.equal(result.lifecycleState, "POST_PHASE2A_SEMANTIC_AUDIT");
+  assert.equal(result.expectedMembershipCount, 13);
+  assert.equal(result.managedProfile, "READY");
+
+  const drifts = [
+    { ...exact, semantic_audit_role: null },
+    withMemberships(exact, memberships.slice(0, 12), exactProtectedRole),
+    withMemberships(exact, [...memberships, { ...memberships.at(-1), grantor_role: "postgres" }], exactProtectedRole),
+    withMemberships(exact, memberships.map((membership, index) => index === memberships.length - 1
+      ? { ...membership, admin_option: false }
+      : membership), exactProtectedRole),
+    withMemberships(exact, memberships.map((membership, index) => index === memberships.length - 1
+      ? { ...membership, inherit_option: true }
+      : membership), exactProtectedRole),
+    withMemberships(exact, memberships.map((membership, index) => index === memberships.length - 1
+      ? { ...membership, set_option: true }
+      : membership), exactProtectedRole),
+  ];
+  for (const drift of drifts) {
+    assert.equal(classifyInstallerIdentity(drift).managedProfile, "BLOCKER");
+  }
 });
 
 test("installer attestation target and role guards reject wrong project and installer", () => {

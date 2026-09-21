@@ -8,9 +8,12 @@ import {
   ROLE_BOOTSTRAP_MANAGED_PROFILE_FORMAT,
   ROLE_BOOTSTRAP_MANAGED_PROJECT_REF,
   ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS,
+  ROLE_BOOTSTRAP_POST_PHASE2A_MEMBERSHIPS,
   ROLE_BOOTSTRAP_PRE_BOOTSTRAP_MEMBERSHIPS,
   ROLE_BOOTSTRAP_ROLE,
   ROLE_BOOTSTRAP_ROLE_ATTRIBUTES,
+  ROLE_BOOTSTRAP_SEMANTIC_AUDIT_OWNER,
+  ROLE_BOOTSTRAP_SEMANTIC_AUDIT_OWNER_ATTRIBUTES,
 } from "./production-role-bootstrap-contract.mjs";
 
 export const INSTALLER_IDENTITY_QUERY_ID = "production_installer_identity";
@@ -37,6 +40,12 @@ export const installerIdentityQuery = jsonQuery(
       from pg_catalog.pg_roles role
       where role.rolname = 'reflab_rls_owner'
     ) role_contract), 'null'::json),
+    'semantic_audit_role', coalesce((select pg_catalog.row_to_json(role_contract) from (
+      select role.rolname, role.rolcanlogin, role.rolinherit, role.rolcreaterole,
+        role.rolsuper, role.rolcreatedb, role.rolbypassrls, role.rolreplication
+      from pg_catalog.pg_roles role
+      where role.rolname = 'reflab_preflight_audit_owner'
+    ) role_contract), 'null'::json),
     'memberships', coalesce((select pg_catalog.json_agg(membership_contract
       order by membership_contract.granted_role, membership_contract.member_role,
         membership_contract.grantor_role) from (
@@ -50,8 +59,8 @@ export const installerIdentityQuery = jsonQuery(
       join pg_catalog.pg_roles granted_role on granted_role.oid = membership.roleid
       join pg_catalog.pg_roles member_role on member_role.oid = membership.member
       join pg_catalog.pg_roles grantor_role on grantor_role.oid = membership.grantor
-      where granted_role.rolname in ('postgres', 'reflab_rls_owner')
-        or member_role.rolname in ('postgres', 'reflab_rls_owner')
+      where granted_role.rolname in ('postgres', 'reflab_rls_owner', 'reflab_preflight_audit_owner')
+        or member_role.rolname in ('postgres', 'reflab_rls_owner', 'reflab_preflight_audit_owner')
     ) membership_contract), '[]'::json),
     'membership_summary', (select pg_catalog.json_build_object(
       'total_count', pg_catalog.count(*),
@@ -61,8 +70,8 @@ export const installerIdentityQuery = jsonQuery(
       from pg_catalog.pg_auth_members membership
       join pg_catalog.pg_roles granted_role on granted_role.oid = membership.roleid
       join pg_catalog.pg_roles member_role on member_role.oid = membership.member
-      where granted_role.rolname in ('postgres', 'reflab_rls_owner')
-        or member_role.rolname in ('postgres', 'reflab_rls_owner')),
+      where granted_role.rolname in ('postgres', 'reflab_rls_owner', 'reflab_preflight_audit_owner')
+        or member_role.rolname in ('postgres', 'reflab_rls_owner', 'reflab_preflight_audit_owner')),
     'database', (select pg_catalog.json_build_object(
       'name', database.datname,
       'owner', owner_role.rolname,
@@ -147,6 +156,15 @@ export function classifyInstallerIdentity(payload) {
   const protectedRoleExact = protectedRoleObservable
     && Object.entries(ROLE_BOOTSTRAP_ROLE_ATTRIBUTES).every(([attribute, expected]) =>
       protectedRole[attribute] === expected);
+  const semanticAuditRole = payload?.semantic_audit_role;
+  const semanticAuditRoleAbsent = semanticAuditRole === null || semanticAuditRole === undefined;
+  const semanticAuditRoleObservable = Boolean(semanticAuditRole)
+    && semanticAuditRole.rolname === ROLE_BOOTSTRAP_SEMANTIC_AUDIT_OWNER
+    && Object.keys(ROLE_BOOTSTRAP_SEMANTIC_AUDIT_OWNER_ATTRIBUTES).every((attribute) =>
+      typeof semanticAuditRole[attribute] === "boolean");
+  const semanticAuditRoleExact = semanticAuditRoleObservable
+    && Object.entries(ROLE_BOOTSTRAP_SEMANTIC_AUDIT_OWNER_ATTRIBUTES).every(([attribute, expected]) =>
+      semanticAuditRole[attribute] === expected);
   const preBootstrapMembershipsExact = membershipCompletenessProven
     && membershipsMatch(
       observedMembershipKeys,
@@ -159,11 +177,19 @@ export function classifyInstallerIdentity(payload) {
       memberships.length,
       ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS,
     );
-  const lifecycleState = protectedRoleAbsent && preBootstrapMembershipsExact
+  const postPhase2aMembershipsExact = membershipCompletenessProven
+    && membershipsMatch(
+      observedMembershipKeys,
+      memberships.length,
+      ROLE_BOOTSTRAP_POST_PHASE2A_MEMBERSHIPS,
+    );
+  const lifecycleState = protectedRoleAbsent && semanticAuditRoleAbsent && preBootstrapMembershipsExact
     ? "PRE_BOOTSTRAP"
-    : protectedRoleExact && postBootstrapMembershipsExact
+    : protectedRoleExact && semanticAuditRoleAbsent && postBootstrapMembershipsExact
       ? "POST_BOOTSTRAP"
-      : "UNKNOWN";
+      : protectedRoleExact && semanticAuditRoleExact && postPhase2aMembershipsExact
+        ? "POST_PHASE2A_SEMANTIC_AUDIT"
+        : "UNKNOWN";
   const membershipFingerprintExact = lifecycleState !== "UNKNOWN";
   const postgresMajorExact = Number.isInteger(payload?.server_version_num)
     && Math.trunc(payload.server_version_num / 10000) === 17;
@@ -186,13 +212,16 @@ export function classifyInstallerIdentity(payload) {
     databaseCreate,
     lifecycleState,
     protectedRoleExact: protectedRoleAbsent ? null : protectedRoleExact,
+    semanticAuditRoleExact: semanticAuditRole === null ? null : semanticAuditRoleExact,
     membershipCompletenessProven,
     membershipFingerprintExact,
     expectedMembershipCount: lifecycleState === "PRE_BOOTSTRAP"
       ? ROLE_BOOTSTRAP_PRE_BOOTSTRAP_MEMBERSHIPS.length
       : lifecycleState === "POST_BOOTSTRAP"
         ? ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS.length
-        : null,
+        : lifecycleState === "POST_PHASE2A_SEMANTIC_AUDIT"
+          ? ROLE_BOOTSTRAP_POST_PHASE2A_MEMBERSHIPS.length
+          : null,
     observedMembershipCount: memberships?.length ?? null,
     postgresMajorExact,
     decision,

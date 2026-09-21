@@ -1421,7 +1421,9 @@ as $semantic_audit$
   );
 $semantic_audit$;
 
+grant create on schema reflab_audit to reflab_preflight_audit_owner;
 alter function reflab_audit.production_semantic_snapshot() owner to reflab_preflight_audit_owner;
+revoke create on schema reflab_audit from reflab_preflight_audit_owner;
 revoke all on function reflab_audit.production_semantic_snapshot()
   from public, anon, authenticated, service_role, reflab_rls_owner;
 grant execute on function reflab_audit.production_semantic_snapshot() to reflab_prod_preflight_ro;

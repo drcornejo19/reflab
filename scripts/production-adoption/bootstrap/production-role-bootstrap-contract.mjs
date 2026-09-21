@@ -83,6 +83,23 @@ export const ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS = Object.freeze([
   ...ROLE_BOOTSTRAP_MANAGED_INSTALLER_MEMBERSHIPS,
   ...ROLE_BOOTSTRAP_APPROVED_MEMBERSHIPS,
 ]);
+export const ROLE_BOOTSTRAP_SEMANTIC_AUDIT_OWNER = "reflab_preflight_audit_owner";
+export const ROLE_BOOTSTRAP_SEMANTIC_AUDIT_OWNER_ATTRIBUTES = Object.freeze({
+  ...ROLE_BOOTSTRAP_ROLE_ATTRIBUTES,
+  rolreplication: false,
+});
+export const ROLE_BOOTSTRAP_SEMANTIC_AUDIT_MEMBERSHIP = Object.freeze({
+  grantedRole: ROLE_BOOTSTRAP_SEMANTIC_AUDIT_OWNER,
+  memberRole: ROLE_BOOTSTRAP_INSTALLER,
+  grantorRole: "supabase_admin",
+  adminOption: true,
+  inheritOption: false,
+  setOption: false,
+});
+export const ROLE_BOOTSTRAP_POST_PHASE2A_MEMBERSHIPS = Object.freeze([
+  ...ROLE_BOOTSTRAP_POST_BOOTSTRAP_MEMBERSHIPS,
+  ROLE_BOOTSTRAP_SEMANTIC_AUDIT_MEMBERSHIP,
+]);
 
 export function sha256(value) {
   return createHash("sha256").update(value).digest("hex");

@@ -302,12 +302,16 @@ export const phase1PsychologyNotificationsPostQuery = jsonQuery(
   ))`,
 );
 
-export function classifyExamTrainingAfter310003(payload) {
+export function classifyExamTrainingAfter310003(payload, options = {}) {
   if (!payload?.checks || !payload?.counts) return "UNKNOWN";
   if (preservedExamTrainingChecks.some((field) => typeof payload.checks[field] !== "boolean")) {
     return "UNKNOWN";
   }
-  const exact = preservedExamTrainingChecks.every((field) => payload.checks[field] === true)
+  const expectedTargetAclExact = options.expectedTargetAclExact ?? true;
+  const preservedChecksExact = preservedExamTrainingChecks.every((field) => field === "targetAclExact"
+    ? payload.checks[field] === expectedTargetAclExact
+    : payload.checks[field] === true);
+  const exact = preservedChecksExact
     && payload.checks.ledgerExact === false
     && payload.checks.laterPhaseInfrastructureAbsent === false
     && payload.counts.target_columns === 6
@@ -330,6 +334,7 @@ export function classifyPhase1PsychologyNotificationsPost(
   beforeMutationFingerprint,
   afterMutationFingerprint,
   examTrainingAfter310003,
+  options = {},
 ) {
   const complete = payload?.checks && payload?.counts
     && requiredPostChecks.every((field) => typeof payload.checks[field] === "boolean")
@@ -346,6 +351,10 @@ export function classifyPhase1PsychologyNotificationsPost(
   const notificationRowsUnchanged = beforeMutationFingerprint.notification_count === 60
     && afterMutationFingerprint.notification_count === 60
     && beforeMutationFingerprint.notification_rows_hash === afterMutationFingerprint.notification_rows_hash;
+  const expectedPhase310004Absent = options.expectedPhase310004Absent ?? true;
+  const postChecksExact = requiredPostChecks.every((field) => field === "phase310004Absent"
+    ? payload.checks[field] === expectedPhase310004Absent
+    : payload.checks[field] === true);
   const exact = installer?.managedProfile === "READY"
     && installer?.lifecycleState === "POST_BOOTSTRAP"
     && payload.caller === "postgres" && payload.session_user === "postgres"
@@ -353,7 +362,7 @@ export function classifyPhase1PsychologyNotificationsPost(
     && Math.trunc(payload.server_version_num / 10000) === 17
     && historicalFingerprintExact && notificationRowsUnchanged
     && examTrainingAfter310003 === "EXACT"
-    && requiredPostChecks.every((field) => payload.checks[field] === true)
+    && postChecksExact
     && payload.counts.catalog_rows === 8
     && payload.counts.notification_events === 60
     && payload.counts.notification_backfills === 0

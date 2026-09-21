@@ -357,7 +357,9 @@ security definer
 set search_path = pg_catalog
 as $semantic_audit$${semanticAuditFunctionSource()}$semantic_audit$;
 
+grant create on schema ${SEMANTIC_AUDIT_SCHEMA} to ${SEMANTIC_AUDIT_OWNER};
 alter function ${SEMANTIC_AUDIT_FUNCTION} owner to ${SEMANTIC_AUDIT_OWNER};
+revoke create on schema ${SEMANTIC_AUDIT_SCHEMA} from ${SEMANTIC_AUDIT_OWNER};
 revoke all on function ${SEMANTIC_AUDIT_FUNCTION}
   from public, anon, authenticated, service_role, reflab_rls_owner;
 grant execute on function ${SEMANTIC_AUDIT_FUNCTION} to ${SEMANTIC_AUDIT_CALLER};

@@ -106,12 +106,37 @@ test("post classifier accepts only the exact independent contract", () => {
   ).postState, "UNKNOWN");
 });
 
+test("post classifier preserves 310003 across the exact Phase 2A lifecycle transition", () => {
+  const mutation = { notification_count: 60, notification_rows_hash: "same" };
+  const installer = { managedProfile: "READY", lifecycleState: "POST_BOOTSTRAP" };
+  const phase2aPayload = exactPostPayload({ checks: {
+    ...exactPostPayload().checks, phase310004Absent: false,
+  } });
+  assert.equal(classifyPhase1PsychologyNotificationsPost(
+    phase2aPayload, installer, PHASE1_HISTORICAL_FINGERPRINT,
+    PHASE1_HISTORICAL_FINGERPRINT, mutation, mutation, "EXACT",
+    { expectedPhase310004Absent: false },
+  ).postState, "EXACT");
+  assert.equal(classifyPhase1PsychologyNotificationsPost(
+    exactPostPayload(), installer, PHASE1_HISTORICAL_FINGERPRINT,
+    PHASE1_HISTORICAL_FINGERPRINT, mutation, mutation, "EXACT",
+    { expectedPhase310004Absent: false },
+  ).postState, "BLOCKER");
+});
+
 test("310002 preservation permits only the reviewed later-phase differences", () => {
   assert.equal(classifyExamTrainingAfter310003(examPayload()), "EXACT");
   assert.equal(classifyExamTrainingAfter310003(examPayload({ checks: {
     ...examChecks, targetFkSemanticsExact: false,
   } })), "BLOCKER");
   assert.equal(classifyExamTrainingAfter310003(undefined), "UNKNOWN");
+  const phase2aExamPayload = examPayload({ checks: { ...examChecks, targetAclExact: false } });
+  assert.equal(classifyExamTrainingAfter310003(
+    phase2aExamPayload, { expectedTargetAclExact: false },
+  ), "EXACT");
+  assert.equal(classifyExamTrainingAfter310003(
+    examPayload(), { expectedTargetAclExact: false },
+  ), "BLOCKER");
 });
 
 function runnerDependencies(overrides = {}) {
