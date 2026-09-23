@@ -47,7 +47,8 @@ import {
   assertStrictSessionPoolerTarget,
   buildPhase2aSidecarAttestationBatch,
   buildSemanticAuditCallerProbeBatch,
-  buildSemanticAuditSnapshotExecutionBatch,
+  buildSemanticAuditSnapshotInvocationBatch,
+  buildSemanticAuditSnapshotSessionBatch,
   classifyCallerProbe,
   classifyPhase2aSidecarAttestation,
   classifySemanticAuditSnapshot,
@@ -81,7 +82,7 @@ function session(caller, overrides = {}) {
     session_user: caller,
     database: "postgres",
     transaction_read_only: "on",
-    default_transaction_read_only: "off",
+    default_transaction_read_only: "on",
     server_version_num: 170011,
     ...overrides,
   };
@@ -231,19 +232,24 @@ function exactGateAResults() {
   ]);
 }
 
-test("all three fixed inventories are read-only and only Gate B invokes the snapshot", () => {
+test("all fixed inventories are read-only and only Gate B invocation calls the snapshot", () => {
   const gateA = buildPhase2aSidecarAttestationBatch();
   const probe = buildSemanticAuditCallerProbeBatch();
-  const gateB = buildSemanticAuditSnapshotExecutionBatch();
-  for (const sql of [gateA, probe, gateB]) {
+  const gateBSession = buildSemanticAuditSnapshotSessionBatch();
+  const gateBInvocation = buildSemanticAuditSnapshotInvocationBatch();
+  for (const sql of [gateA, probe, gateBSession, gateBInvocation]) {
     assert.doesNotThrow(() => assertReadOnlyBatch(sql));
     assert.match(sql, /^begin read only;/i);
     assert.match(sql, /rollback;\s*$/i);
     assert.doesNotMatch(sql, /\bset\s+role\b|\bcreate\s+temp\b/i);
   }
-  assert.doesNotMatch(gateA, /select\s+reflab_audit\.production_semantic_snapshot\(\)/i);
-  assert.doesNotMatch(probe, /select\s+reflab_audit\.production_semantic_snapshot\(\)/i);
-  assert.match(gateB, /select\s+reflab_audit\.production_semantic_snapshot\(\)/i);
+  const invocation = /(?:select|then)\s+reflab_audit\.production_semantic_snapshot\(\)/i;
+  assert.doesNotMatch(gateA, invocation);
+  assert.doesNotMatch(probe, invocation);
+  assert.doesNotMatch(gateBSession, invocation);
+  assert.match(gateBInvocation, invocation);
+  assert.match(gateBInvocation, /default_transaction_read_only'\) = 'on'/i);
+  assert.match(gateBInvocation, /transaction_read_only'\) = 'on'/i);
 });
 
 test("strict target permits only the Session Pooler and exact role", () => {
@@ -327,11 +333,11 @@ test("Gate A source hash is enforced by the shared exact post-state contract", (
 });
 
 test("caller probe observes but never guesses default_transaction_read_only", () => {
-  assert.equal(SEMANTIC_AUDIT_CALLER_DEFAULT_TRANSACTION_READ_ONLY, null);
+  assert.equal(SEMANTIC_AUDIT_CALLER_DEFAULT_TRANSACTION_READ_ONLY, "on");
   const results = new Map([[PHASE2A_SESSION_QUERY_ID, session(PRODUCTION_PREFLIGHT_ROLE)]]);
   const decision = classifyCallerProbe(results);
   assert.equal(decision.classification, "CALLER_DEFAULT_READ_ONLY_OBSERVED");
-  assert.equal(decision.observedDefaultTransactionReadOnly, "off");
+  assert.equal(decision.observedDefaultTransactionReadOnly, "on");
   assert.equal(decision.defaultContractPinned, false);
   const malformed = new Map([[PHASE2A_SESSION_QUERY_ID, session(
     PRODUCTION_PREFLIGHT_ROLE,
@@ -340,62 +346,163 @@ test("caller probe observes but never guesses default_transaction_read_only", ()
   assert.equal(classifyCallerProbe(malformed).classification, "BLOCKER");
 });
 
-test("Gate B remains pending before any target or SQL execution", () => {
-  let authorized = 0;
-  let executed = 0;
-  assert.throws(() => runProductionSemanticAuditSnapshot({
-    ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT: "true",
-    ALLOW_PRODUCTION_SEMANTIC_AUDIT_SNAPSHOT: "true",
-    [SEMANTIC_AUDIT_SIDECAR_REVIEW_OPT_IN]: "true",
-  }, {
-    argument: SEMANTIC_AUDIT_SNAPSHOT_OPERATION,
-    authorize: () => { authorized += 1; },
-    executeReadOnly: () => { executed += 1; },
-  }), /CALLER_DEFAULT_CONTRACT/);
-  assert.equal(authorized, 0);
-  assert.equal(executed, 0);
-});
-
 test("Gate B accepts only an exact pinned caller session and 10/37 snapshot", () => {
   const results = new Map([
     [PHASE2A_SESSION_QUERY_ID, session(PRODUCTION_PREFLIGHT_ROLE)],
     [semanticAuditSnapshotQuery.id, exactSnapshot()],
   ]);
-  assert.equal(classifySemanticAuditSnapshot(results, "off").classification, "PASS");
-  assert.equal(classifySemanticAuditSnapshot(results, undefined).classification,
-    "CALLER_DEFAULT_READ_ONLY_CONTRACT_PENDING");
+  assert.equal(classifySemanticAuditSnapshot(results).classification, "PASS");
   const wrongDefault = new Map(results);
   wrongDefault.set(PHASE2A_SESSION_QUERY_ID, session(PRODUCTION_PREFLIGHT_ROLE, {
-    default_transaction_read_only: "on",
+    default_transaction_read_only: "off",
   }));
-  assert.equal(classifySemanticAuditSnapshot(wrongDefault, "off").classification, "BLOCKER");
+  assert.equal(classifySemanticAuditSnapshot(wrongDefault).classification, "BLOCKER");
+  const missingDefault = new Map(results);
+  const missingSession = session(PRODUCTION_PREFLIGHT_ROLE);
+  delete missingSession.default_transaction_read_only;
+  missingDefault.set(PHASE2A_SESSION_QUERY_ID, missingSession);
+  assert.equal(classifySemanticAuditSnapshot(missingDefault).classification, "UNKNOWN");
   const unexpected = structuredClone(exactSnapshot());
   unexpected.unexpected = { raw_rows: 1 };
   const bad = new Map(results);
   bad.set(semanticAuditSnapshotQuery.id, unexpected);
-  assert.equal(classifySemanticAuditSnapshot(bad, "off").classification, "BLOCKER");
+  assert.equal(classifySemanticAuditSnapshot(bad).classification, "BLOCKER");
+  const pii = structuredClone(exactSnapshot());
+  const [firstGroup] = Object.keys(pii);
+  const [firstMetric] = Object.keys(pii[firstGroup]);
+  pii[firstGroup][firstMetric] = "user@example.invalid";
+  const unsafe = new Map(results);
+  unsafe.set(semanticAuditSnapshotQuery.id, pii);
+  assert.equal(classifySemanticAuditSnapshot(unsafe).classification, "BLOCKER");
 });
 
-test("Gate B runner requires reviewed Gate A and returns no continuation", () => {
+test("Gate B runner requires reviewed Gate A, attests first, and returns no continuation", () => {
   const environment = {
     ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT: "true",
     ALLOW_PRODUCTION_SEMANTIC_AUDIT_SNAPSHOT: "true",
     [SEMANTIC_AUDIT_SIDECAR_REVIEW_OPT_IN]: "true",
     REFLAB_PRODUCTION_SEMANTIC_AUDIT_APPROVED_HEAD: head,
   };
+  let calls = 0;
   const result = runProductionSemanticAuditSnapshot(environment, {
     argument: SEMANTIC_AUDIT_SNAPSHOT_OPERATION,
-    expectedDefaultTransactionReadOnly: "off",
     git: (args) => args[0] === "rev-parse" ? head : "",
     authorize: () => poolerTarget(PRODUCTION_PREFLIGHT_ROLE),
-    executeReadOnly: () => new Map([
-      [PHASE2A_SESSION_QUERY_ID, session(PRODUCTION_PREFLIGHT_ROLE)],
-      [semanticAuditSnapshotQuery.id, exactSnapshot()],
-    ]),
+    executeReadOnly: (sql) => {
+      calls += 1;
+      return /production_semantic_snapshot\(\)/i.test(sql)
+        ? new Map([
+          [PHASE2A_SESSION_QUERY_ID, session(PRODUCTION_PREFLIGHT_ROLE)],
+          [semanticAuditSnapshotQuery.id, exactSnapshot()],
+        ])
+        : new Map([[PHASE2A_SESSION_QUERY_ID, session(PRODUCTION_PREFLIGHT_ROLE)]]);
+    },
   });
+  assert.equal(calls, 2);
+  assert.equal(result.callerDefaultTransactionReadOnly, "on");
   assert.equal(result.output.groups, 10);
   assert.equal(result.output.numericMetrics, 37);
   assert.equal(result.nextMigration, "NOT_AUTHORIZED");
+});
+
+test("Gate B rejects default off before the snapshot invocation with a bounded reason", async () => {
+  const environment = {
+    ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT: "true",
+    ALLOW_PRODUCTION_SEMANTIC_AUDIT_SNAPSHOT: "true",
+    [SEMANTIC_AUDIT_SIDECAR_REVIEW_OPT_IN]: "true",
+    REFLAB_PRODUCTION_SEMANTIC_AUDIT_APPROVED_HEAD: head,
+  };
+  let snapshotCalls = 0;
+  let stderr = "";
+  assert.equal(await runProductionSemanticAuditSnapshotCli(environment, {
+    argument: SEMANTIC_AUDIT_SNAPSHOT_OPERATION,
+    git: (args) => args[0] === "rev-parse" ? head : "",
+    authorize: () => poolerTarget(PRODUCTION_PREFLIGHT_ROLE),
+    executeReadOnly: (sql) => {
+      if (/production_semantic_snapshot\(\)/i.test(sql)) snapshotCalls += 1;
+      return new Map([[PHASE2A_SESSION_QUERY_ID, session(PRODUCTION_PREFLIGHT_ROLE, {
+        default_transaction_read_only: "off",
+      })]]);
+    },
+    writeStderr: (value) => { stderr += value; },
+  }), 1);
+  assert.equal(snapshotCalls, 0);
+  assert.match(stderr, /stage=SESSION_ATTESTATION/);
+  assert.match(stderr, /reason=DEFAULT_TRANSACTION_READ_ONLY_MISMATCH/);
+  assert.match(stderr, /rollback=PASS/);
+});
+
+test("Gate B rejects every live session drift before snapshot invocation", () => {
+  const environment = {
+    ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT: "true",
+    ALLOW_PRODUCTION_SEMANTIC_AUDIT_SNAPSHOT: "true",
+    [SEMANTIC_AUDIT_SIDECAR_REVIEW_OPT_IN]: "true",
+    REFLAB_PRODUCTION_SEMANTIC_AUDIT_APPROVED_HEAD: head,
+  };
+  const drifts = [
+    { default_transaction_read_only: "invalid" },
+    { transaction_read_only: "off" },
+    { current_user: "postgres" },
+    { session_user: "postgres" },
+    { server_version_num: 180003 },
+    { database: "wrong" },
+  ];
+  for (const drift of drifts) {
+    let snapshotCalls = 0;
+    assert.throws(() => runProductionSemanticAuditSnapshot(environment, {
+      argument: SEMANTIC_AUDIT_SNAPSHOT_OPERATION,
+      git: (args) => args[0] === "rev-parse" ? head : "",
+      authorize: () => poolerTarget(PRODUCTION_PREFLIGHT_ROLE),
+      executeReadOnly: (sql) => {
+        if (/production_semantic_snapshot\(\)/i.test(sql)) snapshotCalls += 1;
+        return new Map([[PHASE2A_SESSION_QUERY_ID, session(PRODUCTION_PREFLIGHT_ROLE, drift)]]);
+      },
+    }), /SESSION_ATTESTATION/);
+    assert.equal(snapshotCalls, 0);
+  }
+});
+
+test("Gate B requires fresh reviewed Gate A authorization before target or SQL", () => {
+  let authorized = 0;
+  let executed = 0;
+  assert.throws(() => runProductionSemanticAuditSnapshot({
+    ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT: "true",
+    ALLOW_PRODUCTION_SEMANTIC_AUDIT_SNAPSHOT: "true",
+  }, {
+    argument: SEMANTIC_AUDIT_SNAPSHOT_OPERATION,
+    authorize: () => { authorized += 1; },
+    executeReadOnly: () => { executed += 1; },
+  }), /TARGET_GUARD:OPERATION_NOT_AUTHORIZED/);
+  assert.equal(authorized, 0);
+  assert.equal(executed, 0);
+});
+
+test("snapshot SQL failure emits bounded SQLSTATE and rollback classification", async () => {
+  let calls = 0;
+  let stderr = "";
+  assert.equal(await runProductionSemanticAuditSnapshotCli({
+    ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT: "true",
+    ALLOW_PRODUCTION_SEMANTIC_AUDIT_SNAPSHOT: "true",
+    [SEMANTIC_AUDIT_SIDECAR_REVIEW_OPT_IN]: "true",
+    REFLAB_PRODUCTION_SEMANTIC_AUDIT_APPROVED_HEAD: head,
+  }, {
+    argument: SEMANTIC_AUDIT_SNAPSHOT_OPERATION,
+    git: (args) => args[0] === "rev-parse" ? head : "",
+    authorize: () => poolerTarget(PRODUCTION_PREFLIGHT_ROLE),
+    executeReadOnly: () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Map([[PHASE2A_SESSION_QUERY_ID, session(PRODUCTION_PREFLIGHT_ROLE)]]);
+      }
+      throw Object.assign(new Error("secret-bearing details"), { sqlstate: "42501" });
+    },
+    writeStderr: (value) => { stderr += value; },
+  }), 1);
+  assert.equal(calls, 2);
+  assert.match(stderr, /stage=PSQL_EXECUTION/);
+  assert.match(stderr, /reason=SQLSTATE_42501/);
+  assert.match(stderr, /rollback=PASS/);
+  assert.doesNotMatch(stderr, /secret-bearing/);
 });
 
 test("Gate A and caller probe runners preserve their caller separation", () => {
@@ -428,7 +535,7 @@ test("Gate A and caller probe runners preserve their caller separation", () => {
     ]),
   });
   assert.equal(probe.caller, PRODUCTION_PREFLIGHT_ROLE);
-  assert.equal(probe.observed.defaultTransactionReadOnly, "off");
+  assert.equal(probe.observed.defaultTransactionReadOnly, "on");
 });
 
 test("bounded diagnostics preserve only stage, SQLSTATE and rollback", () => {
@@ -464,6 +571,7 @@ test("the contracts expose no PII, raw rows, DDL continuation, or secret configu
     "run-production-semantic-audit-snapshot.mjs",
   ].map((file) => readFileSync(resolve(import.meta.dirname, file), "utf8")).join("\n");
   assert.doesNotMatch(sources, /console\.log|process\.env\.(?:PGPASSWORD|.*DB_URL)/);
+  assert.doesNotMatch(sources, /expectedDefaultTransactionReadOnly/);
   assert.doesNotMatch(sources, /310005|310006|phase2b|db push|migration glob/i);
   assert.doesNotMatch(buildSemanticAuditCallerProbeBatch(), /\bfrom\s+public\./i);
 });

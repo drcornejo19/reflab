@@ -46,8 +46,9 @@ export const SEMANTIC_AUDIT_CALLER_PROBE_APPROVED_HEAD =
 export const SEMANTIC_AUDIT_SIDECAR_REVIEW_OPT_IN =
   "ALLOW_PRODUCTION_PHASE2A_SIDECAR_ATTESTATION_EXACT";
 
-// This must be changed only after reviewed real-Production probe evidence.
-export const SEMANTIC_AUDIT_CALLER_DEFAULT_TRANSACTION_READ_ONLY = null;
+// Pinned from reviewed REFLAB_SEMANTIC_AUDIT_CALLER_CONTRACT_PROBE_V1
+// Production evidence for nagjddldrldwavmfaytc.
+export const SEMANTIC_AUDIT_CALLER_DEFAULT_TRANSACTION_READ_ONLY = "on";
 
 export const PHASE2A_SESSION_QUERY_ID = "phase2a_snapshot_session";
 export const phase2aSnapshotSessionQuery = jsonQuery(
@@ -60,6 +61,19 @@ export const phase2aSnapshotSessionQuery = jsonQuery(
     'default_transaction_read_only', pg_catalog.current_setting('default_transaction_read_only'),
     'server_version_num', pg_catalog.current_setting('server_version_num')::integer
   )`,
+);
+
+const guardedSemanticAuditSnapshotQuery = jsonQuery(
+  semanticAuditSnapshotQuery.id,
+  `case when current_user = 'reflab_prod_preflight_ro'
+      and session_user = 'reflab_prod_preflight_ro'
+      and pg_catalog.current_database() = 'postgres'
+      and pg_catalog.current_setting('transaction_read_only') = 'on'
+      and pg_catalog.current_setting('default_transaction_read_only') = 'on'
+      and pg_catalog.current_setting('server_version_num')::integer / 10000 = 17
+    then ${semanticAuditSnapshotQuery.payloadSql}
+    else null::jsonb
+  end`,
 );
 
 export const PHASE2A_SIDECAR_ATTESTATION_CHECK_COUNT =
@@ -96,8 +110,12 @@ export function buildSemanticAuditCallerProbeBatch() {
   return buildSqlBatch([phase2aSnapshotSessionQuery]);
 }
 
-export function buildSemanticAuditSnapshotExecutionBatch() {
-  return buildSqlBatch([phase2aSnapshotSessionQuery, semanticAuditSnapshotQuery]);
+export function buildSemanticAuditSnapshotSessionBatch() {
+  return buildSqlBatch([phase2aSnapshotSessionQuery]);
+}
+
+export function buildSemanticAuditSnapshotInvocationBatch() {
+  return buildSqlBatch([phase2aSnapshotSessionQuery, guardedSemanticAuditSnapshotQuery]);
 }
 
 function sessionShapeExact(payload) {
@@ -211,29 +229,35 @@ export function classifyCallerProbe(results) {
   };
 }
 
-export function classifySemanticAuditSnapshot(results, expectedDefault) {
-  if (expectedDefault !== "on" && expectedDefault !== "off") {
-    return { classification: "CALLER_DEFAULT_READ_ONLY_CONTRACT_PENDING" };
-  }
+export function classifySemanticAuditSnapshotSession(results) {
   const session = classifySession(
     results.get(PHASE2A_SESSION_QUERY_ID),
     "reflab_prod_preflight_ro",
-    expectedDefault,
+    SEMANTIC_AUDIT_CALLER_DEFAULT_TRANSACTION_READ_ONLY,
   );
-  if (session.classification !== "EXACT") return { classification: session.classification, session };
+  return { classification: session.classification, session };
+}
+
+export function classifySemanticAuditSnapshotOutput(results) {
   const snapshot = results.get(semanticAuditSnapshotQuery.id);
   try {
     expandSemanticAuditSnapshot(snapshot);
   } catch {
-    return { classification: "BLOCKER", session, snapshot: null };
+    return { classification: "BLOCKER", snapshot: null };
   }
-  return { classification: "PASS", session, snapshot };
+  return { classification: "PASS", snapshot };
+}
+
+export function classifySemanticAuditSnapshot(results) {
+  const sessionDecision = classifySemanticAuditSnapshotSession(results);
+  if (sessionDecision.classification !== "EXACT") return sessionDecision;
+  const outputDecision = classifySemanticAuditSnapshotOutput(results);
+  return { ...outputDecision, session: sessionDecision.session };
 }
 
 export const SNAPSHOT_FAILURE_STAGES = Object.freeze([
   "TARGET_GUARD",
   "REPOSITORY_GUARD",
-  "CALLER_DEFAULT_CONTRACT",
   "SESSION_ATTESTATION",
   "SIDECAR_ATTESTATION",
   "SNAPSHOT_INVOCATION",

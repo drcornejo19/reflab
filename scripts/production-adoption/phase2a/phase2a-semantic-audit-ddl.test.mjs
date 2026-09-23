@@ -249,25 +249,34 @@ test("snapshot runner requires its operation, opt-in, clean HEAD and strict aggr
   assert.throws(() => runProductionSemanticAuditSnapshot({ ...base, ALLOW_PRODUCTION_SEMANTIC_AUDIT_SNAPSHOT: "false" }, { argument: SEMANTIC_AUDIT_SNAPSHOT_OPERATION }), /TARGET_GUARD:OPERATION_NOT_AUTHORIZED/);
   const dependencies = { argument: SEMANTIC_AUDIT_SNAPSHOT_OPERATION,
     git: (args) => args[0] === "rev-parse" ? "a".repeat(40) : "",
-    expectedDefaultTransactionReadOnly: "off",
     allowLocalTarget: true,
     authorize: () => ({ projectRef: "nagjddldrldwavmfaytc", host: "local", connectionEnvironment: {} }),
-    executeReadOnly: () => new Map([
-      ["phase2a_snapshot_session", { current_user: "reflab_prod_preflight_ro",
+    executeReadOnly: (sql) => /production_semantic_snapshot\(\)/i.test(sql)
+      ? new Map([
+        ["phase2a_snapshot_session", { current_user: "reflab_prod_preflight_ro",
+          session_user: "reflab_prod_preflight_ro", database: "postgres",
+          transaction_read_only: "on", default_transaction_read_only: "on",
+          server_version_num: 170011 }],
+        ["semantic_audit_snapshot", exactSnapshot()],
+      ])
+      : new Map([["phase2a_snapshot_session", { current_user: "reflab_prod_preflight_ro",
         session_user: "reflab_prod_preflight_ro", database: "postgres",
-        transaction_read_only: "on", default_transaction_read_only: "off",
-        server_version_num: 170011 }],
-      ["semantic_audit_snapshot", exactSnapshot()],
-    ]) };
+        transaction_read_only: "on", default_transaction_read_only: "on",
+        server_version_num: 170011 }]]) };
   assert.equal(runProductionSemanticAuditSnapshot(base, dependencies).readOnly, true);
   assert.throws(() => runProductionSemanticAuditSnapshot(base, { ...dependencies,
-    executeReadOnly: () => new Map([
-      ["phase2a_snapshot_session", { current_user: "reflab_prod_preflight_ro",
+    executeReadOnly: (sql) => /production_semantic_snapshot\(\)/i.test(sql)
+      ? new Map([
+        ["phase2a_snapshot_session", { current_user: "reflab_prod_preflight_ro",
+          session_user: "reflab_prod_preflight_ro", database: "postgres",
+          transaction_read_only: "on", default_transaction_read_only: "on",
+          server_version_num: 170011 }],
+        ["semantic_audit_snapshot", { unexpected: {} }],
+      ])
+      : new Map([["phase2a_snapshot_session", { current_user: "reflab_prod_preflight_ro",
         session_user: "reflab_prod_preflight_ro", database: "postgres",
-        transaction_read_only: "on", default_transaction_read_only: "off",
-        server_version_num: 170011 }],
-      ["semantic_audit_snapshot", { unexpected: {} }],
-    ]) }), /OUTPUT_CONTRACT:SNAPSHOT_CONTRACT_MISMATCH/);
+        transaction_read_only: "on", default_transaction_read_only: "on",
+        server_version_num: 170011 }]]) }), /OUTPUT_CONTRACT:SNAPSHOT_CONTRACT_MISMATCH/);
 });
 
 test("teardown is deterministic, exact-scope and has no CASCADE or product DML", () => {

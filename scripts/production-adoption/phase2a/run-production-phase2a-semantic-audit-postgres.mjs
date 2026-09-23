@@ -61,7 +61,8 @@ function executeBatch(environment, sql, user = "postgres") {
 function preparePost310003State(environment) {
   prepareExamTrainingState(environment);
   psql(environment, `alter role reflab_prod_preflight_ro
-    login noinherit nosuperuser nocreatedb nocreaterole nobypassrls;`, "supabase_admin");
+    login noinherit nosuperuser nocreatedb nocreaterole nobypassrls;
+    alter role reflab_prod_preflight_ro set default_transaction_read_only = on;`, "supabase_admin");
   psql(environment, `
     truncate table public.psychology_checkins, public.psychology_wellbeing_assessments,
       public.psychology_exercise_sessions;
@@ -225,12 +226,44 @@ function invokeTwoGateSnapshot(environment) {
   }, {
     argument: SEMANTIC_AUDIT_SNAPSHOT_OPERATION,
     allowLocalTarget: true,
-    expectedDefaultTransactionReadOnly: probe.observed.defaultTransactionReadOnly,
     git: (args) => args[0] === "rev-parse" ? head : "",
     authorize: () => localReadOnlyTarget(environment),
     executeReadOnly: (sql) => executeBatch(environment, sql, "reflab_prod_preflight_ro"),
   });
   return { gateA, probe, snapshot };
+}
+
+function assertDefaultOffRejectedBeforeSnapshot(environment) {
+  psql(environment, "alter role reflab_prod_preflight_ro set default_transaction_read_only = off;", "supabase_admin");
+  let snapshotCalls = 0;
+  let failure;
+  try {
+    runProductionSemanticAuditSnapshot({
+      ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT: "true",
+      ALLOW_PRODUCTION_SEMANTIC_AUDIT_SNAPSHOT: "true",
+      [SEMANTIC_AUDIT_SIDECAR_REVIEW_OPT_IN]: "true",
+      REFLAB_PRODUCTION_SEMANTIC_AUDIT_APPROVED_HEAD: head,
+    }, {
+      argument: SEMANTIC_AUDIT_SNAPSHOT_OPERATION,
+      allowLocalTarget: true,
+      git: (args) => args[0] === "rev-parse" ? head : "",
+      authorize: () => localReadOnlyTarget(environment),
+      executeReadOnly: (sql) => {
+        if (/production_semantic_snapshot\(\)/i.test(sql)) snapshotCalls += 1;
+        return executeBatch(environment, sql, "reflab_prod_preflight_ro");
+      },
+    });
+  } catch (error) {
+    failure = error;
+  } finally {
+    psql(environment, "alter role reflab_prod_preflight_ro set default_transaction_read_only = on;", "supabase_admin");
+  }
+  if (failure?.stage !== "SESSION_ATTESTATION"
+      || failure?.reason !== "DEFAULT_TRANSACTION_READ_ONLY_MISMATCH"
+      || snapshotCalls !== 0) {
+    throw new Error("Gate B did not reject default_transaction_read_only=off before snapshot invocation.");
+  }
+  return "PASS";
 }
 
 function applyPreScenario(environment, scenario) {
@@ -412,6 +445,7 @@ export async function runProductionPhase2aSemanticAuditPostgres() {
         !== Object.keys(semanticAuditExpectedFields).sort().join(",")) {
       throw new Error("Semantic snapshot aggregate contract drifted.");
     }
+    const defaultOffRejectedBeforeSnapshot = assertDefaultOffRejectedBeforeSnapshot(environment);
     psql(environment, teardown.sql, "postgres");
     if (!sidecarAbsent(environment)) throw new Error("Teardown left Phase 2A sidecar infrastructure.");
     if (auditOwnerMemberships(environment).length !== 0) throw new Error("Teardown left an audit-owner membership.");
@@ -420,7 +454,8 @@ export async function runProductionPhase2aSemanticAuditPostgres() {
       callerProbe: twoGate.probe.classification,
       snapshot: { classification: "PASS", readOnly: true,
       groups: Object.keys(twoGate.snapshot.snapshot).length,
-      metrics: Object.values(semanticAuditExpectedFields).flat().length }, teardown: "PASS" };
+      metrics: Object.values(semanticAuditExpectedFields).flat().length },
+      defaultOffRejectedBeforeSnapshot, teardown: "PASS" };
   });
 
   const preScenarios = ["audit_role_present", "audit_schema_present", "audit_function_present", "audit_policy_present",
@@ -487,7 +522,9 @@ export async function runProductionPhase2aSemanticAuditPostgres() {
 
   return { localOnly: true, postgresMajor: 17, positiveInstall: positive.result.postDdl,
     privilegedGate: positive.gateA, callerProbe: positive.callerProbe,
-    semanticSnapshot: positive.snapshot, installNegatives: preScenarios.length,
+    semanticSnapshot: positive.snapshot,
+    defaultOffRejectedBeforeSnapshot: positive.defaultOffRejectedBeforeSnapshot,
+    installNegatives: preScenarios.length,
     membershipNegatives: membershipScenarios.length, rollbackTests: failurePoints.length, teardownPositive: positive.teardown,
     teardownNegatives: teardownScenarios.length, cleanup: "PASS" };
 }

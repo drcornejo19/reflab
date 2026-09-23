@@ -14,8 +14,10 @@ import {
   SEMANTIC_AUDIT_SIDECAR_REVIEW_OPT_IN,
   assertStrictSessionPoolerTarget,
   atSnapshotStage,
-  buildSemanticAuditSnapshotExecutionBatch,
-  classifySemanticAuditSnapshot,
+  buildSemanticAuditSnapshotInvocationBatch,
+  buildSemanticAuditSnapshotSessionBatch,
+  classifySemanticAuditSnapshotOutput,
+  classifySemanticAuditSnapshotSession,
   executeSnapshotReadOnlyBatch,
   formatSnapshotGateFailure,
 } from "./phase2a-semantic-snapshot-execution-contract.mjs";
@@ -28,7 +30,23 @@ export const SEMANTIC_AUDIT_SNAPSHOT_OPT_IN = "ALLOW_PRODUCTION_SEMANTIC_AUDIT_S
 export const SEMANTIC_AUDIT_SNAPSHOT_APPROVED_HEAD = "REFLAB_PRODUCTION_SEMANTIC_AUDIT_APPROVED_HEAD";
 
 export function buildSemanticAuditSnapshotBatch() {
-  return buildSemanticAuditSnapshotExecutionBatch();
+  return buildSemanticAuditSnapshotInvocationBatch();
+}
+
+export function buildSemanticAuditSnapshotSessionAttestationBatch() {
+  return buildSemanticAuditSnapshotSessionBatch();
+}
+
+function sessionMismatchReason(session) {
+  if (session?.defaultTransactionReadOnlyExact !== true) {
+    return "DEFAULT_TRANSACTION_READ_ONLY_MISMATCH";
+  }
+  if (session?.transactionReadOnlyExact !== true) return "TRANSACTION_READ_ONLY_MISMATCH";
+  if (session?.currentUserExact !== true) return "CURRENT_USER_MISMATCH";
+  if (session?.sessionUserExact !== true) return "SESSION_USER_MISMATCH";
+  if (session?.databaseExact !== true) return "DATABASE_MISMATCH";
+  if (session?.postgresMajorExact !== true) return "POSTGRESQL_MAJOR_MISMATCH";
+  return "SESSION_CONTRACT_MISMATCH";
 }
 
 export function runProductionSemanticAuditSnapshot(environment = process.env, dependencies = {}) {
@@ -48,15 +66,6 @@ export function runProductionSemanticAuditSnapshot(environment = process.env, de
     }
     assertNoInheritedPgState(environment);
   });
-  const expectedDefault = dependencies.expectedDefaultTransactionReadOnly
-    ?? SEMANTIC_AUDIT_CALLER_DEFAULT_TRANSACTION_READ_ONLY;
-  if (expectedDefault !== "on" && expectedDefault !== "off") {
-    throw atSnapshotStage(
-      "CALLER_DEFAULT_CONTRACT",
-      "CALLER_DEFAULT_READ_ONLY_CONTRACT_PENDING",
-      () => { throw new Error("Caller default transaction contract is pending."); },
-    );
-  }
   const git = dependencies.git ?? ((args) => execFileSync(
     "git", args, { cwd: root, encoding: "utf8", windowsHide: true },
   ));
@@ -87,17 +96,38 @@ export function runProductionSemanticAuditSnapshot(environment = process.env, de
       assertStrictSessionPoolerTarget(target, expectedPoolerUsername);
     });
   }
-  const results = executeSnapshotReadOnlyBatch(
+  const sessionResults = executeSnapshotReadOnlyBatch(
+    dependencies.executeReadOnly ?? executeReadOnlyBatch,
+    buildSemanticAuditSnapshotSessionAttestationBatch(),
+    target,
+    environment,
+    "SESSION_ATTESTATION",
+  );
+  const sessionDecision = classifySemanticAuditSnapshotSession(sessionResults);
+  if (sessionDecision.classification !== "EXACT") {
+    const reason = sessionMismatchReason(sessionDecision.session);
+    throw atSnapshotStage("SESSION_ATTESTATION", reason, () => {
+      throw new Error("Semantic audit snapshot session contract mismatch.");
+    });
+  }
+  const snapshotResults = executeSnapshotReadOnlyBatch(
     dependencies.executeReadOnly ?? executeReadOnlyBatch,
     buildSemanticAuditSnapshotBatch(),
     target,
     environment,
     "SNAPSHOT_INVOCATION",
   );
-  const decision = classifySemanticAuditSnapshot(results, expectedDefault);
-  if (decision.classification !== "PASS") {
+  const invocationSessionDecision = classifySemanticAuditSnapshotSession(snapshotResults);
+  if (invocationSessionDecision.classification !== "EXACT") {
+    const reason = sessionMismatchReason(invocationSessionDecision.session);
+    throw atSnapshotStage("SESSION_ATTESTATION", reason, () => {
+      throw new Error("Semantic audit snapshot invocation session contract mismatch.");
+    });
+  }
+  const outputDecision = classifySemanticAuditSnapshotOutput(snapshotResults);
+  if (outputDecision.classification !== "PASS") {
     throw atSnapshotStage("OUTPUT_CONTRACT", "SNAPSHOT_CONTRACT_MISMATCH", () => {
-      throw new Error("Semantic audit snapshot contract mismatch.");
+      throw new Error("Semantic audit snapshot output contract mismatch.");
     });
   }
   return {
@@ -107,8 +137,8 @@ export function runProductionSemanticAuditSnapshot(environment = process.env, de
     readOnly: true,
     head: actualHead,
     gateAReview: "PHASE2A_SIDECAR_PRIVILEGED_ATTESTATION_EXACT",
-    callerDefaultTransactionReadOnly: expectedDefault,
-    snapshot: decision.snapshot,
+    callerDefaultTransactionReadOnly: SEMANTIC_AUDIT_CALLER_DEFAULT_TRANSACTION_READ_ONLY,
+    snapshot: outputDecision.snapshot,
     output: { groups: 10, numericMetrics: 37 },
     nextMigration: "NOT_AUTHORIZED",
   };
