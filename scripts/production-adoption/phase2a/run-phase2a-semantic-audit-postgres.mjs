@@ -36,9 +36,14 @@ function columnType(column) {
   return "text";
 }
 
+function columnDefinition(table, column) {
+  if (table === "public.notification_preferences" && column === "user_id") return "user_id text primary key";
+  return `${column} ${columnType(column)}`;
+}
+
 function fixtureSql() {
   const tables = Object.entries(semanticAuditTableColumns).map(([table, columns]) => {
-    const definitions = columns.map((column) => `${column} ${columnType(column)}`).join(", ");
+    const definitions = columns.map((column) => columnDefinition(table, column)).join(", ");
     return `create table ${table} (${definitions});\nalter table ${table} enable row level security;\ngrant select on ${table} to ${SEMANTIC_AUDIT_CALLER};`;
   }).join("\n");
 
@@ -82,8 +87,8 @@ insert into public.notification_tokens (id, token, user_id)
   values ('token-1', 'token_must_not_leak', 'user_phase2a_private_001');
 insert into public.notification_events (id, user_id)
   values ('event-1', 'user_phase2a_private_001');
-insert into public.notification_preferences (id, user_id)
-  values ('preference-1', 'user_phase2a_private_001');
+insert into public.notification_preferences (user_id)
+  values ('user_phase2a_private_001');
 insert into public.institution_permissions (permission_key)
   select 'permission_' || value from pg_catalog.generate_series(1, 27) value;
 insert into public.institution_roles (id, institution_id, role_key)
@@ -173,6 +178,37 @@ export async function runPhase2aSemanticAuditPostgres() {
     if (!missingDependencyRolledBack) throw new Error("Phase 2A dependency failure left partial infrastructure.");
     sql("alter table public.wellness_logs_missing rename to wellness_logs;");
 
+    let artificialPreferenceIdRejected = false;
+    sql("alter table public.notification_preferences rename column user_id to id;");
+    try {
+      apply(migration);
+    } catch (error) {
+      const diagnostic = String(error.stderr ?? error);
+      if (!diagnostic.includes("Semantic audit dependency column is missing")) {
+        throw new Error("Phase 2A notification preference key negative returned an unexpected error.");
+      }
+      artificialPreferenceIdRejected = scalar(sql(
+        `select pg_catalog.to_regrole('${SEMANTIC_AUDIT_OWNER}') is null and pg_catalog.to_regnamespace('reflab_audit') is null;`,
+      )) === "t";
+    }
+    if (!artificialPreferenceIdRejected) {
+      throw new Error("An artificial notification_preferences.id key passed the Phase 2A dependency contract.");
+    }
+    sql("alter table public.notification_preferences rename column id to user_id;");
+
+    const preferenceKeyExact = scalar(sql(`select
+      exists (
+        select 1 from pg_catalog.pg_attribute attribute
+        where attribute.attrelid='public.notification_preferences'::pg_catalog.regclass
+          and attribute.attname='user_id' and attribute.attnum>0 and not attribute.attisdropped
+      )
+      and not exists (
+        select 1 from pg_catalog.pg_attribute attribute
+        where attribute.attrelid='public.notification_preferences'::pg_catalog.regclass
+          and attribute.attname='id' and attribute.attnum>0 and not attribute.attisdropped
+      );`));
+    if (preferenceKeyExact !== "t") throw new Error("Phase 2A fixture does not model the real notification preference key.");
+
     apply(migration);
 
     const installedSourceBase64 = scalar(sql(`select pg_catalog.translate(
@@ -247,6 +283,8 @@ export async function runPhase2aSemanticAuditPostgres() {
       noRoleEscalation: true,
       noDirectWrite: true,
       missingDependencyRollback: true,
+      artificialPreferenceIdRejected: true,
+      notificationPreferenceKeyExact: true,
       canonicalMarkerRows: 0,
       adoptionLedgerRows: 3,
     };

@@ -38,6 +38,11 @@ function columnType(table, column) {
   return "text";
 }
 
+function columnDefinition(table, column) {
+  if (table === "public.notification_preferences" && column === "user_id") return "user_id text primary key";
+  return `${column} ${columnType(table, column)}`;
+}
+
 function executeBatch(environment, sql, user = "postgres") {
   return parseJsonResults(psql(environment, sql, user).stdout);
 }
@@ -65,13 +70,26 @@ function preparePost310003State(environment) {
       ('00000000-0000-0000-0000-' || pg_catalog.lpad(id::text,12,'0'))::uuid;
   `, "postgres");
   for (const [table, columns] of Object.entries(semanticAuditTableColumns)) {
-    const definitions = columns.map((column) => `${column} ${columnType(table, column)}`).join(",");
+    const definitions = columns.map((column) => columnDefinition(table, column)).join(",");
     psql(environment, `create table if not exists ${table}(${definitions});`, "postgres");
     for (const column of columns) {
       psql(environment, `alter table ${table} add column if not exists ${column} ${columnType(table, column)};`, "postgres");
     }
     psql(environment, `alter table ${table} enable row level security; alter table ${table} no force row level security;`, "postgres");
   }
+  const preferenceKeyExact = psql(environment, `select
+    exists (
+      select 1 from pg_catalog.pg_attribute attribute
+      where attribute.attrelid='public.notification_preferences'::pg_catalog.regclass
+        and attribute.attname='user_id' and attribute.atttypid='text'::pg_catalog.regtype
+        and attribute.attnotnull and attribute.attnum>0 and not attribute.attisdropped
+    )
+    and not exists (
+      select 1 from pg_catalog.pg_attribute attribute
+      where attribute.attrelid='public.notification_preferences'::pg_catalog.regclass
+        and attribute.attname='id' and attribute.attnum>0 and not attribute.attisdropped
+    );`, "postgres").stdout.trim();
+  if (preferenceKeyExact !== "t") throw new Error("Production-faithful fixture does not model notification_preferences.user_id exactly.");
 }
 
 function localDependencies(environment, migrationSql) {
@@ -189,6 +207,7 @@ function applyPreScenario(environment, scenario) {
     development_present: "create function public.resolve_development_clerk_identity(text) returns text language sql as $$select $1$$",
     missing_table: `drop table ${semanticAuditTables.at(-1)}`,
     missing_column: `alter table ${firstTable} drop column ${firstColumn}`,
+    notification_preferences_user_id_missing: "alter table public.notification_preferences rename column user_id to id",
     rls_disabled: `alter table ${firstTable} disable row level security`,
   };
   psql(environment, mutations[scenario], "postgres");
@@ -353,7 +372,7 @@ export async function runProductionPhase2aSemanticAuditPostgres() {
     "audit_grant_present", "foundation_drift", "exam_training_drift", "reconciliation_drift", "phase310003_drift",
     "checkin_mapping_drift", "modules_drift", "attempts_drift", "exam_results_drift", "notification_drift",
     "ledger_drift", "schema_state_nonempty", "phase2b_present", "development_present", "missing_table",
-    "missing_column", "rls_disabled"];
+    "missing_column", "notification_preferences_user_id_missing", "rls_disabled"];
   for (const scenario of preScenarios) await prepared(async (environment) => {
     applyPreScenario(environment, scenario);
     let migrationCalls = 0;
@@ -374,7 +393,10 @@ export async function runProductionPhase2aSemanticAuditPostgres() {
     try {
       runProductionPhase2aSemanticAudit(runnerEnvironment(), { ...localDependencies(environment, migrationSql),
         executeMigration: (sql) => { psql(environment, sql, "postgres"); applyPostScenario(environment, scenario); } });
-    } catch (error) { blocked = /post-DDL attestation failed/.test(error.message); }
+    } catch (error) {
+      blocked = error?.stage === "POST_DDL_ATTESTATION"
+        && error?.reason === "POST_DDL_CONTRACT_MISMATCH";
+    }
     if (!blocked) throw new Error(`Post-DDL membership/security negative did not block: ${scenario}.`);
   });
 
@@ -383,7 +405,7 @@ export async function runProductionPhase2aSemanticAuditPostgres() {
     const before = preservedState(environment);
     let blocked = false;
     try { runProductionPhase2aSemanticAudit(runnerEnvironment(), localDependencies(environment, injectFailure(migrationSql, point))); }
-    catch (error) { blocked = /rollback=PASS/.test(error.message); }
+    catch (error) { blocked = error?.rollback === "PASS"; }
     if (!blocked || !sidecarAbsent(environment)) throw new Error(`310004 rollback failed: ${point}.`);
     assertPreserved(preservedState(environment), `Rollback ${point}`);
     assertPreserved(before, `Rollback baseline ${point}`);

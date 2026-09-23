@@ -24,6 +24,7 @@ const migration = readFileSync(
 ).replace(/\r\n/g, "\n");
 const docs = readFileSync(resolve(root, "docs", "production-adoption", "phase2a-semantic-audit.md"), "utf8");
 const runner = readFileSync(resolve(directory, "run-phase2a-semantic-audit-postgres.mjs"), "utf8");
+const productionRunner = readFileSync(resolve(directory, "run-production-phase2a-semantic-audit-postgres.mjs"), "utf8");
 
 test("generated migration is deterministic and checked in exactly", () => {
   assert.equal(migration, generateSemanticAuditMigration());
@@ -46,6 +47,8 @@ test("audit function is fixed, aggregate-only and has no caller-controlled input
   assert.match(migration, /language sql\s+stable\s+security definer\s+set search_path = pg_catalog/i);
   assert.doesNotMatch(source, /\bexecute\b|format\s*\(|\binsert\b|\bupdate\b|\bdelete\b|\btruncate\b/i);
   assert.doesNotMatch(source, /returning\s+(user_id|token|payload|raw_source_reference)/i);
+  assert.match(source, /count\(preference\.user_id\)/i);
+  assert.doesNotMatch(source, /preference\.id\b/i);
   assert.deepEqual(Object.keys(semanticAuditExpectedFields).sort(), [
     "attempt_semantics",
     "exam_integrity",
@@ -96,6 +99,10 @@ test("migration fails before role creation when dependencies are incomplete", ()
   assert.ok(migration.indexOf("Semantic audit dependency table is missing") < migration.indexOf(`create role ${SEMANTIC_AUDIT_OWNER}`));
   assert.ok(migration.indexOf("Semantic audit dependency column is missing") < migration.indexOf(`create role ${SEMANTIC_AUDIT_OWNER}`));
   assert.equal(semanticAuditTables.length, 58);
+  assert.equal(Object.values(semanticAuditTableColumns).flat().length, 100);
+  assert.deepEqual(semanticAuditTableColumns["public.notification_preferences"], ["user_id"]);
+  assert.doesNotMatch(migration, /public\.notification_preferences\.id\b/i);
+  assert.match(migration, /grant select \(user_id\) on table public\.notification_preferences/i);
 });
 
 test("Phase 2A migration is classified for manual Production adoption", () => {
@@ -111,6 +118,11 @@ test("local PostgreSQL runner is isolated and proves non-exposure", () => {
   assert.match(runner, /noSensitiveValuesReturned: true/);
   assert.match(runner, /sourceHashExact: true/);
   assert.match(runner, /missingDependencyRollback: true/);
+  assert.match(runner, /artificialPreferenceIdRejected: true/);
+  assert.match(runner, /notificationPreferenceKeyExact: true/);
+  assert.doesNotMatch(runner, /notification_preferences \(id, user_id\)/i);
+  assert.match(productionRunner, /notification_preferences" && column === "user_id"\) return "user_id text primary key"/i);
+  assert.doesNotMatch(productionRunner, /notification_preferences\.id\b/i);
   assert.match(runner, /sqlAs\(SEMANTIC_AUDIT_CALLER/);
   assert.doesNotMatch(runner, /set role \$\{SEMANTIC_AUDIT_CALLER\}/);
   assert.doesNotMatch(runner, /supabase[.]co|PGPASSWORD|dotenv|--env-file|readFileSync\([^)]*[.]env/i);

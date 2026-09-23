@@ -91,7 +91,7 @@ begin
     ''notification_integrity'', pg_catalog.jsonb_build_object(
       ''token_owner_conflicts'', coalesce((select pg_catalog.count(token) from (select token from public.notification_tokens group by token having pg_catalog.count(distinct user_id) > 1) conflict), 0),
       ''events_without_profile'', (select pg_catalog.count(event.id) from public.notification_events event left join public.user_profiles profile on profile.user_id = event.user_id where profile.user_id is null),
-      ''preferences_without_profile'', (select pg_catalog.count(preference.id) from public.notification_preferences preference left join public.user_profiles profile on profile.user_id = preference.user_id where profile.user_id is null)
+      ''preferences_without_profile'', (select pg_catalog.count(preference.user_id) from public.notification_preferences preference left join public.user_profiles profile on profile.user_id = preference.user_id where profile.user_id is null)
     ),
     ''identity_reference_integrity'', (
       select pg_catalog.jsonb_build_object(

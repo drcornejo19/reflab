@@ -49,7 +49,7 @@ test("310004 is pinned byte-for-byte and contains no product DML", () => {
   assert.equal(sha256(readFileSync(resolve(root, PHASE2A_SEMANTIC_AUDIT_ARTIFACT))), PHASE2A_SEMANTIC_AUDIT_SHA256);
   assert.deepEqual(PHASE2A_SEMANTIC_AUDIT_MUTATIONS, {
     auditRoleCreates: 1, auditSchemaCreates: 1, auditFunctionCreates: 1,
-    auditPolicies: 58, auditColumnSelectGrants: 101,
+    auditPolicies: 58, auditColumnSelectGrants: 100,
     historicalProductInserts: 0, historicalProductUpdates: 0, historicalProductDeletes: 0,
     backfills: 0, ledgerWrites: 0, schemaStateWrites: 0,
   });
@@ -94,7 +94,7 @@ test("pre classifier fails closed on incomplete and drifted state", () => {
     default_transaction_read_only: "off", server_version_num: 170006,
     checks: { dependenciesExact: true, installerOwnsDependencies: true, postgresCanCreatePublic: true,
       sidecarAbsent: true, phase2bAbsent: true, laterAdoptionAbsent: true, developmentObjectsAbsent: true },
-    counts: { dependency_tables: 58, dependency_columns: 101 } };
+    counts: { dependency_tables: 58, dependency_columns: 100 } };
   assert.equal(classifyPhase2aSemanticAuditPre(payload), "EXACT");
   assert.equal(classifyPhase2aSemanticAuditPre({ ...payload, checks: { ...payload.checks, sidecarAbsent: false } }), "BLOCKER");
   assert.equal(classifyPhase2aSemanticAuditPre({ ...payload, server_version_num: 180003 }), "BLOCKER");
@@ -111,7 +111,7 @@ test("post classifier requires every structural and security check", () => {
     .match(/as \$semantic_audit\$([\s\S]*?)\$semantic_audit\$;/i)[1];
   const payload = { caller: "postgres", session_user: "postgres", transaction_read_only: "on",
     server_version_num: 170006, checks: Object.fromEntries(checkNames.map((name) => [name, true])),
-    counts: { policies: 58, column_grants: 101, effective_select_columns: 101, ledger_rows: 3, schema_state_rows: 0 },
+    counts: { policies: 58, column_grants: 100, effective_select_columns: 100, ledger_rows: 3, schema_state_rows: 0 },
     function_source_base64: Buffer.from(source).toString("base64") };
   assert.equal(classifyPhase2aSemanticAuditPost(payload).postState, "EXACT");
   assert.equal(classifyPhase2aSemanticAuditPost({ ...payload, checks: { ...payload.checks, auditPoliciesExact: false } }).postState, "BLOCKER");
