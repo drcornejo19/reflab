@@ -24,6 +24,17 @@ import {
 import { semanticAuditExpectedFields, semanticAuditTableColumns, semanticAuditTables } from "./semantic-audit-contract.mjs";
 import { buildPhase2aSemanticAuditPostBatch, runProductionPhase2aSemanticAudit } from "./run-production-phase2a-semantic-audit.mjs";
 import {
+  PHASE2A_SIDECAR_ATTESTATION_OPERATION,
+  SEMANTIC_AUDIT_CALLER_PROBE_OPERATION,
+  SEMANTIC_AUDIT_SIDECAR_REVIEW_OPT_IN,
+} from "./phase2a-semantic-snapshot-execution-contract.mjs";
+import {
+  runProductionPhase2aSidecarAttestation,
+} from "./run-production-phase2a-sidecar-attestation.mjs";
+import {
+  runProductionSemanticAuditCallerProbe,
+} from "./run-production-semantic-audit-caller-probe.mjs";
+import {
   SEMANTIC_AUDIT_SNAPSHOT_OPERATION,
   runProductionSemanticAuditSnapshot,
 } from "./run-production-semantic-audit-snapshot.mjs";
@@ -169,16 +180,57 @@ function assertPreserved(state, label) {
       || state.ledger !== 3 || state.schema_state !== 0) throw new Error(`${label} did not preserve reviewed state.`);
 }
 
-function invokeSnapshot(environment) {
-  return runProductionSemanticAuditSnapshot({
+function localReadOnlyTarget(environment) {
+  return {
+    projectRef: "nagjddldrldwavmfaytc",
+    host: "127.0.0.1",
+    connectionEnvironment: {
+      PGHOST: "127.0.0.1",
+      PGPORT: String(environment.port),
+      PGDATABASE: "postgres",
+      PGSSLMODE: "disable",
+    },
+  };
+}
+
+function invokeTwoGateSnapshot(environment) {
+  const gateA = runProductionPhase2aSidecarAttestation({
+    ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT: "true",
+    ALLOW_PRODUCTION_PRIVILEGED_READ_ONLY_ATTESTATION: "true",
+    ALLOW_PRODUCTION_PHASE2A_SIDECAR_ATTESTATION: "true",
+    REFLAB_PRODUCTION_PHASE2A_SIDECAR_ATTESTATION_APPROVED_HEAD: head,
+  }, {
+    argument: PHASE2A_SIDECAR_ATTESTATION_OPERATION,
+    allowLocalTarget: true,
+    git: (args) => args[0] === "rev-parse" ? head : "",
+    authorize: () => localReadOnlyTarget(environment),
+    executeReadOnly: (sql) => executeBatch(environment, sql, "postgres"),
+  });
+  const probe = runProductionSemanticAuditCallerProbe({
+    ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT: "true",
+    ALLOW_PRODUCTION_SEMANTIC_AUDIT_CALLER_PROBE: "true",
+    REFLAB_PRODUCTION_SEMANTIC_AUDIT_CALLER_PROBE_APPROVED_HEAD: head,
+  }, {
+    argument: SEMANTIC_AUDIT_CALLER_PROBE_OPERATION,
+    allowLocalTarget: true,
+    git: (args) => args[0] === "rev-parse" ? head : "",
+    authorize: () => localReadOnlyTarget(environment),
+    executeReadOnly: (sql) => executeBatch(environment, sql, "reflab_prod_preflight_ro"),
+  });
+  const snapshot = runProductionSemanticAuditSnapshot({
+    ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT: "true",
     ALLOW_PRODUCTION_SEMANTIC_AUDIT_SNAPSHOT: "true",
+    [SEMANTIC_AUDIT_SIDECAR_REVIEW_OPT_IN]: "true",
     REFLAB_PRODUCTION_SEMANTIC_AUDIT_APPROVED_HEAD: head,
   }, {
     argument: SEMANTIC_AUDIT_SNAPSHOT_OPERATION,
+    allowLocalTarget: true,
+    expectedDefaultTransactionReadOnly: probe.observed.defaultTransactionReadOnly,
     git: (args) => args[0] === "rev-parse" ? head : "",
-    authorize: () => ({ projectRef: "nagjddldrldwavmfaytc", host: "127.0.0.1", connectionEnvironment: {} }),
+    authorize: () => localReadOnlyTarget(environment),
     executeReadOnly: (sql) => executeBatch(environment, sql, "reflab_prod_preflight_ro"),
   });
+  return { gateA, probe, snapshot };
 }
 
 function applyPreScenario(environment, scenario) {
@@ -355,16 +407,19 @@ export async function runProductionPhase2aSemanticAuditPostgres() {
     }
     assertExactAutomaticMembership(environment, "Post-DDL");
     const after = preservedState(environment); assertPreserved(after, "Post-DDL");
-    const snapshot = invokeSnapshot(environment);
-    if (Object.keys(snapshot.snapshot).sort().join(",") !== Object.keys(semanticAuditExpectedFields).sort().join(",")) {
+    const twoGate = invokeTwoGateSnapshot(environment);
+    if (Object.keys(twoGate.snapshot.snapshot).sort().join(",")
+        !== Object.keys(semanticAuditExpectedFields).sort().join(",")) {
       throw new Error("Semantic snapshot aggregate contract drifted.");
     }
     psql(environment, teardown.sql, "postgres");
     if (!sidecarAbsent(environment)) throw new Error("Teardown left Phase 2A sidecar infrastructure.");
     if (auditOwnerMemberships(environment).length !== 0) throw new Error("Teardown left an audit-owner membership.");
     assertPreserved(preservedState(environment), "Teardown");
-    return { result, snapshot: { classification: "PASS", readOnly: true,
-      groups: Object.keys(snapshot.snapshot).length,
+    return { result, gateA: twoGate.gateA.classification,
+      callerProbe: twoGate.probe.classification,
+      snapshot: { classification: "PASS", readOnly: true,
+      groups: Object.keys(twoGate.snapshot.snapshot).length,
       metrics: Object.values(semanticAuditExpectedFields).flat().length }, teardown: "PASS" };
   });
 
@@ -431,6 +486,7 @@ export async function runProductionPhase2aSemanticAuditPostgres() {
   });
 
   return { localOnly: true, postgresMajor: 17, positiveInstall: positive.result.postDdl,
+    privilegedGate: positive.gateA, callerProbe: positive.callerProbe,
     semanticSnapshot: positive.snapshot, installNegatives: preScenarios.length,
     membershipNegatives: membershipScenarios.length, rollbackTests: failurePoints.length, teardownPositive: positive.teardown,
     teardownNegatives: teardownScenarios.length, cleanup: "PASS" };

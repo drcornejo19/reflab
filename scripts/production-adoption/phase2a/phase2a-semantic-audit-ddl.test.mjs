@@ -236,21 +236,38 @@ test("snapshot boundary is separate, fixed, aggregate-only and read-only", () =>
   assert.match(batch, /reflab_audit\.production_semantic_snapshot\(\)/i);
   assert.match(batch, /rollback;\s*$/i);
   assert.doesNotMatch(batch, /\b(insert|update|delete|truncate|create|alter|drop|grant|revoke|set role)\b/i);
-  assert.doesNotMatch(snapshotSource, /ALLOW_PRODUCTION_DDL|REFLAB_PRODUCTION_DDL_DB_URL/);
+  assert.doesNotMatch(snapshotSource, /REFLAB_PRODUCTION_DDL_DB_URL/);
+  assert.match(snapshotSource, /rejects Production DDL configuration/);
 });
 
 test("snapshot runner requires its operation, opt-in, clean HEAD and strict aggregate shape", () => {
   const base = { ALLOW_PRODUCTION_SEMANTIC_AUDIT_SNAPSHOT: "true",
+    ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT: "true",
+    ALLOW_PRODUCTION_PHASE2A_SIDECAR_ATTESTATION_EXACT: "true",
     REFLAB_PRODUCTION_SEMANTIC_AUDIT_APPROVED_HEAD: "a".repeat(40) };
-  assert.throws(() => runProductionSemanticAuditSnapshot(base, {}), /exact operation/);
-  assert.throws(() => runProductionSemanticAuditSnapshot({ ...base, ALLOW_PRODUCTION_SEMANTIC_AUDIT_SNAPSHOT: "false" }, { argument: SEMANTIC_AUDIT_SNAPSHOT_OPERATION }), /dedicated opt-in/);
+  assert.throws(() => runProductionSemanticAuditSnapshot(base, {}), /TARGET_GUARD:OPERATION_NOT_AUTHORIZED/);
+  assert.throws(() => runProductionSemanticAuditSnapshot({ ...base, ALLOW_PRODUCTION_SEMANTIC_AUDIT_SNAPSHOT: "false" }, { argument: SEMANTIC_AUDIT_SNAPSHOT_OPERATION }), /TARGET_GUARD:OPERATION_NOT_AUTHORIZED/);
   const dependencies = { argument: SEMANTIC_AUDIT_SNAPSHOT_OPERATION,
     git: (args) => args[0] === "rev-parse" ? "a".repeat(40) : "",
+    expectedDefaultTransactionReadOnly: "off",
+    allowLocalTarget: true,
     authorize: () => ({ projectRef: "nagjddldrldwavmfaytc", host: "local", connectionEnvironment: {} }),
-    executeReadOnly: () => new Map([["semantic_audit_snapshot", exactSnapshot()]]) };
+    executeReadOnly: () => new Map([
+      ["phase2a_snapshot_session", { current_user: "reflab_prod_preflight_ro",
+        session_user: "reflab_prod_preflight_ro", database: "postgres",
+        transaction_read_only: "on", default_transaction_read_only: "off",
+        server_version_num: 170011 }],
+      ["semantic_audit_snapshot", exactSnapshot()],
+    ]) };
   assert.equal(runProductionSemanticAuditSnapshot(base, dependencies).readOnly, true);
   assert.throws(() => runProductionSemanticAuditSnapshot(base, { ...dependencies,
-    executeReadOnly: () => new Map([["semantic_audit_snapshot", { unexpected: {} }]]) }), /unexpected aggregate contract/);
+    executeReadOnly: () => new Map([
+      ["phase2a_snapshot_session", { current_user: "reflab_prod_preflight_ro",
+        session_user: "reflab_prod_preflight_ro", database: "postgres",
+        transaction_read_only: "on", default_transaction_read_only: "off",
+        server_version_num: 170011 }],
+      ["semantic_audit_snapshot", { unexpected: {} }],
+    ]) }), /OUTPUT_CONTRACT:SNAPSHOT_CONTRACT_MISMATCH/);
 });
 
 test("teardown is deterministic, exact-scope and has no CASCADE or product DML", () => {
