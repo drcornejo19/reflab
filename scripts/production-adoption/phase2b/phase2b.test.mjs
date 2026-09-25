@@ -27,6 +27,7 @@ const admin = migrationSql["202608110001_canonical_admin_user_access.sql"];
 const training = migrationSql["202608130001_canonical_training_attempts.sql"];
 const communication = migrationSql["202608150001_canonical_communication_feedback.sql"];
 const prerequisite = migrationSql["202608310005_production_adoption_canonical_runtime_prerequisites.sql"];
+const schemaReconciliation = migrationSql["20260925150422_production_adoption_pre_phase2b_schema_reconciliation.sql"];
 const completion = migrationSql["202608310006_production_adoption_canonical_runtime_installed.sql"];
 const docs = readFileSync(resolve(root, "docs", "production-adoption", "phase2b-canonical-runtime-installation.md"), "utf8");
 const runner = readFileSync(resolve(directory, "run-phase2b-postgres.mjs"), "utf8");
@@ -39,7 +40,7 @@ test("Phase 2B order excludes every Development-only migration", () => {
 });
 
 test("dependency graph assigns one provider to every Phase 2B object", () => {
-  assert.equal(PHASE2B_DEPENDENCY_GRAPH.length, 5);
+  assert.equal(PHASE2B_DEPENDENCY_GRAPH.length, 6);
   assert.equal(PHASE2B_OBJECT_PROVIDERS["public.attempts.canonical_payload_hash"], "202608130001");
   assert.equal((Object.values(PHASE2B_OBJECT_PROVIDERS).filter((provider) => provider === "202608130001")).length, 3);
   const orderedSql = PHASE2B_MIGRATIONS.map((name) => migrationSql[name]).join("\n");
@@ -92,7 +93,7 @@ test("completion qualifies derived function signatures without PL/pgSQL ambiguit
 });
 
 test("all modified migrations are transactional and fail closed", () => {
-  for (const sql of [admin, training, communication, prerequisite, completion]) {
+  for (const sql of [admin, training, communication, prerequisite, schemaReconciliation, completion]) {
     assert.match(sql, /^begin;/im);
     assert.match(sql, /^commit;/im);
     assert.match(sql, /set local lock_timeout/i);
@@ -101,7 +102,7 @@ test("all modified migrations are transactional and fail closed", () => {
 });
 
 test("browser roles receive no new function execution", () => {
-  for (const sql of [admin, training, communication, prerequisite, completion]) {
+  for (const sql of [admin, training, communication, prerequisite, schemaReconciliation, completion]) {
     const executeGrants = sql.split(";").filter((statement) => /grant execute/i.test(statement));
     for (const statement of executeGrants) {
       assert.doesNotMatch(statement, /to\s+(public|anon|authenticated)\b/i);
@@ -164,7 +165,7 @@ test("semantic sidecar fixture covers its complete reviewed table set", () => {
 });
 
 test("new adoption migrations are explicitly classified", () => {
-  for (const version of ["202608310005", "202608310006"]) {
+  for (const version of ["202608310005", "20260925150422", "202608310006"]) {
     const entry = migrationManifest.find((candidate) => candidate.version === version);
     assert.equal(entry?.classification, "production_adoption_bridge");
     assert.equal(entry?.productionAction, "MANUAL_PHASED_ADOPTION_AFTER_PHASE0_EVIDENCE");

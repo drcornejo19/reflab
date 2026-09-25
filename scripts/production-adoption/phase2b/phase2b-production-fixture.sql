@@ -66,8 +66,7 @@ create table public.clips (
   season text,
   source_version text,
   difficulty text,
-  is_active boolean not null default true,
-  status text not null default 'published'
+  is_active boolean not null default true
 );
 create table public.attempts (
   id uuid primary key,
@@ -87,7 +86,8 @@ create table public.attempts (
   season text,
   source_version text,
   difficulty text,
-  score numeric(7,2),
+  score integer,
+  var_review boolean not null default false,
   is_correct boolean,
   selected_decision text,
   correct_decision text,
@@ -144,8 +144,22 @@ create table public.attempts (
   notes text,
   institution_id uuid,
   institution_group_id uuid,
-  created_at timestamptz not null default pg_catalog.now()
+  created_at timestamp without time zone default pg_catalog.now()
 );
+create index attempts_user_sport_created_idx
+  on public.attempts (user_id, sport_type, created_at desc);
+create index attempts_institution_sport_created_idx
+  on public.attempts (institution_id, sport_type, created_at desc);
+create view public.leaderboard as
+select user_id,
+  count(*) as attempts,
+  round(avg(score)) as avg_score,
+  max(score) as best_score,
+  sum(case when var_review then 1 else 0 end) as var_yes
+from public.attempts
+group by user_id
+order by round(avg(score)) desc, count(*) desc;
+grant select on public.leaderboard to reflab_prod_preflight_ro;
 create table public.exam_results (
   id uuid primary key,
   user_id text not null,
@@ -189,14 +203,21 @@ insert into public.institution_memberships (id, institution_id, user_id, status)
 values ('91000000-0000-4000-8000-000000000001', '90000000-0000-4000-8000-000000000001', 'user_synthetic_001', 'active');
 insert into public.clips (id, sport_type, title, topic, difficulty)
 values ('d3f00000-0000-4000-8000-000000000003', 'football_11', 'Synthetic communication clip', 'Communication', 'medium');
+insert into public.clips (id, sport_type, title, topic, difficulty)
+select
+  ('d4f00000-0000-4000-8000-' || pg_catalog.lpad(value::text, 12, '0'))::uuid,
+  'football_11', 'Synthetic clip ' || value, 'Training', 'medium'
+from pg_catalog.generate_series(1, 29) value;
 
-insert into public.attempts (id, user_id, exam_result_id, submission_id, sport_type)
+insert into public.attempts (id, user_id, exam_result_id, submission_id, sport_type, score, created_at)
 select
   ('10000000-0000-4000-8000-' || pg_catalog.lpad(value::text, 12, '0'))::uuid,
   'user_synthetic_' || pg_catalog.lpad(((value - 1) % 13 + 1)::text, 3, '0'),
   null,
   null,
-  'football_11'
+  'football_11',
+  case when value = 37 then null else pg_catalog.round(25 + ((value - 1) * 75.0 / 35.0))::integer end,
+  '2026-05-01 00:00:00'::timestamp + ((value - 1) * interval '2 days')
 from pg_catalog.generate_series(1, 37) value;
 insert into public.exam_results (id, user_id, submission_id, activity_type, source_version, submitted_at)
 select

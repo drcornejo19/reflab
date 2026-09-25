@@ -62,6 +62,7 @@ const canonicalMigrationManifest = [
   ["202608310003", "production_adoption_psychology_notifications_prerequisites", "production_adoption_bridge"],
   ["202608310004", "production_adoption_semantic_audit", "production_adoption_audit"],
   ["202608310005", "production_adoption_canonical_runtime_prerequisites", "production_adoption_bridge"],
+  ["20260925150422", "production_adoption_pre_phase2b_schema_reconciliation", "production_adoption_bridge"],
   ["202608310006", "production_adoption_canonical_runtime_installed", "production_adoption_bridge"],
   ["20260901064236", "production_adoption_identity_security_bridge", "production_adoption_security"],
   ["20260901064245", "production_adoption_core_policy_reconciliation", "production_adoption_security"],

@@ -1,0 +1,152 @@
+import { execFileSync, spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
+import { buildSqlBatch } from "../../production-preflight/queries.mjs";
+import {
+  buildPsqlEnvironment,
+  executeReadOnlyBatch,
+  sanitizeProcessOutput,
+} from "../../production-preflight/run.mjs";
+import {
+  PRODUCTION_DDL_APPROVED_HEAD,
+  assertRepositoryAttestation,
+  authorizeProductionDdlTarget,
+} from "../bootstrap/run-production-role-bootstrap.mjs";
+import {
+  assertNoInheritedPgState,
+  classifyInstallerIdentity,
+  installerIdentityQuery,
+} from "../bootstrap/run-production-installer-identity-attestation.mjs";
+import {
+  PRE_PHASE2B_FORMAT,
+  PRE_PHASE2B_OPERATION,
+  PRE_PHASE2B_OPT_IN,
+  PRE_PHASE2B_POST_QUERY_ID,
+  PRE_PHASE2B_PRE_QUERY_ID,
+  PRE_PHASE2B_MUTATION_ACCOUNTING,
+  assertPrePhase2bArtifact,
+  classifyPrePhase2bPost,
+  classifyPrePhase2bPre,
+  prePhase2bPostQuery,
+  prePhase2bPreQuery,
+} from "./pre-phase2b-adoption-prerequisite-contract.mjs";
+
+const root = resolve(import.meta.dirname, "..", "..", "..");
+
+function diagnostic(stderr) {
+  const match = String(stderr ?? "").match(/(?:ERROR|FATAL):\s+([0-9A-Z]{5}):/);
+  return match?.[1] ?? "UNKNOWN";
+}
+
+function executeMigration(sql, connectionEnvironment, environment, spawn = spawnSync) {
+  const result = spawn("psql", [
+    "-X", "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "--set", "VERBOSITY=verbose", "--quiet",
+  ], {
+    input: sql,
+    encoding: "utf8",
+    windowsHide: true,
+    maxBuffer: 8 * 1024 * 1024,
+    env: buildPsqlEnvironment(environment, connectionEnvironment),
+  });
+  if (result.error || result.status !== 0) {
+    throw Object.assign(new Error(`MIGRATION_SQLSTATE_${diagnostic(result.stderr)}`), {
+      stage: "MIGRATION_SQL",
+    });
+  }
+}
+
+export function buildPrePhase2bPreBatch() {
+  return buildSqlBatch([installerIdentityQuery, prePhase2bPreQuery]);
+}
+
+export function buildPrePhase2bPostBatch() {
+  return buildSqlBatch([installerIdentityQuery, prePhase2bPostQuery]);
+}
+
+function classifyPre(results) {
+  const installer = classifyInstallerIdentity(results.get(installerIdentityQuery.id));
+  const adoption = classifyPrePhase2bPre(results.get(PRE_PHASE2B_PRE_QUERY_ID), installer);
+  if (adoption.classification !== "PASS") throw new Error("PRE_DDL_CONTRACT_MISMATCH");
+  return { installer, adoption };
+}
+
+function classifyPost(results) {
+  const installer = classifyInstallerIdentity(results.get(installerIdentityQuery.id));
+  const adoption = classifyPrePhase2bPost(results.get(PRE_PHASE2B_POST_QUERY_ID), installer);
+  if (adoption.classification !== "EXACT") throw new Error("POST_DDL_CONTRACT_MISMATCH");
+  return { installer, adoption };
+}
+
+export function runProductionPrePhase2bAdoptionPrerequisite(
+  environment = process.env,
+  dependencies = {},
+) {
+  if (dependencies.argument !== PRE_PHASE2B_OPERATION) {
+    throw new Error("EXACT_OPERATION_ARGUMENT_REQUIRED");
+  }
+  assertNoInheritedPgState(environment);
+  const git = dependencies.git ?? ((args) => execFileSync("git", args, {
+    cwd: root, encoding: "utf8", windowsHide: true,
+  }));
+  const actualHead = git(["rev-parse", "HEAD"]).trim();
+  const status = git(["status", "--short"]);
+  assertRepositoryAttestation({
+    expectedHead: environment[PRODUCTION_DDL_APPROVED_HEAD], actualHead, status,
+  });
+  const artifact = (dependencies.assertArtifact ?? assertPrePhase2bArtifact)(root);
+  const target = (dependencies.authorize ?? authorizeProductionDdlTarget)(environment, {
+    operationOptIn: PRE_PHASE2B_OPT_IN,
+  });
+  const executeReadOnly = dependencies.executeReadOnly ?? executeReadOnlyBatch;
+  const executeApprovedMigration = dependencies.executeMigration
+    ?? ((sql, connectionEnvironment) => executeMigration(
+      sql, connectionEnvironment, environment, dependencies.spawn ?? spawnSync,
+    ));
+
+  const beforeResults = executeReadOnly(
+    buildPrePhase2bPreBatch(), target.connectionEnvironment, { processEnvironment: environment },
+  );
+  const before = classifyPre(beforeResults);
+  try {
+    executeApprovedMigration(artifact.sql, target.connectionEnvironment);
+  } catch (error) {
+    let rollback = "UNKNOWN";
+    try {
+      classifyPre(executeReadOnly(
+        buildPrePhase2bPreBatch(), target.connectionEnvironment, { processEnvironment: environment },
+      ));
+      rollback = "PASS";
+    } catch {
+      rollback = "BLOCKER";
+    }
+    throw new Error(`${sanitizeProcessOutput(error.message)} rollback=${rollback}`);
+  }
+
+  const after = classifyPost(executeReadOnly(
+    buildPrePhase2bPostBatch(), target.connectionEnvironment, { processEnvironment: environment },
+  ));
+  return {
+    format: PRE_PHASE2B_FORMAT,
+    target: { projectRef: target.projectRef, host: target.host, database: "postgres" },
+    installer: "postgres",
+    head: actualHead,
+    artifact: { path: artifact.path, sha256: artifact.sha256 },
+    preDdl: { installer: before.installer.managedProfile, contract: before.adoption.classification },
+    migration: "PASS",
+    transaction: "COMMIT",
+    postDdl: { contract: after.adoption.classification, phase2bEntry: "PASS" },
+    mutationAccounting: PRE_PHASE2B_MUTATION_ACCOUNTING,
+    nextMigration: "NOT_AUTHORIZED",
+  };
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  const argument = process.argv.length === 3 ? process.argv[2] : undefined;
+  Promise.resolve().then(() => runProductionPrePhase2bAdoptionPrerequisite(
+    process.env, { argument },
+  )).then((result) => process.stdout.write(`${JSON.stringify(result)}\n`))
+    .catch((error) => {
+      process.stderr.write(`PRE_PHASE2B_ADOPTION_PREREQUISITE_FAIL: ${sanitizeProcessOutput(error.message)}\n`);
+      process.exitCode = 1;
+    });
+}

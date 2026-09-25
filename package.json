@@ -61,6 +61,8 @@
     "test:production-adoption:phase2a-ddl:postgres": "node scripts/production-adoption/phase2a/run-production-phase2a-semantic-audit-postgres.mjs",
     "test:production-adoption:phase2b": "node --test scripts/production-adoption/phase2b/phase2b.test.mjs",
     "test:production-adoption:phase2b:postgres": "node scripts/production-adoption/phase2b/run-phase2b-postgres.mjs",
+    "run:production-pre-phase2b-adoption-prerequisite": "node scripts/production-adoption/phase2b/run-production-pre-phase2b-adoption-prerequisite.mjs --production-pre-phase2b-adoption-prerequisite",
+    "test:production-adoption:pre-phase2b-prerequisite": "node --test scripts/production-adoption/phase2b/pre-phase2b-adoption-prerequisite.test.mjs",
     "test:production-adoption:phase3": "node --test scripts/production-adoption/phase3/phase3-security.test.mjs",
     "test:production-adoption:phase3:postgres": "node scripts/production-adoption/phase3/run-phase3-postgres.mjs",
     "test:production-adoption:phase4a": "node --test scripts/production-adoption/phase4/phase4-structural.test.mjs",
