@@ -2,6 +2,8 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import { buildSqlBatch } from "../../production-preflight/queries.mjs";
+import { PRODUCTION_PROJECT_REF } from "../../production-preflight/manifest.mjs";
+import { PRODUCTION_SESSION_POOLER_HOST } from "../../production-preflight/target.mjs";
 import {
   buildPsqlEnvironment,
   executeReadOnlyBatch,
@@ -77,6 +79,20 @@ function classifyPost(results) {
   return { installer, adoption };
 }
 
+export function assertPrePhase2bSessionPoolerTarget(target) {
+  const expectedUsername = `postgres.${PRODUCTION_PROJECT_REF}`;
+  if (target?.projectRef !== PRODUCTION_PROJECT_REF
+      || target?.host !== PRODUCTION_SESSION_POOLER_HOST
+      || target?.connectionEnvironment?.PGHOST !== PRODUCTION_SESSION_POOLER_HOST
+      || target?.connectionEnvironment?.PGPORT !== "5432"
+      || target?.connectionEnvironment?.PGDATABASE !== "postgres"
+      || target?.connectionEnvironment?.PGUSER !== expectedUsername
+      || target?.connectionEnvironment?.PGSSLMODE !== "require") {
+    throw new Error("PRE_PHASE2B_TARGET_REJECTED");
+  }
+  return target;
+}
+
 export function runProductionPrePhase2bAdoptionPrerequisite(
   environment = process.env,
   dependencies = {},
@@ -94,9 +110,11 @@ export function runProductionPrePhase2bAdoptionPrerequisite(
     expectedHead: environment[PRODUCTION_DDL_APPROVED_HEAD], actualHead, status,
   });
   const artifact = (dependencies.assertArtifact ?? assertPrePhase2bArtifact)(root);
-  const target = (dependencies.authorize ?? authorizeProductionDdlTarget)(environment, {
-    operationOptIn: PRE_PHASE2B_OPT_IN,
-  });
+  const target = assertPrePhase2bSessionPoolerTarget(
+    (dependencies.authorize ?? authorizeProductionDdlTarget)(environment, {
+      operationOptIn: PRE_PHASE2B_OPT_IN,
+    }),
+  );
   const executeReadOnly = dependencies.executeReadOnly ?? executeReadOnlyBatch;
   const executeApprovedMigration = dependencies.executeMigration
     ?? ((sql, connectionEnvironment) => executeMigration(
