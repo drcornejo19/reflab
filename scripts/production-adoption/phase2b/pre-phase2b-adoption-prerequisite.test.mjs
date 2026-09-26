@@ -204,7 +204,26 @@ test("dedicated runner executes exactly one pinned artifact and stops", () => {
   assert.equal(migrations, 1);
   assert.equal(reads, 2);
   assert.equal(output.migration, "PASS");
+  assert.equal(output.postDdl.contract, "EXACT");
+  assert.equal(output.postDdl.phase2bEntry, "EXACT");
+  assert.notEqual(output.postDdl.phase2bEntry, "PASS");
   assert.equal(output.nextMigration, "NOT_AUTHORIZED");
+});
+
+test("non-exact Phase 2B entry post-state fails closed", () => {
+  const responses = [
+    results(PRE_PHASE2B_PRE_QUERY_ID),
+    results(PRE_PHASE2B_POST_QUERY_ID,
+      statePayload({ checks: { ...checks, phase2bEntryExact: false } })),
+  ];
+  let reads = 0;
+  assert.throws(() => runProductionPrePhase2bAdoptionPrerequisite(productionEnvironment(), {
+    argument: PRE_PHASE2B_OPERATION,
+    git: (args) => args[0] === "rev-parse" ? `${head}\n` : "",
+    executeReadOnly: () => responses[reads++],
+    executeMigration: () => {},
+  }), /POST_DDL_CONTRACT_MISMATCH/);
+  assert.equal(reads, 2);
 });
 
 test("dedicated target guard accepts only the exact Session Pooler target", () => {
@@ -286,6 +305,8 @@ test("runner has no arbitrary SQL, migration discovery, or continuation", () => 
   const source = readFileSync(resolve(import.meta.dirname,
     "run-production-pre-phase2b-adoption-prerequisite.mjs"), "utf8");
   assert.doesNotMatch(source, /process\.argv\[3\]|readdir|glob|db push|migration list|202608130001.*execute/i);
+  assert.match(source, /phase2bEntry:\s*"EXACT"/);
+  assert.doesNotMatch(source, /phase2bEntry:\s*"PASS"/);
   assert.match(source, /nextMigration:\s*"NOT_AUTHORIZED"/);
 });
 

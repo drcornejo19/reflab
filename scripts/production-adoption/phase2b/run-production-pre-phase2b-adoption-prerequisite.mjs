@@ -152,7 +152,7 @@ export function runProductionPrePhase2bAdoptionPrerequisite(
     preDdl: { installer: before.installer.managedProfile, contract: before.adoption.classification },
     migration: "PASS",
     transaction: "COMMIT",
-    postDdl: { contract: after.adoption.classification, phase2bEntry: "PASS" },
+    postDdl: { contract: after.adoption.classification, phase2bEntry: "EXACT" },
     mutationAccounting: PRE_PHASE2B_MUTATION_ACCOUNTING,
     nextMigration: "NOT_AUTHORIZED",
   };
