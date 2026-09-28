@@ -40,7 +40,7 @@ export const PRE_PHASE2B_MUTATION_ACCOUNTING = Object.freeze({
   canonicalMarkerWrites: 0,
 });
 
-const requiredChecks = Object.freeze([
+export const PRE_PHASE2B_REQUIRED_CHECKS = Object.freeze([
   "sessionExact",
   "columnShapeExact",
   "historicalCountsExact",
@@ -242,7 +242,7 @@ export const prePhase2bPostQuery = stateQuery(PRE_PHASE2B_POST_QUERY_ID, true);
 
 function complete(payload) {
   return payload && typeof payload === "object" && payload.checks && payload.counts
-    && requiredChecks.every((check) => typeof payload.checks[check] === "boolean")
+    && PRE_PHASE2B_REQUIRED_CHECKS.every((check) => typeof payload.checks[check] === "boolean")
     && Number.isInteger(payload.server_version_num);
 }
 
@@ -253,7 +253,7 @@ function classify(payload, installer, expected) {
     && payload.caller === "postgres" && payload.session_user === "postgres"
     && payload.transaction_read_only === "on"
     && Math.trunc(payload.server_version_num / 10000) === 17
-    && requiredChecks.every((check) => payload.checks[check] === true)
+    && PRE_PHASE2B_REQUIRED_CHECKS.every((check) => payload.checks[check] === true)
     && payload.counts.attempts === 37 && payload.counts.exam_results === 6
     && payload.counts.notification_events === 60 && payload.counts.clips === 30
     && payload.counts.score_non_null === 36 && payload.counts.score_null === 1

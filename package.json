@@ -63,6 +63,8 @@
     "test:production-adoption:phase2b:postgres": "node scripts/production-adoption/phase2b/run-phase2b-postgres.mjs",
     "run:production-pre-phase2b-adoption-prerequisite": "node scripts/production-adoption/phase2b/run-production-pre-phase2b-adoption-prerequisite.mjs --production-pre-phase2b-adoption-prerequisite",
     "test:production-adoption:pre-phase2b-prerequisite": "node --test scripts/production-adoption/phase2b/pre-phase2b-adoption-prerequisite.test.mjs",
+    "attest:production-pre-phase2b-diagnostic": "node scripts/production-adoption/phase2b/run-production-pre-phase2b-read-only-diagnostic.mjs --production-pre-phase2b-read-only-diagnostic",
+    "test:production-adoption:pre-phase2b-diagnostic": "node --test scripts/production-adoption/phase2b/pre-phase2b-read-only-diagnostic.test.mjs",
     "test:production-adoption:phase3": "node --test scripts/production-adoption/phase3/phase3-security.test.mjs",
     "test:production-adoption:phase3:postgres": "node scripts/production-adoption/phase3/run-phase3-postgres.mjs",
     "test:production-adoption:phase4a": "node --test scripts/production-adoption/phase4/phase4-structural.test.mjs",
