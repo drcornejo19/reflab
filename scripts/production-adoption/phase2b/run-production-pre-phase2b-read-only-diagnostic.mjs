@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { executeReadOnlyBatch } from "../../production-preflight/run.mjs";
+import { buildSqlBatch } from "../../production-preflight/queries.mjs";
 import { PREFLIGHT_OPT_IN } from "../../production-preflight/target.mjs";
 import {
   PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_APPROVED_HEAD,
@@ -17,16 +18,20 @@ import {
   INSTALLER_IDENTITY_QUERY_ID,
   assertNoInheritedPgState,
   classifyInstallerIdentity,
+  installerIdentityQuery,
 } from "../bootstrap/run-production-installer-identity-attestation.mjs";
 import {
   PRE_PHASE2B_PRE_QUERY_ID,
+  PRE_PHASE2B_PROVIDER_STATE_CHECKS,
+  PRE_PHASE2B_PROVIDER_STATE_QUERY_ID,
   PRE_PHASE2B_REQUIRED_CHECKS,
   assertPrePhase2bArtifact,
   classifyPrePhase2bPre,
+  prePhase2bPreQuery,
+  prePhase2bProviderStateQuery,
 } from "./pre-phase2b-adoption-prerequisite-contract.mjs";
 import {
   assertPrePhase2bSessionPoolerTarget,
-  buildPrePhase2bPreBatch,
 } from "./run-production-pre-phase2b-adoption-prerequisite.mjs";
 
 const root = resolve(import.meta.dirname, "..", "..", "..");
@@ -59,6 +64,14 @@ export const PRE_PHASE2B_DIAGNOSTIC_CHECK_INVENTORY = Object.freeze([
   "scoreNullCountExact",
   "trainingDuplicateGroupsExact",
 ]);
+
+export function buildPrePhase2bDiagnosticBatch() {
+  return buildSqlBatch([
+    installerIdentityQuery,
+    prePhase2bPreQuery,
+    prePhase2bProviderStateQuery,
+  ]);
+}
 
 const expectedCounts = Object.freeze({
   attempts: 37,
@@ -99,6 +112,9 @@ export function classifyPrePhase2bDiagnostic(results) {
     ? results.get(INSTALLER_IDENTITY_QUERY_ID)
     : undefined;
   const payload = results instanceof Map ? results.get(PRE_PHASE2B_PRE_QUERY_ID) : undefined;
+  const providerPayload = results instanceof Map
+    ? results.get(PRE_PHASE2B_PROVIDER_STATE_QUERY_ID)
+    : undefined;
   const installer = classifyInstallerIdentity(installerPayload);
   const contract = classifyPrePhase2bPre(payload, installer);
   const checks = {
@@ -134,8 +150,18 @@ export function classifyPrePhase2bDiagnostic(results) {
   const unknownChecks = PRE_PHASE2B_DIAGNOSTIC_CHECK_INVENTORY.filter(
     (name) => checks[name] === null,
   );
+  const providerState = Object.fromEntries(PRE_PHASE2B_PROVIDER_STATE_CHECKS.map((name) => [
+    name, observedBoolean(providerPayload?.[name]),
+  ]));
+  const failedProviderChecks = PRE_PHASE2B_PROVIDER_STATE_CHECKS.filter(
+    (name) => providerState[name] === false,
+  );
+  const unknownProviderChecks = PRE_PHASE2B_PROVIDER_STATE_CHECKS.filter(
+    (name) => providerState[name] === null,
+  );
   const classification = contract.classification === "PASS" && failedChecks.length === 0
-      && unknownChecks.length === 0
+      && unknownChecks.length === 0 && failedProviderChecks.length === 0
+      && unknownProviderChecks.length === 0
     ? "EXACT"
     : contract.classification === "BLOCKER" ? "BLOCKER" : "UNKNOWN";
 
@@ -145,6 +171,9 @@ export function classifyPrePhase2bDiagnostic(results) {
     checks,
     failedChecks,
     unknownChecks,
+    providerState,
+    failedProviderChecks,
+    unknownProviderChecks,
     expected: {
       installerManagedProfile: "READY",
       installerLifecycleState: "POST_PHASE2A_SEMANTIC_AUDIT",
@@ -192,7 +221,7 @@ export function runProductionPrePhase2bReadOnlyDiagnostic(
     ?? authorizeProductionPrePhase2bDiagnosticTarget)(environment);
   assertPrePhase2bSessionPoolerTarget(target);
   const results = (dependencies.executeReadOnly ?? executeReadOnlyBatch)(
-    buildPrePhase2bPreBatch(),
+    buildPrePhase2bDiagnosticBatch(),
     target.connectionEnvironment,
     { processEnvironment: environment },
   );

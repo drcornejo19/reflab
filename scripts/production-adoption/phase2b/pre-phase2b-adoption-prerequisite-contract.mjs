@@ -11,6 +11,7 @@ export const PRE_PHASE2B_ARTIFACT =
 export const PRE_PHASE2B_SHA256 = "01e2fc62eb0d851b4c4616c70b37ae544ae6ae54af36a3491d68fb5484a375fe";
 export const PRE_PHASE2B_PRE_QUERY_ID = "pre_phase2b_adoption_prerequisite_pre";
 export const PRE_PHASE2B_POST_QUERY_ID = "pre_phase2b_adoption_prerequisite_post";
+export const PRE_PHASE2B_PROVIDER_STATE_QUERY_ID = "pre_phase2b_provider_state_diagnostic";
 
 export const LEADERBOARD_PRE_DEFINITION_SHA256 =
   "f422129265876fb2ebecba5b977562893e6451c7278026c9a71cf1864804f623";
@@ -54,6 +55,40 @@ export const PRE_PHASE2B_REQUIRED_CHECKS = Object.freeze([
   "createdAtIndexesExact",
   "phase2bEntryExact",
 ]);
+
+export const PRE_PHASE2B_PROVIDER_STATE_PREDICATES = Object.freeze({
+  canonicalJsonbTextPresent:
+    "pg_catalog.to_regprocedure('reflab_private.canonical_jsonb_text(jsonb)') is not null",
+  adminSetCanonicalUserPlanPresent:
+    "pg_catalog.to_regprocedure('public.admin_set_canonical_user_plan(text,text,text,text)') is not null",
+  adminSetCanonicalGlobalRolePresent:
+    "pg_catalog.to_regprocedure('public.admin_set_canonical_global_role(text,text,text,text)') is not null",
+  submitCanonicalTrainingAttemptAbsent:
+    "pg_catalog.to_regprocedure('public.submit_canonical_training_attempt(text,uuid,jsonb,integer)') is null",
+  submitCanonicalCommunicationFeedbackAbsent:
+    "pg_catalog.to_regprocedure('public.submit_canonical_communication_feedback(text,uuid,text,jsonb)') is null",
+  attemptsCanonicalPayloadHashAbsent:
+    "not exists (select 1 from pg_catalog.pg_attribute where attrelid='public.attempts'::pg_catalog.regclass and attname='canonical_payload_hash' and attnum>0 and not attisdropped)",
+});
+
+export const PRE_PHASE2B_PROVIDER_STATE_CHECKS = Object.freeze(
+  Object.keys(PRE_PHASE2B_PROVIDER_STATE_PREDICATES),
+);
+
+const providerStateExactSql = Object.values(PRE_PHASE2B_PROVIDER_STATE_PREDICATES)
+  .map((predicate) => `(${predicate})`)
+  .join(" and ");
+
+const providerStateJsonSql = Object.entries(PRE_PHASE2B_PROVIDER_STATE_PREDICATES)
+  .map(([name, predicate]) => `'${name}', (${predicate})`)
+  .join(",\n      ");
+
+export const prePhase2bProviderStateQuery = jsonQuery(
+  PRE_PHASE2B_PROVIDER_STATE_QUERY_ID,
+  `pg_catalog.json_build_object(
+      ${providerStateJsonSql}
+    )`,
+);
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -177,13 +212,7 @@ function stateQuery(id, post) {
         and (select pg_catalog.count(*)=58 from pg_catalog.pg_policies where policyname='reflab_preflight_audit_owner_read')
         and (select pg_catalog.count(*)=100 from information_schema.column_privileges
           where grantee='reflab_preflight_audit_owner' and privilege_type='SELECT'),
-      'providerStateExact', pg_catalog.to_regprocedure('reflab_private.canonical_jsonb_text(jsonb)') is not null
-        and pg_catalog.to_regprocedure('public.admin_set_canonical_user_plan(text,text,text,text)') is not null
-        and pg_catalog.to_regprocedure('public.admin_set_canonical_global_role(text,text,text,text)') is not null
-        and pg_catalog.to_regprocedure('public.submit_canonical_training_attempt(text,uuid,jsonb,integer)') is null
-        and pg_catalog.to_regprocedure('public.submit_canonical_communication_feedback(text,uuid,text,jsonb)') is null
-        and not exists (select 1 from pg_catalog.pg_attribute where attrelid='public.attempts'::pg_catalog.regclass
-          and attname='canonical_payload_hash' and attnum>0 and not attisdropped),
+      'providerStateExact', ${providerStateExactSql},
       'ledgerExact', (select pg_catalog.count(*)=3 and pg_catalog.max(phase_order)=3
         and pg_catalog.count(*) filter(where phase_order=1 and phase_key='foundation')=1
         and pg_catalog.count(*) filter(where phase_order=2 and phase_key='exam_training_prerequisites')=1

@@ -21,15 +21,19 @@ import {
 } from "../bootstrap/phase1-psychology-notifications-privileged-entry-attestation-contract.mjs";
 import { INSTALLER_IDENTITY_QUERY_ID } from "../bootstrap/run-production-installer-identity-attestation.mjs";
 import {
+  PRE_PHASE2B_ARTIFACT,
   PRE_PHASE2B_PRE_QUERY_ID,
+  PRE_PHASE2B_PROVIDER_STATE_CHECKS,
+  PRE_PHASE2B_PROVIDER_STATE_QUERY_ID,
   PRE_PHASE2B_REQUIRED_CHECKS,
+  PRE_PHASE2B_SHA256,
 } from "./pre-phase2b-adoption-prerequisite-contract.mjs";
-import { buildPrePhase2bPreBatch } from "./run-production-pre-phase2b-adoption-prerequisite.mjs";
 import {
   PRE_PHASE2B_DIAGNOSTIC_CHECK_INVENTORY,
   PRE_PHASE2B_DIAGNOSTIC_OPERATION,
   PRE_PHASE2B_DIAGNOSTIC_OPT_IN,
   authorizeProductionPrePhase2bDiagnosticTarget,
+  buildPrePhase2bDiagnosticBatch,
   classifyPrePhase2bDiagnostic,
   runProductionPrePhase2bReadOnlyDiagnostic,
   runProductionPrePhase2bReadOnlyDiagnosticCli,
@@ -38,6 +42,10 @@ import {
 const head = "a".repeat(40);
 const username = `postgres.${PRODUCTION_PROJECT_REF}`;
 const expectedDdlRunnerSha256 = "7a02e6f06fb039f226ffb52b4d57cc433f55622553960ab59c4af79f6fe4c828";
+
+const baseProviderState = Object.freeze(Object.fromEntries(
+  PRE_PHASE2B_PROVIDER_STATE_CHECKS.map((name) => [name, true]),
+));
 
 const baseChecks = Object.freeze(Object.fromEntries(
   PRE_PHASE2B_REQUIRED_CHECKS.map((name) => [name, true]),
@@ -100,10 +108,15 @@ function statePayload(overrides = {}) {
   };
 }
 
-function results(payload = statePayload(), installer = installerPayload()) {
+function results(
+  payload = statePayload(),
+  installer = installerPayload(),
+  providerState = baseProviderState,
+) {
   return new Map([
     [INSTALLER_IDENTITY_QUERY_ID, installer],
     [PRE_PHASE2B_PRE_QUERY_ID, payload],
+    [PRE_PHASE2B_PROVIDER_STATE_QUERY_ID, providerState],
   ]);
 }
 
@@ -135,16 +148,21 @@ function environment(overrides = {}) {
   };
 }
 
-function run(payload = statePayload(), overrides = {}, installer = installerPayload()) {
+function run(
+  payload = statePayload(),
+  overrides = {},
+  installer = installerPayload(),
+  providerState = baseProviderState,
+) {
   return runProductionPrePhase2bReadOnlyDiagnostic(environment(), {
     argument: PRE_PHASE2B_DIAGNOSTIC_OPERATION,
     git: (args) => args[0] === "rev-parse" ? `${head}\n` : "",
     assertArtifact: () => ({ path: "prerequisite.sql", sha256: "f".repeat(64) }),
     authorize: () => target(),
     executeReadOnly: (sql) => {
-      assert.equal(sql, buildPrePhase2bPreBatch());
+      assert.equal(sql, buildPrePhase2bDiagnosticBatch());
       assert.doesNotThrow(() => assertReadOnlyBatch(sql));
-      return results(payload, installer);
+      return results(payload, installer, providerState);
     },
     ...overrides,
   });
@@ -155,10 +173,14 @@ test("all exact fixture checks classify EXACT", () => {
   assert.equal(output.classification, "EXACT");
   assert.deepEqual(output.failedChecks, []);
   assert.deepEqual(output.unknownChecks, []);
+  assert.deepEqual(output.failedProviderChecks, []);
+  assert.deepEqual(output.unknownProviderChecks, []);
+  assert.deepEqual(output.providerState, baseProviderState);
   assert.equal(output.checkCount, PRE_PHASE2B_DIAGNOSTIC_CHECK_INVENTORY.length);
   assert.deepEqual(Object.keys(output), [
     "format", "classification", "checkCount", "checks", "failedChecks",
-    "unknownChecks", "expected", "observed",
+    "unknownChecks", "providerState", "failedProviderChecks", "unknownProviderChecks",
+    "expected", "observed",
   ]);
 });
 
@@ -219,6 +241,41 @@ test("multiple failed predicates report every safe name", () => {
   ]);
 });
 
+test("every provider-state drift is identified by its safe name", () => {
+  for (const name of PRE_PHASE2B_PROVIDER_STATE_CHECKS) {
+    const output = run(statePayload({
+      checks: { ...baseChecks, providerStateExact: false },
+    }), {}, installerPayload(), { ...baseProviderState, [name]: false });
+    assert.equal(output.classification, "BLOCKER", name);
+    assert.deepEqual(output.failedProviderChecks, [name], name);
+    assert.deepEqual(output.unknownProviderChecks, [], name);
+    assert.ok(output.failedChecks.includes("providerStateExact"), name);
+  }
+});
+
+test("multiple provider-state drifts are all reported", () => {
+  const names = [
+    PRE_PHASE2B_PROVIDER_STATE_CHECKS[1],
+    PRE_PHASE2B_PROVIDER_STATE_CHECKS[4],
+  ];
+  const providerState = { ...baseProviderState };
+  for (const name of names) providerState[name] = false;
+  const output = run(statePayload({
+    checks: { ...baseChecks, providerStateExact: false },
+  }), {}, installerPayload(), providerState);
+  assert.equal(output.classification, "BLOCKER");
+  assert.deepEqual(output.failedProviderChecks, names);
+  assert.deepEqual(output.failedChecks, ["providerStateExact"]);
+});
+
+test("provider detail evidence is required and never inferred", () => {
+  const providerless = results();
+  providerless.delete(PRE_PHASE2B_PROVIDER_STATE_QUERY_ID);
+  const output = classifyPrePhase2bDiagnostic(providerless);
+  assert.equal(output.classification, "UNKNOWN");
+  assert.deepEqual(output.unknownProviderChecks, [...PRE_PHASE2B_PROVIDER_STATE_CHECKS]);
+});
+
 test("transaction_read_only must be on", () => {
   const output = run(statePayload({
     transaction_read_only: "off",
@@ -255,7 +312,7 @@ test("diagnostic source cannot execute migration SQL or continue to Phase 2B", (
     "run-production-pre-phase2b-read-only-diagnostic.mjs"), "utf8");
   assert.doesNotMatch(source, /executeMigration|spawnSync|\bcommit\b|db push|migration discovery/i);
   assert.doesNotMatch(source, /202608310005|202608110001|202608130001|202608150001|202608310006/);
-  assert.match(source, /buildPrePhase2bPreBatch\(\)/);
+  assert.match(source, /buildPrePhase2bDiagnosticBatch\(\)/);
   assert.doesNotMatch(source, /nextMigration|nextAllowedRemoteOperation/);
 });
 
@@ -273,6 +330,11 @@ test("existing DDL runner remains byte-for-byte unchanged", () => {
   const source = readFileSync(resolve(import.meta.dirname,
     "run-production-pre-phase2b-adoption-prerequisite.mjs"));
   assert.equal(createHash("sha256").update(source).digest("hex"), expectedDdlRunnerSha256);
+});
+
+test("adoption prerequisite migration remains byte-for-byte unchanged", () => {
+  const source = readFileSync(resolve(import.meta.dirname, "..", "..", "..", PRE_PHASE2B_ARTIFACT));
+  assert.equal(createHash("sha256").update(source).digest("hex"), PRE_PHASE2B_SHA256);
 });
 
 test("missing evidence is UNKNOWN and never EXACT", () => {
