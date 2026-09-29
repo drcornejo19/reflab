@@ -333,6 +333,7 @@ function stateQuery(id, post) {
       and pg_catalog.current_setting('server_version_num')::integer/10000=17,
     'installerCanGrantPublicExact',exists(select 1 from pg_catalog.pg_namespace namespace
       where namespace.nspname='public' and (namespace.nspowner=(select oid from pg_catalog.pg_roles where rolname=current_user)
+        or coalesce(pg_catalog.pg_has_role(current_user,namespace.nspowner,'USAGE'),false)
         or exists(select 1 from pg_catalog.aclexplode(namespace.nspacl) acl
           where acl.grantee=(select oid from pg_catalog.pg_roles where rolname=current_user)
             and acl.privilege_type='CREATE' and acl.is_grantable))),

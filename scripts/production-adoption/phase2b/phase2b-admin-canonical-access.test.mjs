@@ -113,6 +113,65 @@ test("pre and post queries are fixed catalog and bounded aggregate evidence", ()
   }
 });
 
+test("public schema grant authority recognizes only ownership or CREATE grant option", () => {
+  const sql = adminCanonicalAccessPreQuery.payloadSql.replaceAll(/\s+/g, " ");
+  const predicate = sql.match(
+    /'installerCanGrantPublicExact',exists\(select 1 from pg_catalog\.pg_namespace namespace where namespace\.nspname='public' and \(([\s\S]*?)\)\), 'rlsOwnerExact'/,
+  )?.[1] ?? "";
+
+  assert.match(predicate,
+    /namespace\.nspowner=\(select oid from pg_catalog\.pg_roles where rolname=current_user\)/,
+    "direct schema ownership must remain sufficient");
+  assert.match(predicate,
+    /coalesce\(pg_catalog\.pg_has_role\(current_user,namespace\.nspowner,'USAGE'\),false\)/,
+    "effective membership in the actual schema-owner role must be sufficient");
+  assert.match(predicate,
+    /acl\.grantee=\(select oid from pg_catalog\.pg_roles where rolname=current_user\)[\s\S]*acl\.privilege_type='CREATE' and acl\.is_grantable/,
+    "explicit CREATE must still require grant option");
+  assert.doesNotMatch(predicate, /has_schema_privilege/,
+    "effective CREATE without grant authority must not pass");
+  assert.doesNotMatch(predicate, /pg_database_owner/,
+    "membership must be checked against the observed owner, not an unrelated hardcoded role");
+  assert.match(sql,
+    /'installerCanGrantPublicExact',exists\(select 1 from pg_catalog\.pg_namespace namespace where namespace\.nspname='public'/,
+    "a missing public schema must fail the enclosing exists predicate");
+});
+
+function installerCanGrantPublicFixture({
+  schemaExists = true,
+  directOwner = false,
+  effectiveOwner = false,
+  createAcl = false,
+  createGrantable = false,
+} = {}) {
+  return schemaExists
+    && (directOwner || effectiveOwner || (createAcl && createGrantable));
+}
+
+test("direct public schema owner passes installer authority", () => {
+  assert.equal(installerCanGrantPublicFixture({ directOwner: true }), true);
+});
+
+test("effective pg_database_owner schema owner passes installer authority", () => {
+  assert.equal(installerCanGrantPublicFixture({ effectiveOwner: true }), true);
+});
+
+test("explicit CREATE with grant option passes installer authority", () => {
+  assert.equal(installerCanGrantPublicFixture({ createAcl: true, createGrantable: true }), true);
+});
+
+test("CREATE without grant authority remains blocked", () => {
+  assert.equal(installerCanGrantPublicFixture({ createAcl: true, createGrantable: false }), false);
+});
+
+test("unrelated role membership remains blocked", () => {
+  assert.equal(installerCanGrantPublicFixture({ effectiveOwner: false }), false);
+});
+
+test("missing public schema remains blocked", () => {
+  assert.equal(installerCanGrantPublicFixture({ schemaExists: false, directOwner: true }), false);
+});
+
 test("exact pre-state passes and exact post-state is exact", () => {
   assert.equal(classifyAdminCanonicalAccessState(payload()).classification, "PASS");
   assert.equal(classifyAdminCanonicalAccessState(payload(true), { post: true }).classification, "EXACT");
