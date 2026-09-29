@@ -69,6 +69,8 @@
     "run:production-phase2b-admin-canonical-access": "node scripts/production-adoption/phase2b/run-production-phase2b-admin-canonical-access.mjs --production-phase2b-admin-canonical-access",
     "test:production-adoption:phase2b-admin-canonical-access": "node --test scripts/production-adoption/phase2b/phase2b-admin-canonical-access.test.mjs",
     "test:production-adoption:phase2b-admin-canonical-access:postgres": "node scripts/production-adoption/phase2b/run-phase2b-admin-canonical-access-postgres.mjs",
+    "attest:production-phase2b-admin-canonical-access-diagnostic": "node scripts/production-adoption/phase2b/run-production-phase2b-admin-canonical-access-read-only-diagnostic.mjs --production-phase2b-admin-canonical-access-read-only-diagnostic",
+    "test:production-adoption:phase2b-admin-canonical-access-diagnostic": "node --test scripts/production-adoption/phase2b/phase2b-admin-canonical-access-read-only-diagnostic.test.mjs",
     "run:production-pre-phase2b-adoption-prerequisite": "node scripts/production-adoption/phase2b/run-production-pre-phase2b-adoption-prerequisite.mjs --production-pre-phase2b-adoption-prerequisite",
     "test:production-adoption:pre-phase2b-prerequisite": "node --test scripts/production-adoption/phase2b/pre-phase2b-adoption-prerequisite.test.mjs",
     "attest:production-pre-phase2b-diagnostic": "node scripts/production-adoption/phase2b/run-production-pre-phase2b-read-only-diagnostic.mjs --production-pre-phase2b-read-only-diagnostic",
