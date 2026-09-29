@@ -64,6 +64,8 @@
     "run:production-phase2b-canonical-runtime-prerequisites": "node scripts/production-adoption/phase2b/run-production-phase2b-canonical-runtime-prerequisites.mjs --production-phase2b-canonical-runtime-prerequisites",
     "test:production-adoption:phase2b-canonical-runtime-prerequisites": "node --test scripts/production-adoption/phase2b/phase2b-canonical-runtime-prerequisites.test.mjs",
     "test:production-adoption:phase2b-canonical-runtime-prerequisites:postgres": "node scripts/production-adoption/phase2b/run-phase2b-canonical-runtime-prerequisites-postgres.mjs",
+    "attest:production-phase2b-canonical-runtime-prerequisites-diagnostic": "node scripts/production-adoption/phase2b/run-production-phase2b-canonical-runtime-prerequisites-read-only-diagnostic.mjs --production-phase2b-canonical-runtime-prerequisites-read-only-diagnostic",
+    "test:production-adoption:phase2b-canonical-runtime-prerequisites-diagnostic": "node --test scripts/production-adoption/phase2b/phase2b-canonical-runtime-prerequisites-read-only-diagnostic.test.mjs",
     "run:production-phase2b-admin-canonical-access": "node scripts/production-adoption/phase2b/run-production-phase2b-admin-canonical-access.mjs --production-phase2b-admin-canonical-access",
     "test:production-adoption:phase2b-admin-canonical-access": "node --test scripts/production-adoption/phase2b/phase2b-admin-canonical-access.test.mjs",
     "test:production-adoption:phase2b-admin-canonical-access:postgres": "node scripts/production-adoption/phase2b/run-phase2b-admin-canonical-access-postgres.mjs",
