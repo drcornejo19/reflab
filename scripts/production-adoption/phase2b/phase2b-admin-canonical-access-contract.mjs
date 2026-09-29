@@ -82,7 +82,7 @@ export const ADMIN_CANONICAL_ACCESS_FUNCTION_ACL = Object.freeze(
 );
 
 export const ADMIN_CANONICAL_ACCESS_SCHEMA_ACL = Object.freeze([
-  Object.freeze({ schema_name: "public", grantee: "reflab_rls_owner", grantor: "postgres", privilege_type: "USAGE", is_grantable: false }),
+  Object.freeze({ schema_name: "public", grantee: "reflab_rls_owner", grantor: "pg_database_owner", privilege_type: "USAGE", is_grantable: false }),
   Object.freeze({ schema_name: "reflab_meta", grantee: "reflab_rls_owner", grantor: "postgres", privilege_type: "USAGE", is_grantable: false }),
 ]);
 

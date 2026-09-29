@@ -104,6 +104,15 @@ test("migration retains exact reviewed scope", () => {
   assert.match(migration, /notify pgrst, 'reload schema';/i);
 });
 
+test("schema ACL contract records the effective owner as the public grantor", () => {
+  assert.deepEqual(ADMIN_CANONICAL_ACCESS_SCHEMA_ACL, [
+    { schema_name: "public", grantee: "reflab_rls_owner", grantor: "pg_database_owner",
+      privilege_type: "USAGE", is_grantable: false },
+    { schema_name: "reflab_meta", grantee: "reflab_rls_owner", grantor: "postgres",
+      privilege_type: "USAGE", is_grantable: false },
+  ]);
+});
+
 test("pre and post queries are fixed catalog and bounded aggregate evidence", () => {
   for (const query of [adminCanonicalAccessPreQuery, adminCanonicalAccessPostQuery]) {
     assert.match(query.payloadSql, /transaction_read_only/);

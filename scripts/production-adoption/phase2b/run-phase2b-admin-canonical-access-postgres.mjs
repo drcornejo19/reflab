@@ -63,8 +63,6 @@ function apply(environment, database, name) {
 
 function setup(environment, database) {
   psql(environment, database,
-    "grant usage,create on schema public to postgres with grant option", "supabase_admin");
-  psql(environment, database,
     "create schema extensions; create extension pgcrypto with schema extensions;");
   psql(environment, database,
     "create role legacy_runtime nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls;",
@@ -73,6 +71,7 @@ function setup(environment, database) {
   psql(environment, database,
     "alter role reflab_prod_preflight_ro login noinherit nosuperuser nocreatedb nocreaterole nobypassrls",
     "supabase_admin");
+  psql(environment, database, "alter database postgres owner to postgres", "supabase_admin");
   psql(environment, database, fixture);
   for (const migration of phase1) apply(environment, database, migration);
   psql(environment, database, buildSemanticSidecarFixtureSql());
@@ -81,7 +80,7 @@ function setup(environment, database) {
 }
 
 function clone(environment, source, target) {
-  psql(environment, "maintenance", `create database ${target} template ${source}`, "supabase_admin");
+  psql(environment, "maintenance", `create database ${target} owner postgres template ${source}`, "supabase_admin");
 }
 
 function drop(environment, database) {
