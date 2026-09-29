@@ -1,6 +1,6 @@
 {
   "format": "REFLAB_PHASE4B_WAVE5_EFFECTIVE_CANONICAL_CATALOG_V1",
-  "serverVersionNum": 180003,
+  "serverVersionNum": 180006,
   "postgresMajor": 18,
   "canonicalGraph": {
     "version": "202608240001",
@@ -17,7 +17,7 @@
         "name": "canonical_admin_user_access",
         "classification": "canonical_production_safe_incremental",
         "file": "202608110001_canonical_admin_user_access.sql",
-        "sha256": "b1ae4cfa4bb88e8bd6b903078d23b27d6c03563e8cb0de7305d89add6d23b1ca"
+        "sha256": "0c8ea0383eb16bcef78b2252bd66682f9fbfa4b5dcea93d03807a1b91e6f8051"
       },
       {
         "version": "202608130001",
@@ -65,7 +65,7 @@
       "202608110002_development_super_admin_identity_link.sql"
     ]
   },
-  "providerGraphHash": "a86a24846cc1a489d54e61f7d53aec12ed98622d25862a291d893a56d0566b49",
+  "providerGraphHash": "0004b69235f86eaa84cf718c43ea05a0c7302e9cb882a6d765fc9d0490b9134b",
   "baselineExtractionCoverage": {
     "checks": {
       "physical": 300,
@@ -8972,5 +8972,5 @@
       "finalProvider": "202607270000_reflab_canonical_baseline.sql"
     }
   ],
-  "fingerprintHash": "e2cbcd2dec6dcfc5daceffe19fb492c0b74848aae228631209db4eea2fb8c45b"
+  "fingerprintHash": "b19fdd13b16905376d40887d2e0753119af0380340b35f2fda219e916326e928"
 }
