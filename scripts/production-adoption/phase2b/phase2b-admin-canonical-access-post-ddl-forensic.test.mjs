@@ -14,10 +14,13 @@ import {
   CANONICAL_JSONB_TEXT_ACL,
 } from "./phase2b-canonical-runtime-prerequisites-contract.mjs";
 import {
+  AdminCanonicalAccessForensicFailure,
   ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID,
   ADMIN_CANONICAL_ACCESS_FORENSIC_OPERATION,
   buildAdminCanonicalAccessForensicCatalogBatch,
   classifyAdminCanonicalAccessPostDdlForensic,
+  executeAdminCanonicalAccessForensicReadOnlyBatch,
+  formatAdminCanonicalAccessForensicFailure,
   runProductionAdminCanonicalAccessPostDdlForensic,
   runProductionAdminCanonicalAccessPostDdlForensicCli,
 } from "./run-production-phase2b-admin-canonical-access-post-ddl-forensic.mjs";
@@ -227,7 +230,9 @@ test("runner enforces exact operation before any read-only query", () => {
   assert.throws(() => runProductionAdminCanonicalAccessPostDdlForensic({}, {
     argument: "wrong",
     executeReadOnly: () => { calls += 1; return new Map(); },
-  }), /EXACT_202608110001_POST_DDL_FORENSIC_ARGUMENT_REQUIRED/);
+  }), (error) => error instanceof AdminCanonicalAccessForensicFailure
+    && error.stage === "OPERATION_GUARD"
+    && error.reason === "OPERATION_NOT_AUTHORIZED");
   assert.equal(calls, 0);
   assert.equal(ADMIN_CANONICAL_ACCESS_FORENSIC_OPERATION,
     "--production-phase2b-admin-canonical-access-post-ddl-forensic");
@@ -240,15 +245,78 @@ test("runner rejects inherited PostgreSQL state before any read-only query", () 
   }, {
     argument: ADMIN_CANONICAL_ACCESS_FORENSIC_OPERATION,
     executeReadOnly: () => { calls += 1; return new Map(); },
-  }), /inherited PostgreSQL/i);
+  }), (error) => error instanceof AdminCanonicalAccessForensicFailure
+    && error.stage === "ENVIRONMENT_GUARD"
+    && error.reason === "INHERITED_PG_STATE");
   assert.equal(calls, 0);
 });
 
 test("forensic catalog query uses only safe catalog metadata", () => {
   assert.equal(ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID,
     "phase2b_admin_canonical_access_forensic_catalog");
-  assert.doesNotMatch(source, /source_base64[^\n]*JSON\.stringify|password|DB_URL/);
+  assert.doesNotMatch(source, /source_base64[^\n]*JSON\.stringify/);
+  assert.doesNotMatch(source, /JSON\.stringify\((?:process\.env|environment|connectionEnvironment)\)/);
+  assert.doesNotMatch(source, /\$\{(?:processEvidence\.)?stderr\}/);
   assert.doesNotMatch(source, /select\s+\*\s+from\s+public\./i);
+});
+
+test("SQLSTATE failures preserve only bounded process evidence", () => {
+  assert.throws(() => executeAdminCanonicalAccessForensicReadOnlyBatch(
+    buildAdminCanonicalAccessForensicCatalogBatch(), {}, {
+      context: { stage: "PSQL_EXECUTION", substage: "FORENSIC_CATALOG_BATCH",
+        queryId: ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID },
+      spawn: () => ({ status: 1, stdout: "", stderr: "ERROR:  42501: permission denied" }),
+    },
+  ), (error) => error instanceof AdminCanonicalAccessForensicFailure
+    && error.stage === "PSQL_EXECUTION"
+    && error.reason === "SQLSTATE_42501"
+    && error.sqlstate === "42501"
+    && error.psqlExitStatus === 1
+    && error.stderrClass === "SQLSTATE_ERROR");
+});
+
+test("psql spawn failures retain PSQL_NOT_FOUND without command or environment output", () => {
+  const spawnError = Object.assign(new Error("spawn psql ENOENT"), { code: "ENOENT" });
+  assert.throws(() => executeAdminCanonicalAccessForensicReadOnlyBatch(
+    buildAdminCanonicalAccessForensicCatalogBatch(), {}, {
+      context: { stage: "PSQL_EXECUTION", substage: "FORENSIC_CATALOG_BATCH",
+        queryId: ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID },
+      spawn: () => ({ status: null, stdout: "", stderr: "", error: spawnError }),
+    },
+  ), (error) => error instanceof AdminCanonicalAccessForensicFailure
+    && error.reason === "PSQL_NOT_FOUND"
+    && error.psqlExitStatus === null
+    && error.stderrClass === "PROCESS_SPAWN_ERROR");
+});
+
+test("malformed framed output is classified as a parser/result-shape failure", () => {
+  assert.throws(() => executeAdminCanonicalAccessForensicReadOnlyBatch(
+    buildAdminCanonicalAccessForensicCatalogBatch(), {}, {
+      context: { stage: "PSQL_EXECUTION", substage: "FORENSIC_CATALOG_BATCH",
+        queryId: ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID },
+      spawn: () => ({ status: 0, stderr: "",
+        stdout: `REFLAB_PREFLIGHT_V1\t${ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID}\tnot-base64\n` }),
+    },
+  ), (error) => error instanceof AdminCanonicalAccessForensicFailure
+    && error.stage === "RESULT_PARSE"
+    && error.reason === "QUERY_RESULT_SHAPE_MISMATCH"
+    && error.queryId === ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID
+    && error.psqlExitStatus === 0);
+});
+
+test("missing expected query IDs fail with the exact safe query name", () => {
+  const head = "a".repeat(40);
+  assert.throws(() => runProductionAdminCanonicalAccessPostDdlForensic({
+    REFLAB_PRODUCTION_PRIVILEGED_READ_ONLY_APPROVED_HEAD: head,
+  }, {
+    argument: ADMIN_CANONICAL_ACCESS_FORENSIC_OPERATION,
+    git: (args) => args[0] === "rev-parse" ? head : "",
+    authorize: () => ({ connectionEnvironment: {} }),
+    executeReadOnly: () => new Map(),
+  }), (error) => error instanceof AdminCanonicalAccessForensicFailure
+    && error.stage === "RESULT_PARSE"
+    && error.reason === "QUERY_RESULT_SHAPE_MISMATCH"
+    && error.queryId === installerIdentityQuery.id);
 });
 
 test("CLI failure output is bounded and never exposes connection material", async () => {
@@ -259,11 +327,35 @@ test("CLI failure output is bounded and never exposes connection material", asyn
     writeStderr: (value) => { stderr += value; },
   });
   assert.equal(exitCode, 1);
-  assert.equal(stderr, [
-    "REFLAB_202608110001_POST_DDL_FORENSIC_FAIL",
-    "stage=READ_ONLY_FORENSIC",
-    "reason=READ_ONLY_FORENSIC_ABORTED",
-    "",
-  ].join("\n"));
+  assert.match(stderr, /^REFLAB_202608110001_POST_DDL_FORENSIC_FAIL\n/);
+  assert.match(stderr, /stage=OTHER/);
+  assert.match(stderr, /reason=PSQL_PROCESS_FAILED/);
+  assert.match(stderr, /sqlstate=UNKNOWN/);
+  assert.match(stderr, /psqlExitStatus=UNKNOWN/);
   assert.doesNotMatch(stderr, /password|postgresql:|example\.invalid/i);
+});
+
+test("failure formatter rejects secret-bearing structured fields", () => {
+  const output = formatAdminCanonicalAccessForensicFailure(
+    new AdminCanonicalAccessForensicFailure("postgresql://unsafe", "secret", "password", {
+      queryId: "postgresql://unsafe", stderrClass: "secret",
+    }),
+  );
+  assert.doesNotMatch(output, /unsafe|secret|password|postgresql:/i);
+  assert.match(output, /stage=OTHER/);
+  assert.match(output, /reason=PSQL_PROCESS_FAILED/);
+});
+
+test("CLI happy path remains unchanged", async () => {
+  let stdout = "";
+  let stderr = "";
+  const exitCode = await runProductionAdminCanonicalAccessPostDdlForensicCli({}, {
+    run: () => ({ format: "REFLAB_202608110001_POST_DDL_FORENSIC_V1",
+      classification: "A. POST_STATE_EXACT_DIAGNOSTIC_FALSE_NEGATIVE" }),
+    writeStdout: (value) => { stdout += value; },
+    writeStderr: (value) => { stderr += value; },
+  });
+  assert.equal(exitCode, 0);
+  assert.match(stdout, /POST_STATE_EXACT_DIAGNOSTIC_FALSE_NEGATIVE/);
+  assert.equal(stderr, "");
 });

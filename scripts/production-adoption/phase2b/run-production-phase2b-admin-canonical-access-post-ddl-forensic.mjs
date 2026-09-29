@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { buildSqlBatch, hashFunctionSource, jsonQuery } from "../../production-preflight/queries.mjs";
@@ -49,6 +49,219 @@ export const ADMIN_CANONICAL_ACCESS_FORENSIC_OPT_IN =
   "ALLOW_PRODUCTION_PHASE2B_ADMIN_CANONICAL_ACCESS_POST_DDL_FORENSIC";
 export const ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID =
   "phase2b_admin_canonical_access_forensic_catalog";
+
+const POST_CONTRACT_BATCH_QUERY_ID = "phase2b_admin_canonical_access_post_batch";
+const safeReasons = new Set([
+  "AUTHENTICATION_FAILED", "CONNECTION_FAILED", "DATABASE_UNAVAILABLE",
+  "DDL_CONFIGURATION_REJECTED", "HEAD_MISMATCH", "HOST_RESOLUTION_FAILED",
+  "INHERITED_PG_STATE", "JSON_PARSE_FAILED", "OPERATION_NOT_AUTHORIZED",
+  "LOCAL_PROGRAMMING_ERROR", "OPT_IN_REQUIRED", "OUTPUT_LIMIT_EXCEEDED",
+  "POST_CLASSIFICATION_FAILED",
+  "PSQL_NOT_FOUND", "PSQL_PROCESS_FAILED", "QUERY_RESULT_SHAPE_MISMATCH",
+  "READ_ONLY_GUARD_FAILED", "REPOSITORY_HEAD_READ_FAILED", "TARGET_MISMATCH",
+  "TIMEOUT", "TLS_FAILED", "WORKTREE_DIRTY", "WORKTREE_READ_FAILED",
+]);
+
+export class AdminCanonicalAccessForensicFailure extends Error {
+  constructor(stage, substage, reason, details = {}) {
+    super(`${stage}:${substage}:${reason}`);
+    this.stage = stage;
+    this.substage = substage;
+    this.reason = reason;
+    this.queryId = details.queryId ?? "NONE";
+    this.sqlstate = details.sqlstate ?? "UNKNOWN";
+    this.psqlExitStatus = Number.isInteger(details.psqlExitStatus)
+      ? details.psqlExitStatus : null;
+    this.stderrClass = details.stderrClass ?? "NOT_AVAILABLE";
+  }
+}
+
+function sqlstateFrom(value) {
+  return String(value ?? "").match(
+    /(?:ERROR|FATAL|PANIC):\s+([0-9A-Z]{5}):|SQLSTATE[_=:\s-]*([0-9A-Z]{5})/i,
+  )?.slice(1).find(Boolean)?.toUpperCase() ?? null;
+}
+
+function queryIdFrom(value) {
+  return String(value ?? "").match(/query\s+([a-z][a-z0-9_]*)/i)?.[1] ?? null;
+}
+
+function classifyProcessText(value, processEvidence = {}) {
+  const text = String(value ?? "");
+  const sqlstate = sqlstateFrom(text);
+  if (sqlstate) return { reason: `SQLSTATE_${sqlstate}`, sqlstate, stderrClass: "SQLSTATE_ERROR" };
+  if (processEvidence.errorCode === "ENOENT") {
+    return { reason: "PSQL_NOT_FOUND", sqlstate: null, stderrClass: "PROCESS_SPAWN_ERROR" };
+  }
+  if (processEvidence.errorCode === "ENOBUFS" || /maxbuffer|buffer limit/i.test(text)) {
+    return { reason: "OUTPUT_LIMIT_EXCEEDED", sqlstate: null, stderrClass: "PROCESS_BUFFER_ERROR" };
+  }
+  if (processEvidence.errorCode === "ETIMEDOUT" || /statement timeout|canceling statement due to statement timeout/i.test(text)) {
+    return { reason: "TIMEOUT", sqlstate: null, stderrClass: "TIMEOUT" };
+  }
+  if (/password authentication failed|no password supplied|authentication failed|sasl authentication/i.test(text)) {
+    return { reason: "AUTHENTICATION_FAILED", sqlstate: null, stderrClass: "AUTHENTICATION_ERROR" };
+  }
+  if (/could not translate host name|getaddrinfo|name or service not known|temporary failure in name resolution/i.test(text)) {
+    return { reason: "HOST_RESOLUTION_FAILED", sqlstate: null, stderrClass: "HOST_RESOLUTION_ERROR" };
+  }
+  if (/ssl|tls|certificate/i.test(text)) {
+    return { reason: "TLS_FAILED", sqlstate: null, stderrClass: "TLS_ERROR" };
+  }
+  if (/database .* does not exist|invalid catalog name/i.test(text)) {
+    return { reason: "DATABASE_UNAVAILABLE", sqlstate: null, stderrClass: "DATABASE_ERROR" };
+  }
+  if (/connection to server|could not connect|connection refused|server closed the connection|network is unreachable/i.test(text)) {
+    return { reason: "CONNECTION_FAILED", sqlstate: null, stderrClass: "CONNECTION_ERROR" };
+  }
+  return { reason: "PSQL_PROCESS_FAILED", sqlstate: null, stderrClass: "UNCLASSIFIED_PROCESS_ERROR" };
+}
+
+export function classifyAdminCanonicalAccessForensicFailure(error, context = {}, processEvidence = {}) {
+  if (error instanceof AdminCanonicalAccessForensicFailure) return error;
+  const message = String(error?.message ?? error ?? "");
+  const combinedProcessText = [processEvidence.stderr, processEvidence.errorMessage, message]
+    .filter(Boolean).join("\n");
+  const baseDetails = {
+    queryId: error?.queryId ?? queryIdFrom(message) ?? context.queryId ?? "NONE",
+    psqlExitStatus: processEvidence.exitStatus,
+  };
+  if (error instanceof SyntaxError) {
+    return new AdminCanonicalAccessForensicFailure(
+      context.stage ?? "RESULT_PARSE", context.substage ?? "JSON_RESULT",
+      "JSON_PARSE_FAILED", baseDetails,
+    );
+  }
+  if (error?.safeReason && safeReasons.has(error.safeReason)) {
+    return new AdminCanonicalAccessForensicFailure(
+      context.stage ?? "OTHER", context.substage ?? "UNKNOWN", error.safeReason,
+      { ...baseDetails, stderrClass: error.stderrClass },
+    );
+  }
+  if (/invalid result frame|missing required query result|expected a Map/i.test(message)) {
+    return new AdminCanonicalAccessForensicFailure(
+      "RESULT_PARSE", context.substage ?? "QUERY_RESULTS",
+      "QUERY_RESULT_SHAPE_MISMATCH", baseDetails,
+    );
+  }
+  if (/transaction_read_only was not confirmed as on/i.test(message)) {
+    return new AdminCanonicalAccessForensicFailure(
+      "READ_ONLY_GUARD", context.substage ?? "TRANSACTION_READ_ONLY",
+      "READ_ONLY_GUARD_FAILED", baseDetails,
+    );
+  }
+  if (context.stage === "PSQL_EXECUTION" || processEvidence.spawnAttempted) {
+    const classified = classifyProcessText(combinedProcessText, processEvidence);
+    return new AdminCanonicalAccessForensicFailure(
+      "PSQL_EXECUTION", context.substage ?? "UNKNOWN", classified.reason,
+      { ...baseDetails, sqlstate: classified.sqlstate, stderrClass: classified.stderrClass },
+    );
+  }
+  const localReason = [
+    [/exact operation/i, "OPERATION_NOT_AUTHORIZED"],
+    [/inherited PostgreSQL/i, "INHERITED_PG_STATE"],
+    [/clean worktree/i, "WORKTREE_DIRTY"],
+    [/HEAD attestation/i, "HEAD_MISMATCH"],
+    [/REJECTS_DDL_CONFIGURATION/i, "DDL_CONFIGURATION_REJECTED"],
+    [/NOT_AUTHORIZED/i, "OPT_IN_REQUIRED"],
+    [/TARGET_REJECTED|project reference|target is not the exact allowlisted host|database URL is invalid/i,
+      "TARGET_MISMATCH"],
+  ].find(([pattern]) => pattern.test(message))?.[1];
+  return new AdminCanonicalAccessForensicFailure(
+    context.stage ?? "OTHER", context.substage ?? "UNKNOWN",
+    localReason ?? context.reason ?? "PSQL_PROCESS_FAILED", baseDetails,
+  );
+}
+
+function atForensicStage(context, operation) {
+  try {
+    return operation();
+  } catch (error) {
+    throw classifyAdminCanonicalAccessForensicFailure(error, context);
+  }
+}
+
+function assertRequiredResults(results, queryIds, substage) {
+  if (!(results instanceof Map)) {
+    throw Object.assign(new Error("Expected a Map of framed query results."), {
+      safeReason: "QUERY_RESULT_SHAPE_MISMATCH",
+      queryId: substage,
+    });
+  }
+  for (const queryId of queryIds) {
+    if (!results.has(queryId)) {
+      throw Object.assign(new Error(`Missing required query result ${queryId}.`), {
+        safeReason: "QUERY_RESULT_SHAPE_MISMATCH",
+        queryId,
+      });
+    }
+  }
+  return results;
+}
+
+export function executeAdminCanonicalAccessForensicReadOnlyBatch(
+  sql,
+  connectionEnvironment,
+  { processEnvironment = process.env, spawn = spawnSync, context = {} } = {},
+) {
+  const evidence = {
+    spawnAttempted: false,
+    exitStatus: null,
+    errorCode: null,
+    errorMessage: "",
+    stderr: "",
+  };
+  const capturingSpawn = (command, args, options) => {
+    evidence.spawnAttempted = true;
+    let result;
+    try {
+      result = spawn(command, [...args, "--set", "VERBOSITY=verbose"], options);
+    } catch (error) {
+      evidence.errorCode = error?.code ?? null;
+      evidence.errorMessage = String(error?.message ?? "");
+      throw error;
+    }
+    evidence.exitStatus = Number.isInteger(result?.status) ? result.status : null;
+    evidence.errorCode = result?.error?.code ?? null;
+    evidence.errorMessage = String(result?.error?.message ?? "");
+    evidence.stderr = String(result?.stderr ?? "");
+    return result;
+  };
+  try {
+    return executeReadOnlyBatch(sql, connectionEnvironment, {
+      processEnvironment,
+      spawn: capturingSpawn,
+    });
+  } catch (error) {
+    throw classifyAdminCanonicalAccessForensicFailure(error, context, evidence);
+  }
+}
+
+export function formatAdminCanonicalAccessForensicFailure(error) {
+  const failure = classifyAdminCanonicalAccessForensicFailure(error, {
+    stage: "OTHER", substage: "UNCLASSIFIED", reason: "PSQL_PROCESS_FAILED",
+  });
+  const stage = /^[A-Z][A-Z0-9_]*$/.test(failure.stage) ? failure.stage : "OTHER";
+  const substage = /^[A-Z][A-Z0-9_]*$/.test(failure.substage)
+    ? failure.substage : "UNCLASSIFIED";
+  const queryId = /^[a-z][a-z0-9_]*$/.test(failure.queryId) ? failure.queryId : "NONE";
+  const sqlstate = /^[0-9A-Z]{5}$/.test(failure.sqlstate) ? failure.sqlstate : "UNKNOWN";
+  const reason = safeReasons.has(failure.reason) || /^SQLSTATE_[0-9A-Z]{5}$/.test(failure.reason)
+    ? failure.reason : "PSQL_PROCESS_FAILED";
+  const stderrClass = /^[A-Z][A-Z0-9_]*$/.test(failure.stderrClass)
+    ? failure.stderrClass : "NOT_AVAILABLE";
+  return [
+    "REFLAB_202608110001_POST_DDL_FORENSIC_FAIL",
+    `stage=${stage}`,
+    `substage=${substage}`,
+    `query=${queryId}`,
+    `reason=${reason}`,
+    `sqlstate=${sqlstate}`,
+    `psqlExitStatus=${failure.psqlExitStatus ?? "UNKNOWN"}`,
+    `stderrClass=${stderrClass}`,
+    "",
+  ].join("\n");
+}
 
 export const adminCanonicalAccessForensicCatalogQuery = jsonQuery(
   ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID,
@@ -357,32 +570,86 @@ export function runProductionAdminCanonicalAccessPostDdlForensic(
   environment = process.env,
   dependencies = {},
 ) {
-  if (dependencies.argument !== ADMIN_CANONICAL_ACCESS_FORENSIC_OPERATION) {
-    throw new Error("EXACT_202608110001_POST_DDL_FORENSIC_ARGUMENT_REQUIRED");
-  }
-  assertNoInheritedPgState(environment);
+  atForensicStage({
+    stage: "OPERATION_GUARD", substage: "ARGUMENT", reason: "OPERATION_NOT_AUTHORIZED",
+  }, () => {
+    if (dependencies.argument !== ADMIN_CANONICAL_ACCESS_FORENSIC_OPERATION) {
+      throw new Error("EXACT_202608110001_POST_DDL_FORENSIC_ARGUMENT_REQUIRED");
+    }
+  });
+  atForensicStage({
+    stage: "ENVIRONMENT_GUARD", substage: "INHERITED_PG_STATE", reason: "INHERITED_PG_STATE",
+  }, () => assertNoInheritedPgState(environment));
   const git = dependencies.git ?? ((args) => execFileSync("git", args, {
     cwd: root,
     encoding: "utf8",
     windowsHide: true,
   }));
-  assertRepositoryAttestation({
+  const actualHead = atForensicStage({
+    stage: "REPOSITORY_GUARD", substage: "HEAD_READ", reason: "REPOSITORY_HEAD_READ_FAILED",
+  }, () => git(["rev-parse", "HEAD"]).trim());
+  const status = atForensicStage({
+    stage: "REPOSITORY_GUARD", substage: "WORKTREE_READ", reason: "WORKTREE_READ_FAILED",
+  }, () => git(["status", "--short"]));
+  atForensicStage({
+    stage: "REPOSITORY_GUARD", substage: "ATTESTATION", reason: "HEAD_MISMATCH",
+  }, () => assertRepositoryAttestation({
     expectedHead: environment[PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_APPROVED_HEAD],
-    actualHead: git(["rev-parse", "HEAD"]).trim(),
-    status: git(["status", "--short"]),
+    actualHead,
+    status,
+  }));
+  const target = atForensicStage({
+    stage: "TARGET_GUARD", substage: "PRIVILEGED_READ_ONLY_TARGET", reason: "TARGET_MISMATCH",
+  }, () => (dependencies.authorize
+    ?? authorizeProductionAdminCanonicalAccessForensicTarget)(environment));
+  const executeReadOnly = dependencies.executeReadOnly
+    ?? executeAdminCanonicalAccessForensicReadOnlyBatch;
+  const execute = (batch, context) => atForensicStage(context, () => executeReadOnly(
+    batch,
+    target.connectionEnvironment,
+    { processEnvironment: environment, spawn: dependencies.spawn ?? spawnSync, context },
+  ));
+  const postBatch = atForensicStage({
+    stage: "SQL_BUILD", substage: "POST_CONTRACT_BATCH",
+    queryId: POST_CONTRACT_BATCH_QUERY_ID, reason: "LOCAL_PROGRAMMING_ERROR",
+  }, () => buildAdminCanonicalAccessPostBatch());
+  const postResults = execute(postBatch, {
+    stage: "PSQL_EXECUTION", substage: "POST_CONTRACT_BATCH",
+    queryId: POST_CONTRACT_BATCH_QUERY_ID,
   });
-  const target = (dependencies.authorize
-    ?? authorizeProductionAdminCanonicalAccessForensicTarget)(environment);
-  const executeReadOnly = dependencies.executeReadOnly ?? executeReadOnlyBatch;
-  const execute = (batch) => executeReadOnly(
-    batch, target.connectionEnvironment, { processEnvironment: environment },
-  );
-  const postResults = execute(buildAdminCanonicalAccessPostBatch());
-  const catalogResults = execute(buildAdminCanonicalAccessForensicCatalogBatch());
-  return classifyAdminCanonicalAccessPostDdlForensic(
+  atForensicStage({
+    stage: "RESULT_PARSE", substage: "POST_CONTRACT_RESULTS",
+    queryId: POST_CONTRACT_BATCH_QUERY_ID, reason: "QUERY_RESULT_SHAPE_MISMATCH",
+  }, () => assertRequiredResults(postResults, [
+    installerIdentityQuery.id,
+    phase1ProductFingerprintQuery.id,
+    phase2aSemanticAuditPostQuery.id,
+    ADMIN_CANONICAL_ACCESS_POST_QUERY_ID,
+  ], POST_CONTRACT_BATCH_QUERY_ID));
+  const catalogBatch = atForensicStage({
+    stage: "SQL_BUILD", substage: "FORENSIC_CATALOG_BATCH",
+    queryId: ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID,
+    reason: "LOCAL_PROGRAMMING_ERROR",
+  }, () => buildAdminCanonicalAccessForensicCatalogBatch());
+  const catalogResults = execute(catalogBatch, {
+    stage: "PSQL_EXECUTION", substage: "FORENSIC_CATALOG_BATCH",
+    queryId: ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID,
+  });
+  atForensicStage({
+    stage: "RESULT_PARSE", substage: "FORENSIC_CATALOG_RESULTS",
+    queryId: ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID,
+    reason: "QUERY_RESULT_SHAPE_MISMATCH",
+  }, () => assertRequiredResults(catalogResults,
+    [ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID],
+    ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID));
+  return atForensicStage({
+    stage: "CLASSIFICATION", substage: "POST_DDL_COMPARISON",
+    queryId: ADMIN_CANONICAL_ACCESS_POST_QUERY_ID,
+    reason: "POST_CLASSIFICATION_FAILED",
+  }, () => classifyAdminCanonicalAccessPostDdlForensic(
     postResults,
     catalogResults.get(ADMIN_CANONICAL_ACCESS_FORENSIC_CATALOG_QUERY_ID),
-  );
+  ));
 }
 
 export async function runProductionAdminCanonicalAccessPostDdlForensicCli(
@@ -397,17 +664,21 @@ export async function runProductionAdminCanonicalAccessPostDdlForensicCli(
         ...dependencies,
         argument,
       });
-    (dependencies.writeStdout ?? process.stdout.write.bind(process.stdout))(
-      `${JSON.stringify(result, null, 2)}\n`,
-    );
+    let serialized;
+    try {
+      serialized = `${JSON.stringify(result, null, 2)}\n`;
+    } catch (error) {
+      throw classifyAdminCanonicalAccessForensicFailure(error, {
+        stage: "OUTPUT_SERIALIZATION", substage: "JSON_STRINGIFY",
+        reason: "JSON_PARSE_FAILED",
+      });
+    }
+    (dependencies.writeStdout ?? process.stdout.write.bind(process.stdout))(serialized);
     return 0;
-  } catch {
-    (dependencies.writeStderr ?? process.stderr.write.bind(process.stderr))([
-      "REFLAB_202608110001_POST_DDL_FORENSIC_FAIL",
-      "stage=READ_ONLY_FORENSIC",
-      "reason=READ_ONLY_FORENSIC_ABORTED",
-      "",
-    ].join("\n"));
+  } catch (error) {
+    (dependencies.writeStderr ?? process.stderr.write.bind(process.stderr))(
+      formatAdminCanonicalAccessForensicFailure(error),
+    );
     return 1;
   }
 }
