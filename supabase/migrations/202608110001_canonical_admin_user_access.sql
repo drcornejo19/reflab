@@ -559,6 +559,20 @@ begin
 end
 $function$;
 
+revoke all on function
+  public.admin_set_canonical_user_plan(text, text, text, text)
+from public, anon, authenticated, service_role;
+revoke all on function
+  public.admin_set_canonical_global_role(text, text, text, text)
+from public, anon, authenticated, service_role;
+
+grant execute on function
+  public.admin_set_canonical_user_plan(text, text, text, text)
+to service_role;
+grant execute on function
+  public.admin_set_canonical_global_role(text, text, text, text)
+to service_role;
+
 grant create on schema public to reflab_rls_owner;
 alter function public.admin_set_canonical_user_plan(text, text, text, text)
   owner to reflab_rls_owner;
@@ -578,20 +592,6 @@ begin
   end if;
 end
 $ownership_postflight$;
-
-revoke all on function
-  public.admin_set_canonical_user_plan(text, text, text, text)
-from public, anon, authenticated, service_role;
-revoke all on function
-  public.admin_set_canonical_global_role(text, text, text, text)
-from public, anon, authenticated, service_role;
-
-grant execute on function
-  public.admin_set_canonical_user_plan(text, text, text, text)
-to service_role;
-grant execute on function
-  public.admin_set_canonical_global_role(text, text, text, text)
-to service_role;
 
 notify pgrst, 'reload schema';
 
