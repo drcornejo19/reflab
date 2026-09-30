@@ -41,7 +41,7 @@ import {
 
 const head = "a".repeat(40);
 const username = `postgres.${PRODUCTION_PROJECT_REF}`;
-const expectedDdlRunnerSha256 = "7a02e6f06fb039f226ffb52b4d57cc433f55622553960ab59c4af79f6fe4c828";
+const expectedDdlRunnerSha256 = "ddde1d1e77fc8d3f20b0db80b042fa7fcb9d2aadb9e6d5c16e045e5cff840aa9";
 
 const baseProviderState = Object.freeze(Object.fromEntries(
   PRE_PHASE2B_PROVIDER_STATE_CHECKS.map((name) => [name, true]),

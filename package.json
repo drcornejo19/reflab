@@ -75,6 +75,7 @@
     "test:production-adoption:phase2b-admin-canonical-access-post-ddl-forensic": "node --test scripts/production-adoption/phase2b/phase2b-admin-canonical-access-post-ddl-forensic.test.mjs",
     "run:production-pre-phase2b-adoption-prerequisite": "node scripts/production-adoption/phase2b/run-production-pre-phase2b-adoption-prerequisite.mjs --production-pre-phase2b-adoption-prerequisite",
     "test:production-adoption:pre-phase2b-prerequisite": "node --test scripts/production-adoption/phase2b/pre-phase2b-adoption-prerequisite.test.mjs",
+    "test:production-adoption:pre-phase2b-prerequisite:postgres": "node scripts/production-adoption/phase2b/run-pre-phase2b-execution-gate-postgres.mjs",
     "attest:production-pre-phase2b-diagnostic": "node scripts/production-adoption/phase2b/run-production-pre-phase2b-read-only-diagnostic.mjs --production-pre-phase2b-read-only-diagnostic",
     "test:production-adoption:pre-phase2b-diagnostic": "node --test scripts/production-adoption/phase2b/pre-phase2b-read-only-diagnostic.test.mjs",
     "test:production-adoption:phase3": "node --test scripts/production-adoption/phase3/phase3-security.test.mjs",

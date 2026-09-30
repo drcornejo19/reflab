@@ -196,22 +196,45 @@ export const canonicalRuntimePrerequisitesPostQuery = stateQuery(
 function aclKey(value) {
   return [value?.grantee,value?.grantor,value?.privilege_type,value?.is_grantable].join("\u0000");
 }
+
+export function classifyCanonicalJsonbTextProvider(payload) {
+  const checks = payload?.checks;
+  const requiredChecks = [
+    "canonicalJsonbTextStateExact",
+    "canonicalJsonbTextAclExact",
+    "canonicalJsonbTextRelationDependenciesAbsent",
+  ];
+  if (!checks || !requiredChecks.every((name) => typeof checks[name] === "boolean")
+      || typeof payload?.source_base64 !== "string" || !Array.isArray(payload?.acl)) {
+    return { classification: "UNKNOWN" };
+  }
+  let sourceHashExact = false;
+  try {
+    sourceHashExact = hashFunctionSource(Buffer.from(payload.source_base64,"base64").toString("utf8"))
+      === CANONICAL_JSONB_TEXT_SOURCE_SHA256;
+  } catch {}
+  const aclExact = payload.acl.length === expectedAcl.length
+    && new Set(payload.acl.map(aclKey)).size === expectedAcl.length
+    && expectedAcl.every((entry) => payload.acl.some((observed) => aclKey(observed) === aclKey(entry)));
+  const exact = requiredChecks.every((name) => checks[name] === true)
+    && sourceHashExact && aclExact;
+  return {
+    classification: exact ? "EXACT" : "BLOCKER",
+    checks: { ...checks, sourceHashExact, aclExact },
+  };
+}
+
 export function classifyCanonicalRuntimePrerequisitesState(payload, { post = false } = {}) {
   const checks = payload?.checks;
   if (!checks || !CANONICAL_RUNTIME_PREREQUISITES_CHECKS.every((name) => typeof checks[name] === "boolean")
       || !payload?.counts || !Array.isArray(payload?.acl)) return { classification: "UNKNOWN" };
-  let sourceHashExact = !post;
-  if (post && typeof payload.source_base64 === "string") {
-    try {
-      sourceHashExact = hashFunctionSource(Buffer.from(payload.source_base64,"base64").toString("utf8"))
-        === CANONICAL_JSONB_TEXT_SOURCE_SHA256;
-    } catch { sourceHashExact = false; }
-  }
-  const aclExact = !post || (payload.acl.length === expectedAcl.length
-    && new Set(payload.acl.map(aclKey)).size === expectedAcl.length
-    && expectedAcl.every((entry) => payload.acl.some((observed) => aclKey(observed) === aclKey(entry))));
+  const provider = post
+    ? classifyCanonicalJsonbTextProvider(payload)
+    : { classification: "NOT_APPLICABLE", checks: { sourceHashExact: true, aclExact: true } };
+  const sourceHashExact = provider.checks?.sourceHashExact === true;
+  const aclExact = provider.checks?.aclExact === true;
   const exact = CANONICAL_RUNTIME_PREREQUISITES_CHECKS.every((name) => checks[name] === true)
-    && sourceHashExact && aclExact
+    && (!post || provider.classification === "EXACT")
     && payload.counts.attempts === 37 && payload.counts.exam_results === 6
     && payload.counts.notification_events === 60 && payload.counts.ledger === 3
     && payload.counts.schema_state === 0;

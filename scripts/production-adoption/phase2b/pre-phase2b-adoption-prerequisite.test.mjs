@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -11,12 +12,31 @@ import {
   ROLE_BOOTSTRAP_SEMANTIC_AUDIT_OWNER_ATTRIBUTES,
 } from "../bootstrap/production-role-bootstrap-contract.mjs";
 import { INSTALLER_IDENTITY_QUERY_ID } from "../bootstrap/run-production-installer-identity-attestation.mjs";
+import { phase1ProductFingerprintQuery } from "../bootstrap/phase1-foundation-ddl-contract.mjs";
 import {
   PRODUCTION_DDL_APPROVED_HEAD,
   PRODUCTION_DDL_DATABASE_URL,
   PRODUCTION_DDL_OPT_IN,
   PRODUCTION_DDL_PROJECT_REF,
 } from "../bootstrap/run-production-role-bootstrap.mjs";
+import {
+  PHASE2A_SEMANTIC_AUDIT_POST_CHECKS,
+  phase2aSemanticAuditPostQuery,
+} from "../phase2a/phase2a-semantic-audit-ddl-contract.mjs";
+import {
+  ADMIN_CANONICAL_ACCESS_CHECKS,
+  ADMIN_CANONICAL_ACCESS_COLUMN_ACL,
+  ADMIN_CANONICAL_ACCESS_FUNCTIONS,
+  ADMIN_CANONICAL_ACCESS_FUNCTION_ACL,
+  ADMIN_CANONICAL_ACCESS_POLICIES,
+  ADMIN_CANONICAL_ACCESS_POST_QUERY_ID,
+  ADMIN_CANONICAL_ACCESS_SCHEMA_ACL,
+} from "./phase2b-admin-canonical-access-contract.mjs";
+import {
+  CANONICAL_JSONB_TEXT_ACL,
+  CANONICAL_RUNTIME_PREREQUISITES_CHECKS,
+  CANONICAL_RUNTIME_PREREQUISITES_POST_QUERY_ID,
+} from "./phase2b-canonical-runtime-prerequisites-contract.mjs";
 import {
   LEADERBOARD_ACL_FINGERPRINT,
   LEADERBOARD_POST_COLUMN_FINGERPRINT,
@@ -38,6 +58,7 @@ import {
   assertPrePhase2bSessionPoolerTarget,
   buildPrePhase2bPostBatch,
   buildPrePhase2bPreBatch,
+  classifyPrePhase2bExecutionGate,
   runProductionPrePhase2bAdoptionPrerequisite,
 } from "./run-production-pre-phase2b-adoption-prerequisite.mjs";
 
@@ -46,6 +67,27 @@ const head = execFileSync("git", ["rev-parse", "HEAD"], {
   cwd: root, encoding: "utf8", windowsHide: true,
 }).trim();
 const sessionPoolerUsername = `postgres.${PRODUCTION_PROJECT_REF}`;
+const phase2aMigration = readFileSync(resolve(root,
+  "supabase/migrations/202608310004_production_adoption_semantic_audit.sql"), "utf8");
+const phase2aSource = phase2aMigration.match(
+  /as \$semantic_audit\$([\s\S]*?)\$semantic_audit\$;/i,
+)?.[1] ?? "";
+const helperMigration = readFileSync(resolve(root,
+  "supabase/migrations/202608310005_production_adoption_canonical_runtime_prerequisites.sql"), "utf8");
+const helperSource = helperMigration.match(/as \$function\$([\s\S]*?)\$function\$;/i)?.[1] ?? "";
+const adminMigration = readFileSync(resolve(root,
+  "supabase/migrations/202608110001_canonical_admin_user_access.sql"), "utf8");
+
+function adminFunctionSource(name) {
+  return adminMigration.match(new RegExp(
+    `create function public\\.${name}\\([\\s\\S]*?as \\$function\\$([\\s\\S]*?)\\$function\\$;`,
+    "i",
+  ))?.[1] ?? "";
+}
+
+function sha256File(path) {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
 
 function exactTarget() {
   return {
@@ -136,9 +178,161 @@ function statePayload(overrides = {}) {
   };
 }
 
-function results(queryId, payload = statePayload(), installer = installerPayload()) {
-  return new Map([[INSTALLER_IDENTITY_QUERY_ID, installer], [queryId, payload]]);
+function fingerprintPayload(overrides = {}) {
+  return { attempts: 37, exam_results: 6, notification_events: 60, ...overrides };
 }
+
+function sidecarPayload(overrides = {}) {
+  return {
+    caller: "postgres", session_user: "postgres", transaction_read_only: "on",
+    server_version_num: 170011,
+    checks: {
+      ...Object.fromEntries(PHASE2A_SEMANTIC_AUDIT_POST_CHECKS.map((name) => [name, true])),
+      phase2bAbsent: false,
+    },
+    counts: {
+      policies: 58, column_grants: 100, effective_select_columns: 100,
+      ledger_rows: 3, schema_state_rows: 0,
+    },
+    function_source_base64: Buffer.from(phase2aSource, "utf8").toString("base64"),
+    ...overrides,
+  };
+}
+
+function adminPostPayload(overrides = {}) {
+  return {
+    checks: Object.fromEntries(ADMIN_CANONICAL_ACCESS_CHECKS.map((name) => [name, true])),
+    helper_source_base64: Buffer.from(helperSource, "utf8").toString("base64"),
+    helper_acl: CANONICAL_JSONB_TEXT_ACL.map((entry) => ({ ...entry })),
+    functions: ADMIN_CANONICAL_ACCESS_FUNCTIONS.map((fn) => ({
+      name: fn.name,
+      identity_arguments: fn.identity_arguments,
+      result_type: "jsonb",
+      language_name: "plpgsql",
+      volatility: "v",
+      strict_mode: false,
+      security_definer: true,
+      leakproof: false,
+      function_kind: "f",
+      owner_name: "reflab_rls_owner",
+      configuration: ["search_path=pg_catalog"],
+      source_base64: Buffer.from(adminFunctionSource(fn.name), "utf8").toString("base64"),
+    })),
+    function_acl: ADMIN_CANONICAL_ACCESS_FUNCTION_ACL.map((entry) => ({ ...entry })),
+    policies: ADMIN_CANONICAL_ACCESS_POLICIES.map((entry) => ({ ...entry })),
+    schema_acl: ADMIN_CANONICAL_ACCESS_SCHEMA_ACL.map((entry) => ({ ...entry })),
+    table_acl: [],
+    column_acl: ADMIN_CANONICAL_ACCESS_COLUMN_ACL.map((entry) => ({ ...entry })),
+    counts: {
+      attempts: 37, exam_results: 6, notification_events: 60,
+      ledger: 3, schema_state: 0,
+    },
+    ...overrides,
+  };
+}
+
+function canonicalJsonbTextPayload(overrides = {}) {
+  return {
+    checks: {
+      ...Object.fromEntries(CANONICAL_RUNTIME_PREREQUISITES_CHECKS.map((name) => [name, true])),
+      adminProvidersAbsent: false,
+    },
+    source_base64: Buffer.from(helperSource, "utf8").toString("base64"),
+    acl: CANONICAL_JSONB_TEXT_ACL.map((entry) => ({ ...entry })),
+    counts: {
+      attempts: 37, exam_results: 6, notification_events: 60,
+      ledger: 3, schema_state: 0,
+    },
+    ...overrides,
+  };
+}
+
+function results(queryId, payload = statePayload(), installer = installerPayload(), exact = {}) {
+  return new Map([
+    [INSTALLER_IDENTITY_QUERY_ID, installer],
+    [phase1ProductFingerprintQuery.id, exact.fingerprint ?? fingerprintPayload()],
+    [phase2aSemanticAuditPostQuery.id, exact.sidecar ?? sidecarPayload()],
+    [CANONICAL_RUNTIME_PREREQUISITES_POST_QUERY_ID,
+      exact.canonicalJsonbText ?? canonicalJsonbTextPayload()],
+    [ADMIN_CANONICAL_ACCESS_POST_QUERY_ID, exact.admin ?? adminPostPayload()],
+    [queryId, payload],
+  ]);
+}
+
+const providerDriftCases = [
+  ["310005 wrong source hash", ({ canonicalJsonbText }) => {
+    canonicalJsonbText.source_base64 = Buffer.from("drift", "utf8").toString("base64");
+  }],
+  ["310005 wrong owner", ({ canonicalJsonbText }) => {
+    canonicalJsonbText.checks.canonicalJsonbTextStateExact = false;
+  }],
+  ["310005 wrong ACL", ({ canonicalJsonbText }) => {
+    canonicalJsonbText.acl = canonicalJsonbText.acl.filter((entry) => entry.grantee !== "service_role");
+  }],
+  ["310005 relation dependency drift", ({ canonicalJsonbText }) => {
+    canonicalJsonbText.checks.canonicalJsonbTextRelationDependenciesAbsent = false;
+  }],
+  ["admin function wrong source", ({ admin }) => {
+    admin.functions[0].source_base64 = Buffer.from("drift", "utf8").toString("base64");
+  }],
+  ["admin function wrong owner", ({ admin }) => {
+    admin.functions[0].owner_name = "postgres";
+  }],
+  ["admin function SECURITY DEFINER mismatch", ({ admin }) => {
+    admin.functions[0].security_definer = false;
+  }],
+  ["admin function search_path mismatch", ({ admin }) => {
+    admin.functions[0].configuration = ["search_path=public"];
+  }],
+  ["admin function unexpected PUBLIC EXECUTE", ({ admin }) => {
+    admin.function_acl.push({
+      routine: ADMIN_CANONICAL_ACCESS_FUNCTIONS[0].name,
+      grantee: "PUBLIC", grantor: "reflab_rls_owner",
+      privilege_type: "EXECUTE", is_grantable: false,
+    });
+  }],
+  ["admin function unexpected anon EXECUTE", ({ admin }) => {
+    admin.function_acl.push({
+      routine: ADMIN_CANONICAL_ACCESS_FUNCTIONS[0].name,
+      grantee: "anon", grantor: "reflab_rls_owner",
+      privilege_type: "EXECUTE", is_grantable: false,
+    });
+  }],
+  ["admin function unexpected authenticated EXECUTE", ({ admin }) => {
+    admin.function_acl.push({
+      routine: ADMIN_CANONICAL_ACCESS_FUNCTIONS[0].name,
+      grantee: "authenticated", grantor: "reflab_rls_owner",
+      privilege_type: "EXECUTE", is_grantable: false,
+    });
+  }],
+  ["admin function missing service_role EXECUTE", ({ admin }) => {
+    admin.function_acl = admin.function_acl.filter((entry) =>
+      !(entry.routine === ADMIN_CANONICAL_ACCESS_FUNCTIONS[0].name
+        && entry.grantee === "service_role"));
+  }],
+  ["admin policy drift", ({ admin }) => {
+    admin.policies.pop();
+  }],
+  ["admin schema ACL drift", ({ admin }) => {
+    admin.schema_acl[0].grantor = "postgres";
+  }],
+  ["admin column ACL drift", ({ admin }) => {
+    admin.column_acl.pop();
+  }],
+  ["admin unexpected table ACL", ({ admin }) => {
+    admin.table_acl.push({
+      schema_name: "public", table_name: "user_profiles",
+      grantee: "reflab_rls_owner", grantor: "postgres",
+      privilege_type: "SELECT", is_grantable: false,
+    });
+  }],
+  ["admin reflab_rls_owner CREATE gained", ({ admin }) => {
+    admin.checks.rlsOwnerCreateAbsent = false;
+  }],
+  ["Phase 2A exact sidecar drift", ({ sidecar }) => {
+    sidecar.checks.functionExecuteAclExact = false;
+  }],
+];
 
 test("migration is pinned and contains only the approved reconciliation", () => {
   const artifact = assertPrePhase2bArtifact(root);
@@ -175,6 +369,64 @@ test("pre/post attestations are fixed read-only batches", () => {
     assert.doesNotThrow(() => assertReadOnlyBatch(batch));
     assert.doesNotMatch(batch, /\bset\s+role\b|\bcreate\s+temp\b/i);
   }
+});
+
+test("pre-DDL evidence batch orders exact dependencies before the prerequisite state", () => {
+  const batch = buildPrePhase2bPreBatch();
+  const queryIds = [
+    INSTALLER_IDENTITY_QUERY_ID,
+    phase1ProductFingerprintQuery.id,
+    phase2aSemanticAuditPostQuery.id,
+    CANONICAL_RUNTIME_PREREQUISITES_POST_QUERY_ID,
+    ADMIN_CANONICAL_ACCESS_POST_QUERY_ID,
+    PRE_PHASE2B_PRE_QUERY_ID,
+  ];
+  const positions = queryIds.map((id) => batch.indexOf(id));
+  assert.ok(positions.every((position) => position >= 0));
+  assert.deepEqual([...positions].sort((left, right) => left - right), positions);
+  assert.equal(classifyPrePhase2bExecutionGate(
+    results(PRE_PHASE2B_PRE_QUERY_ID),
+  ).providers.classification, "EXACT");
+});
+
+for (const [name, mutate] of providerDriftCases) {
+  test(`${name} blocks before prerequisite DDL`, () => {
+    const exact = {
+      admin: structuredClone(adminPostPayload()),
+      canonicalJsonbText: structuredClone(canonicalJsonbTextPayload()),
+      sidecar: structuredClone(sidecarPayload()),
+    };
+    mutate(exact);
+    let migrations = 0;
+    assert.throws(() => runProductionPrePhase2bAdoptionPrerequisite(productionEnvironment(), {
+      argument: PRE_PHASE2B_OPERATION,
+      git: (args) => args[0] === "rev-parse" ? `${head}\n` : "",
+      authorize: () => exactTarget(),
+      executeReadOnly: () => results(
+        PRE_PHASE2B_PRE_QUERY_ID,
+        statePayload(),
+        installerPayload(),
+        exact,
+      ),
+      executeMigration: () => { migrations += 1; },
+    }), /PRE_DDL_CONTRACT_MISMATCH/);
+    assert.equal(migrations, 0);
+  });
+}
+
+test("provider migrations and the 202608110001 DDL runner remain byte-identical", () => {
+  assert.equal(sha256File(resolve(root,
+    "supabase/migrations/20260925150422_production_adoption_pre_phase2b_schema_reconciliation.sql")),
+  "01e2fc62eb0d851b4c4616c70b37ae544ae6ae54af36a3491d68fb5484a375fe");
+  assert.equal(sha256File(resolve(root,
+    "supabase/migrations/202608310005_production_adoption_canonical_runtime_prerequisites.sql")),
+  "66ee4c2ce2f849d4d3d1aa20bbf87c90e4ed6c97cd29eb86448be75660a822e9");
+  assert.equal(sha256File(resolve(root,
+    "supabase/migrations/202608110001_canonical_admin_user_access.sql")),
+  "0c8ea0383eb16bcef78b2252bd66682f9fbfa4b5dcea93d03807a1b91e6f8051");
+  assert.equal(sha256File(resolve(import.meta.dirname,
+    "run-production-phase2b-admin-canonical-access.mjs")),
+  "108be5302ef4816a1231b617ce6e53a2536447e6b9543b541e90543d00a43c67");
 });
 
 test("pre/post classifiers fail closed", () => {
@@ -325,4 +577,16 @@ test("PostgreSQL rehearsal pins every required negative and rollback class", () 
   for (const id of requiredCases) assert.match(source, new RegExp(`\\b${id}\\b`), id);
   assert.match(source, /if \(before !== after\).*rollback mismatch/i);
   assert.match(source, /expectedSqlstate:\s*"55P03"/);
+});
+
+test("dedicated PostgreSQL rehearsal exercises each exact provider family", () => {
+  const source = readFileSync(resolve(import.meta.dirname,
+    "run-pre-phase2b-execution-gate-postgres.mjs"), "utf8");
+  for (const id of ["phase2a_sidecar", "canonical_jsonb_text", "admin_canonical_access"]) {
+    assert.match(source, new RegExp(`\\b${id}\\b`), id);
+  }
+  assert.match(source, /classifyPrePhase2bExecutionGate/);
+  assert.match(source, /migrationCalls !== 0/);
+  assert.match(source, /PRE_DDL_CONTRACT_MISMATCH/);
+  assert.match(source, /residualTemporaryClusters:\s*0/);
 });

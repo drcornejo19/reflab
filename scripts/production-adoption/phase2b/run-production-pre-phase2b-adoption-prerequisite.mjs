@@ -20,6 +20,24 @@ import {
   installerIdentityQuery,
 } from "../bootstrap/run-production-installer-identity-attestation.mjs";
 import {
+  phase1HistoricalFingerprintExact,
+  phase1ProductFingerprintQuery,
+} from "../bootstrap/phase1-foundation-ddl-contract.mjs";
+import {
+  classifyPhase2aSemanticAuditPost,
+  phase2aSemanticAuditPostQuery,
+} from "../phase2a/phase2a-semantic-audit-ddl-contract.mjs";
+import {
+  ADMIN_CANONICAL_ACCESS_POST_QUERY_ID,
+  adminCanonicalAccessPostQuery,
+  classifyAdminCanonicalAccessState,
+} from "./phase2b-admin-canonical-access-contract.mjs";
+import {
+  CANONICAL_RUNTIME_PREREQUISITES_POST_QUERY_ID,
+  canonicalRuntimePrerequisitesPostQuery,
+  classifyCanonicalJsonbTextProvider,
+} from "./phase2b-canonical-runtime-prerequisites-contract.mjs";
+import {
   PRE_PHASE2B_FORMAT,
   PRE_PHASE2B_OPERATION,
   PRE_PHASE2B_OPT_IN,
@@ -58,18 +76,69 @@ function executeMigration(sql, connectionEnvironment, environment, spawn = spawn
 }
 
 export function buildPrePhase2bPreBatch() {
-  return buildSqlBatch([installerIdentityQuery, prePhase2bPreQuery]);
+  return buildSqlBatch([
+    installerIdentityQuery,
+    phase1ProductFingerprintQuery,
+    phase2aSemanticAuditPostQuery,
+    canonicalRuntimePrerequisitesPostQuery,
+    adminCanonicalAccessPostQuery,
+    prePhase2bPreQuery,
+  ]);
 }
 
 export function buildPrePhase2bPostBatch() {
   return buildSqlBatch([installerIdentityQuery, prePhase2bPostQuery]);
 }
 
-function classifyPre(results) {
+function classifyProviderDependencies(results) {
   const installer = classifyInstallerIdentity(results.get(installerIdentityQuery.id));
-  const adoption = classifyPrePhase2bPre(results.get(PRE_PHASE2B_PRE_QUERY_ID), installer);
-  if (adoption.classification !== "PASS") throw new Error("PRE_DDL_CONTRACT_MISMATCH");
-  return { installer, adoption };
+  const fingerprintExact = phase1HistoricalFingerprintExact(
+    results.get(phase1ProductFingerprintQuery.id),
+  );
+  const sidecarPayload = results.get(phase2aSemanticAuditPostQuery.id);
+  // Provider state is attested independently below; retain the authoritative sidecar identity checks.
+  const adjustedSidecar = {
+    ...sidecarPayload,
+    checks: { ...sidecarPayload?.checks, phase2bAbsent: true },
+  };
+  const sidecar = classifyPhase2aSemanticAuditPost(adjustedSidecar);
+  const canonicalJsonbText = classifyCanonicalJsonbTextProvider(
+    results.get(CANONICAL_RUNTIME_PREREQUISITES_POST_QUERY_ID),
+  );
+  const providers = classifyAdminCanonicalAccessState(
+    results.get(ADMIN_CANONICAL_ACCESS_POST_QUERY_ID),
+    { post: true },
+  );
+  const lifecycleExact = installer.managedProfile === "READY"
+    && installer.lifecycleState === "POST_PHASE2A_SEMANTIC_AUDIT";
+  return {
+    installer, fingerprintExact, sidecar, canonicalJsonbText, providers, lifecycleExact,
+  };
+}
+
+export function inspectPrePhase2bExecutionGate(results) {
+  const dependencies = classifyProviderDependencies(results);
+  const adoption = classifyPrePhase2bPre(
+    results.get(PRE_PHASE2B_PRE_QUERY_ID),
+    dependencies.installer,
+  );
+  return { ...dependencies, adoption };
+}
+
+export function classifyPrePhase2bExecutionGate(results) {
+  const inspection = inspectPrePhase2bExecutionGate(results);
+  if (!inspection.lifecycleExact || !inspection.fingerprintExact
+      || inspection.sidecar.postState !== "EXACT"
+      || inspection.canonicalJsonbText.classification !== "EXACT"
+      || inspection.providers.classification !== "EXACT"
+      || inspection.adoption.classification !== "PASS") {
+    throw new Error("PRE_DDL_CONTRACT_MISMATCH");
+  }
+  return inspection;
+}
+
+function classifyPre(results) {
+  return classifyPrePhase2bExecutionGate(results);
 }
 
 function classifyPost(results) {
