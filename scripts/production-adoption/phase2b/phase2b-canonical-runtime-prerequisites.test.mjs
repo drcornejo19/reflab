@@ -4,12 +4,14 @@ import { resolve } from "node:path";
 import test from "node:test";
 import {
   CANONICAL_JSONB_TEXT_ACL,
+  CANONICAL_JSONB_TEXT_TRAINING_ACL,
   CANONICAL_RUNTIME_PREREQUISITES_CHECKS,
   CANONICAL_RUNTIME_PREREQUISITES_OPERATION,
   CANONICAL_RUNTIME_PREREQUISITES_SHA256,
   assertCanonicalRuntimePrerequisitesArtifact,
   canonicalRuntimePrerequisitesPostQuery,
   canonicalRuntimePrerequisitesPreQuery,
+  classifyCanonicalJsonbTextProvider,
   classifyCanonicalRuntimePrerequisitesState,
 } from "./phase2b-canonical-runtime-prerequisites-contract.mjs";
 import {
@@ -77,6 +79,29 @@ test("source hash and exact ACL drift fail closed", () => {
   assert.equal(classifyCanonicalRuntimePrerequisitesState(sourceDrift, { post: true }).classification, "BLOCKER");
   const aclDrift = payload(true); aclDrift.acl.push({ grantee: "anon", grantor: "postgres", privilege_type: "EXECUTE", is_grantable: false });
   assert.equal(classifyCanonicalRuntimePrerequisitesState(aclDrift, { post: true }).classification, "BLOCKER");
+});
+
+test("post-Training helper preservation accepts only the reviewed owner dependency ACL extension", () => {
+  const value = payload(true);
+  value.checks.trainingProviderAbsent = false;
+  value.checks.canonicalPayloadHashAbsent = false;
+  value.checks.canonicalJsonbTextAclExact = false;
+  value.acl = CANONICAL_JSONB_TEXT_TRAINING_ACL.map((entry) => ({ ...entry }));
+  assert.equal(classifyCanonicalJsonbTextProvider(value).classification, "EXACT");
+
+  for (const mutate of [
+    (candidate) => candidate.acl.push({ grantee: "PUBLIC", grantor: "postgres",
+      privilege_type: "EXECUTE", is_grantable: false }),
+    (candidate) => candidate.acl.push({ grantee: "anon", grantor: "postgres",
+      privilege_type: "EXECUTE", is_grantable: false }),
+    (candidate) => { candidate.acl = candidate.acl.filter(({ grantee }) => grantee !== "service_role"); },
+    (candidate) => { candidate.acl.find(({ grantee }) => grantee === "reflab_rls_owner").is_grantable = true; },
+    (candidate) => { candidate.checks.canonicalJsonbTextStateExact = false; },
+  ]) {
+    const candidate = structuredClone(value);
+    mutate(candidate);
+    assert.equal(classifyCanonicalJsonbTextProvider(candidate).classification, "BLOCKER");
+  }
 });
 
 test("only the exact Session Pooler target is accepted", () => {

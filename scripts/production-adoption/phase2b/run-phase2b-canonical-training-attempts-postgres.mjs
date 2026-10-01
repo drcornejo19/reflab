@@ -128,11 +128,13 @@ export async function runCanonicalTrainingPostgres() {
       rollback;`), query.id);
     return JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
   }
-  function adminExact(value, { requireNoTableAcl }) {
+  function adminExact(value, { requireNoTableAcl, requireTrainingTableAcl = false }) {
     const checks = value.checks ?? {};
     return ["helperSourceExact", "helperAclExact", "functionsExact", "functionAclExact",
-      "policiesExact", "schemaAclExact", "columnAclExact"].every((name) => checks[name] === true)
-      && (!requireNoTableAcl || checks.tableAclExact === true);
+      "policiesExact", "schemaAclExact", "columnAclExact", "trainingStageExact"]
+      .every((name) => checks[name] === true)
+      && (!requireNoTableAcl || checks.tableAclExact === true)
+      && (!requireTrainingTableAcl || checks.tableAclExact === true);
   }
   function attestPre(database) {
     const installer = { managedProfile: "READY", lifecycleState: "POST_PHASE2A_SEMANTIC_AUDIT" };
@@ -165,9 +167,23 @@ export async function runCanonicalTrainingPostgres() {
   }
   function attestPost(database) {
     const postPayload = payload(database, canonicalTrainingPostQuery);
+    const helper = classifyCanonicalJsonbTextProvider(
+      payload(database, canonicalRuntimePrerequisitesPostQuery),
+    );
+    const admin = classifyAdminCanonicalAccessState(
+      payload(database, adminCanonicalAccessPostQuery), { post: true },
+    );
     const training = classifyCanonicalTrainingState(postPayload, { post: true });
-    if (training.classification !== "EXACT") {
+    const components = {
+      helper: helper.classification === "EXACT",
+      admin: adminExact(admin, { requireNoTableAcl: false, requireTrainingTableAcl: true }),
+      training: training.classification === "EXACT",
+    };
+    if (Object.values(components).some((value) => value !== true)) {
       throw new Error(`Canonical Training POST contract mismatch: ${JSON.stringify({
+        components,
+        helperChecks: helper.checks,
+        adminChecks: admin.checks,
         checks: training.checks,
         policies: postPayload.policies,
         rls: postPayload.rls,

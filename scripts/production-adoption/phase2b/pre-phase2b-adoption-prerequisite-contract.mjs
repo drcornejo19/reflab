@@ -56,6 +56,15 @@ export const PRE_PHASE2B_REQUIRED_CHECKS = Object.freeze([
   "phase2bEntryExact",
 ]);
 
+export const PRE_PHASE2B_ENTRY_ONLY_CHECKS = Object.freeze([
+  "providerStateExact",
+  "phase2bEntryExact",
+]);
+
+export const PRE_PHASE2B_PRESERVATION_CHECKS = Object.freeze(
+  PRE_PHASE2B_REQUIRED_CHECKS.filter((check) => !PRE_PHASE2B_ENTRY_ONLY_CHECKS.includes(check)),
+);
+
 export const PRE_PHASE2B_PROVIDER_STATE_PREDICATES = Object.freeze({
   canonicalJsonbTextPresent:
     "pg_catalog.to_regprocedure('reflab_private.canonical_jsonb_text(jsonb)') is not null",
@@ -296,4 +305,23 @@ export function classifyPrePhase2bPre(payload, installer) {
 
 export function classifyPrePhase2bPost(payload, installer) {
   return classify(payload, installer, "EXACT");
+}
+
+export function classifyPrePhase2bPreservation(payload) {
+  if (!complete(payload)) return { classification: "UNKNOWN" };
+  const exact = payload.caller === "postgres" && payload.session_user === "postgres"
+    && payload.transaction_read_only === "on"
+    && Math.trunc(payload.server_version_num / 10000) === 17
+    && PRE_PHASE2B_PRESERVATION_CHECKS.every((check) => payload.checks[check] === true)
+    && payload.counts.attempts === 37 && payload.counts.exam_results === 6
+    && payload.counts.notification_events === 60 && payload.counts.clips === 30
+    && payload.counts.score_non_null === 36 && payload.counts.score_null === 1
+    && payload.counts.training_duplicate_groups === 0;
+  return {
+    classification: exact ? "EXACT" : "BLOCKER",
+    checks: payload.checks,
+    entryOnlyChecks: Object.fromEntries(
+      PRE_PHASE2B_ENTRY_ONLY_CHECKS.map((check) => [check, payload.checks[check]]),
+    ),
+  };
 }

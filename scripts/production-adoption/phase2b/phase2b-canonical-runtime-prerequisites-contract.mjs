@@ -2,6 +2,10 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { hashFunctionSource, jsonQuery } from "../../production-preflight/queries.mjs";
+import {
+  TRAINING_STAGE_CANONICAL_JSONB_TEXT_ACL_EXTENSION,
+  classifyTrainingProviderStage,
+} from "./phase2b-training-stage-preservation-contract.mjs";
 
 export const CANONICAL_RUNTIME_PREREQUISITES_FORMAT =
   "REFLAB_PRODUCTION_PHASE2B_CANONICAL_RUNTIME_PREREQUISITES_V1";
@@ -51,6 +55,11 @@ export const CANONICAL_RUNTIME_PREREQUISITES_CHECKS = Object.freeze([
 const expectedAcl = Object.freeze([
   Object.freeze({ grantee: "postgres", grantor: "postgres", privilege_type: "EXECUTE", is_grantable: false }),
   Object.freeze({ grantee: "service_role", grantor: "postgres", privilege_type: "EXECUTE", is_grantable: false }),
+]);
+
+export const CANONICAL_JSONB_TEXT_TRAINING_ACL = Object.freeze([
+  ...expectedAcl,
+  ...TRAINING_STAGE_CANONICAL_JSONB_TEXT_ACL_EXTENSION,
 ]);
 
 function sha256(value) {
@@ -201,10 +210,10 @@ export function classifyCanonicalJsonbTextProvider(payload) {
   const checks = payload?.checks;
   const requiredChecks = [
     "canonicalJsonbTextStateExact",
-    "canonicalJsonbTextAclExact",
     "canonicalJsonbTextRelationDependenciesAbsent",
   ];
   if (!checks || !requiredChecks.every((name) => typeof checks[name] === "boolean")
+      || typeof checks.canonicalJsonbTextAclExact !== "boolean"
       || typeof payload?.source_base64 !== "string" || !Array.isArray(payload?.acl)) {
     return { classification: "UNKNOWN" };
   }
@@ -213,14 +222,30 @@ export function classifyCanonicalJsonbTextProvider(payload) {
     sourceHashExact = hashFunctionSource(Buffer.from(payload.source_base64,"base64").toString("utf8"))
       === CANONICAL_JSONB_TEXT_SOURCE_SHA256;
   } catch {}
-  const aclExact = payload.acl.length === expectedAcl.length
-    && new Set(payload.acl.map(aclKey)).size === expectedAcl.length
-    && expectedAcl.every((entry) => payload.acl.some((observed) => aclKey(observed) === aclKey(entry)));
+  const exactAcl = (expected) => payload.acl.length === expected.length
+    && new Set(payload.acl.map(aclKey)).size === expected.length
+    && expected.every((entry) => payload.acl.some((observed) => aclKey(observed) === aclKey(entry)));
+  const baseAclExact = exactAcl(expectedAcl);
+  const trainingAclExact = exactAcl(CANONICAL_JSONB_TEXT_TRAINING_ACL);
+  const stage = classifyTrainingProviderStage(checks);
+  const aclExact = stage === "PRE_TRAINING"
+    ? baseAclExact && checks.canonicalJsonbTextAclExact
+    : stage === "POST_TRAINING"
+      ? trainingAclExact && !checks.canonicalJsonbTextAclExact
+      : false;
   const exact = requiredChecks.every((name) => checks[name] === true)
     && sourceHashExact && aclExact;
   return {
     classification: exact ? "EXACT" : "BLOCKER",
-    checks: { ...checks, sourceHashExact, aclExact },
+    stage,
+    checks: {
+      ...checks,
+      sourceHashExact,
+      aclExact,
+      baseAclExact,
+      trainingAclExact,
+      trainingStageExact: stage === "PRE_TRAINING" || stage === "POST_TRAINING",
+    },
   };
 }
 

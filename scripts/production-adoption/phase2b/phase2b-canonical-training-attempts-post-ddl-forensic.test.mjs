@@ -23,10 +23,11 @@ import {
   ADMIN_CANONICAL_ACCESS_SCHEMA_ACL,
 } from "./phase2b-admin-canonical-access-contract.mjs";
 import {
-  CANONICAL_JSONB_TEXT_ACL,
+  CANONICAL_JSONB_TEXT_TRAINING_ACL,
   CANONICAL_RUNTIME_PREREQUISITES_CHECKS,
   CANONICAL_RUNTIME_PREREQUISITES_POST_QUERY_ID,
 } from "./phase2b-canonical-runtime-prerequisites-contract.mjs";
+import { TRAINING_STAGE_ADMIN_SCOPE_TABLE_ACL } from "./phase2b-training-stage-preservation-contract.mjs";
 import {
   CANONICAL_TRAINING_CHECK_EXPRESSION,
   CANONICAL_TRAINING_COLUMN_ACL,
@@ -127,24 +128,32 @@ function sidecarPayload() {
 }
 
 function helperPayload() {
+  const checks = Object.fromEntries(
+    CANONICAL_RUNTIME_PREREQUISITES_CHECKS.map((name) => [name, true]),
+  );
+  checks.adminProvidersAbsent = false;
+  checks.prerequisiteAbsent = false;
+  checks.trainingProviderAbsent = false;
+  checks.canonicalPayloadHashAbsent = false;
+  checks.canonicalJsonbTextAclExact = false;
   return {
-    checks: {
-      ...Object.fromEntries(CANONICAL_RUNTIME_PREREQUISITES_CHECKS.map((name) => [name, true])),
-      adminProvidersAbsent: false,
-    },
+    checks,
     source_base64: Buffer.from(helperSource, "utf8").toString("base64"),
-    acl: CANONICAL_JSONB_TEXT_ACL.map((entry) => ({ ...entry })),
+    acl: CANONICAL_JSONB_TEXT_TRAINING_ACL.map((entry) => ({ ...entry })),
     counts: { attempts: 37, exam_results: 6, notification_events: 60, ledger: 3, schema_state: 0 },
   };
 }
 
 function adminPayload() {
   const checks = Object.fromEntries(ADMIN_CANONICAL_ACCESS_CHECKS.map((name) => [name, true]));
+  checks.prerequisiteAbsent = false;
+  checks.trainingProviderAbsent = false;
+  checks.canonicalPayloadHashAbsent = false;
   checks.adminTablePrivilegesAbsent = false;
   return {
     checks,
     helper_source_base64: Buffer.from(helperSource, "utf8").toString("base64"),
-    helper_acl: CANONICAL_JSONB_TEXT_ACL.map((entry) => ({ ...entry })),
+    helper_acl: CANONICAL_JSONB_TEXT_TRAINING_ACL.map((entry) => ({ ...entry })),
     functions: ADMIN_CANONICAL_ACCESS_FUNCTIONS.map((fn) => ({
       name: fn.name, identity_arguments: fn.identity_arguments, result_type: "jsonb",
       language_name: "plpgsql", volatility: "v", strict_mode: false,
@@ -155,7 +164,7 @@ function adminPayload() {
     function_acl: ADMIN_CANONICAL_ACCESS_FUNCTION_ACL.map((entry) => ({ ...entry })),
     policies: ADMIN_CANONICAL_ACCESS_POLICIES.map((entry) => ({ ...entry })),
     schema_acl: ADMIN_CANONICAL_ACCESS_SCHEMA_ACL.map((entry) => ({ ...entry })),
-    table_acl: [{ ...CANONICAL_TRAINING_TABLE_ACL[0] }],
+    table_acl: TRAINING_STAGE_ADMIN_SCOPE_TABLE_ACL.map((entry) => ({ ...entry })),
     column_acl: ADMIN_CANONICAL_ACCESS_COLUMN_ACL.map((entry) => ({ ...entry })),
     counts: { attempts: 37, exam_results: 6, notification_events: 60, ledger: 3, schema_state: 0 },
   };
@@ -184,6 +193,7 @@ function trainingPayload() {
     rls: CANONICAL_TRAINING_RLS.map((entry) => ({ ...entry })),
     check_expression: CANONICAL_TRAINING_CHECK_EXPRESSION,
     index_definition: CANONICAL_TRAINING_INDEX_DEFINITION,
+    prerequisite_preservation: prerequisitePayload(),
   };
 }
 
@@ -289,7 +299,36 @@ test("browser EXECUTE exposure is reported and classified unsafe", () => {
     }),
   );
   assert.equal(output.classification, "C. COMMITTED_PARTIAL_OR_UNSAFE_STATE");
-  assert.equal(output.security.productionExposureIncreased, true);
+  assert.equal(output.security.productionExposureIncreased, null);
+  assert.equal(output.security.browserPrivilegeDeltaKnown, false);
+  assert.equal(output.security.browserPrivilegesIntroducedBy130001, false);
+  assert.equal(output.security.currentUnexpectedBrowserPrivilegesPresent, true);
+});
+
+test("preexisting browser table privileges are surfaced without inventing a temporal increase", () => {
+  const privilege = { schema_name: "public", table_name: "clips", grantee: "authenticated",
+    grantor: "postgres", privilege_type: "SELECT", is_grantable: false };
+  const output = classifyCanonicalTrainingPostDdlForensic(
+    postResults(), prerequisiteResults(), catalogPayload({ browser_table_privileges: [privilege] }),
+  );
+  assert.equal(output.classification, "A. POST_STATE_EXACT_DIAGNOSTIC_FALSE_NEGATIVE");
+  assert.equal(output.security.productionExposureIncreased, null);
+  assert.equal(output.security.browserPrivilegeDeltaKnown, false);
+  assert.equal(output.security.browserPrivilegesIntroducedBy130001, false);
+  assert.deepEqual(output.security.historicalOrPreexistingBrowserPrivileges, [privilege]);
+  assert.deepEqual(output.security.currentSecurityRelevantBrowserPrivileges, []);
+});
+
+test("security-relevant historical browser privileges remain visible without temporal attribution", () => {
+  const privilege = { schema_name: "public", table_name: "clips", grantee: "authenticated",
+    grantor: "postgres", privilege_type: "TRUNCATE", is_grantable: false };
+  const output = classifyCanonicalTrainingPostDdlForensic(
+    postResults(), prerequisiteResults(), catalogPayload({ browser_table_privileges: [privilege] }),
+  );
+  assert.equal(output.security.productionExposureIncreased, null);
+  assert.equal(output.security.browserPrivilegeDeltaKnown, false);
+  assert.equal(output.security.browserPrivilegesIntroducedBy130001, false);
+  assert.deepEqual(output.security.currentSecurityRelevantBrowserPrivileges, [privilege]);
 });
 
 test("grantor-only ACL drift is distinguished as committed safe contract drift", () => {
@@ -299,7 +338,7 @@ test("grantor-only ACL drift is distinguished as committed safe contract drift",
     postResults(payload), prerequisiteResults(), catalogPayload(),
   );
   assert.equal(output.classification, "B. COMMITTED_SAFE_BUT_CONTRACT_DRIFT");
-  assert.equal(output.security.productionExposureIncreased, false);
+  assert.equal(output.security.productionExposureIncreased, null);
   assert.ok(output.differences.some(({ area }) => area === "FUNCTION_ACL"));
 });
 

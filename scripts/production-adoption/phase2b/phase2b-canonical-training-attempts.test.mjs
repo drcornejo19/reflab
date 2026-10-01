@@ -34,6 +34,21 @@ const runner = readFileSync(resolve(import.meta.dirname,
   "run-production-phase2b-canonical-training-attempts.mjs"), "utf8");
 const body = migration.match(/create function public[.]submit_canonical_training_attempt[(][\s\S]*?as [$]function[$]([\s\S]*?)[$]function[$];/i)?.[1] ?? "";
 
+function prerequisitePreservationPayload() {
+  return {
+    caller: "postgres", session_user: "postgres", transaction_read_only: "on",
+    server_version_num: 170011,
+    checks: {
+      sessionExact: true, columnShapeExact: true, historicalCountsExact: true,
+      historicalSemanticsExact: true, clipsExact: true, sidecarExact: true,
+      providerStateExact: false, ledgerExact: true, markerAbsent: true,
+      leaderboardExact: true, createdAtIndexesExact: true, phase2bEntryExact: false,
+    },
+    counts: { attempts: 37, exam_results: 6, notification_events: 60, clips: 30,
+      score_non_null: 36, score_null: 1, training_duplicate_groups: 0 },
+  };
+}
+
 function payload(post = false) {
   const checks = Object.fromEntries([
     "sessionExact", "historicalFingerprintsExact", "ledgerExact", "schemaStateEmpty",
@@ -63,6 +78,7 @@ function payload(post = false) {
     rls: post ? CANONICAL_TRAINING_RLS.map((entry) => ({ ...entry })) : [],
     check_expression: post ? CANONICAL_TRAINING_CHECK_EXPRESSION : null,
     index_definition: post ? CANONICAL_TRAINING_INDEX_DEFINITION : null,
+    prerequisite_preservation: post ? prerequisitePreservationPayload() : null,
   };
 }
 
@@ -95,6 +111,31 @@ test("migration scope is exactly one function, 15 policies, one index and one ch
   assert.equal((migration.match(/^create policy training_attempt_/gmi) ?? []).length, 15);
   assert.equal((migration.match(/^create unique index attempts_canonical_training_submission_unique/gmi) ?? []).length, 1);
   assert.equal((migration.match(/add constraint attempts_canonical_payload_hash_check/gmi) ?? []).length, 1);
+});
+
+test("Training preserves historically enabled RLS for clips and institution subscriptions", () => {
+  const foundation = readFileSync(resolve(root,
+    "supabase/migrations/202607240001_access_control_foundation.sql"), "utf8");
+  const coreRls = readFileSync(resolve(root,
+    "supabase/migrations/202607240002_core_rls_lockdown.sql"), "utf8");
+  const canonicalBaseline = readFileSync(resolve(root,
+    "supabase/migrations/202607270000_reflab_canonical_baseline.sql"), "utf8");
+  assert.doesNotMatch(migration,
+    /alter\s+table\s+public[.](?:clips|institution_subscriptions)\s+(?:enable|disable|force|no\s+force)\s+row\s+level\s+security/i);
+  assert.match(foundation,
+    /alter table public[.]institution_subscriptions enable row level security;/i);
+  assert.match(coreRls, /'clips'/);
+  assert.match(coreRls, /alter table public[.]%I enable row level security/i);
+  assert.match(canonicalBaseline, /alter table public[.]%I enable row level security/i);
+  const expected = new Map([
+    ["public.clips", { enabled: true, forced: false }],
+    ["public.institution_subscriptions", { enabled: true, forced: false }],
+  ]);
+  for (const entry of CANONICAL_TRAINING_RLS) {
+    const state = expected.get(`${entry.schema_name}.${entry.table_name}`);
+    if (state) assert.deepEqual({ enabled: entry.enabled, forced: entry.forced }, state);
+  }
+  assert.equal(expected.size, 2);
 });
 
 test("pre and post queries are bounded catalog and aggregate evidence", () => {
@@ -140,7 +181,20 @@ for (const [name, mutate] of [
   ["rls owner CREATE", (value) => { value.checks.rlsOwnerCreateAbsent = false; }],
   ["unique index", (value) => { value.index_definition += " INCLUDE (id)"; }],
   ["check expression", (value) => { value.check_expression = "canonical_payload_hash is not null"; }],
-  ["RLS", (value) => { value.rls[0].enabled = false; }],
+  ["clips RLS", (value) => { value.rls.find(({ table_name }) => table_name === "clips").enabled = false; }],
+  ["institution subscriptions RLS", (value) => {
+    value.rls.find(({ table_name }) => table_name === "institution_subscriptions").enabled = false;
+  }],
+  ["prerequisite historical semantics", (value) => {
+    value.prerequisite_preservation.checks.historicalSemanticsExact = false;
+  }],
+  ["prerequisite ledger", (value) => { value.prerequisite_preservation.checks.ledgerExact = false; }],
+  ["prerequisite schema state", (value) => { value.prerequisite_preservation.counts.score_null = 2; }],
+  ["prerequisite marker", (value) => { value.prerequisite_preservation.checks.markerAbsent = false; }],
+  ["training ledger", (value) => { value.checks.ledgerExact = false; }],
+  ["training schema state", (value) => { value.checks.schemaStateEmpty = false; }],
+  ["training canonical marker", (value) => { value.checks.canonicalMarkerAbsent = false; }],
+  ["training later provider", (value) => { value.checks.laterProvidersAbsent = false; }],
   ["unexpected column ACL", (value) => { value.column_acl.push({ ...value.column_acl[0], column_name: "unexpected" }); }],
 ]) test(`POST ${name} drift fails closed`, () => {
   const value = payload(true);

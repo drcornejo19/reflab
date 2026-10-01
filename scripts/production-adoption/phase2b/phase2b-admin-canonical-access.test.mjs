@@ -24,7 +24,9 @@ import {
 } from "./run-production-phase2b-admin-canonical-access.mjs";
 import {
   CANONICAL_JSONB_TEXT_ACL,
+  CANONICAL_JSONB_TEXT_TRAINING_ACL,
 } from "./phase2b-canonical-runtime-prerequisites-contract.mjs";
+import { TRAINING_STAGE_ADMIN_SCOPE_TABLE_ACL } from "./phase2b-training-stage-preservation-contract.mjs";
 
 const root = resolve(import.meta.dirname, "..", "..", "..");
 const runnerPath = resolve(import.meta.dirname, "run-production-phase2b-admin-canonical-access.mjs");
@@ -184,6 +186,33 @@ test("missing public schema remains blocked", () => {
 test("exact pre-state passes and exact post-state is exact", () => {
   assert.equal(classifyAdminCanonicalAccessState(payload()).classification, "PASS");
   assert.equal(classifyAdminCanonicalAccessState(payload(true), { post: true }).classification, "EXACT");
+});
+
+test("post-Training admin preservation permits only reviewed helper and table ACL extensions", () => {
+  const value = payload(true);
+  value.checks.prerequisiteAbsent = false;
+  value.checks.trainingProviderAbsent = false;
+  value.checks.canonicalPayloadHashAbsent = false;
+  value.checks.adminTablePrivilegesAbsent = false;
+  value.helper_acl = CANONICAL_JSONB_TEXT_TRAINING_ACL.map((entry) => ({ ...entry }));
+  value.table_acl = TRAINING_STAGE_ADMIN_SCOPE_TABLE_ACL.map((entry) => ({ ...entry }));
+  assert.equal(classifyAdminCanonicalAccessState(value, { post: true }).classification, "EXACT");
+
+  for (const mutate of [
+    (candidate) => candidate.helper_acl.push({ grantee: "authenticated", grantor: "postgres",
+      privilege_type: "EXECUTE", is_grantable: false }),
+    (candidate) => candidate.function_acl.push({ routine: "admin_set_canonical_user_plan",
+      grantee: "PUBLIC", grantor: "reflab_rls_owner", privilege_type: "EXECUTE", is_grantable: false }),
+    (candidate) => { candidate.function_acl = candidate.function_acl.filter(
+      ({ grantee }) => grantee !== "service_role"); },
+    (candidate) => candidate.table_acl.push({ ...candidate.table_acl[0], privilege_type: "DELETE" }),
+    (candidate) => { candidate.functions[0].owner_name = "postgres"; },
+    (candidate) => { candidate.functions[0].security_definer = false; },
+  ]) {
+    const candidate = structuredClone(value);
+    mutate(candidate);
+    assert.equal(classifyAdminCanonicalAccessState(candidate, { post: true }).classification, "BLOCKER");
+  }
 });
 
 for (const name of ADMIN_CANONICAL_ACCESS_CHECKS) {

@@ -6,6 +6,11 @@ import {
   CANONICAL_JSONB_TEXT_ACL,
   CANONICAL_JSONB_TEXT_SOURCE_SHA256,
 } from "./phase2b-canonical-runtime-prerequisites-contract.mjs";
+import {
+  TRAINING_STAGE_ADMIN_SCOPE_TABLE_ACL,
+  TRAINING_STAGE_CANONICAL_JSONB_TEXT_ACL_EXTENSION,
+  classifyTrainingProviderStage,
+} from "./phase2b-training-stage-preservation-contract.mjs";
 
 export const ADMIN_CANONICAL_ACCESS_FORMAT =
   "REFLAB_PRODUCTION_PHASE2B_ADMIN_CANONICAL_ACCESS_V1";
@@ -435,8 +440,13 @@ export function classifyAdminCanonicalAccessState(payload, { post = false } = {}
       || !payload?.counts || arrays.some((name) => !Array.isArray(payload?.[name]))) {
     return { classification: "UNKNOWN" };
   }
+  const stage = post ? classifyTrainingProviderStage(checks) : "PRE_TRAINING";
+  const postTraining = post && stage === "POST_TRAINING";
+  const expectedHelperAcl = postTraining
+    ? [...CANONICAL_JSONB_TEXT_ACL, ...TRAINING_STAGE_CANONICAL_JSONB_TEXT_ACL_EXTENSION]
+    : CANONICAL_JSONB_TEXT_ACL;
   const helperSourceExact = sourceHash(payload.helper_source_base64) === CANONICAL_JSONB_TEXT_SOURCE_SHA256;
-  const helperAclExact = exactSet(payload.helper_acl, CANONICAL_JSONB_TEXT_ACL,
+  const helperAclExact = exactSet(payload.helper_acl, expectedHelperAcl,
     ["grantee", "grantor", "privilege_type", "is_grantable"]);
   const expectedFunctions = post ? ADMIN_CANONICAL_ACCESS_FUNCTIONS : [];
   const functionsExact = payload.functions.length === expectedFunctions.length
@@ -458,20 +468,35 @@ export function classifyAdminCanonicalAccessState(payload, { post = false } = {}
   const schemaAclExact = exactSet(payload.schema_acl,
     post ? ADMIN_CANONICAL_ACCESS_SCHEMA_ACL : [],
     ["schema_name", "grantee", "grantor", "privilege_type", "is_grantable"]);
-  const tableAclExact = payload.table_acl.length === 0;
+  const tableAclExact = exactSet(payload.table_acl,
+    postTraining ? TRAINING_STAGE_ADMIN_SCOPE_TABLE_ACL : [],
+    ["schema_name", "table_name", "grantee", "grantor", "privilege_type", "is_grantable"]);
   const columnAclExact = exactSet(payload.column_acl,
     post ? ADMIN_CANONICAL_ACCESS_COLUMN_ACL : [],
     ["schema_name", "table_name", "column_name", "grantee", "grantor", "privilege_type", "is_grantable"]);
   const countsExact = payload.counts.attempts === 37 && payload.counts.exam_results === 6
     && payload.counts.notification_events === 60 && payload.counts.ledger === 3
     && payload.counts.schema_state === 0;
-  const exact = ADMIN_CANONICAL_ACCESS_CHECKS.every((name) => checks[name] === true)
+  const postTrainingFalseChecks = new Set([
+    "prerequisiteAbsent",
+    "trainingProviderAbsent",
+    "canonicalPayloadHashAbsent",
+    "adminTablePrivilegesAbsent",
+  ]);
+  const rawChecksExact = postTraining
+    ? ADMIN_CANONICAL_ACCESS_CHECKS.every((name) =>
+      checks[name] === !postTrainingFalseChecks.has(name))
+    : ADMIN_CANONICAL_ACCESS_CHECKS.every((name) => checks[name] === true);
+  const stageExact = !post || stage === "PRE_TRAINING" || stage === "POST_TRAINING";
+  const exact = rawChecksExact && stageExact
     && helperSourceExact && helperAclExact && functionsExact && functionAclExact
     && policiesExact && schemaAclExact && tableAclExact && columnAclExact && countsExact;
   return {
     classification: exact ? (post ? "EXACT" : "PASS") : "BLOCKER",
+    stage,
     checks: { ...checks, helperSourceExact, helperAclExact, functionsExact,
-      functionAclExact, policiesExact, schemaAclExact, tableAclExact, columnAclExact },
+      functionAclExact, policiesExact, schemaAclExact, tableAclExact, columnAclExact,
+      trainingStageExact: stageExact },
     counts: payload.counts,
   };
 }

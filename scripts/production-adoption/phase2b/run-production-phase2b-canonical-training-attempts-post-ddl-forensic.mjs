@@ -50,7 +50,7 @@ import {
 } from "./phase2b-canonical-training-attempts-contract.mjs";
 import {
   PRE_PHASE2B_POST_QUERY_ID,
-  classifyPrePhase2bPost,
+  classifyPrePhase2bPreservation,
   prePhase2bPostQuery,
 } from "./pre-phase2b-adoption-prerequisite-contract.mjs";
 import {
@@ -235,7 +235,8 @@ function adminProviderPreservedExact(state) {
   const checks = state?.checks ?? {};
   const names = [
     "helperSourceExact", "helperAclExact", "functionsExact", "functionAclExact",
-    "policiesExact", "schemaAclExact", "columnAclExact",
+    "policiesExact", "schemaAclExact", "tableAclExact", "columnAclExact",
+    "trainingStageExact",
   ];
   if (names.some((name) => typeof checks[name] !== "boolean")) return null;
   return names.every((name) => checks[name] === true);
@@ -388,14 +389,7 @@ export function classifyCanonicalTrainingPostDdlForensic(
   const sidecar = classifyPhase2aSemanticAuditPost(adjustedSidecar);
   const helper = classifyCanonicalJsonbTextProvider(helperPayload);
   const admin = classifyAdminCanonicalAccessState(adminPayload, { post: true });
-  const prerequisite = classifyPrePhase2bPost({
-    ...prerequisitePayload,
-    checks: {
-      ...prerequisitePayload?.checks,
-      providerStateExact: true,
-      phase2bEntryExact: true,
-    },
-  }, installer);
+  const prerequisite = classifyPrePhase2bPreservation(prerequisitePayload);
   const training = classifyCanonicalTrainingState(payload, { post: true });
   const observedFunction = sanitizeFunction(payload?.function, catalogPayload?.function_raw_acl);
   const expectedFunctionState = expectedFunction();
@@ -520,15 +514,27 @@ export function classifyCanonicalTrainingPostDdlForensic(
     catalogPayload?.browser_column_privileges,
   ];
   const browserEvidenceComplete = browserPrivilegeSets.every(Array.isArray);
-  const unexpectedBrowserPrivileges = browserEvidenceComplete
+  const currentBrowserPrivileges = browserEvidenceComplete
     ? browserPrivilegeSets.flat() : null;
-  const productionExposureIncreased = browserEvidenceComplete
-    ? unexpectedBrowserPrivileges.length > 0 : null;
+  const currentUnexpectedBrowserPrivilegesPresent = browserEvidenceComplete
+    ? currentBrowserPrivileges.length > 0 : null;
+  const browserRpcExecutePresent = Array.isArray(catalogPayload?.browser_function_execute)
+    ? catalogPayload.browser_function_execute.length > 0 : null;
+  const securityRelevantBrowserPrivilegeTypes = new Set([
+    "EXECUTE", "MAINTAIN", "REFERENCES", "TRIGGER", "TRUNCATE",
+  ]);
+  const currentSecurityRelevantBrowserPrivileges = browserEvidenceComplete
+    ? currentBrowserPrivileges.filter(({ privilege_type }) =>
+      securityRelevantBrowserPrivilegeTypes.has(privilege_type))
+    : null;
+  const browserPrivilegeDeltaKnown = false;
+  const browserPrivilegesIntroducedBy130001 = false;
+  const productionExposureIncreased = null;
   const serviceRoleAccessUsable = typeof catalogPayload?.service_role_execute === "boolean"
     ? catalogPayload.service_role_execute : null;
   const exact = unknownComponents.length === 0 && failedComponents.length === 0
     && differences.length === 0
-    && productionExposureIncreased === false
+    && browserRpcExecutePresent === false
     && serviceRoleAccessUsable === true
     && catalogPayload?.rls_owner_create_absent === true;
   const anyInstalled = observedColumn.exists || observedFunction.exists
@@ -549,7 +555,7 @@ export function classifyCanonicalTrainingPostDdlForensic(
   if (exact) {
     classification = "A. POST_STATE_EXACT_DIAGNOSTIC_FALSE_NEGATIVE";
   } else if (unknownComponents.length === 0 && anyInstalled
-      && productionExposureIncreased === false && serviceRoleAccessUsable === true
+      && browserRpcExecutePresent === false && serviceRoleAccessUsable === true
       && safeAclGrantorOnlyDrift
       && training.checks?.functionExact === true
       && training.checks?.policiesExact === true
@@ -592,7 +598,13 @@ export function classifyCanonicalTrainingPostDdlForensic(
     },
     security: {
       productionExposureIncreased,
-      unexpectedBrowserPrivileges,
+      currentUnexpectedBrowserPrivilegesPresent,
+      browserPrivilegeDeltaKnown,
+      browserPrivilegesIntroducedBy130001,
+      currentBrowserPrivileges,
+      currentSecurityRelevantBrowserPrivileges,
+      historicalOrPreexistingBrowserPrivileges: currentBrowserPrivileges,
+      unexpectedBrowserPrivileges: currentBrowserPrivileges,
       serviceRoleAccessUsable,
       rlsOwnerCreateAbsent: catalogPayload?.rls_owner_create_absent ?? null,
       residualTemporaryPrivilegesAbsent: catalogPayload?.rls_owner_create_absent ?? null,

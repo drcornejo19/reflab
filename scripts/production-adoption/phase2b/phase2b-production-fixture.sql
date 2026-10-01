@@ -241,7 +241,9 @@ insert into public.psychology_exercise_sessions (id, user_id, module_slug)
 values ('60000000-0000-4000-8000-000000000001', 'user_synthetic_001', null);
 
 alter table public.attempts enable row level security;
+alter table public.clips enable row level security;
 alter table public.exam_results enable row level security;
+alter table public.institution_subscriptions enable row level security;
 alter table public.notification_events enable row level security;
 alter table public.psychology_checkins enable row level security;
 alter table public.psychology_wellbeing_assessments enable row level security;

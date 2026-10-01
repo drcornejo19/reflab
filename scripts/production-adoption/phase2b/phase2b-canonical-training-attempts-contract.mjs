@@ -7,6 +7,14 @@ import {
   ADMIN_CANONICAL_ACCESS_COLUMN_ACL,
   ADMIN_CANONICAL_ACCESS_SCHEMA_ACL,
 } from "./phase2b-admin-canonical-access-contract.mjs";
+import {
+  TRAINING_STAGE_SCHEMA_ACL_EXTENSIONS,
+  TRAINING_STAGE_TABLE_ACL,
+} from "./phase2b-training-stage-preservation-contract.mjs";
+import {
+  classifyPrePhase2bPreservation,
+  prePhase2bPostQuery,
+} from "./pre-phase2b-adoption-prerequisite-contract.mjs";
 
 export const CANONICAL_TRAINING_FORMAT = "REFLAB_PRODUCTION_PHASE2B_CANONICAL_TRAINING_ATTEMPTS_V1";
 export const CANONICAL_TRAINING_OPERATION = "--production-phase2b-canonical-training-attempts";
@@ -120,40 +128,19 @@ export const CANONICAL_TRAINING_POLICIES = Object.freeze([
 
 export const CANONICAL_TRAINING_SCHEMA_ACL = Object.freeze([
   ...ADMIN_CANONICAL_ACCESS_SCHEMA_ACL,
-  Object.freeze({ schema_name: "extensions", grantee: "reflab_rls_owner", grantor: "postgres", privilege_type: "USAGE", is_grantable: false }),
-  Object.freeze({ schema_name: "reflab_private", grantee: "reflab_rls_owner", grantor: "postgres", privilege_type: "USAGE", is_grantable: false }),
+  ...TRAINING_STAGE_SCHEMA_ACL_EXTENSIONS,
 ]);
 
-const tablePrivileges = Object.freeze({
-  "reflab_meta.reflab_schema_state": Object.freeze(["SELECT"]),
-  "public.user_profiles": Object.freeze(["SELECT"]),
-  "public.user_global_roles": Object.freeze(["SELECT", "UPDATE"]),
-  "public.user_subscriptions": Object.freeze(["SELECT", "UPDATE"]),
-  "public.institution_memberships": Object.freeze(["SELECT", "UPDATE"]),
-  "public.institutions": Object.freeze(["SELECT", "UPDATE"]),
-  "public.institution_subscriptions": Object.freeze(["SELECT", "UPDATE"]),
-  "public.clips": Object.freeze(["SELECT"]),
-  "public.attempts": Object.freeze(["INSERT", "SELECT"]),
-});
-
-export const CANONICAL_TRAINING_TABLE_ACL = Object.freeze(
-  Object.entries(tablePrivileges).flatMap(([relation, privileges]) => {
-    const [schema_name, table_name] = relation.split(".");
-    return privileges.map((privilege_type) => Object.freeze({
-      schema_name, table_name, grantee: "reflab_rls_owner", grantor: "postgres",
-      privilege_type, is_grantable: false,
-    }));
-  }),
-);
+export const CANONICAL_TRAINING_TABLE_ACL = TRAINING_STAGE_TABLE_ACL;
 
 export const CANONICAL_TRAINING_COLUMN_ACL = ADMIN_CANONICAL_ACCESS_COLUMN_ACL;
 
 export const CANONICAL_TRAINING_RLS = Object.freeze([
   ["reflab_meta", "reflab_schema_state", true],
   ["public", "attempts", true],
-  ["public", "clips", false],
+  ["public", "clips", true],
   ["public", "institution_memberships", true],
-  ["public", "institution_subscriptions", false],
+  ["public", "institution_subscriptions", true],
   ["public", "institutions", true],
   ["public", "user_global_roles", true],
   ["public", "user_profiles", true],
@@ -284,7 +271,9 @@ function stateQuery(id, post) {
     select user_id,submission_id from public.attempts
     where exam_result_id is null and submission_id is not null
     group by user_id,submission_id having pg_catalog.count(*)>1
-  ) select pg_catalog.json_build_object(
+  )${post ? `, prerequisite_preservation as (
+    select ${prePhase2bPostQuery.payloadSql} as payload
+  )` : ""} select pg_catalog.json_build_object(
     'caller',current_user,'session_user',session_user,
     'transaction_read_only',pg_catalog.current_setting('transaction_read_only'),
     'server_version_num',pg_catalog.current_setting('server_version_num')::integer,
@@ -325,7 +314,8 @@ function stateQuery(id, post) {
       from pg_catalog.pg_constraint constraint_row where constraint_row.conrelid='public.attempts'::pg_catalog.regclass
         and constraint_row.conname='attempts_canonical_payload_hash_check'),
     'index_definition',case when pg_catalog.to_regclass('public.attempts_canonical_training_submission_unique') is null
-      then null else pg_catalog.pg_get_indexdef(pg_catalog.to_regclass('public.attempts_canonical_training_submission_unique')) end
+      then null else pg_catalog.pg_get_indexdef(pg_catalog.to_regclass('public.attempts_canonical_training_submission_unique')) end,
+    'prerequisite_preservation',${post ? "(select payload from prerequisite_preservation)" : "null"}
   ))`);
 }
 
@@ -402,6 +392,8 @@ export function classifyCanonicalTrainingState(payload, { post = false } = {}) {
     checkExact: normalizeSqlExpression(payload.check_expression)
       === normalizeSqlExpression(CANONICAL_TRAINING_CHECK_EXPRESSION),
     indexExact: payload.index_definition === CANONICAL_TRAINING_INDEX_DEFINITION,
+    prerequisitePreservationExact:
+      classifyPrePhase2bPreservation(payload.prerequisite_preservation).classification === "EXACT",
   };
   const exact = common && payload.counts.payload_hash_nulls === 37
     && Object.values(details).every(Boolean);

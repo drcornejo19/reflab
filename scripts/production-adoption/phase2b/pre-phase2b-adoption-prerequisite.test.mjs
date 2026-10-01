@@ -51,6 +51,7 @@ import {
   PRE_PHASE2B_PRE_QUERY_ID,
   PRE_PHASE2B_SHA256,
   assertPrePhase2bArtifact,
+  classifyPrePhase2bPreservation,
   classifyPrePhase2bPost,
   classifyPrePhase2bPre,
 } from "./pre-phase2b-adoption-prerequisite-contract.mjs";
@@ -438,6 +439,24 @@ test("pre/post classifiers fail closed", () => {
     assert.equal(classifyPrePhase2bPre(payload, installer).classification, "BLOCKER", check);
   }
   assert.equal(classifyPrePhase2bPre(undefined, installer).classification, "UNKNOWN");
+});
+
+test("post-Training preservation excludes only the two entry-only provider predicates", () => {
+  const installer = { managedProfile: "READY", lifecycleState: "POST_PHASE2A_SEMANTIC_AUDIT" };
+  const payload = statePayload({
+    checks: { ...checks, providerStateExact: false, phase2bEntryExact: false },
+  });
+  assert.equal(classifyPrePhase2bPreservation(payload).classification, "EXACT");
+  assert.equal(classifyPrePhase2bPost(payload, installer).classification, "BLOCKER");
+  for (const name of [
+    "columnShapeExact", "historicalCountsExact", "historicalSemanticsExact", "clipsExact",
+    "sidecarExact", "ledgerExact", "markerAbsent", "leaderboardExact", "createdAtIndexesExact",
+  ]) {
+    const drift = statePayload({
+      checks: { ...checks, providerStateExact: false, phase2bEntryExact: false, [name]: false },
+    });
+    assert.equal(classifyPrePhase2bPreservation(drift).classification, "BLOCKER", name);
+  }
 });
 
 test("dedicated runner executes exactly one pinned artifact and stops", () => {
