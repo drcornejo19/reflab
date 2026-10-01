@@ -845,23 +845,23 @@ begin
 end
 $function$;
 
-grant create on schema public to reflab_rls_owner;
-alter function public.submit_canonical_training_attempt(text, uuid, jsonb, integer)
-  owner to reflab_rls_owner;
-revoke create on schema public from reflab_rls_owner;
-
 revoke all on function public.submit_canonical_training_attempt(
   text,
   uuid,
   jsonb,
   integer
-) from public, anon, authenticated;
+) from public, anon, authenticated, service_role;
 grant execute on function public.submit_canonical_training_attempt(
   text,
   uuid,
   jsonb,
   integer
 ) to service_role;
+
+grant create on schema public to reflab_rls_owner;
+alter function public.submit_canonical_training_attempt(text, uuid, jsonb, integer)
+  owner to reflab_rls_owner;
+revoke create on schema public from reflab_rls_owner;
 
 do $verification$
 begin
@@ -878,15 +878,77 @@ begin
     from pg_catalog.pg_proc procedure
     join pg_catalog.pg_namespace namespace
       on namespace.oid = procedure.pronamespace
+    join pg_catalog.pg_language language
+      on language.oid = procedure.prolang
     join pg_catalog.pg_roles owner_role
       on owner_role.oid = procedure.proowner
     where namespace.nspname = 'public'
       and procedure.proname = 'submit_canonical_training_attempt'
+      and pg_catalog.pg_get_function_identity_arguments(procedure.oid)
+        = 'p_user_id text, p_submission_id uuid, p_attempt jsonb, p_weekly_limit integer'
+      and pg_catalog.pg_get_function_result(procedure.oid) = 'jsonb'
+      and language.lanname = 'plpgsql'
+      and procedure.provolatile = 'v'
+      and not procedure.proisstrict
       and owner_role.rolname = 'reflab_rls_owner'
       and procedure.prosecdef = true
+      and not procedure.proleakproof
+      and procedure.prokind = 'f'
       and procedure.proconfig = array['search_path=pg_catalog']
   ) then
     raise exception 'Canonical training RPC security configuration is invalid';
+  end if;
+
+  if not exists (
+    select 1
+    from pg_catalog.pg_proc procedure
+    where procedure.oid = 'public.submit_canonical_training_attempt(text,uuid,jsonb,integer)'::pg_catalog.regprocedure
+      and pg_catalog.encode(
+        extensions.digest(
+          pg_catalog.replace(
+            pg_catalog.btrim(
+              procedure.prosrc,
+              ' ' || pg_catalog.chr(9) || pg_catalog.chr(10) || pg_catalog.chr(13)
+            ),
+            pg_catalog.chr(13) || pg_catalog.chr(10),
+            pg_catalog.chr(10)
+          ),
+          'sha256'
+        ),
+        'hex'
+      ) = '66a5f8793ba0222e0a62a58162d92d49101598bca971e71c9baeffeee1106f34'
+  ) then
+    raise exception 'Canonical training RPC source hash is invalid';
+  end if;
+
+  if (
+    select pg_catalog.count(*) <> 2
+      or pg_catalog.count(*) filter (
+        where grantee_role.rolname = 'reflab_rls_owner'
+          and grantor_role.rolname = 'reflab_rls_owner'
+          and privilege.privilege_type = 'EXECUTE'
+          and not privilege.is_grantable
+      ) <> 1
+      or pg_catalog.count(*) filter (
+        where grantee_role.rolname = 'service_role'
+          and grantor_role.rolname = 'reflab_rls_owner'
+          and privilege.privilege_type = 'EXECUTE'
+          and not privilege.is_grantable
+      ) <> 1
+    from pg_catalog.pg_proc procedure
+    cross join lateral pg_catalog.aclexplode(
+      coalesce(
+        procedure.proacl,
+        pg_catalog.acldefault('f', procedure.proowner)
+      )
+    ) privilege
+    left join pg_catalog.pg_roles grantee_role
+      on grantee_role.oid = privilege.grantee
+    left join pg_catalog.pg_roles grantor_role
+      on grantor_role.oid = privilege.grantor
+    where procedure.oid = 'public.submit_canonical_training_attempt(text,uuid,jsonb,integer)'::pg_catalog.regprocedure
+  ) then
+    raise exception 'Canonical training RPC ACL is invalid';
   end if;
 end
 $verification$;
