@@ -215,6 +215,21 @@ test("post-Training admin preservation permits only reviewed helper and table AC
   }
 });
 
+test("post-Communication admin preservation permits only the reviewed provider presence", () => {
+  const value = payload(true);
+  value.checks.prerequisiteAbsent = false;
+  value.checks.trainingProviderAbsent = false;
+  value.checks.communicationProviderAbsent = false;
+  value.checks.canonicalPayloadHashAbsent = false;
+  value.checks.adminTablePrivilegesAbsent = false;
+  value.helper_acl = CANONICAL_JSONB_TEXT_TRAINING_ACL.map((entry) => ({ ...entry }));
+  value.table_acl = TRAINING_STAGE_ADMIN_SCOPE_TABLE_ACL.map((entry) => ({ ...entry }));
+  assert.equal(classifyAdminCanonicalAccessState(value, {
+    post: true, communicationProviderPresent: true,
+  }).classification, "EXACT");
+  assert.equal(classifyAdminCanonicalAccessState(value, { post: true }).classification, "BLOCKER");
+});
+
 for (const name of ADMIN_CANONICAL_ACCESS_CHECKS) {
   test(`check ${name} fails closed`, () => {
     const value = payload(true);

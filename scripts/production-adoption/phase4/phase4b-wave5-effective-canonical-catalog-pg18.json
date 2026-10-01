@@ -31,7 +31,7 @@
         "name": "canonical_communication_feedback",
         "classification": "canonical_production_safe_incremental",
         "file": "202608150001_canonical_communication_feedback.sql",
-        "sha256": "c562675660d043a3446d32e327dbbfa1699459b5137b385ed57ac32c37cb1ce4"
+        "sha256": "f2ecd8eeb085cecd5c04b55180d20bb8513ecd64fb5ed81734e0970a1ee9dbe9"
       },
       {
         "version": "202608200001",
@@ -65,7 +65,7 @@
       "202608110002_development_super_admin_identity_link.sql"
     ]
   },
-  "providerGraphHash": "8925f5bf1f91725c4e1a987726bc387b3990cc3e7852b5f34bdaf7c36b19a14c",
+  "providerGraphHash": "b7c3a9da50cabde70e95aaf83c4b649e9640287226c99de8ddffb394b8285823",
   "baselineExtractionCoverage": {
     "checks": {
       "physical": 300,
@@ -8972,5 +8972,5 @@
       "finalProvider": "202607270000_reflab_canonical_baseline.sql"
     }
   ],
-  "fingerprintHash": "8a4f854d6c7d43aa5e26acb12d039061b68d1bd89866c08dd40d00bbd7186c09"
+  "fingerprintHash": "829ba1b8b01241daf35a7ab816aa6a63519767f3f55753afe05920c8d7aa01c8"
 }

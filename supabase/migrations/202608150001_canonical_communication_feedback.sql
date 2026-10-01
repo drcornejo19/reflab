@@ -13,6 +13,7 @@ begin
      or pg_catalog.to_regclass('public.user_subscriptions') is null
      or pg_catalog.to_regclass('public.clips') is null
      or pg_catalog.to_regclass('reflab_meta.reflab_schema_state') is null
+     or pg_catalog.to_regprocedure('extensions.digest(text,text)') is null
      or pg_catalog.to_regprocedure(
        'public.submit_canonical_training_attempt(text,uuid,jsonb,integer)'
      ) is null then
@@ -506,6 +507,19 @@ begin
 end
 $function$;
 
+revoke all on function public.submit_canonical_communication_feedback(
+  text,
+  uuid,
+  text,
+  jsonb
+) from public, anon, authenticated, service_role;
+grant execute on function public.submit_canonical_communication_feedback(
+  text,
+  uuid,
+  text,
+  jsonb
+) to service_role;
+
 grant create on schema public to reflab_rls_owner;
 alter function public.submit_canonical_communication_feedback(
   text,
@@ -514,19 +528,6 @@ alter function public.submit_canonical_communication_feedback(
   jsonb
 ) owner to reflab_rls_owner;
 revoke create on schema public from reflab_rls_owner;
-
-revoke all on function public.submit_canonical_communication_feedback(
-  text,
-  uuid,
-  text,
-  jsonb
-) from public, anon, authenticated;
-grant execute on function public.submit_canonical_communication_feedback(
-  text,
-  uuid,
-  text,
-  jsonb
-) to service_role;
 
 do $verification$
 declare
@@ -551,28 +552,69 @@ begin
     and procedure.proname = 'submit_canonical_communication_feedback'
     and pg_catalog.pg_get_function_identity_arguments(procedure.oid)
       = 'p_user_id text, p_submission_id uuid, p_payload_hash text, p_feedback jsonb'
+    and pg_catalog.pg_get_function_result(procedure.oid) = 'jsonb'
+    and procedure.provolatile = 'v'
+    and not procedure.proisstrict
     and owner_role.rolname = 'reflab_rls_owner'
     and procedure.prosecdef = true
+    and not procedure.proleakproof
+    and procedure.prokind = 'f'
     and procedure.proconfig = array['search_path=pg_catalog'];
 
   if function_oid is null then
     raise exception 'Canonical communication RPC security configuration is invalid';
   end if;
 
-  if not pg_catalog.has_function_privilege(
-    'service_role',
-    function_oid,
-    'EXECUTE'
-  ) or pg_catalog.has_function_privilege(
-    'anon',
-    function_oid,
-    'EXECUTE'
-  ) or pg_catalog.has_function_privilege(
-    'authenticated',
-    function_oid,
-    'EXECUTE'
+  if not exists (
+    select 1
+    from pg_catalog.pg_proc procedure
+    where procedure.oid = function_oid
+      and pg_catalog.encode(
+        extensions.digest(
+          pg_catalog.replace(
+            pg_catalog.btrim(
+              procedure.prosrc,
+              ' ' || pg_catalog.chr(9) || pg_catalog.chr(10) || pg_catalog.chr(13)
+            ),
+            pg_catalog.chr(13) || pg_catalog.chr(10),
+            pg_catalog.chr(10)
+          ),
+          'sha256'
+        ),
+        'hex'
+      ) = '1065a615e5b7bbd6f2426d38a835e159c18a4a28becf14d4f33cf43560872609'
   ) then
-    raise exception 'Canonical communication RPC execution grants are invalid';
+    raise exception 'Canonical communication RPC source hash is invalid';
+  end if;
+
+  if (
+    select pg_catalog.count(*) <> 2
+      or pg_catalog.count(*) filter (
+        where grantee_role.rolname = 'reflab_rls_owner'
+          and grantor_role.rolname = 'reflab_rls_owner'
+          and privilege.privilege_type = 'EXECUTE'
+          and not privilege.is_grantable
+      ) <> 1
+      or pg_catalog.count(*) filter (
+        where grantee_role.rolname = 'service_role'
+          and grantor_role.rolname = 'reflab_rls_owner'
+          and privilege.privilege_type = 'EXECUTE'
+          and not privilege.is_grantable
+      ) <> 1
+    from pg_catalog.pg_proc procedure
+    cross join lateral pg_catalog.aclexplode(
+      coalesce(
+        procedure.proacl,
+        pg_catalog.acldefault('f', procedure.proowner)
+      )
+    ) privilege
+    left join pg_catalog.pg_roles grantee_role
+      on grantee_role.oid = privilege.grantee
+    left join pg_catalog.pg_roles grantor_role
+      on grantor_role.oid = privilege.grantor
+    where procedure.oid = function_oid
+  ) then
+    raise exception 'Canonical communication RPC ACL is invalid';
   end if;
 end
 $verification$;

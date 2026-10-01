@@ -433,7 +433,10 @@ function sourceHash(value) {
   catch { return null; }
 }
 
-export function classifyAdminCanonicalAccessState(payload, { post = false } = {}) {
+export function classifyAdminCanonicalAccessState(payload, {
+  post = false,
+  communicationProviderPresent = false,
+} = {}) {
   const checks = payload?.checks;
   const arrays = ["helper_acl", "functions", "function_acl", "policies", "schema_acl", "table_acl", "column_acl"];
   if (!checks || !ADMIN_CANONICAL_ACCESS_CHECKS.every((name) => typeof checks[name] === "boolean")
@@ -483,6 +486,7 @@ export function classifyAdminCanonicalAccessState(payload, { post = false } = {}
     "canonicalPayloadHashAbsent",
     "adminTablePrivilegesAbsent",
   ]);
+  if (communicationProviderPresent) postTrainingFalseChecks.add("communicationProviderAbsent");
   const rawChecksExact = postTraining
     ? ADMIN_CANONICAL_ACCESS_CHECKS.every((name) =>
       checks[name] === !postTrainingFalseChecks.has(name))

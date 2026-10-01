@@ -357,25 +357,18 @@ const requiredChecks = Object.freeze([
   "rlsOwnerCreateAbsent",
 ]);
 
-export function classifyCanonicalTrainingState(payload, { post = false } = {}) {
+function classifyCanonicalTrainingPostPayload(payload, { requireLaterProvidersAbsent }) {
+  const requiredPostChecks = requireLaterProvidersAbsent
+    ? requiredChecks
+    : requiredChecks.filter((name) => name !== "laterProvidersAbsent");
   if (!payload || !payload.checks || !payload.counts
       || requiredChecks.some((name) => typeof payload.checks[name] !== "boolean")) {
     return { classification: "UNKNOWN" };
   }
-  const common = requiredChecks.every((name) => payload.checks[name] === true)
+  const common = requiredPostChecks.every((name) => payload.checks[name] === true)
     && payload.counts.attempts === 37 && payload.counts.exam_results === 6
     && payload.counts.notification_events === 60 && payload.counts.clips === 30
     && payload.counts.training_duplicate_groups === 0;
-  if (!post) {
-    const absent = payload.function === null && payload.function_acl.length === 0
-      && payload.policies.length === 0 && payload.table_acl.length === 0
-      && payload.index_definition === null && payload.check_expression === null
-      && exactSet(payload.schema_acl, ADMIN_CANONICAL_ACCESS_SCHEMA_ACL,
-        ["schema_name", "grantee", "grantor", "privilege_type", "is_grantable"])
-      && exactSet(payload.column_acl, ADMIN_CANONICAL_ACCESS_COLUMN_ACL,
-        ["schema_name", "table_name", "column_name", "grantee", "grantor", "privilege_type", "is_grantable"]);
-    return { classification: common && absent ? "PASS" : "BLOCKER", checks: payload.checks };
-  }
   const details = {
     functionExact: functionExact(payload.function),
     functionAclExact: exactSet(payload.function_acl, CANONICAL_TRAINING_FUNCTION_ACL,
@@ -398,4 +391,30 @@ export function classifyCanonicalTrainingState(payload, { post = false } = {}) {
   const exact = common && payload.counts.payload_hash_nulls === 37
     && Object.values(details).every(Boolean);
   return { classification: exact ? "EXACT" : "BLOCKER", checks: { ...payload.checks, ...details } };
+}
+
+export function classifyCanonicalTrainingPreservation(payload) {
+  return classifyCanonicalTrainingPostPayload(payload, { requireLaterProvidersAbsent: false });
+}
+
+export function classifyCanonicalTrainingState(payload, { post = false } = {}) {
+  if (!payload || !payload.checks || !payload.counts
+      || requiredChecks.some((name) => typeof payload.checks[name] !== "boolean")) {
+    return { classification: "UNKNOWN" };
+  }
+  const common = requiredChecks.every((name) => payload.checks[name] === true)
+    && payload.counts.attempts === 37 && payload.counts.exam_results === 6
+    && payload.counts.notification_events === 60 && payload.counts.clips === 30
+    && payload.counts.training_duplicate_groups === 0;
+  if (!post) {
+    const absent = payload.function === null && payload.function_acl.length === 0
+      && payload.policies.length === 0 && payload.table_acl.length === 0
+      && payload.index_definition === null && payload.check_expression === null
+      && exactSet(payload.schema_acl, ADMIN_CANONICAL_ACCESS_SCHEMA_ACL,
+        ["schema_name", "grantee", "grantor", "privilege_type", "is_grantable"])
+      && exactSet(payload.column_acl, ADMIN_CANONICAL_ACCESS_COLUMN_ACL,
+        ["schema_name", "table_name", "column_name", "grantee", "grantor", "privilege_type", "is_grantable"]);
+    return { classification: common && absent ? "PASS" : "BLOCKER", checks: payload.checks };
+  }
+  return classifyCanonicalTrainingPostPayload(payload, { requireLaterProvidersAbsent: true });
 }
