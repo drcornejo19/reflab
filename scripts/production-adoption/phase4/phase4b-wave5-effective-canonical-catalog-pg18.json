@@ -24,7 +24,7 @@
         "name": "canonical_training_attempts",
         "classification": "canonical_production_safe_incremental",
         "file": "202608130001_canonical_training_attempts.sql",
-        "sha256": "378044816979565159b2a6dd929e4e7d48c8c477caec7e3c4f22e24451562091"
+        "sha256": "c2239f6ae55e220579c4cc3489c9fbe2f2b63114b63f6980cfd001feab30fc59"
       },
       {
         "version": "202608150001",
@@ -65,7 +65,7 @@
       "202608110002_development_super_admin_identity_link.sql"
     ]
   },
-  "providerGraphHash": "0004b69235f86eaa84cf718c43ea05a0c7302e9cb882a6d765fc9d0490b9134b",
+  "providerGraphHash": "8925f5bf1f91725c4e1a987726bc387b3990cc3e7852b5f34bdaf7c36b19a14c",
   "baselineExtractionCoverage": {
     "checks": {
       "physical": 300,
@@ -8972,5 +8972,5 @@
       "finalProvider": "202607270000_reflab_canonical_baseline.sql"
     }
   ],
-  "fingerprintHash": "b19fdd13b16905376d40887d2e0753119af0380340b35f2fda219e916326e928"
+  "fingerprintHash": "8a4f854d6c7d43aa5e26acb12d039061b68d1bd89866c08dd40d00bbd7186c09"
 }
