@@ -26,6 +26,7 @@ import {
   CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION_FORMAT,
   CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION_OPERATION,
   CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION_OPT_IN,
+  CANONICAL_RUNTIME_INSTALLED_PRE_BATCH_QUERY_ID,
   authorizeProductionCanonicalRuntimeInstalledPreAttestationTarget,
   classifyCanonicalRuntimeInstalledPreAttestation,
   runProductionCanonicalRuntimeInstalledPreAttestation,
@@ -145,11 +146,31 @@ function dependencies(overrides = {}) {
   return {
     argument: CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION_OPERATION,
     git: (args) => args[0] === "rev-parse" ? `${expectedHead}\n` : "",
-    authorize: () => structuredClone(exactTarget),
+    resolveTarget: () => structuredClone(exactTarget),
+    assertTarget: () => true,
     executeReadOnly: () => results(),
     classify: () => exactReport(),
     ...overrides,
   };
+}
+
+async function cliFailure(environmentValue = environment(), overrides = {}) {
+  let stderr = "";
+  const exit = await runProductionCanonicalRuntimeInstalledPreAttestationCli(
+    environmentValue,
+    dependencies({
+      ...overrides,
+      writeStdout: () => {},
+      writeStderr: (value) => { stderr += value; },
+    }),
+  );
+  assert.equal(exit, 1);
+  assert.match(stderr, /^REFLAB_310006_PRE_ATTESTATION_FAIL\n/);
+  return stderr;
+}
+
+function failureField(output, name) {
+  return output.match(new RegExp(`^${name}=([^\\r\\n]+)$`, "m"))?.[1] ?? null;
 }
 
 test("dedicated attestation has an exact operation, format, and opt-in", () => {
@@ -348,11 +369,12 @@ test("the successful runner performs one read-only batch and no write callback",
 });
 
 test("the diagnostic source contains no migration or DDL execution path", () => {
-  assert.doesNotMatch(runnerSource, /executeMigration|executeDdl|spawnSync|readFileSync|[.]sql\b/);
+  assert.doesNotMatch(runnerSource, /executeMigration|executeDdl|readFileSync|[.]sql\b/);
   assert.doesNotMatch(runnerSource,
     /\brunProductionPhase2bCanonicalRuntimeInstalled\s*\(|supabase\s+db\s+push|readdir|glob/i);
   assert.match(runnerSource, /buildCanonicalRuntimeInstalledPreBatch/);
   assert.match(runnerSource, /classifyCanonicalRuntimeInstalledEvidence/);
+  assert.match(runnerSource, /executeReadOnlyBatch/);
 });
 
 test("the migration and Production DDL runner remain byte-for-byte unchanged", () => {
@@ -366,24 +388,181 @@ test("the migration and Production DDL runner remain byte-for-byte unchanged", (
   ), "74f1486b724767782b43fc52edca5c0089df0d672e7e5f675ab45ad6348dac39");
 });
 
-test("CLI failure output redacts URL, password, and thrown details", async () => {
+test("missing read-only opt-in is reported safely", async () => {
+  const value = environment();
+  delete value[CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION_OPT_IN];
+  const output = await cliFailure(value);
+  assert.equal(failureField(output, "stage"), "AUTHORIZATION_GUARD");
+  assert.equal(failureField(output, "substage"), "READ_ONLY_OPT_INS");
+  assert.equal(failureField(output, "reason"), "OPT_IN_REQUIRED");
+});
+
+test("wrong operation is reported as not authorized", async () => {
+  const output = await cliFailure(environment(), { argument: "--wrong-operation" });
+  assert.equal(failureField(output, "stage"), "OPERATION_GUARD");
+  assert.equal(failureField(output, "reason"), "OPERATION_NOT_AUTHORIZED");
+});
+
+test("inherited PostgreSQL state has its own bounded failure", async () => {
+  const output = await cliFailure(environment({ PGHOST: "inherited.invalid" }));
+  assert.equal(failureField(output, "stage"), "ENVIRONMENT_GUARD");
+  assert.equal(failureField(output, "reason"), "INHERITED_PG_STATE");
+  assert.doesNotMatch(output, /inherited[.]invalid/);
+});
+
+test("forbidden DDL configuration is reported safely", async () => {
+  const output = await cliFailure(environment({ ALLOW_PRODUCTION_DDL: "false" }));
+  assert.equal(failureField(output, "stage"), "AUTHORIZATION_GUARD");
+  assert.equal(failureField(output, "substage"), "DDL_CONFIGURATION");
+  assert.equal(failureField(output, "reason"), "DDL_CONFIGURATION_REJECTED");
+});
+
+test("HEAD mismatch is reported safely", async () => {
+  const output = await cliFailure(environment(), {
+    git: (args) => args[0] === "rev-parse" ? `${"b".repeat(40)}\n` : "",
+  });
+  assert.equal(failureField(output, "stage"), "REPOSITORY_GUARD");
+  assert.equal(failureField(output, "reason"), "HEAD_MISMATCH");
+});
+
+test("dirty worktree is reported safely", async () => {
+  const output = await cliFailure(environment(), {
+    git: (args) => args[0] === "rev-parse" ? `${expectedHead}\n` : " M package.json\n",
+  });
+  assert.equal(failureField(output, "stage"), "REPOSITORY_GUARD");
+  assert.equal(failureField(output, "reason"), "WORKTREE_DIRTY");
+});
+
+test("target mismatch is reported safely", async () => {
+  const output = await cliFailure(environment(), {
+    resolveTarget: () => { throw new Error("database target is not the exact allowlisted host"); },
+  });
+  assert.equal(failureField(output, "stage"), "TARGET_GUARD");
+  assert.equal(failureField(output, "reason"), "TARGET_MISMATCH");
+});
+
+test("psql ENOENT is reported without process text", async () => {
+  const error = Object.assign(new Error("spawn psql ENOENT"), { code: "ENOENT" });
+  const output = await cliFailure(environment(), {
+    executeReadOnly: undefined,
+    spawn: () => ({ status: null, stdout: "", stderr: "", error }),
+  });
+  assert.equal(failureField(output, "reason"), "PSQL_NOT_FOUND");
+  assert.equal(failureField(output, "query"), CANONICAL_RUNTIME_INSTALLED_PRE_BATCH_QUERY_ID);
+  assert.equal(failureField(output, "psqlExitStatus"), "UNKNOWN");
+  assert.equal(failureField(output, "stderrClass"), "PROCESS_SPAWN_ERROR");
+});
+
+test("authentication failure is reported without raw stderr", async () => {
+  const output = await cliFailure(environment(), {
+    executeReadOnly: undefined,
+    spawn: () => ({
+      status: 2, stdout: "",
+      stderr: "FATAL:  28P01: password authentication failed for fixture-secret",
+    }),
+  });
+  assert.equal(failureField(output, "reason"), "AUTHENTICATION_FAILED");
+  assert.equal(failureField(output, "sqlstate"), "28P01");
+  assert.equal(failureField(output, "psqlExitStatus"), "2");
+  assert.doesNotMatch(output, /fixture-secret|password authentication failed/);
+});
+
+test("timeout is reported safely", async () => {
+  const output = await cliFailure(environment(), {
+    executeReadOnly: undefined,
+    spawn: () => ({
+      status: 1, stdout: "",
+      stderr: "ERROR:  57014: canceling statement due to statement timeout",
+    }),
+  });
+  assert.equal(failureField(output, "reason"), "TIMEOUT");
+  assert.equal(failureField(output, "sqlstate"), "57014");
+  assert.equal(failureField(output, "stderrClass"), "TIMEOUT");
+});
+
+test("an ordinary SQLSTATE is preserved as a bounded reason", async () => {
+  const output = await cliFailure(environment(), {
+    executeReadOnly: undefined,
+    spawn: () => ({ status: 1, stdout: "", stderr: "ERROR:  42501: permission denied" }),
+  });
+  assert.equal(failureField(output, "reason"), "SQLSTATE_42501");
+  assert.equal(failureField(output, "sqlstate"), "42501");
+  assert.equal(failureField(output, "stderrClass"), "SQLSTATE_ERROR");
+});
+
+for (const [name, stderr, expectedReason, expectedClass] of [
+  ["host resolution", "could not translate host name", "HOST_RESOLUTION_FAILED",
+    "HOST_RESOLUTION_ERROR"],
+  ["TLS", "SSL certificate verify failed", "TLS_FAILED", "TLS_ERROR"],
+  ["connection", "connection to server failed: connection refused", "CONNECTION_FAILED",
+    "CONNECTION_ERROR"],
+  ["database", "FATAL:  3D000: database postgres_missing does not exist",
+    "DATABASE_UNAVAILABLE", "DATABASE_ERROR"],
+]) test(`${name} failure has a bounded process classification`, async () => {
+  const output = await cliFailure(environment(), {
+    executeReadOnly: undefined,
+    spawn: () => ({ status: 2, stdout: "", stderr }),
+  });
+  assert.equal(failureField(output, "reason"), expectedReason);
+  assert.equal(failureField(output, "stderrClass"), expectedClass);
+  assert.doesNotMatch(output, /postgres_missing|connection refused|certificate|translate host/i);
+});
+
+test("read-only guard failure is reported separately", async () => {
+  const output = await cliFailure(environment(), {
+    executeReadOnly: () => {
+      throw new Error("Production preflight aborted: transaction_read_only was not confirmed as on.");
+    },
+  });
+  assert.equal(failureField(output, "stage"), "READ_ONLY_GUARD");
+  assert.equal(failureField(output, "reason"), "READ_ONLY_GUARD_FAILED");
+});
+
+test("malformed query result container is an explicit shape failure", async () => {
+  const output = await cliFailure(environment(), { executeReadOnly: () => ({}) });
+  assert.equal(failureField(output, "stage"), "RESULT_PARSE");
+  assert.equal(failureField(output, "reason"), "QUERY_RESULT_SHAPE_MISMATCH");
+});
+
+test("classifier exception is reported separately", async () => {
+  const output = await cliFailure(environment(), {
+    classify: () => { throw new Error("classifier fixture failure"); },
+  });
+  assert.equal(failureField(output, "stage"), "CLASSIFICATION");
+  assert.equal(failureField(output, "reason"), "PRE_CLASSIFICATION_FAILED");
+  assert.doesNotMatch(output, /classifier fixture failure/);
+});
+
+test("JSON serialization failure is reported separately", async () => {
+  const output = await cliFailure(environment(), {
+    run: () => exactReport(),
+    serialize: () => { throw new SyntaxError("fixture JSON failure"); },
+  });
+  assert.equal(failureField(output, "stage"), "OUTPUT_SERIALIZATION");
+  assert.equal(failureField(output, "reason"), "JSON_PARSE_FAILED");
+});
+
+test("CLI failure output always redacts URL, password, and thrown details", async () => {
   const secretUrl = environment()[PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_DATABASE_URL];
-  let stderr = "";
+  const output = await cliFailure(environment(), {
+    run: () => { throw new Error(`${secretUrl} fixture-secret PGPASSWORD`); },
+  });
+  assert.equal(failureField(output, "reason"), "LOCAL_PROGRAMMING_ERROR");
+  assert.doesNotMatch(output, /fixture-secret|postgresql:\/\/|PGPASSWORD/);
+  for (const field of ["stage", "substage", "query", "reason", "sqlstate",
+    "psqlExitStatus", "stderrClass"]) {
+    assert.notEqual(failureField(output, field), null);
+  }
+});
+
+test("existing exact CLI happy path still emits the exact report", async () => {
+  let stdout = "";
   const exit = await runProductionCanonicalRuntimeInstalledPreAttestationCli(
     environment(),
-    {
-      argument: CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION_OPERATION,
-      run: () => { throw new Error(`${secretUrl} fixture-secret`); },
-      writeStdout: () => {},
-      writeStderr: (value) => { stderr += value; },
-    },
+    dependencies({ writeStdout: (value) => { stdout += value; }, writeStderr: () => {} }),
   );
-  assert.equal(exit, 1);
-  assert.equal(stderr, [
-    "REFLAB_310006_PRE_ATTESTATION_FAIL",
-    "stage=READ_ONLY_PRE_ATTESTATION",
-    "reason=READ_ONLY_PRE_ATTESTATION_ABORTED",
-    "",
-  ].join("\n"));
-  assert.doesNotMatch(stderr, /fixture-secret|postgresql:\/\//);
+  assert.equal(exit, 0);
+  const output = JSON.parse(stdout);
+  assert.equal(output.format, CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION_FORMAT);
+  assert.equal(output.classification, "310006_PRE_EXACT");
 });

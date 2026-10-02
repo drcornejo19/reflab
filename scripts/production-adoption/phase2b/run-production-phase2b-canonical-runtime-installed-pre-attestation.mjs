@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { executeReadOnlyBatch } from "../../production-preflight/run.mjs";
@@ -49,6 +49,19 @@ export const CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION_OPERATION =
   "--production-phase2b-canonical-runtime-installed-pre-attestation";
 export const CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION_OPT_IN =
   "ALLOW_PRODUCTION_PHASE2B_CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION";
+export const CANONICAL_RUNTIME_INSTALLED_PRE_BATCH_QUERY_ID =
+  "phase2b_canonical_runtime_installed_pre_batch";
+
+const safeFailureReasons = new Set([
+  "AUTHENTICATION_FAILED", "CONNECTION_FAILED", "DATABASE_UNAVAILABLE",
+  "DDL_CONFIGURATION_REJECTED", "HEAD_MISMATCH", "HOST_RESOLUTION_FAILED",
+  "INHERITED_PG_STATE", "JSON_PARSE_FAILED", "LOCAL_PROGRAMMING_ERROR",
+  "OPERATION_NOT_AUTHORIZED", "OPT_IN_REQUIRED", "OUTPUT_LIMIT_EXCEEDED",
+  "PRE_CLASSIFICATION_FAILED", "PSQL_NOT_FOUND", "PSQL_PROCESS_FAILED",
+  "QUERY_RESULT_SHAPE_MISMATCH", "READ_ONLY_GUARD_FAILED",
+  "REPOSITORY_HEAD_READ_FAILED", "TARGET_MISMATCH", "TIMEOUT", "TLS_FAILED",
+  "WORKTREE_DIRTY", "WORKTREE_READ_FAILED",
+]);
 
 const rejectedDdlVariables = Object.freeze([
   "ALLOW_PRODUCTION_DDL",
@@ -118,6 +131,198 @@ const expectedCounts = Object.freeze({
   schema_state_rows: 0,
 });
 
+export class CanonicalRuntimeInstalledPreAttestationFailure extends Error {
+  constructor(stage, substage, reason, details = {}) {
+    super(`${stage}:${substage}:${reason}`);
+    this.stage = stage;
+    this.substage = substage;
+    this.reason = reason;
+    this.query = details.query ?? "NONE";
+    this.sqlstate = details.sqlstate ?? "UNKNOWN";
+    this.psqlExitStatus = Number.isInteger(details.psqlExitStatus)
+      ? details.psqlExitStatus : null;
+    this.stderrClass = details.stderrClass ?? "NOT_AVAILABLE";
+  }
+}
+
+function sqlstateFrom(value) {
+  return String(value ?? "").match(
+    /(?:ERROR|FATAL|PANIC):\s+([0-9A-Z]{5}):|SQLSTATE[_=:\s-]*([0-9A-Z]{5})/i,
+  )?.slice(1).find(Boolean)?.toUpperCase() ?? null;
+}
+
+function queryFrom(value) {
+  return String(value ?? "").match(/(?:query|frame for query)\s+([a-z][a-z0-9_]*)/i)?.[1]
+    ?? null;
+}
+
+function classifyProcessText(value, processEvidence = {}) {
+  const text = String(value ?? "");
+  const sqlstate = sqlstateFrom(text);
+  if (processEvidence.errorCode === "ENOENT") {
+    return { reason: "PSQL_NOT_FOUND", sqlstate, stderrClass: "PROCESS_SPAWN_ERROR" };
+  }
+  if (processEvidence.errorCode === "ENOBUFS" || /maxbuffer|buffer limit/i.test(text)) {
+    return { reason: "OUTPUT_LIMIT_EXCEEDED", sqlstate, stderrClass: "PROCESS_BUFFER_ERROR" };
+  }
+  if (processEvidence.errorCode === "ETIMEDOUT" || sqlstate === "57014"
+      || /statement timeout|canceling statement due to statement timeout/i.test(text)) {
+    return { reason: "TIMEOUT", sqlstate, stderrClass: "TIMEOUT" };
+  }
+  if (sqlstate?.startsWith("28")
+      || /password authentication failed|no password supplied|authentication failed|sasl authentication/i.test(text)) {
+    return { reason: "AUTHENTICATION_FAILED", sqlstate, stderrClass: "AUTHENTICATION_ERROR" };
+  }
+  if (/could not translate host name|getaddrinfo|name or service not known|temporary failure in name resolution/i.test(text)) {
+    return { reason: "HOST_RESOLUTION_FAILED", sqlstate, stderrClass: "HOST_RESOLUTION_ERROR" };
+  }
+  if (/ssl|tls|certificate/i.test(text)) {
+    return { reason: "TLS_FAILED", sqlstate, stderrClass: "TLS_ERROR" };
+  }
+  if (sqlstate === "3D000" || /database .* does not exist|invalid catalog name/i.test(text)) {
+    return { reason: "DATABASE_UNAVAILABLE", sqlstate, stderrClass: "DATABASE_ERROR" };
+  }
+  if (sqlstate?.startsWith("08")
+      || /connection to server|could not connect|connection refused|server closed the connection|network is unreachable/i.test(text)) {
+    return { reason: "CONNECTION_FAILED", sqlstate, stderrClass: "CONNECTION_ERROR" };
+  }
+  if (sqlstate) {
+    return { reason: `SQLSTATE_${sqlstate}`, sqlstate, stderrClass: "SQLSTATE_ERROR" };
+  }
+  return { reason: "PSQL_PROCESS_FAILED", sqlstate: null,
+    stderrClass: "UNCLASSIFIED_PROCESS_ERROR" };
+}
+
+export function classifyCanonicalRuntimeInstalledPreAttestationFailure(
+  error,
+  context = {},
+  processEvidence = {},
+) {
+  if (error instanceof CanonicalRuntimeInstalledPreAttestationFailure) return error;
+  const message = String(error?.message ?? error ?? "");
+  const combinedProcessText = [processEvidence.stderr, processEvidence.errorMessage, message]
+    .filter(Boolean).join("\n");
+  const baseDetails = {
+    query: error?.query ?? queryFrom(message) ?? context.query ?? "NONE",
+    psqlExitStatus: Number.isInteger(error?.psqlExitStatus)
+      ? error.psqlExitStatus : processEvidence.exitStatus,
+  };
+  if (error instanceof SyntaxError) {
+    return new CanonicalRuntimeInstalledPreAttestationFailure(
+      context.stage ?? "RESULT_PARSE", context.substage ?? "JSON_RESULT",
+      "JSON_PARSE_FAILED", baseDetails,
+    );
+  }
+  if (error?.safeReason
+      && (safeFailureReasons.has(error.safeReason)
+        || /^SQLSTATE_[0-9A-Z]{5}$/.test(error.safeReason))) {
+    return new CanonicalRuntimeInstalledPreAttestationFailure(
+      context.stage ?? "OTHER", context.substage ?? "UNKNOWN", error.safeReason,
+      {
+        ...baseDetails,
+        sqlstate: error.sqlstate,
+        stderrClass: error.stderrClass,
+      },
+    );
+  }
+  if (/invalid result frame|expected a Map/i.test(message)) {
+    return new CanonicalRuntimeInstalledPreAttestationFailure(
+      "RESULT_PARSE", context.substage ?? "QUERY_RESULTS",
+      "QUERY_RESULT_SHAPE_MISMATCH", baseDetails,
+    );
+  }
+  if (/transaction_read_only was not confirmed as on/i.test(message)) {
+    return new CanonicalRuntimeInstalledPreAttestationFailure(
+      "READ_ONLY_GUARD", context.substage ?? "TRANSACTION_READ_ONLY",
+      "READ_ONLY_GUARD_FAILED", baseDetails,
+    );
+  }
+  if (context.stage === "PSQL_EXECUTION" || processEvidence.spawnAttempted) {
+    const classified = classifyProcessText(combinedProcessText, processEvidence);
+    return new CanonicalRuntimeInstalledPreAttestationFailure(
+      "PSQL_EXECUTION", context.substage ?? "PRE_BATCH", classified.reason,
+      {
+        ...baseDetails,
+        sqlstate: classified.sqlstate,
+        stderrClass: classified.stderrClass,
+      },
+    );
+  }
+  const localReason = [
+    [/exact .*argument/i, "OPERATION_NOT_AUTHORIZED"],
+    [/inherited PostgreSQL/i, "INHERITED_PG_STATE"],
+    [/clean worktree/i, "WORKTREE_DIRTY"],
+    [/HEAD attestation/i, "HEAD_MISMATCH"],
+    [/REJECTS_DDL_CONFIGURATION/i, "DDL_CONFIGURATION_REJECTED"],
+    [/NOT_AUTHORIZED|explicit read-only opt-in/i, "OPT_IN_REQUIRED"],
+    [/TARGET_REJECTED|project reference|target is not the exact allowlisted host|database URL is invalid/i,
+      "TARGET_MISMATCH"],
+  ].find(([pattern]) => pattern.test(message))?.[1];
+  return new CanonicalRuntimeInstalledPreAttestationFailure(
+    context.stage ?? "OTHER", context.substage ?? "UNKNOWN",
+    localReason ?? context.reason ?? "LOCAL_PROGRAMMING_ERROR", baseDetails,
+  );
+}
+
+function atAttestationStage(context, operation) {
+  try {
+    return operation();
+  } catch (error) {
+    throw classifyCanonicalRuntimeInstalledPreAttestationFailure(error, context);
+  }
+}
+
+function assertResultContainer(results) {
+  if (!(results instanceof Map)) {
+    throw Object.assign(new Error("Expected a Map of framed query results."), {
+      safeReason: "QUERY_RESULT_SHAPE_MISMATCH",
+      query: CANONICAL_RUNTIME_INSTALLED_PRE_BATCH_QUERY_ID,
+    });
+  }
+  return results;
+}
+
+export function executeCanonicalRuntimeInstalledPreAttestationReadOnlyBatch(
+  sql,
+  connectionEnvironment,
+  { processEnvironment = process.env, spawn = spawnSync } = {},
+) {
+  const evidence = {
+    spawnAttempted: false,
+    exitStatus: null,
+    errorCode: null,
+    errorMessage: null,
+    stderr: null,
+  };
+  const observingSpawn = (...args) => {
+    evidence.spawnAttempted = true;
+    try {
+      const result = spawn(...args);
+      evidence.exitStatus = Number.isInteger(result?.status) ? result.status : null;
+      evidence.errorCode = result?.error?.code ?? null;
+      evidence.errorMessage = result?.error?.message ?? null;
+      evidence.stderr = result?.stderr ?? null;
+      return result;
+    } catch (error) {
+      evidence.errorCode = error?.code ?? null;
+      evidence.errorMessage = error?.message ?? null;
+      throw error;
+    }
+  };
+  try {
+    return executeReadOnlyBatch(sql, connectionEnvironment, {
+      processEnvironment,
+      spawn: observingSpawn,
+    });
+  } catch (error) {
+    throw classifyCanonicalRuntimeInstalledPreAttestationFailure(error, {
+      stage: "PSQL_EXECUTION",
+      substage: "PRE_BATCH",
+      query: CANONICAL_RUNTIME_INSTALLED_PRE_BATCH_QUERY_ID,
+    }, evidence);
+  }
+}
+
 function booleanOrNull(value) {
   return typeof value === "boolean" ? value : null;
 }
@@ -173,14 +378,8 @@ function unknownReport() {
 export function authorizeProductionCanonicalRuntimeInstalledPreAttestationTarget(
   environment = process.env,
 ) {
-  if (environment[PREFLIGHT_OPT_IN] !== "true"
-      || environment[PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_OPT_IN] !== "true"
-      || environment[CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION_OPT_IN] !== "true") {
-    throw new Error("310006_PRE_ATTESTATION_NOT_AUTHORIZED");
-  }
-  if (rejectedDdlVariables.some((name) => Object.hasOwn(environment, name))) {
-    throw new Error("310006_PRE_ATTESTATION_REJECTS_DDL_CONFIGURATION");
-  }
+  assertProductionCanonicalRuntimeInstalledPreAttestationOptIns(environment);
+  assertProductionCanonicalRuntimeInstalledPreAttestationNoDdl(environment);
   return assertCanonicalRuntimeInstalledSessionPoolerTarget(
     resolveProductionManagedPostgresTarget(environment, {
       projectRefVariable: PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_PROJECT_REF,
@@ -188,6 +387,22 @@ export function authorizeProductionCanonicalRuntimeInstalledPreAttestationTarget
       operationLabel: "310006 privileged read-only PRE attestation",
     }),
   );
+}
+
+function assertProductionCanonicalRuntimeInstalledPreAttestationOptIns(environment) {
+  if (environment[PREFLIGHT_OPT_IN] !== "true"
+      || environment[PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_OPT_IN] !== "true"
+      || environment[CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION_OPT_IN] !== "true") {
+    throw new Error("310006_PRE_ATTESTATION_NOT_AUTHORIZED");
+  }
+  return true;
+}
+
+function assertProductionCanonicalRuntimeInstalledPreAttestationNoDdl(environment) {
+  if (rejectedDdlVariables.some((name) => Object.hasOwn(environment, name))) {
+    throw new Error("310006_PRE_ATTESTATION_REJECTS_DDL_CONFIGURATION");
+  }
+  return true;
 }
 
 export function classifyCanonicalRuntimeInstalledPreAttestation(
@@ -323,32 +538,118 @@ export function runProductionCanonicalRuntimeInstalledPreAttestation(
   environment = process.env,
   dependencies = {},
 ) {
-  if (dependencies.argument !== CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION_OPERATION) {
-    throw new Error("EXACT_310006_PRE_ATTESTATION_ARGUMENT_REQUIRED");
-  }
-  assertNoInheritedPgState(environment);
+  atAttestationStage({
+    stage: "OPERATION_GUARD", substage: "ARGUMENT", reason: "OPERATION_NOT_AUTHORIZED",
+  }, () => {
+    if (dependencies.argument !== CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION_OPERATION) {
+      throw new Error("EXACT_310006_PRE_ATTESTATION_ARGUMENT_REQUIRED");
+    }
+  });
+  atAttestationStage({
+    stage: "ENVIRONMENT_GUARD", substage: "INHERITED_PG_STATE",
+    reason: "INHERITED_PG_STATE",
+  }, () => assertNoInheritedPgState(environment));
   const git = dependencies.git ?? ((args) => execFileSync("git", args, {
     cwd: root, encoding: "utf8", windowsHide: true,
   }));
-  const actualHead = git(["rev-parse", "HEAD"]).trim();
-  const status = git(["status", "--short"]);
-  assertRepositoryAttestation({
-    expectedHead: environment[PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_APPROVED_HEAD],
-    actualHead,
-    status,
-  });
-  const target = (dependencies.authorize
-    ?? authorizeProductionCanonicalRuntimeInstalledPreAttestationTarget)(environment);
-  assertCanonicalRuntimeInstalledSessionPoolerTarget(target);
-  const results = (dependencies.executeReadOnly ?? executeReadOnlyBatch)(
-    buildCanonicalRuntimeInstalledPreBatch(),
+  const actualHead = atAttestationStage({
+    stage: "REPOSITORY_GUARD", substage: "HEAD_READ",
+    reason: "REPOSITORY_HEAD_READ_FAILED",
+  }, () => git(["rev-parse", "HEAD"]).trim());
+  const status = atAttestationStage({
+    stage: "REPOSITORY_GUARD", substage: "WORKTREE_READ",
+    reason: "WORKTREE_READ_FAILED",
+  }, () => git(["status", "--short"]));
+  atAttestationStage({
+    stage: "REPOSITORY_GUARD", substage: "ATTESTATION", reason: "HEAD_MISMATCH",
+  }, () => assertRepositoryAttestation({
+    expectedHead: environment[
+      PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_APPROVED_HEAD
+    ],
+    actualHead, status,
+  }));
+  atAttestationStage({
+    stage: "AUTHORIZATION_GUARD", substage: "READ_ONLY_OPT_INS", reason: "OPT_IN_REQUIRED",
+  }, () => assertProductionCanonicalRuntimeInstalledPreAttestationOptIns(environment));
+  atAttestationStage({
+    stage: "AUTHORIZATION_GUARD", substage: "DDL_CONFIGURATION",
+    reason: "DDL_CONFIGURATION_REJECTED",
+  }, () => assertProductionCanonicalRuntimeInstalledPreAttestationNoDdl(environment));
+  const target = atAttestationStage({
+    stage: "TARGET_GUARD", substage: "PRIVILEGED_READ_ONLY_TARGET", reason: "TARGET_MISMATCH",
+  }, () => (dependencies.resolveTarget ?? resolveProductionManagedPostgresTarget)(environment, {
+    projectRefVariable: PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_PROJECT_REF,
+    databaseUrlVariable: PHASE1_PSYCHOLOGY_NOTIFICATIONS_PRIVILEGED_DATABASE_URL,
+    operationLabel: "310006 privileged read-only PRE attestation",
+  }));
+  atAttestationStage({
+    stage: "TARGET_GUARD", substage: "SESSION_POOLER", reason: "TARGET_MISMATCH",
+  }, () => (dependencies.assertTarget
+    ?? assertCanonicalRuntimeInstalledSessionPoolerTarget)(target));
+  const batch = atAttestationStage({
+    stage: "SQL_BUILD", substage: "PRE_BATCH",
+    query: CANONICAL_RUNTIME_INSTALLED_PRE_BATCH_QUERY_ID,
+    reason: "LOCAL_PROGRAMMING_ERROR",
+  }, () => (dependencies.buildBatch ?? buildCanonicalRuntimeInstalledPreBatch)());
+  const results = atAttestationStage({
+    stage: "PSQL_EXECUTION", substage: "PRE_BATCH",
+    query: CANONICAL_RUNTIME_INSTALLED_PRE_BATCH_QUERY_ID,
+  }, () => (dependencies.executeReadOnly
+    ?? executeCanonicalRuntimeInstalledPreAttestationReadOnlyBatch)(
+    batch,
     target.connectionEnvironment,
-    { processEnvironment: environment },
-  );
+    { processEnvironment: environment, spawn: dependencies.spawn ?? spawnSync },
+  ));
+  atAttestationStage({
+    stage: "RESULT_PARSE", substage: "PRE_RESULTS",
+    query: CANONICAL_RUNTIME_INSTALLED_PRE_BATCH_QUERY_ID,
+    reason: "QUERY_RESULT_SHAPE_MISMATCH",
+  }, () => assertResultContainer(results));
+  const classification = atAttestationStage({
+    stage: "CLASSIFICATION", substage: "PRE_CONTRACT",
+    query: CANONICAL_RUNTIME_INSTALLED_PRE_QUERY_ID,
+    reason: "PRE_CLASSIFICATION_FAILED",
+  }, () => (dependencies.classify
+    ?? classifyCanonicalRuntimeInstalledPreAttestation)(results));
+  atAttestationStage({
+    stage: "CLASSIFICATION", substage: "PRE_CONTRACT_RESULT",
+    query: CANONICAL_RUNTIME_INSTALLED_PRE_QUERY_ID,
+    reason: "PRE_CLASSIFICATION_FAILED",
+  }, () => {
+    if (!classification || typeof classification !== "object") {
+      throw new Error("PRE classifier returned an invalid result.");
+    }
+  });
   return {
     format: CANONICAL_RUNTIME_INSTALLED_PRE_ATTESTATION_FORMAT,
-    ...(dependencies.classify ?? classifyCanonicalRuntimeInstalledPreAttestation)(results),
+    ...classification,
   };
+}
+
+function safeToken(value, fallback, pattern = /^[A-Z][A-Z0-9_]*$/) {
+  const text = String(value ?? "");
+  return pattern.test(text) ? text : fallback;
+}
+
+export function formatCanonicalRuntimeInstalledPreAttestationFailure(error) {
+  const failure = classifyCanonicalRuntimeInstalledPreAttestationFailure(error, {
+    stage: "OTHER", substage: "UNKNOWN", reason: "LOCAL_PROGRAMMING_ERROR",
+  });
+  const query = safeToken(failure.query, "NONE", /^[a-z][a-z0-9_]*$/);
+  const reason = /^SQLSTATE_[0-9A-Z]{5}$/.test(failure.reason)
+    ? failure.reason : safeFailureReasons.has(failure.reason)
+      ? failure.reason : "LOCAL_PROGRAMMING_ERROR";
+  return [
+    "REFLAB_310006_PRE_ATTESTATION_FAIL",
+    `stage=${safeToken(failure.stage, "OTHER")}`,
+    `substage=${safeToken(failure.substage, "UNKNOWN")}`,
+    `query=${query}`,
+    `reason=${reason}`,
+    `sqlstate=${safeToken(failure.sqlstate, "UNKNOWN", /^[0-9A-Z]{5}$/)}`,
+    `psqlExitStatus=${failure.psqlExitStatus ?? "UNKNOWN"}`,
+    `stderrClass=${safeToken(failure.stderrClass, "NOT_AVAILABLE")}`,
+    "",
+  ].join("\n");
 }
 
 export async function runProductionCanonicalRuntimeInstalledPreAttestationCli(
@@ -363,17 +664,18 @@ export async function runProductionCanonicalRuntimeInstalledPreAttestationCli(
         ...dependencies,
         argument,
       });
+    const serialized = atAttestationStage({
+      stage: "OUTPUT_SERIALIZATION", substage: "JSON_STRINGIFY",
+      reason: "JSON_PARSE_FAILED",
+    }, () => `${(dependencies.serialize ?? JSON.stringify)(result, null, 2)}\n`);
     const writeStdout = dependencies.writeStdout ?? ((value) => process.stdout.write(value));
-    writeStdout(`${JSON.stringify(result, null, 2)}\n`);
+    atAttestationStage({
+      stage: "OUTPUT_WRITE", substage: "STDOUT", reason: "LOCAL_PROGRAMMING_ERROR",
+    }, () => writeStdout(serialized));
     return 0;
-  } catch {
+  } catch (error) {
     const writeStderr = dependencies.writeStderr ?? ((value) => process.stderr.write(value));
-    writeStderr([
-      "REFLAB_310006_PRE_ATTESTATION_FAIL",
-      "stage=READ_ONLY_PRE_ATTESTATION",
-      "reason=READ_ONLY_PRE_ATTESTATION_ABORTED",
-      "",
-    ].join("\n"));
+    writeStderr(formatCanonicalRuntimeInstalledPreAttestationFailure(error));
     return 1;
   }
 }
