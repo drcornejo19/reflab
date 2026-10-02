@@ -213,6 +213,44 @@ export function classifyCanonicalCommunicationState(payload, { post = false } = 
     checks: { ...payload.checks, ...details } };
 }
 
+export function classifyCanonicalCommunicationCompletionPreservation(payload) {
+  if (!payload?.checks || !payload?.training_preservation?.checks
+      || !payload.training_preservation?.prerequisite_preservation?.checks) {
+    return { classification: "UNKNOWN" };
+  }
+  const completionPayload = {
+    ...payload,
+    checks: {
+      ...payload.checks,
+      ledgerExact: true,
+      laterAdoptionAbsent: true,
+    },
+    training_preservation: {
+      ...payload.training_preservation,
+      checks: {
+        ...payload.training_preservation.checks,
+        ledgerExact: true,
+      },
+      prerequisite_preservation: {
+        ...payload.training_preservation.prerequisite_preservation,
+        checks: {
+          ...payload.training_preservation.prerequisite_preservation.checks,
+          ledgerExact: true,
+        },
+      },
+    },
+  };
+  const result = classifyCanonicalCommunicationState(completionPayload, { post: true });
+  return {
+    ...result,
+    stage: "POST_CANONICAL_RUNTIME_INSTALLED",
+    observedLifecycle: {
+      ledgerExact: payload.checks.ledgerExact,
+      laterAdoptionAbsent: payload.checks.laterAdoptionAbsent,
+    },
+  };
+}
+
 export function classifyCanonicalCommunicationEntry({ phase2a, helper, admin, communication }) {
   const components = {
     phase2aExact: phase2a?.postState === "EXACT",

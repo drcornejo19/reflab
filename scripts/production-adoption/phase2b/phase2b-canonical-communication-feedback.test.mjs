@@ -25,6 +25,7 @@ import {
   assertCanonicalCommunicationArtifact,
   canonicalCommunicationPostQuery,
   canonicalCommunicationPreQuery,
+  classifyCanonicalCommunicationCompletionPreservation,
   classifyCanonicalCommunicationEntry,
   classifyCanonicalCommunicationPostComposition,
   classifyCanonicalCommunicationState,
@@ -131,6 +132,33 @@ test("PRE and POST queries are bounded catalog and aggregate evidence", () => {
 test("exact post-Training PRE passes and exact Communication POST is exact", () => {
   assert.equal(classifyCanonicalCommunicationState(payload()).classification, "PASS");
   assert.equal(classifyCanonicalCommunicationState(payload(true), { post: true }).classification, "EXACT");
+});
+
+test("completion preservation permits only the reviewed phase-4 ledger transition", () => {
+  const value = payload(true);
+  value.checks.ledgerExact = false;
+  value.checks.laterAdoptionAbsent = false;
+  value.training_preservation.checks.ledgerExact = false;
+  value.training_preservation.prerequisite_preservation.checks.ledgerExact = false;
+  const result = classifyCanonicalCommunicationCompletionPreservation(value);
+  assert.equal(result.classification, "EXACT");
+  assert.deepEqual(result.observedLifecycle, { ledgerExact: false, laterAdoptionAbsent: false });
+});
+
+for (const [name, mutate] of [
+  ["source constraint", (value) => { value.source_constraint.expression = "source_item_type is null"; }],
+  ["RPC source", (value) => { value.function.source_base64 = Buffer.from("begin return null; end").toString("base64"); }],
+  ["RPC ACL", (value) => { value.function_acl.push({ grantee: "anon", grantor: "reflab_rls_owner", privilege_type: "EXECUTE", is_grantable: false }); }],
+  ["Training preservation", (value) => { value.training_preservation.policies.pop(); }],
+  ["historical rows", (value) => { value.counts.communication_attempts = 1; }],
+]) test(`completion preservation still blocks ${name} drift`, () => {
+  const value = payload(true);
+  value.checks.ledgerExact = false;
+  value.checks.laterAdoptionAbsent = false;
+  value.training_preservation.checks.ledgerExact = false;
+  value.training_preservation.prerequisite_preservation.checks.ledgerExact = false;
+  mutate(value);
+  assert.equal(classifyCanonicalCommunicationCompletionPreservation(value).classification, "BLOCKER");
 });
 
 test("entry composition requires exact Phase2A, helper, admin and Communication PRE", () => {
