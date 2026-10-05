@@ -12,6 +12,10 @@ import {
   PHASE3_MIGRATIONS,
   PHASE3_POLICY_MATRIX,
 } from "./phase3-security-contract.mjs";
+import {
+  classifyIdentitySecurityBridgePreState,
+  identitySecurityBridgePreQuery,
+} from "./phase3-identity-security-bridge-pre-attestation-contract.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const root = resolve(directory, "..", "..", "..");
@@ -471,6 +475,9 @@ export async function runPhase3Postgres() {
   const policyParserDiagnosticOnly = process.argv.includes("--diagnose-policy-parser");
   const policyExpressionDiagnosticOnly = process.argv.includes("--diagnose-policy-expression");
   const roleMembershipDiagnosticOnly = process.argv.includes("--diagnose-role-memberships");
+  const identitySecurityBridgePreOnly = process.argv.includes(
+    "--attest-identity-security-bridge-pre",
+  );
   const requestedNegativeCase = process.argv.find((argument) => argument.startsWith("--negative-case="))?.split("=", 2)[1] ?? null;
   if (requestedNegativeCase !== null && !phase3NegativeCases.includes(requestedNegativeCase)) {
     throw new Error("Unknown isolated Phase 3 negative scenario.");
@@ -697,7 +704,7 @@ export async function runPhase3Postgres() {
     return parsed;
   }
 
-  const positive = "phase3_positive";
+  const positive = identitySecurityBridgePreOnly ? "postgres" : "phase3_positive";
 
   try {
     run(binaries.initdb, ["--auth=trust", "--username=postgres", "--encoding=UTF8", "--no-locale", "--pgdata", dataDirectory]);
@@ -783,8 +790,39 @@ export async function runPhase3Postgres() {
       };
     }
 
-    createDatabase(positive);
+    if (identitySecurityBridgePreOnly) {
+      sql(positive, "create schema extensions; create extension pgcrypto with schema extensions;");
+    } else {
+      createDatabase(positive);
+    }
     setupThroughPhase2b(positive);
+    if (identitySecurityBridgePreOnly) {
+      const payload = JSON.parse(String(sql(
+        positive,
+        `begin read only;
+         set local lock_timeout = '2s';
+         set local statement_timeout = '15s';
+         select ${identitySecurityBridgePreQuery.payloadSql};
+         rollback;`,
+      )).trim());
+      const attestation = classifyIdentitySecurityBridgePreState(payload);
+      if (attestation.classification !== "EXACT_EXPECTED_PRE_STATE") {
+        const failedChecks = Object.entries(attestation.checks ?? {})
+          .filter(([, exact]) => exact !== true).map(([name]) => name);
+        throw new Error(
+          `Local PostgreSQL 64236 PRE attestation was not exact: ${failedChecks.join(",")}.`,
+        );
+      }
+      return {
+        localOnly: true,
+        localTarget: { host: environment.PGHOST, port: environment.PGPORT },
+        postgresMajor: 17,
+        phase3MigrationsApplied: 0,
+        classification: attestation.classification,
+        checks: attestation.checks,
+        cleanup: "PASS",
+      };
+    }
     if (roleMembershipDiagnosticOnly) {
       return {
         localOnly: true,
