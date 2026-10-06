@@ -12,10 +12,7 @@ import {
   PHASE3_MIGRATIONS,
   PHASE3_POLICY_MATRIX,
 } from "./phase3-security-contract.mjs";
-import {
-  classifyIdentitySecurityBridgePreState,
-  identitySecurityBridgePreQuery,
-} from "./phase3-identity-security-bridge-pre-attestation-contract.mjs";
+import { rehearseIdentityBridge } from "./phase3-identity-pre-postgres-rehearsal.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const root = resolve(directory, "..", "..", "..");
@@ -198,7 +195,7 @@ export function identityHelperContractDiagnosticSql() {
       ('volatility', 'stable', coalesce(helper.volatility, '<null>')),
       ('security_definer', 'false', coalesce(helper.prosecdef::text, '<null>')),
       ('owner', 'postgres', coalesce(helper.owner_name, '<null>')),
-      ('proconfig', '["search_path=pg_catalog"]', helper.normalized_proconfig::text),
+      ('proconfig', '[]', helper.normalized_proconfig::text),
       ('overload_count', '1', coalesce(helper.overload_count::text, '<null>')),
       ('source_hash', helper.expected_source_hash, coalesce(helper.observed_source_hash, '<null>'))
     ) contract(attribute, expected_value, observed_value)
@@ -478,6 +475,7 @@ export async function runPhase3Postgres() {
   const identitySecurityBridgePreOnly = process.argv.includes(
     "--attest-identity-security-bridge-pre",
   );
+  const identityCorrectionOnly = process.argv.includes("--rehearse-identity-security-bridge-pre-correction");
   const requestedNegativeCase = process.argv.find((argument) => argument.startsWith("--negative-case="))?.split("=", 2)[1] ?? null;
   if (requestedNegativeCase !== null && !phase3NegativeCases.includes(requestedNegativeCase)) {
     throw new Error("Unknown isolated Phase 3 negative scenario.");
@@ -510,9 +508,9 @@ export async function runPhase3Postgres() {
       windowsHide: true,
     });
   }
-  function sql(database, statement) {
+  function sql(database, statement, user = "postgres") {
     return run(binaries.psql, ["-X", "--no-psqlrc", "-q", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose", "-t", "-A"], {
-      environment: { PGDATABASE: database },
+      environment: { PGDATABASE: database, PGUSER: user },
       input: statement,
     });
   }
@@ -704,12 +702,15 @@ export async function runPhase3Postgres() {
     return parsed;
   }
 
-  const positive = identitySecurityBridgePreOnly ? "postgres" : "phase3_positive";
+  const positive = identitySecurityBridgePreOnly || identityCorrectionOnly ? "postgres" : "phase3_positive";
 
   try {
-    run(binaries.initdb, ["--auth=trust", "--username=postgres", "--encoding=UTF8", "--no-locale", "--pgdata", dataDirectory]);
+    run(binaries.initdb, ["--auth=trust", `--username=${identitySecurityBridgePreOnly || identityCorrectionOnly ? "supabase_admin" : "postgres"}`, "--encoding=UTF8", "--no-locale", "--pgdata", dataDirectory]);
     run(binaries.pgCtl, ["start", "-D", dataDirectory, "-l", logPath, "-o", `-h 127.0.0.1 -p ${port}`, "-w"], { quiet: true });
     serverStarted = true;
+    if (identitySecurityBridgePreOnly || identityCorrectionOnly) {
+      sql("postgres", "create role postgres superuser login inherit createrole createdb replication bypassrls; alter database postgres owner to postgres;", "supabase_admin");
+    }
     if (policyParserDiagnosticOnly) {
       const probe = (groupCaseExpression) => `do $probe$
       declare
@@ -790,38 +791,26 @@ export async function runPhase3Postgres() {
       };
     }
 
-    if (identitySecurityBridgePreOnly) {
+    if (identitySecurityBridgePreOnly || identityCorrectionOnly) {
       sql(positive, "create schema extensions; create extension pgcrypto with schema extensions;");
     } else {
       createDatabase(positive);
     }
     setupThroughPhase2b(positive);
-    if (identitySecurityBridgePreOnly) {
-      const payload = JSON.parse(String(sql(
-        positive,
-        `begin read only;
-         set local lock_timeout = '2s';
-         set local statement_timeout = '15s';
-         select ${identitySecurityBridgePreQuery.payloadSql};
-         rollback;`,
-      )).trim());
-      const attestation = classifyIdentitySecurityBridgePreState(payload);
-      if (attestation.classification !== "EXACT_EXPECTED_PRE_STATE") {
-        const failedChecks = Object.entries(attestation.checks ?? {})
-          .filter(([, exact]) => exact !== true).map(([name]) => name);
-        throw new Error(
-          `Local PostgreSQL 64236 PRE attestation was not exact: ${failedChecks.join(",")}.`,
-        );
+    if (identitySecurityBridgePreOnly || identityCorrectionOnly) {
+      if (Math.trunc(Number(scalar(sql(positive, "show server_version_num;"))) / 10000) !== 17) {
+        throw new Error("Identity PRE correction requires disposable PostgreSQL 17.");
       }
-      return {
-        localOnly: true,
-        localTarget: { host: environment.PGHOST, port: environment.PGPORT },
-        postgresMajor: 17,
-        phase3MigrationsApplied: 0,
-        classification: attestation.classification,
-        checks: attestation.checks,
-        cleanup: "PASS",
-      };
+      const result = rehearseIdentityBridge({
+        sql: (statement, user) => sql(positive, statement, user),
+        execute: (statement) => spawnSync(binaries.psql,
+          ["-X", "--no-psqlrc", "-q", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose"],
+          { env: { ...environment, PGDATABASE: positive }, input: statement, encoding: "utf8",
+            windowsHide: true, maxBuffer: 16 * 1024 * 1024 }),
+        migration: readFileSync(resolve(migrationsDirectory, PHASE3_MIGRATIONS[0]), "utf8"),
+        historicalFingerprintSql: historicalFingerprintSql(), preOnly: identitySecurityBridgePreOnly,
+      });
+      return { ...result, cleanup: cleanupCluster() };
     }
     if (roleMembershipDiagnosticOnly) {
       return {
@@ -966,5 +955,7 @@ export async function runPhase3Postgres() {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  process.stdout.write(`${JSON.stringify(await runPhase3Postgres())}\n`);
+  const result = await runPhase3Postgres();
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+  if (result.migration === "BLOCKER") process.exitCode = 1;
 }

@@ -34,33 +34,50 @@ begin
     raise exception 'Canonical RLS owner is missing or unsafe' using errcode = '55000';
   end if;
 
-  -- The reviewed bootstrap allowlist is empty in both membership directions.
-  if exists (
-    select 1
-    from pg_catalog.pg_auth_members membership
-    join pg_catalog.pg_roles granted on granted.oid = membership.roleid
-    join pg_catalog.pg_roles member_role on member_role.oid = membership.member
-    where granted.rolname in (
-      'anon',
-      'authenticated',
-      'service_role',
-      'legacy_runtime',
-      'reflab_rls_owner',
-      'reflab_prod_preflight_ro',
-      'reflab_preflight_audit_owner'
-    )
-       or member_role.rolname in (
-         'anon',
-         'authenticated',
-         'service_role',
-         'legacy_runtime',
-         'reflab_rls_owner',
-         'reflab_prod_preflight_ro',
-         'reflab_preflight_audit_owner'
-       )
-       or granted.rolname = current_user
-       or member_role.rolname = current_user
-  ) then
+  -- Exact installer/request-role topology; unrelated managed internals are not dependencies.
+  if not (with expected(granted_role, member_role, grantor_role, admin_option, inherit_option, set_option) as (
+  values
+  ('anon', 'postgres', 'supabase_admin', true, true, true),
+  ('authenticated', 'postgres', 'supabase_admin', true, true, true),
+  ('authenticator', 'postgres', 'supabase_admin', true, true, true),
+  ('pg_create_subscription', 'postgres', 'supabase_admin', true, true, true),
+  ('pg_monitor', 'postgres', 'supabase_admin', true, true, true),
+  ('pg_read_all_data', 'postgres', 'supabase_admin', true, true, true),
+  ('pg_signal_backend', 'postgres', 'supabase_admin', true, true, true),
+  ('reflab_prod_preflight_ro', 'postgres', 'supabase_admin', true, false, false),
+  ('service_role', 'postgres', 'supabase_admin', true, true, true),
+  ('supabase_privileged_role', 'postgres', 'supabase_admin', false, true, true),
+  ('reflab_rls_owner', 'postgres', 'supabase_admin', true, false, false),
+  ('reflab_rls_owner', 'postgres', 'postgres', false, false, true),
+  ('reflab_preflight_audit_owner', 'postgres', 'supabase_admin', true, false, false),
+  ('anon', 'authenticator', 'supabase_admin', false, false, true),
+  ('authenticated', 'authenticator', 'supabase_admin', false, false, true),
+  ('service_role', 'authenticator', 'supabase_admin', false, false, true)
+), actual as (
+  select granted.rolname::text, member_role.rolname::text, grantor.rolname::text,
+    membership.admin_option, membership.inherit_option, membership.set_option
+  from pg_catalog.pg_auth_members membership
+  join pg_catalog.pg_roles granted on granted.oid = membership.roleid
+  join pg_catalog.pg_roles member_role on member_role.oid = membership.member
+  join pg_catalog.pg_roles grantor on grantor.oid = membership.grantor
+  where granted.rolname in ('postgres', 'anon', 'authenticated', 'service_role', 'legacy_runtime', 'reflab_rls_owner', 'reflab_prod_preflight_ro', 'reflab_preflight_audit_owner')
+     or member_role.rolname in ('postgres', 'anon', 'authenticated', 'service_role', 'legacy_runtime', 'reflab_rls_owner', 'reflab_prod_preflight_ro', 'reflab_preflight_audit_owner')
+), protected_access as (
+  select subject.oid as subject_oid, target.oid as target_oid
+  from pg_catalog.pg_roles subject cross join pg_catalog.pg_roles target
+  where subject.rolname in ('anon', 'authenticated', 'authenticator', 'service_role')
+    and target.rolname in ('postgres', 'reflab_rls_owner', 'reflab_prod_preflight_ro', 'reflab_preflight_audit_owner', 'supabase_admin', 'supabase_privileged_role')
+)
+select not exists (select * from expected except select * from actual)
+  and not exists (select * from actual except select * from expected)
+  and (select count(*) from protected_access) = 24
+  and not exists (select 1 from protected_access
+    where pg_catalog.pg_has_role(subject_oid, target_oid, 'MEMBER')
+       or pg_catalog.pg_has_role(subject_oid, target_oid, 'USAGE')
+       or pg_catalog.pg_has_role(subject_oid, target_oid, 'SET'))
+  and pg_catalog.pg_has_role('postgres', 'reflab_rls_owner', 'MEMBER')
+  and not pg_catalog.pg_has_role('postgres', 'reflab_rls_owner', 'USAGE')
+  and pg_catalog.pg_has_role('postgres', 'reflab_rls_owner', 'SET')) then
     raise exception 'Unexpected application role membership blocks identity reconciliation'
       using errcode = '55000';
   end if;
@@ -85,9 +102,9 @@ begin
 
   for helper_contract in
     select * from (values
-      ('public.institution_request_user_id()', '9893e8f1ed47027aed9529c192d2afc6da54de996a1385691facdc8a776010de'),
-      ('public.platform_request_user_id()', '9893e8f1ed47027aed9529c192d2afc6da54de996a1385691facdc8a776010de'),
-      ('public.reflab_request_user_id()', '9893e8f1ed47027aed9529c192d2afc6da54de996a1385691facdc8a776010de')
+      ('public.institution_request_user_id()', 'd035c5365d2bef99fa241696564a74587dd47635005771c54731b8c76132edc1'),
+      ('public.platform_request_user_id()', 'd035c5365d2bef99fa241696564a74587dd47635005771c54731b8c76132edc1'),
+      ('public.reflab_request_user_id()', 'd035c5365d2bef99fa241696564a74587dd47635005771c54731b8c76132edc1')
     ) expected(signature, source_hash)
   loop
     if pg_catalog.to_regprocedure(helper_contract.signature) is null then
@@ -96,6 +113,9 @@ begin
 
     select
       routine.prosecdef,
+      routine.proisstrict,
+      routine.proleakproof,
+      routine.prokind,
       routine.provolatile,
       routine.proconfig,
       routine.prorettype,
@@ -132,7 +152,10 @@ begin
     );
     if helper_state.prosecdef
        or helper_state.provolatile <> 's'
-       or helper_state.proconfig is distinct from array['search_path=pg_catalog']::text[]
+       or helper_state.proisstrict
+       or helper_state.proleakproof
+       or helper_state.prokind <> 'f'
+       or helper_state.proconfig is not null
        or helper_state.prorettype <> 'pg_catalog.text'::pg_catalog.regtype
        or helper_state.lanname <> 'sql'
        or helper_state.owner_name <> 'postgres'
@@ -153,6 +176,35 @@ begin
         using errcode = '55000';
     end if;
   end loop;
+
+  if not (with expected(signature, grantee, grantor, privilege_type, is_grantable) as (
+  values
+  ('public.institution_request_user_id()', 'PUBLIC', 'postgres', 'EXECUTE', false),
+  ('public.institution_request_user_id()', 'anon', 'postgres', 'EXECUTE', false),
+  ('public.institution_request_user_id()', 'authenticated', 'postgres', 'EXECUTE', false),
+  ('public.institution_request_user_id()', 'postgres', 'postgres', 'EXECUTE', false),
+  ('public.institution_request_user_id()', 'service_role', 'postgres', 'EXECUTE', false),
+  ('public.platform_request_user_id()', 'postgres', 'postgres', 'EXECUTE', false),
+  ('public.platform_request_user_id()', 'authenticated', 'postgres', 'EXECUTE', false),
+  ('public.platform_request_user_id()', 'service_role', 'postgres', 'EXECUTE', false),
+  ('public.reflab_request_user_id()', 'PUBLIC', 'postgres', 'EXECUTE', false),
+  ('public.reflab_request_user_id()', 'anon', 'postgres', 'EXECUTE', false),
+  ('public.reflab_request_user_id()', 'authenticated', 'postgres', 'EXECUTE', false),
+  ('public.reflab_request_user_id()', 'postgres', 'postgres', 'EXECUTE', false),
+  ('public.reflab_request_user_id()', 'service_role', 'postgres', 'EXECUTE', false)
+), actual as (
+  select expected_function.signature,
+    case when acl.grantee = 0 then 'PUBLIC' else pg_catalog.pg_get_userbyid(acl.grantee)::text end,
+    pg_catalog.pg_get_userbyid(acl.grantor)::text, acl.privilege_type, acl.is_grantable
+  from (select signature from expected group by signature) expected_function
+  join pg_catalog.pg_proc routine on routine.oid = pg_catalog.to_regprocedure(expected_function.signature)
+  cross join lateral pg_catalog.aclexplode(coalesce(routine.proacl,
+    pg_catalog.acldefault('f', routine.proowner))) acl
+)
+select not exists (select * from expected except select * from actual)
+  and not exists (select * from actual except select * from expected)) then
+    raise exception 'Legacy identity helper ACL is unexpected' using errcode = '55000';
+  end if;
 
   if exists (
     select 1
@@ -220,14 +272,15 @@ grant usage on schema public, reflab_private to reflab_rls_owner;
 grant create on schema reflab_private to reflab_rls_owner;
 grant execute on function reflab_private.request_user_id() to reflab_rls_owner;
 grant select on table public.user_global_roles to reflab_rls_owner;
-alter function reflab_private.is_super_admin() owner to reflab_rls_owner;
-revoke create on schema reflab_private from reflab_rls_owner;
-
 revoke all on function reflab_private.request_user_id() from public, anon, authenticated, service_role;
 revoke all on function reflab_private.is_super_admin() from public, anon, authenticated, service_role;
 grant usage on schema reflab_private to authenticated;
 grant execute on function reflab_private.request_user_id() to authenticated;
 grant execute on function reflab_private.is_super_admin() to authenticated;
+
+-- Harden ACLs while the installer is still the direct function owner.
+alter function reflab_private.is_super_admin() owner to reflab_rls_owner;
+revoke create on schema reflab_private from reflab_rls_owner;
 
 create or replace function public.institution_request_user_id()
 returns text

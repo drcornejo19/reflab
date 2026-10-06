@@ -1,3 +1,4 @@
+import { legacyServiceRoleAccessExact } from "./phase3-identity-pre-input.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -407,7 +408,7 @@ export function classifyIdentitySecurityBridgePreAttestation(results, dependenci
       wrapperAclExact: checks["identity.legacyHelperAclsExact"],
       canonicalFunctionsAbsent: checks["identity.canonicalIdentityFunctionsAbsent"],
       unexpectedBrowserExecuteAbsent: checks["identity.legacyHelperAclsExact"],
-      serviceRoleAccessExact: checks["identity.legacyHelperAclsExact"],
+      serviceRoleAccessExact: legacyServiceRoleAccessExact(identityPayload?.legacy_helper_acl),
       rlsOwnerCreateAbsent: checks["identity.rlsOwnerCreateAbsent"],
       browserSchemaCreateAbsent: checks["identity.browserSchemaCreateAbsent"],
     },

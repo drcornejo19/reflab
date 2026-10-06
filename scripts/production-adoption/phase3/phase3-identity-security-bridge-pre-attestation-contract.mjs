@@ -3,11 +3,15 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { jsonQuery } from "../../production-preflight/queries.mjs";
 import { PHASE3_DEVELOPMENT_RPCS, PHASE3_LEGACY_IDENTITY_HELPERS } from "./phase3-security-contract.mjs";
+import {
+  IDENTITY_MEMBERSHIP_PRE_SQL, IDENTITY_PRE_HELPER_ACL,
+  identityMembershipsExact,
+} from "./phase3-identity-pre-input.mjs";
 
 export const IDENTITY_SECURITY_BRIDGE_ARTIFACT =
   "supabase/migrations/20260901064236_production_adoption_identity_security_bridge.sql";
 export const IDENTITY_SECURITY_BRIDGE_SHA256 =
-  "057ab50a4cbe40f153ca2c3d32563b1f188f366e358912ceabbc1fefc2f78330";
+  "3cf17916b711b1fc301f0bd566d8d10d69b263f398a9305a4464e673e18acb1f";
 export const IDENTITY_SECURITY_BRIDGE_PRE_QUERY_ID =
   "phase3_identity_security_bridge_pre";
 
@@ -83,10 +87,13 @@ export const identitySecurityBridgePreQuery = jsonQuery(
         or pg_catalog.strpos(pg_catalog.lower(pg_catalog.pg_get_functiondef(procedure.oid)), 'auth.uid()') > 0
       )
   ), protected_memberships as (
-    select granted.rolname as granted_role, member_role.rolname as member_role
+    select granted.rolname as granted_role, member_role.rolname as member_role,
+      grantor.rolname as grantor_role, membership.admin_option,
+      membership.inherit_option, membership.set_option
     from pg_catalog.pg_auth_members membership
     join pg_catalog.pg_roles granted on granted.oid = membership.roleid
     join pg_catalog.pg_roles member_role on member_role.oid = membership.member
+    join pg_catalog.pg_roles grantor on grantor.oid = membership.grantor
     where granted.rolname in ('anon', 'authenticated', 'service_role', 'legacy_runtime',
       'reflab_rls_owner', 'reflab_prod_preflight_ro', 'reflab_preflight_audit_owner')
       or member_role.rolname in ('anon', 'authenticated', 'service_role', 'legacy_runtime',
@@ -101,7 +108,7 @@ export const identitySecurityBridgePreQuery = jsonQuery(
       'rlsOwnerExact', coalesce((select not rolcanlogin and not rolsuper and not rolcreatedb
         and not rolcreaterole and not rolinherit and not rolbypassrls
         from pg_catalog.pg_roles where rolname = 'reflab_rls_owner'), false),
-      'roleMembershipsExact', not exists(select 1 from protected_memberships),
+      'roleMembershipsExact', ${IDENTITY_MEMBERSHIP_PRE_SQL},
       'canonicalIdentityFunctionsAbsent',
         pg_catalog.to_regprocedure('reflab_private.request_user_id()') is null
         and pg_catalog.to_regprocedure('reflab_private.is_super_admin()') is null,
@@ -130,20 +137,23 @@ export const identitySecurityBridgePreQuery = jsonQuery(
       (select coalesce(pg_catalog.json_agg(signature order by signature), '[]'::json)
        from unnest(array[${developmentSignaturesSql}]::text[]) state(signature)
        where pg_catalog.to_regprocedure(state.signature) is not null),
-    'roleMemberships', (select coalesce(pg_catalog.json_agg(state order by granted_role, member_role), '[]'::json)
-      from protected_memberships state)
+    'roleMemberships', (select coalesce(pg_catalog.json_agg(state order by granted_role, member_role, grantor_role), '[]'::json)
+      from protected_memberships state),
+    'effectiveRelationships', (select pg_catalog.json_agg(pg_catalog.json_build_object(
+      'subject_role', subject.rolname, 'target_role', target.rolname,
+      'member', pg_catalog.pg_has_role(subject.oid, target.oid, 'MEMBER'),
+      'usage', pg_catalog.pg_has_role(subject.oid, target.oid, 'USAGE'),
+      'set', pg_catalog.pg_has_role(subject.oid, target.oid, 'SET')))
+      from pg_catalog.pg_roles subject cross join pg_catalog.pg_roles target
+      where (subject.rolname in ('anon', 'authenticated', 'authenticator', 'service_role')
+        and target.rolname in ('postgres', 'reflab_rls_owner', 'reflab_prod_preflight_ro',
+          'reflab_preflight_audit_owner', 'supabase_admin', 'supabase_privileged_role'))
+        or (subject.rolname = 'postgres' and target.rolname = 'reflab_rls_owner'))
   ))`,
 );
 
 const aclFields = ["signature", "grantee", "grantor", "privilege_type", "is_grantable"];
-const expectedAcl = Object.freeze(PHASE3_LEGACY_IDENTITY_HELPERS.flatMap((helper) => [
-  Object.freeze({ signature: helper.signature, grantee: "postgres", grantor: "postgres",
-    privilege_type: "EXECUTE", is_grantable: false }),
-  Object.freeze({ signature: helper.signature, grantee: "authenticated", grantor: "postgres",
-    privilege_type: "EXECUTE", is_grantable: false }),
-  Object.freeze({ signature: helper.signature, grantee: "service_role", grantor: "postgres",
-    privilege_type: "EXECUTE", is_grantable: false }),
-]));
+const expectedAcl = IDENTITY_PRE_HELPER_ACL;
 
 const key = (value, fields) => fields.map((field) => JSON.stringify(value?.[field] ?? null)).join("|");
 
@@ -165,7 +175,7 @@ function helpersExact(observed) {
       && actual.strict_mode === false && actual.security_definer === false
       && actual.leakproof === false && actual.function_kind === "f"
       && actual.owner_name === expected.owner
-      && JSON.stringify(actual.configuration) === JSON.stringify(["search_path=pg_catalog"])
+      && actual.configuration === null
       && actual.source_hash === expected.sourceHash && actual.direct_identity_reader === true));
 }
 
@@ -176,11 +186,14 @@ export function classifyIdentitySecurityBridgePreState(payload) {
     .some((name) => typeof baseChecks[name] !== "boolean")
     || !Array.isArray(payload?.legacy_helpers) || !Array.isArray(payload?.legacy_helper_acl)
     || !Array.isArray(payload?.direct_identity_readers)
-    || !payload?.canonical_functions || !Array.isArray(payload?.roleMemberships)) {
+    || !payload?.canonical_functions || !Array.isArray(payload?.roleMemberships)
+    || !Array.isArray(payload?.effectiveRelationships)) {
     return { classification: "UNKNOWN" };
   }
   const checks = {
     ...baseChecks,
+    roleMembershipsExact: baseChecks.roleMembershipsExact === true
+      && identityMembershipsExact(payload.roleMemberships, payload.effectiveRelationships),
     legacyHelpersExact: helpersExact(payload.legacy_helpers),
     legacyHelperAclsExact: exactSet(payload.legacy_helper_acl, expectedAcl, aclFields),
   };

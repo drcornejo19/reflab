@@ -32,10 +32,10 @@ export const PHASE3_DEVELOPMENT_RPCS = Object.freeze([
 export const PHASE3_LEGACY_IDENTITY_HELPERS = Object.freeze([
   {
     signature: "public.institution_request_user_id()",
-    sourceHash: "9893e8f1ed47027aed9529c192d2afc6da54de996a1385691facdc8a776010de",
+    sourceHash: "d035c5365d2bef99fa241696564a74587dd47635005771c54731b8c76132edc1",
     owner: "postgres",
     security: "INVOKER",
-    searchPath: "pg_catalog",
+    searchPath: null,
     callerSource: "202607160001_institutional_multitenant_foundation.sql",
     replacement: "reflab_private.request_user_id()",
     decision: "legacy_required_temporarily",
@@ -43,10 +43,10 @@ export const PHASE3_LEGACY_IDENTITY_HELPERS = Object.freeze([
   },
   {
     signature: "public.platform_request_user_id()",
-    sourceHash: "9893e8f1ed47027aed9529c192d2afc6da54de996a1385691facdc8a776010de",
+    sourceHash: "d035c5365d2bef99fa241696564a74587dd47635005771c54731b8c76132edc1",
     owner: "postgres",
     security: "INVOKER",
-    searchPath: "pg_catalog",
+    searchPath: null,
     callerSource: "202607240001/202607240002 access-control policies and helpers",
     replacement: "reflab_private.request_user_id()",
     decision: "legacy_required_temporarily",
@@ -54,10 +54,10 @@ export const PHASE3_LEGACY_IDENTITY_HELPERS = Object.freeze([
   },
   {
     signature: "public.reflab_request_user_id()",
-    sourceHash: "9893e8f1ed47027aed9529c192d2afc6da54de996a1385691facdc8a776010de",
+    sourceHash: "d035c5365d2bef99fa241696564a74587dd47635005771c54731b8c76132edc1",
     owner: "postgres",
     security: "INVOKER",
-    searchPath: "pg_catalog",
+    searchPath: null,
     callerSource: "Production-only object; privileged caller inventory still required",
     replacement: "reflab_private.request_user_id()",
     decision: "unknown_requires_evidence",

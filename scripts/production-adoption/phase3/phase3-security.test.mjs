@@ -124,17 +124,18 @@ test("identity reader allowlist compares stable OIDs instead of rendered regproc
   assert.doesNotMatch(diagnosticSql, /rendered_identity\s*=\s*any/i);
 });
 
-test("identity bridge rejects every protected-role membership in both directions", () => {
+test("identity bridge pins approved memberships and rejects relevant tuple/effective drift", () => {
   for (const role of [
     "anon", "authenticated", "service_role", "legacy_runtime", "reflab_rls_owner",
     "reflab_prod_preflight_ro", "reflab_preflight_audit_owner",
   ]) assert.match(identitySql, new RegExp(`'${role}'`));
   assert.match(identitySql, /granted\.rolname\s+in\s*\(/i);
   assert.match(identitySql, /member_role\.rolname\s+in\s*\(/i);
-  assert.match(identitySql, /granted\.rolname\s*=\s*current_user/i);
-  assert.match(identitySql, /member_role\.rolname\s*=\s*current_user/i);
-  assert.doesNotMatch(identitySql, /granted\.rolname\s+not\s+in/i);
-  assert.match(identitySql, /reviewed bootstrap allowlist is empty/i);
+  assert.match(identitySql, /membership\.grantor/);
+  assert.match(identitySql, /select \* from expected except select \* from actual/i);
+  assert.match(identitySql, /select \* from actual except select \* from expected/i);
+  assert.match(identitySql, /pg_has_role\(subject_oid, target_oid, 'SET'\)/);
+  assert.doesNotMatch(identitySql, /reviewed bootstrap allowlist is empty/i);
 });
 
 test("Phase 3 membership diagnostics expose only role attributes and aggregate role edges", () => {
@@ -156,13 +157,13 @@ test("legacy identity helper contracts pin signature, owner, mode, search path, 
     assert.equal(actualHash, helper.sourceHash);
     assert.equal(helper.owner, "postgres");
     assert.equal(helper.security, "INVOKER");
-    assert.equal(helper.searchPath, "pg_catalog");
+    assert.equal(helper.searchPath, null);
     assert.match(identitySql, new RegExp(helper.sourceHash, "i"));
   }
   assert.match(identitySql, /identity_arguments\s*<>\s*''/i);
   assert.match(identitySql, /overload_count\s*<>\s*1/i);
   assert.match(identitySql, /owner_name\s*<>\s*'postgres'/i);
-  assert.match(identitySql, /proconfig is distinct from array\['search_path=pg_catalog'\]/i);
+  assert.match(identitySql, /helper_state\.proconfig is not null/i);
 });
 
 test("function source hashing removes only exterior whitespace in JavaScript and PostgreSQL", () => {

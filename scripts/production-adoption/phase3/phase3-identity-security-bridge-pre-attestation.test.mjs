@@ -42,7 +42,31 @@ const runnerPath = resolve(import.meta.dirname,
   "run-production-identity-security-bridge-pre-attestation.mjs");
 const runnerSource = readFileSync(runnerPath, "utf8");
 const expectedHead = "a".repeat(40);
-const helperHash = "9893e8f1ed47027aed9529c192d2afc6da54de996a1385691facdc8a776010de";
+const helperHash = "d035c5365d2bef99fa241696564a74587dd47635005771c54731b8c76132edc1";
+const approvedMemberships = [
+  ["anon", "postgres", "supabase_admin", true, true, true],
+  ["authenticated", "postgres", "supabase_admin", true, true, true],
+  ["authenticator", "postgres", "supabase_admin", true, true, true],
+  ["pg_create_subscription", "postgres", "supabase_admin", true, true, true],
+  ["pg_monitor", "postgres", "supabase_admin", true, true, true],
+  ["pg_read_all_data", "postgres", "supabase_admin", true, true, true],
+  ["pg_signal_backend", "postgres", "supabase_admin", true, true, true],
+  ["reflab_prod_preflight_ro", "postgres", "supabase_admin", true, false, false],
+  ["service_role", "postgres", "supabase_admin", true, true, true],
+  ["supabase_privileged_role", "postgres", "supabase_admin", false, true, true],
+  ["reflab_rls_owner", "postgres", "supabase_admin", true, false, false],
+  ["reflab_rls_owner", "postgres", "postgres", false, false, true],
+  ["reflab_preflight_audit_owner", "postgres", "supabase_admin", true, false, false],
+  ["anon", "authenticator", "supabase_admin", false, false, true],
+  ["authenticated", "authenticator", "supabase_admin", false, false, true],
+  ["service_role", "authenticator", "supabase_admin", false, false, true],
+].map(([granted_role, member_role, grantor_role, admin_option, inherit_option, set_option]) =>
+  ({ granted_role, member_role, grantor_role, admin_option, inherit_option, set_option }));
+const effectiveRelationships = ["anon", "authenticated", "authenticator", "service_role"]
+  .flatMap((subject_role) => ["postgres", "reflab_rls_owner", "reflab_prod_preflight_ro",
+    "reflab_preflight_audit_owner", "supabase_admin", "supabase_privileged_role"]
+    .map((target_role) => ({ subject_role, target_role, member: false, usage: false, set: false })))
+  .concat({ subject_role: "postgres", target_role: "reflab_rls_owner", member: true, usage: false, set: true });
 const signatures = [
   "public.institution_request_user_id()",
   "public.platform_request_user_id()",
@@ -88,7 +112,7 @@ function identityPayload(overrides = {}) {
     signature, exists: true, identity_arguments: "", result_type: "text",
     language_name: "sql", volatility: "s", strict_mode: false,
     security_definer: false, leakproof: false, function_kind: "f",
-    owner_name: "postgres", configuration: ["search_path=pg_catalog"],
+    owner_name: "postgres", configuration: null,
     source_hash: helperHash, direct_identity_reader: true,
   }));
   const legacyHelperAcl = signatures.flatMap((signature) => [
@@ -99,6 +123,10 @@ function identityPayload(overrides = {}) {
     { signature, grantee: "service_role", grantor: "postgres", privilege_type: "EXECUTE",
       is_grantable: false },
   ]);
+  for (const signature of [signatures[0], signatures[2]]) {
+    for (const grantee of ["PUBLIC", "anon"]) legacyHelperAcl.push({ signature, grantee,
+      grantor: "postgres", privilege_type: "EXECUTE", is_grantable: false });
+  }
   return {
     checks,
     legacy_helpers: legacyHelpers,
@@ -106,7 +134,8 @@ function identityPayload(overrides = {}) {
     direct_identity_readers: [...signatures],
     canonical_functions: { requestUserIdPresent: false, isSuperAdminPresent: false },
     developmentIdentityObjectsPresent: [],
-    roleMemberships: [],
+    roleMemberships: structuredClone(approvedMemberships),
+    effectiveRelationships: structuredClone(effectiveRelationships),
     ...overrides,
   };
 }
@@ -232,7 +261,26 @@ test("exact composed evidence emits 64236_PRE_EXACT", () => {
   assert.equal(output.PRODUCTION_64236_PRE_STATE, "CURRENTLY_ATTESTED_EXACT");
   assert.equal(output.adoptionState.finalPhaseKey, "canonical_objects");
   assert.equal(output.historicalState.evidenceRole, "SHARED_PRESERVATION_EVIDENCE");
+  assert.equal(output.securityState.serviceRoleAccessExact, true);
 });
+
+for (const [field, value] of [["configuration", ["search_path=pg_catalog"]],
+  ["security_definer", true], ["strict_mode", true], ["leakproof", true],
+  ["function_kind", "p"], ["volatility", "v"], ["language_name", "plpgsql"]]) {
+  test("historical helper " + field + " drift is a named blocker", () => {
+    const payload = identityPayload(); payload.legacy_helpers[0][field] = value;
+    assert.ok(classify(payload).failedChecks.includes("identity.legacyHelpersExact"));
+  });
+}
+for (const grantee of ["PUBLIC", "anon"]) {
+  test("platform helper cannot gain historical " + grantee + " execute", () => {
+    const payload = identityPayload(); payload.legacy_helper_acl.push({ signature: signatures[1],
+      grantee, grantor: "postgres", privilege_type: "EXECUTE", is_grantable: false });
+    const report = classify(payload);
+    assert.ok(report.failedChecks.includes("identity.legacyHelperAclsExact"));
+    assert.equal(report.securityState.serviceRoleAccessExact, true);
+  });
+}
 
 for (const [name, mutation, failedCheck] of [
   ["already-installed POST state", (payload) => {

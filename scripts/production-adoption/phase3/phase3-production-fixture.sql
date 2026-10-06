@@ -1,21 +1,27 @@
 -- Synthetic reviewed pre-cutover security state for disposable PostgreSQL only.
 
+create schema if not exists auth;
+create or replace function auth.jwt() returns jsonb language sql stable as $jwt$
+  select coalesce(nullif(pg_catalog.current_setting('request.jwt.claims', true), ''), '{}')::jsonb;
+$jwt$;
+grant usage on schema auth to authenticated, service_role;
+
 create or replace function public.institution_request_user_id()
-returns text language sql stable security invoker set search_path = pg_catalog
+returns text language sql stable security invoker
 as $function$
-  select nullif((coalesce(nullif(pg_catalog.current_setting('request.jwt.claims', true), ''), '{}')::jsonb)->>'sub', '');
+  select nullif(auth.jwt() ->> 'sub', '');
 $function$;
 
 create or replace function public.platform_request_user_id()
-returns text language sql stable security invoker set search_path = pg_catalog
+returns text language sql stable security invoker
 as $function$
-  select nullif((coalesce(nullif(pg_catalog.current_setting('request.jwt.claims', true), ''), '{}')::jsonb)->>'sub', '');
+  select nullif(auth.jwt() ->> 'sub', '');
 $function$;
 
 create or replace function public.reflab_request_user_id()
-returns text language sql stable security invoker set search_path = pg_catalog
+returns text language sql stable security invoker
 as $function$
-  select nullif((coalesce(nullif(pg_catalog.current_setting('request.jwt.claims', true), ''), '{}')::jsonb)->>'sub', '');
+  select nullif(auth.jwt() ->> 'sub', '');
 $function$;
 
 create or replace function public.platform_is_super_admin()
@@ -34,9 +40,9 @@ as $function$
   select public.platform_is_super_admin();
 $function$;
 
-revoke all on function public.institution_request_user_id() from public, anon;
+grant execute on function public.institution_request_user_id() to public, anon;
 revoke all on function public.platform_request_user_id() from public, anon;
-revoke all on function public.reflab_request_user_id() from public, anon;
+grant execute on function public.reflab_request_user_id() to public, anon;
 grant execute on function public.institution_request_user_id() to authenticated, service_role;
 grant execute on function public.platform_request_user_id() to authenticated, service_role;
 grant execute on function public.reflab_request_user_id() to authenticated, service_role;

@@ -280,11 +280,11 @@ test("no provider execution imports or discovery path", () => {
     assert.doesNotMatch(source, /executeMigration|readFileSync|migrations\/|db push|run-production-phase2b|run-production-identity-security/);
   }
 });
-test("protected migration and existing attestation byte-identical", () => {
+test("current identity migration and attestation hashes are pinned", () => {
   for (const [path, hash] of [
     ["../../../supabase/migrations/20260901064236_production_adoption_identity_security_bridge.sql",
-      "057ab50a4cbe40f153ca2c3d32563b1f188f366e358912ceabbc1fefc2f78330"],
+      "3cf17916b711b1fc301f0bd566d8d10d69b263f398a9305a4464e673e18acb1f"],
     ["run-production-identity-security-bridge-pre-attestation.mjs",
-      "7863d99a6a7036552e2ec1fd260610782cc2fe0e1a17b4ec2cb7e86fcd48ee2f"],
+      "2a3737836f8deea768385f283956a1315746ae5c7e873e16a16379d472fb8f6e"],
   ]) assert.equal(createHash("sha256").update(readFileSync(new URL(path, import.meta.url))).digest("hex"), hash);
 });
