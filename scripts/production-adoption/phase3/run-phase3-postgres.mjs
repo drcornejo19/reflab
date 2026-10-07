@@ -13,6 +13,7 @@ import {
   PHASE3_POLICY_MATRIX,
 } from "./phase3-security-contract.mjs";
 import { rehearseIdentityBridge } from "./phase3-identity-pre-postgres-rehearsal.mjs";
+import { rehearseCorePolicy, holdCorePolicyLock } from "./phase3-core-policy-postgres-rehearsal.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const root = resolve(directory, "..", "..", "..");
@@ -475,7 +476,8 @@ export async function runPhase3Postgres() {
   const identitySecurityBridgePreOnly = process.argv.includes(
     "--attest-identity-security-bridge-pre",
   );
-  const identityCorrectionOnly = process.argv.includes("--rehearse-identity-security-bridge-pre-correction");
+  const corePolicyOnly = process.argv.includes("--rehearse-core-policy-reconciliation");
+  const identityCorrectionOnly = corePolicyOnly || process.argv.includes("--rehearse-identity-security-bridge-pre-correction");
   const requestedNegativeCase = process.argv.find((argument) => argument.startsWith("--negative-case="))?.split("=", 2)[1] ?? null;
   if (requestedNegativeCase !== null && !phase3NegativeCases.includes(requestedNegativeCase)) {
     throw new Error("Unknown isolated Phase 3 negative scenario.");
@@ -816,6 +818,25 @@ export async function runPhase3Postgres() {
         migration: readFileSync(resolve(migrationsDirectory, PHASE3_MIGRATIONS[0]), "utf8"),
         historicalFingerprintSql: historicalFingerprintSql(), preOnly: identitySecurityBridgePreOnly,
       });
+      if (corePolicyOnly) {
+        if (result.fullPost !== "EXACT") throw new Error("Exact 64236 POST is required for isolated 64245 rehearsal.");
+        const policy = await rehearseCorePolicy({
+          sql: (statement, user) => sql(positive, statement, user),
+          execute: (statement, user = "postgres") => spawnSync(binaries.psql,
+            ["-X", "--no-psqlrc", "-q", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose"],
+            { env: { ...environment, PGDATABASE: positive, PGUSER: user }, input: statement,
+              encoding: "utf8", windowsHide: true, maxBuffer: 16 * 1024 * 1024 }),
+          lock: () => holdCorePolicyLock(binaries.psql, { ...environment, PGDATABASE: positive }),
+          checkpoint: () => sql(positive, "create database core_policy_restore template postgres owner postgres;", "supabase_admin"),
+          restore: () => {
+            sql("core_policy_restore", "drop database postgres;", "supabase_admin");
+            sql("core_policy_restore", "create database postgres template core_policy_restore owner postgres;", "supabase_admin");
+            sql(positive, "drop role if exists reflab_pre_cutover_evidence_owner;", "supabase_admin");
+          },
+          migration: readFileSync(resolve(migrationsDirectory, PHASE3_MIGRATIONS[1]), "utf8"),
+        });
+        return { identityPredecessor: result.fullPost, ...policy, cleanup: cleanupCluster() };
+      }
       return { ...result, cleanup: cleanupCluster() };
     }
     if (roleMembershipDiagnosticOnly) {

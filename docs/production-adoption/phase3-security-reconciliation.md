@@ -54,7 +54,7 @@ The reviewed batch contains 22 canonical policies:
 - `psychology_checkins`, `psychology_wellbeing_assessments`, and `psychology_exercise_sessions`: own read, insert, update.
 - `attempts`, `exam_results`, `rules_exam_results`, and `notification_events`: own read only.
 
-Existing policies may be absent or match a recognized legacy equivalent using `platform_*` or `institution_*` helpers. Any different command, role set, permissive mode, `USING`, or `WITH CHECK` aborts. Replacement occurs in one transaction and points directly to `reflab_private.request_user_id()` and `reflab_private.is_super_admin()`.
+Existing targeted policies may be absent or match a recognized legacy equivalent using `platform_request_user_id()` and `platform_is_super_admin()` (qualified or unqualified), or the canonical private helpers. `institution_*` expressions are not normalized by this migration. Any different command, role set, permissive mode, `USING`, or `WITH CHECK` aborts. Replacement occurs in one transaction and points directly to `reflab_private.request_user_id()` and `reflab_private.is_super_admin()`.
 
 Institution policies are intentionally excluded. Their helper graph and permission catalog need a separate exact caller/policy inventory before replacement.
 
