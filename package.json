@@ -98,6 +98,8 @@
     "test:production-adoption:phase3-role-membership-forensic": "node --test scripts/production-adoption/phase3/phase3-role-membership-forensic.test.mjs",
     "test:production-adoption:phase3-role-membership-forensic:postgres": "node scripts/production-adoption/phase3/run-phase3-role-membership-forensic-postgres.mjs",
     "attest:production-identity-security-bridge-pre": "node scripts/production-adoption/phase3/run-production-identity-security-bridge-pre-attestation.mjs --production-identity-security-bridge-pre-attestation",
+    "attest:production-core-policy-pre": "node scripts/production-adoption/phase3/run-production-core-policy-pre-attestation.mjs --production-core-policy-pre-attestation",
+    "forensic:production-core-policy-baseline": "node scripts/production-adoption/phase3/run-production-core-policy-baseline-forensic.mjs --production-core-policy-baseline-forensic",
     "run:production-phase3-identity-security-bridge": "node scripts/production-adoption/phase3/run-production-phase3-identity-security-bridge.mjs --production-phase3-identity-security-bridge",
     "test:production-adoption:identity-security-bridge-pre-attestation": "node --test scripts/production-adoption/phase3/phase3-identity-security-bridge-pre-attestation.test.mjs",
     "test:production-adoption:identity-security-bridge-pre-attestation:postgres": "node scripts/production-adoption/phase3/run-phase3-postgres.mjs --attest-identity-security-bridge-pre",

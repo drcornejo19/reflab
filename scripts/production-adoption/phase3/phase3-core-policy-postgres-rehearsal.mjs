@@ -5,6 +5,8 @@ import { executeReadOnlyBatch } from "../../production-preflight/run.mjs";
 import { classifyIdentityBridgePostBatch } from "./phase3-identity-security-bridge-ddl-contract.mjs";
 import { CORE_POLICY_QUERY_ID, CORE_POLICY_SHA256, CORE_POLICY_MUTATIONS,
   buildCorePolicyBatch, classifyCorePolicyBatch } from "./phase3-core-policy-contract.mjs";
+import { classifyCorePolicyPreAttestation } from "./phase3-core-policy-pre-attestation-contract.mjs";
+import { buildCorePolicyBaselineForensicBatch, classifyCorePolicyBaselineObservation } from "./phase3-core-policy-baseline-forensic-contract.mjs";
 
 // This entry point only receives the disposable harness's loopback connection.
 export function holdCorePolicyLock(psql, environment) {
@@ -39,8 +41,21 @@ export async function rehearseCorePolicy({ sql, execute, lock, checkpoint, resto
   const observe = () => executeReadOnlyBatch(buildCorePolicyBatch(), {}, { processEnvironment: {},
     spawn: () => ({ status: 0, stdout: sql(buildCorePolicyBatch()), stderr: "" }) });
   const initial = observe();
+  const observeBaseline = () => classifyCorePolicyBaselineObservation(executeReadOnlyBatch(
+    buildCorePolicyBaselineForensicBatch(), {}, { processEnvironment: {},
+      spawn: () => ({ status: 0, stdout: sql(buildCorePolicyBaselineForensicBatch()), stderr: "" }) }), { targetExact: true });
+  const forensicPre = observeBaseline();
+  assert.equal(forensicPre.classification, "OBSERVATION_COMPLETE", JSON.stringify(forensicPre.failedChecks));
+  assert.equal(forensicPre.predecessor64236State.comparison, "EXACT");
+  assert.equal(forensicPre.targetedObservedPolicies, 22);
+  assert.equal(forensicPre.tableSecurityInventory.length, 10);
   assert.equal(classifyIdentityBridgePostBatch(initial).classification, "EXACT");
   const baseline = structuredClone(initial.get(CORE_POLICY_QUERY_ID));
+  // Approval belongs only to this disposable fixture, never to the Production CLI.
+  const localApproval = { projectRef: "nagjddldrldwavmfaytc", migrationSha: CORE_POLICY_SHA256,
+    reviewed: true, inventory: baseline };
+  assert.equal(classifyCorePolicyPreAttestation(initial).classification, "BLOCKER");
+  assert.equal(classifyCorePolicyPreAttestation(initial, localApproval).classification, "64245_PRE_EXECUTABLE_EXACT");
   const pre = (evidence) => classifyCorePolicyBatch(evidence, baseline);
   const post = (evidence) => classifyCorePolicyBatch(evidence, baseline, { post: true });
   assert.equal(pre(initial).classification, "EXECUTABLE_PRE", JSON.stringify(pre(initial).failedChecks));
@@ -134,6 +149,11 @@ export async function rehearseCorePolicy({ sql, execute, lock, checkpoint, resto
   const final = observe();
   assert.equal(post(final).classification, "EXACT", JSON.stringify(post(final).failedChecks));
   assert.equal(pre(final).classification, "ALREADY_INSTALLED_POST");
+  assert.equal(classifyCorePolicyPreAttestation(final, localApproval).classification, "64245_ALREADY_INSTALLED_POST");
+  const forensicPost = observeBaseline();
+  assert.equal(forensicPost.classification, "OBSERVATION_COMPLETE");
+  assert.equal(forensicPost.approval, "NOT_PERFORMED");
+  assert.deepEqual(forensicPost.nonTargetPolicyInventory, forensicPre.nonTargetPolicyInventory);
   let replayCalls = 0;
   invokeCorePolicyIfExecutable(pre(final), migration, () => { replayCalls++; });
   assert.equal(replayCalls, 0);
@@ -141,5 +161,6 @@ export async function rehearseCorePolicy({ sql, execute, lock, checkpoint, resto
     installedPostPre: "NOT_EXECUTABLE_ALREADY_INSTALLED", migrationInvocations: 1, reexecutionInvocations: 0,
     targetTables: 10, targetPolicies: post(final).targetedCount, nonTargetPolicies: post(final).nonTargetCount,
     preservation: "EXACT", missingTargetInput: "EXPLICITLY_ALLOWED", negatives, rollbacks,
-    privilegeWarnings: 0, mutations: CORE_POLICY_MUTATIONS, laterProvidersExecuted: 0 };
+    privilegeWarnings: 0, mutations: CORE_POLICY_MUTATIONS, laterProvidersExecuted: 0,
+    baselineForensic: { pre: forensicPre.classification, post: forensicPost.classification, approval: "NOT_PERFORMED" } };
 }
