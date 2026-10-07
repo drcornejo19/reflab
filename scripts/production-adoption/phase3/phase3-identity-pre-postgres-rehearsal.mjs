@@ -1,53 +1,16 @@
 import assert from "node:assert/strict";
 import { IDENTITY_PRE_MEMBERSHIPS } from "./phase3-identity-pre-input.mjs";
 import { classifyIdentitySecurityBridgePreState, identitySecurityBridgePreQuery } from "./phase3-identity-security-bridge-pre-attestation-contract.mjs";
+import { executeReadOnlyBatch } from "../../production-preflight/run.mjs";
+import { buildIdentitySecurityBridgePreBatch, classifyIdentitySecurityBridgePreAttestation } from "./run-production-identity-security-bridge-pre-attestation.mjs";
+import { IdentityBridgeRunnerFailure, IDENTITY_BRIDGE_OPERATION, IDENTITY_BRIDGE_OPT_IN,
+  runProductionIdentitySecurityBridge } from "./run-production-phase3-identity-security-bridge.mjs";
 
-// Intermediate 64236 state: request_user_id and the wrappers still belong to postgres.
-const postFunctions = [
-  ["reflab_private.request_user_id()", "text", false, "postgres", "e8f03466a3552a13b61c5555e9bed5a8fb392d4236d9fd69fea720fc529cbcd5", ["postgres", "authenticated", "reflab_rls_owner"]],
-  ["reflab_private.is_super_admin()", "boolean", true, "reflab_rls_owner", "5daabe23a490557055a2129814bf408ebf2af42604ad21d25226cce01e4b9986", ["reflab_rls_owner", "authenticated"]],
-  ...["institution", "platform", "reflab"].map((name) => [`public.${name}_request_user_id()`, "text", false, "postgres", "3b98e3dc7ede054761782c910afbf3120be785a3e7c29ef5db474f313306c11c", ["postgres", "authenticated", "service_role"]]),
-];
-const signatures = postFunctions.map(([signature]) => `'${signature}'`).join(",");
-export const identityBridgePostEvidenceSql = `select pg_catalog.jsonb_build_object(
-  'functions', (select jsonb_agg(jsonb_build_object(
-    'signature', n.nspname || '.' || p.proname || '()', 'identity_arguments', pg_get_function_identity_arguments(p.oid),
-    'result_type', pg_get_function_result(p.oid), 'language', l.lanname, 'volatility', p.provolatile,
-    'strict', p.proisstrict, 'security_definer', p.prosecdef, 'leakproof', p.proleakproof, 'kind', p.prokind,
-    'owner', pg_get_userbyid(p.proowner), 'configuration', p.proconfig, 'proacl', p.proacl,
-    'source_hash', encode(extensions.digest(convert_to(pg_catalog.regexp_replace(
-      p.prosrc,'^[[:space:]]+|[[:space:]]+$','','g'),'UTF8'),'sha256'),'hex')) order by n.nspname,p.proname)
-    from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
-    join pg_catalog.pg_language l on l.oid=p.prolang
-    where p.oid in (select to_regprocedure(s) from unnest(array[${signatures}]) s)),
-  'acl', (select jsonb_agg(jsonb_build_object('signature', n.nspname || '.' || p.proname || '()',
-    'grantee', case when a.grantee=0 then 'PUBLIC' else pg_get_userbyid(a.grantee) end,
-    'grantor', pg_get_userbyid(a.grantor), 'privilege', a.privilege_type, 'grantable', a.is_grantable)
-    order by n.nspname,p.proname,a.grantee,a.grantor)
-    from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
-    cross join lateral pg_catalog.aclexplode(coalesce(p.proacl,pg_catalog.acldefault('f',p.proowner))) a
-    where p.oid in (select to_regprocedure(s) from unnest(array[${signatures}]) s)),
-  'rls_owner_create', has_schema_privilege('reflab_rls_owner','public','CREATE')
-    or has_schema_privilege('reflab_rls_owner','reflab_private','CREATE'),
-  'ledger_rows', (select count(*) from reflab_meta.production_adoption_state),
-  'schema_state_rows', (select count(*) from reflab_meta.reflab_schema_state)
-)::text;`;
-
-export function identityBridgePostExact(evidence) {
-  if (!Array.isArray(evidence?.functions) || !Array.isArray(evidence?.acl)) return false;
-  const canonical = (rows) => rows.map((r) => JSON.stringify(Object.fromEntries(
-    Object.entries(r).sort(([a], [b]) => a.localeCompare(b))))).sort().join("\n");
-  const expectedAcl = postFunctions.flatMap(([signature, , , owner, , grantees]) =>
-    grantees.map((grantee) => ({ signature, grantee, grantor: owner, privilege: "EXECUTE", grantable: false })));
-  return evidence.functions.length === 5 && postFunctions.every(([signature, result, definer, owner, source]) => {
-    const f = evidence.functions.find((row) => row.signature === signature);
-    return f?.identity_arguments === "" && f.result_type === result && f.language === "sql"
-      && f.volatility === "s" && f.strict === false && f.security_definer === definer
-      && f.leakproof === false && f.kind === "f" && f.owner === owner
-      && JSON.stringify(f.configuration) === '["search_path=pg_catalog"]' && f.source_hash === source;
-  }) && canonical(evidence.acl) === canonical(expectedAcl)
-    && evidence.rls_owner_create === false && evidence.ledger_rows === 4 && evidence.schema_state_rows === 0;
-}
+import {
+  identityBridgePostEvidenceSql, identityBridgePostExact,
+  buildIdentityBridgePostBatch, classifyIdentityBridgePostBatch,
+} from "./phase3-identity-security-bridge-ddl-contract.mjs";
+export { identityBridgePostEvidenceSql, identityBridgePostExact } from "./phase3-identity-security-bridge-ddl-contract.mjs";
 
 // Called only by the disposable, loopback-only Phase3 harness. Never a Production entry point.
 export function rehearseIdentityBridge({ sql, execute, migration, historicalFingerprintSql, preOnly = false }) {
@@ -81,6 +44,10 @@ export function rehearseIdentityBridge({ sql, execute, migration, historicalFing
       && (r.member || r.usage || r.set)) }));
   if (preOnly) return { classification: pre.classification, checks: pre.checks,
     phase3MigrationsApplied: 0, postgresMajor: 17, postgresVersion, localOnly: true };
+  const readBatch = (batch) => executeReadOnlyBatch(batch, {}, { processEnvironment: {},
+    spawn: () => ({ status: 0, stdout: sql(batch), stderr: "" }) });
+  const fullPre = classifyIdentitySecurityBridgePreAttestation(readBatch(buildIdentitySecurityBridgePreBatch()));
+  assert.equal(fullPre.classification, "64236_PRE_EXACT", JSON.stringify(fullPre.failedChecks));
   const negatives = [];
   let migrationInvocations = 0;
   const invoke = (statement) => { migrationInvocations++; return execute(statement); };
@@ -189,7 +156,30 @@ export function rehearseIdentityBridge({ sql, execute, migration, historicalFing
     assert.equal(observe().classification, "EXACT_EXPECTED_PRE_STATE");
     lifecycleNegatives.push({ name, result: "BLOCKER", rollback: "PASS" });
   }
-  const result = invoke(migration);
+  const runnerEnvironment = {
+    ALLOW_PRODUCTION_DDL: "true", [IDENTITY_BRIDGE_OPT_IN]: "true",
+    REFLAB_PRODUCTION_DDL_PROJECT_REF: "nagjddldrldwavmfaytc",
+    REFLAB_PRODUCTION_DDL_APPROVED_HEAD: "a".repeat(40),
+    REFLAB_PRODUCTION_DDL_DB_URL: "postgresql://postgres.nagjddldrldwavmfaytc:local-fixture-only@aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require",
+  };
+  // Every database callback is explicitly bound to this disposable loopback cluster.
+  const runnerDependencies = { argument: IDENTITY_BRIDGE_OPERATION,
+    git: (args) => args[0] === "rev-parse" ? "a".repeat(40) : "",
+    executeReadOnly: readBatch };
+  let result;
+  let runnerMigrationCalls = 0;
+  assert.throws(() => runProductionIdentitySecurityBridge(runnerEnvironment, {
+    ...runnerDependencies,
+    executeMigration: (statement) => {
+      runnerMigrationCalls++;
+      assert.equal(statement, migration, "only the pinned artifact may execute");
+      result = invoke(statement);
+      assert.equal(result.status, 0, "local migration must complete before forced POST mismatch");
+    },
+    classifyPost: () => ({ classification: "BLOCKER" }),
+  }), (error) => error instanceof IdentityBridgeRunnerFailure && error.stage === "POST_DDL"
+    && error.migrationState === "COMMITTED_REQUIRES_READ_ONLY_FORENSIC");
+  assert.equal(runnerMigrationCalls, 1, "POST failure must never trigger a rerun");
   const warnings = (String(result.stderr).match(/WARNING:/g) ?? []).length;
   const sqlstate = String(result.stderr).match(/(?:ERROR|FATAL):\s+([0-9A-Z]{5}):/)?.[1] ?? null;
   if (result.status !== 0) {
@@ -202,6 +192,16 @@ export function rehearseIdentityBridge({ sql, execute, migration, historicalFing
   const postEvidence = JSON.parse(scalar(`begin read only; ${identityBridgePostEvidenceSql} rollback;`));
   assert.equal(identityBridgePostExact(postEvidence), true, JSON.stringify(postEvidence));
   assert.equal(scalar(preservedDataSql), preservedDataBefore, "historical rows and adoption data preserved");
+  const fullPost = classifyIdentityBridgePostBatch(readBatch(buildIdentityBridgePostBatch()));
+  assert.equal(fullPost.classification, "EXACT", JSON.stringify(fullPost));
+  const reexecutionPre = classifyIdentitySecurityBridgePreAttestation(readBatch(buildIdentitySecurityBridgePreBatch()));
+  assert.equal(reexecutionPre.classification, "BLOCKER", "installed POST must never be accepted as PRE");
+  let reexecutionCalls = 0;
+  assert.throws(() => runProductionIdentitySecurityBridge(runnerEnvironment, { ...runnerDependencies,
+    executeMigration: () => { reexecutionCalls++; } }),
+  (error) => error instanceof IdentityBridgeRunnerFailure && error.stage === "PRE_DDL"
+    && error.migrationState === "NOT_EXECUTED");
+  assert.equal(reexecutionCalls, 0, "real installed PG17 state must block the migration callback");
   assert.equal(warnings, 0, "privilege warnings must fail the positive rehearsal");
   const postNegatives = [];
   for (const [name, change] of [
@@ -223,6 +223,8 @@ export function rehearseIdentityBridge({ sql, execute, migration, historicalFing
   }
   return { postgresVersion, pre: "EXACT", migration: "PASS", post: "EXACT", sqlstate,
     privilegeWarnings: warnings, oldOrderingRejected: true, historicalAndAdoptionDataPreserved: true,
+    fullPre: fullPre.classification, fullPost: fullPost.classification, reexecution: "PRE_REJECTED",
+    runnerPostFailureMigrationCalls: runnerMigrationCalls, runnerReexecutionCalls: reexecutionCalls,
     functionEvidence: postEvidence,
     negatives, postNegatives, lifecycleNegatives, rollbacks };
 }

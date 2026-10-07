@@ -559,7 +559,13 @@ export async function runPhase3Postgres() {
     apply(name, phase1Migrations[2]);
     sql(name, buildSemanticSidecarFixtureSql());
     apply(name, phase2aMigration);
-    for (const migration of phase2bMigrations) apply(name, migration);
+    for (const migration of phase2bMigrations) {
+      if ((identityCorrectionOnly || identitySecurityBridgePreOnly)
+        && migration === "202608130001_canonical_training_attempts.sql") {
+        apply(name, "20260925150422_production_adoption_pre_phase2b_schema_reconciliation.sql");
+      }
+      apply(name, migration);
+    }
     sql(name, phase3Fixture);
   }
   function migrationFailure(name, migration, setup, expectedMessage, rollbackSql) {
