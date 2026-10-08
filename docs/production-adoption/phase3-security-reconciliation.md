@@ -58,6 +58,35 @@ Existing targeted policies may be absent or match a recognized legacy equivalent
 
 Institution policies are intentionally excluded. Their helper graph and permission catalog need a separate exact caller/policy inventory before replacement.
 
+### Reviewed 64245 historical Production input
+
+The completed baseline forensic observed four historical target SELECT policies
+(`user_profiles`, `attempts`, `exam_results`, `rules_exam_results`), eighteen missing
+target slots, and twenty-three non-target policies. The corrected, unexecuted
+64245 validates and retires exactly three direct-auth legacy policies in the same
+transaction: `Users can read own notification events`,
+`match_preparations_authenticated_manage_own`, and
+`post_match_reviews_authenticated_manage_own`. Missing or altered retirement
+inputs abort before any policy mutation. Catalog expressions preserve literal
+case and casts; raw CREATE statement formatting is not an approval boundary.
+
+The canonical matrix remains 22 policies, with no authenticated DELETE policy.
+The local caller audit found server/service-role UPSERT/read paths, cancellation
+by appointment UPDATE, and no authenticated DELETE dependency. The three service
+policies, three historical insert policies, ten audit-owner policies, and four
+admin/training support policies remain unchanged (20 total). POST rejects any
+surviving legacy direct-auth browser path or authenticated DELETE/ALL policy on
+the two match tables. Exact observed mutation accounting is seven policy drops
+(four replacements plus three retirements) and twenty-two creates; no product DML.
+
+Table/column ACLs, owners, RLS/FORCE, 64236, adoption boundaries and fingerprints
+are preservation invariants, not cleanup targets. ACL reconciliation remains a
+separate mandatory pre-runtime boundary, including MAINTAIN, TRUNCATE, TRIGGER
+and REFERENCES review. This does not authorize a later provider or Production.
+The historical forensic report remains immutable and observation-only. The PRE
+attestation still needs a separately committed/reviewed Production baseline;
+the local rehearsal inventory must never approve Production by observation.
+
 ## Identity helper migration
 
 `reflab_private.request_user_id()` remains the canonical Clerk-subject boundary defined by the current baseline. `user_*` values are not rewritten and `user_identity_links` is never created.

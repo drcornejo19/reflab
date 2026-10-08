@@ -146,8 +146,18 @@ test("single bounded SELECT-only transaction with no migration path", () => {
   const source = readFileSync(new URL("./run-production-core-policy-baseline-forensic.mjs", import.meta.url), "utf8");
   assert.doesNotMatch(source, /executeMigration|executeDdl|64249|classifyCorePolicyPreAttestation/);
 });
-test("existing uncommitted PRE runner and contract are preserved byte-for-byte", () => {
-  for (const [file, hash] of [["run-production-core-policy-pre-attestation.mjs", "08e6b2a9f7597202db355c6d1d91b88735bf845b5944ddb6d6d25ed4707d4394"],
-    ["phase3-core-policy-pre-attestation-contract.mjs", "3b701b3cbfd89e60c1f62e7d3fbd33585657c652c590af8896b182e36bb53e2c"]])
+test("existing PRE runner remains byte-identical; baseline approval remains independent", () => {
+  for (const [file, hash] of [["run-production-core-policy-pre-attestation.mjs", "08e6b2a9f7597202db355c6d1d91b88735bf845b5944ddb6d6d25ed4707d4394"]])
     assert.equal(createHash("sha256").update(readFileSync(new URL(file, import.meta.url))).digest("hex"), hash);
+  const contract = readFileSync(new URL("./phase3-core-policy-pre-attestation-contract.mjs", import.meta.url), "utf8");
+  assert.match(contract, /APPROVED_PRODUCTION_CORE_POLICY_BASELINE = null/);
+  assert.match(contract, /PRODUCTION_BASELINE_REVIEW_REQUIRED/);
+});
+test("legacy retirement is an observation label, never approval", () => {
+  const e = fixture(); const p = e.get(CORE_POLICY_QUERY_ID);
+  p.policies.push({ ...p.policies[0], table: "notification_events", name: "Users can read own notification events", oid: 999 });
+  const r = observe(e);
+  assert.equal(r.classification, "OBSERVATION_COMPLETE");
+  assert.equal(r.nonTargetPolicyInventory[0].intendedEffect, "RETIRE_IF_EXACT_APPROVED_PRE");
+  assert.equal(r.approval, "NOT_PERFORMED");
 });

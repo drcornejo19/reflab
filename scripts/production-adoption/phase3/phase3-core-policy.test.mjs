@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { CORE_POLICY_MIGRATION, CORE_POLICY_SHA256, CORE_POLICY_TABLES, CORE_POLICY_MUTATIONS,
   classifyCorePolicyInventory, classifyCorePolicyBatch, buildCorePolicyBatch,
-  normalizeCorePolicyExpression } from "./phase3-core-policy-contract.mjs";
+  normalizeCorePolicyExpression, CORE_POLICY_RETIRED, CORE_POLICY_LEGACY_EXPRESSION } from "./phase3-core-policy-contract.mjs";
 import { invokeCorePolicyIfExecutable } from "./phase3-core-policy-postgres-rehearsal.mjs";
 import { PHASE3_POLICY_MATRIX } from "./phase3-security-contract.mjs";
 
@@ -26,13 +26,21 @@ const policies = tables.flatMap((table, index) => (writable.includes(table)
 const extra = { oid: 999, schema: "public", table: "attempts", name: "attempts_own_insert",
   command: "INSERT", permissive: true, roles: ["authenticated"], using: null,
   withCheck: "user_id = public.platform_request_user_id()" };
+const historical = "(user_id = COALESCE((auth.jwt() ->> 'sub'::text), (auth.uid())::text))";
+const legacy = [
+  ["notification_events", "Users can read own notification events", "SELECT"],
+  ["match_preparations", "match_preparations_authenticated_manage_own", "ALL"],
+  ["post_match_reviews", "post_match_reviews_authenticated_manage_own", "ALL"],
+].map(([table, name, command], i) => ({ oid: 900 + i, schema: "public", table, name, command,
+  permissive: true, roles: ["authenticated"], using: historical, withCheck: command === "ALL" ? historical : null }));
 function fixture(canonical = false) {
   return { tables: tables.map((table) => ({ schema: "public", table, owner: "postgres", rls: true,
     force: false, installer_authority: true })),
   policies: [...policies.map((p) => ({ ...structuredClone(p), using: canonical ? p.using : p.using
     ?.replaceAll("reflab_private.request_user_id", "public.platform_request_user_id")
     .replaceAll("reflab_private.is_super_admin", "public.platform_is_super_admin") ?? null,
-  withCheck: canonical ? p.withCheck : p.withCheck?.replaceAll("reflab_private.request_user_id", "public.platform_request_user_id") ?? null })), structuredClone(extra)],
+  withCheck: canonical ? p.withCheck : p.withCheck?.replaceAll("reflab_private.request_user_id", "public.platform_request_user_id") ?? null })),
+    ...(canonical ? [] : structuredClone(legacy)), structuredClone(extra)],
   table_acl: [{ table: "attempts", grantee: "service_role", grantor: "postgres", privilege: "SELECT", grantable: false }],
   column_acl: [{ table: "user_profiles", column: "user_id", grantee: "reflab_rls_owner", grantor: "postgres", privilege: "SELECT", grantable: false }],
   productFingerprint: "a".repeat(32), protectedObjectsHash: "b".repeat(32),
@@ -55,7 +63,7 @@ test("missing target is an explicit approved input, not an arbitrary expression 
   assert.equal(classify(p, { post: true }).classification, "BLOCKER");
 });
 test("all targets missing remains explicit executable PRE", () => {
-  const p = fixture(); p.policies = [structuredClone(extra)];
+  const p = fixture(); p.policies = [...structuredClone(legacy), structuredClone(extra)];
   assert.equal(classify(p).missingTargets.length, 22);
   assert.equal(classify(p).classification, "EXECUTABLE_PRE");
 });
@@ -170,8 +178,44 @@ test("migration byte pin and metadata-only mutation accounting remain exact", ()
   assert.match(migration, /lock_timeout = '5s'/); assert.match(migration, /statement_timeout = '90s'/);
   assert.doesNotMatch(migration, /\b(?:grant|revoke|notify|truncate|insert into|update public|delete from|alter table|create function|create index|create trigger)\b/i);
   assert.equal(CORE_POLICY_MUTATIONS.policyCreates, 22);
-  assert.equal(CORE_POLICY_MUTATIONS.maxPolicyDrops, 22);
+  assert.equal(CORE_POLICY_MUTATIONS.maxPolicyDrops, 25);
   for (const [key, value] of Object.entries(CORE_POLICY_MUTATIONS)) if (!/PolicyDrops|policyCreates/.test(key)) assert.equal(value, 0, key);
+});
+
+for (const legacyPolicy of legacy) for (const [field, value] of [
+  ["missing", null], ["name", "renamed"], ["command", "DELETE"], ["roles", ["anon"]],
+  ["permissive", false], ["using", "true"], ["withCheck", "true"],
+  ["using", historical.replace("'sub'", "'SUB'")],
+]) test(`legacy retirement rejects ${legacyPolicy.table} ${field} ${JSON.stringify(value)}`, () => {
+  const p = fixture(); const row = p.policies.find((r) => r.name === legacyPolicy.name);
+  if (field === "missing") p.policies = p.policies.filter((r) => r !== row); else row[field] = value;
+  const result = classify(p);
+  assert.equal(result.classification, "BLOCKER");
+  assert.equal(invokeCorePolicyIfExecutable(result, migration, () => assert.fail("must not execute")).invoked, 0);
+});
+test("POST requires retirement and rejects extra browser DELETE or direct-auth authorization", () => {
+  for (const row of [...legacy, { ...legacy[1], name: "unexpected_delete", command: "DELETE", using: "true", withCheck: null },
+    { ...legacy[0], name: "unexpected_direct_auth" }]) {
+    const p = fixture(true); p.policies.push(structuredClone(row));
+    assert.equal(classify(p, { post: true }).classification, "BLOCKER");
+    assert.equal(classify(p).executablePre, false);
+  }
+});
+test("SQL retirement PRE and JS share exact catalog metadata and literal semantics", () => {
+  assert.equal(CORE_POLICY_LEGACY_EXPRESSION, historical);
+  assert.deepEqual(CORE_POLICY_RETIRED, legacy.map(({ table, name, command }) => ({ table, name, command })));
+  const block = migration.slice(migration.indexOf("do $legacy_preflight$"), migration.indexOf("do $replace_policies$"));
+  assert.ok(block.includes(historical.replaceAll("'", "''")));
+  for (const { table, name, command } of legacy) {
+    assert.ok(block.includes(`('${table}', '${name}', '${command === 'ALL' ? '*' : 'r'}', ${command === 'ALL'})`));
+  }
+  assert.match(block, /actual.polroles is distinct from array\[authenticated_oid\]/);
+  assert.match(block, /actual.polpermissive is distinct from true/);
+  assert.match(block, /if not found then/);
+  assert.equal((block.match(/^drop policy /gm) ?? []).length, 3);
+  assert.ok(migration.indexOf("$legacy_preflight$;") < migration.indexOf('drop policy "Users'));
+  assert.match(migration, /p.polroles && array\[0::oid, authenticated_oid\]/);
+  assert.doesNotMatch(migration, /create policy[^;]*for delete/i);
 });
 test("bounded evidence batch preserves authoritative 64236 checks and inventories every policy", () => {
   const batch = buildCorePolicyBatch();

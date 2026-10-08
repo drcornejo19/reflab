@@ -130,6 +130,44 @@ begin
 end
 $preflight$;
 
+do $legacy_preflight$
+declare
+  expected record;
+  actual record;
+  authenticated_oid oid := (select oid from pg_catalog.pg_roles where rolname = 'authenticated');
+  historical_expression constant text := '(user_id = COALESCE((auth.jwt() ->> ''sub''::text), (auth.uid())::text))';
+begin
+  -- Compare catalog-normalized expressions; never normalize away quoted literal differences.
+  for expected in select * from (values
+    ('notification_events', 'Users can read own notification events', 'r', false),
+    ('match_preparations', 'match_preparations_authenticated_manage_own', '*', true),
+    ('post_match_reviews', 'post_match_reviews_authenticated_manage_own', '*', true)
+  ) approved(table_name, policy_name, command, has_check) loop
+    select p.polcmd::text as command, p.polpermissive, p.polroles,
+      pg_catalog.pg_get_expr(p.polqual, p.polrelid, false) as using_expression,
+      pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid, false) as check_expression
+    into actual from pg_catalog.pg_policy p
+    where p.polrelid = pg_catalog.to_regclass('public.' || expected.table_name)
+      and p.polname = expected.policy_name;
+    if not found then
+      raise exception 'Required historical policy is absent' using errcode = '55000';
+    end if;
+    if actual.command is distinct from expected.command
+       or actual.polpermissive is distinct from true
+       or actual.polroles is distinct from array[authenticated_oid]
+       or actual.using_expression is distinct from historical_expression
+       or actual.check_expression is distinct from
+         (case when expected.has_check then historical_expression else null end) then
+      raise exception 'Historical policy retirement input mismatch' using errcode = '55000';
+    end if;
+  end loop;
+end
+$legacy_preflight$;
+
+drop policy "Users can read own notification events" on public.notification_events;
+drop policy match_preparations_authenticated_manage_own on public.match_preparations;
+drop policy post_match_reviews_authenticated_manage_own on public.post_match_reviews;
+
 do $replace_policies$
 declare
   table_name text;
@@ -259,5 +297,31 @@ begin
   end if;
 end
 $assertions$;
+
+do $retirement_post$
+declare
+  authenticated_oid oid := (select oid from pg_catalog.pg_roles where rolname = 'authenticated');
+begin
+  if exists (
+    select 1 from pg_catalog.pg_policy p
+    join pg_catalog.pg_class c on c.oid = p.polrelid
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and (
+      (c.relname, p.polname) in (
+        ('notification_events', 'Users can read own notification events'),
+        ('match_preparations', 'match_preparations_authenticated_manage_own'),
+        ('post_match_reviews', 'post_match_reviews_authenticated_manage_own'))
+      or (p.polroles && array[0::oid, authenticated_oid] and (
+        (c.relname in ('match_preparations', 'post_match_reviews') and p.polcmd in ('*', 'd'))
+        or (c.relname in ('notification_events', 'match_preparations', 'post_match_reviews')
+          and (coalesce(pg_catalog.pg_get_expr(p.polqual, p.polrelid, false), '') || ' ' ||
+            coalesce(pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid, false), ''))
+            ~* 'auth[[:space:]]*[.][[:space:]]*(jwt|uid)[[:space:]]*[(]')))
+    )
+  ) then
+    raise exception 'Legacy browser authorization survived policy reconciliation' using errcode = '55000';
+  end if;
+end
+$retirement_post$;
 
 commit;

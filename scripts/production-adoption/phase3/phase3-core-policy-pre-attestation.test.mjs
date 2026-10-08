@@ -22,7 +22,14 @@ function inventory(canonical = false) {
       .map((command, n) => ({ oid: 100 + index * 3 + n, schema: "public", table,
         name: `${table}_own_${{ SELECT: "read", INSERT: "insert", UPDATE: "update" }[command]}`,
         command, permissive: true, roles: ["authenticated"], using: command === "SELECT" ? `${own} or ${admin}` : command === "UPDATE" ? own : null,
-        withCheck: command === "SELECT" ? null : own }))),
+        withCheck: command === "SELECT" ? null : own }))).concat(canonical ? [] : [
+          ["notification_events", "Users can read own notification events", "SELECT"],
+          ["match_preparations", "match_preparations_authenticated_manage_own", "ALL"],
+          ["post_match_reviews", "post_match_reviews_authenticated_manage_own", "ALL"],
+        ].map(([table, name, command], i) => ({ oid: 900 + i, schema: "public", table, name, command,
+          roles: ["authenticated"], permissive: true,
+          using: "(user_id = COALESCE((auth.jwt() ->> 'sub'::text), (auth.uid())::text))",
+          withCheck: command === "ALL" ? "(user_id = COALESCE((auth.jwt() ->> 'sub'::text), (auth.uid())::text))" : null }))),
     productFingerprint: "a".repeat(32), protectedObjectsHash: "b".repeat(32), phase4Absent: true, cutoverAbsent: true, runtimeDisabled: true };
 }
 const approval = { reviewed: true, projectRef: "nagjddldrldwavmfaytc", migrationSha: CORE_POLICY_SHA256, inventory: inventory() };
@@ -40,6 +47,19 @@ const classify = (e, a = approval, d = composition) => classifyCorePolicyPreAtte
 test("independently approved historical PRE and canonical POST remain distinct", () => {
   assert.equal(classify(evidence()).classification, "64245_PRE_EXECUTABLE_EXACT");
   assert.equal(classify(evidence(inventory(true))).classification, "64245_ALREADY_INSTALLED_POST");
+});
+test("Production lineage pins four historical targets and eighteen missing slots", () => {
+  const p = inventory();
+  p.policies = p.policies.filter((r) => r.oid >= 900 || r.command === "SELECT"
+    && ["user_profiles", "attempts", "exam_results", "rules_exam_results"].includes(r.table));
+  const a = { ...approval, inventory: structuredClone(p) };
+  assert.equal(classify(evidence(p), a).classification, "64245_PRE_EXECUTABLE_EXACT");
+  const changed = structuredClone(p); changed.policies.splice(0, 1);
+  assert.equal(classify(evidence(changed), a).classification, "BLOCKER");
+  for (const name of ["Users can read own notification events", "match_preparations_authenticated_manage_own", "post_match_reviews_authenticated_manage_own"]) {
+    const drift = structuredClone(p); drift.policies = drift.policies.filter((r) => r.name !== name);
+    assert.equal(classify(evidence(drift), a).classification, "BLOCKER");
+  }
 });
 test("no baseline or unreviewed/wrong-project approval cannot authorize itself", () => {
   for (const a of [null, {}, { ...approval, reviewed: false }, { ...approval, projectRef: "other" }, { ...approval, migrationSha: "wrong" }]) {

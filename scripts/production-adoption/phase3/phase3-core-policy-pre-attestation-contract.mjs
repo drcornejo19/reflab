@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { CORE_POLICY_QUERY_ID, CORE_POLICY_SHA256, CORE_POLICY_TABLES, classifyCorePolicyBatch,
-  nonTargetPolicies } from "./phase3-core-policy-contract.mjs";
+  nonTargetPolicies, preservedCorePolicies, isRetiredCorePolicy } from "./phase3-core-policy-contract.mjs";
 import { classifyIdentityBridgePostBatch } from "./phase3-identity-security-bridge-ddl-contract.mjs";
 import { CANONICAL_RUNTIME_INSTALLED_POST_QUERY_ID } from "../phase2b/phase2b-canonical-runtime-installed-contract.mjs";
 
@@ -34,11 +34,18 @@ export function classifyCorePolicyPreAttestation(results, approval = APPROVED_PR
   const identity = classifyIdentity(evidence);
   const core = classifyCore(evidence, approved ? approval.inventory : null);
   const runtime = evidence.get(CANONICAL_RUNTIME_INSTALLED_POST_QUERY_ID);
+  const targets = (p) => {
+    const nonTargets = new Set(nonTargetPolicies(p?.policies ?? []));
+    return (p?.policies ?? []).filter((r) => !nonTargets.has(r)).map((r) =>
+      JSON.stringify(fields.policies.map((key) => r[key]))).sort();
+  };
   const counts = runtime?.counts ?? {};
   const checks = {
     transactionReadOnly: evidence.get("read_only_guard") === "on",
     predecessorExact: identity.classification === "EXACT",
     productionBaselineApproved: approved ? true : "UNKNOWN",
+    approvedTargetInputExact: core.classification === "ALREADY_INSTALLED_POST" || approved
+      && JSON.stringify(targets(inventory)) === JSON.stringify(targets(approval.inventory)),
     corePolicyEvidenceComplete: core.classification === "UNKNOWN" ? "UNKNOWN" : true,
     historicalCountsExact: counts.attempts === 37 && counts.exam_results === 6
       && counts.notification_events === 60 && counts.clips === 30,
@@ -77,6 +84,8 @@ export function classifyCorePolicyPreAttestation(results, approval = APPROVED_PR
     targetPolicyState: { classification: core.classification, policies: policies.filter((p) => !nonTargetSet.has(p)),
       missingTargets: core.missingTargets ?? null },
     nonTargetPolicyState: { policies: nonTargets, count: nonTargets.length,
+      retirementCandidates: nonTargets.filter(isRetiredCorePolicy),
+      preservedPolicies: preservedCorePolicies(policies),
       independentlyApproved: approved, preservationExact: core.checks?.nonTargetPoliciesPreserved ?? "UNKNOWN" },
     historicalState: { attempts: counts.attempts ?? null, examResults: counts.exam_results ?? null,
       notificationEvents: counts.notification_events ?? null, clips: counts.clips ?? null },

@@ -4,9 +4,28 @@ import { identityBridgePostQueries, classifyIdentityBridgePostBatch } from "./ph
 import { PHASE4B_WAVE1_HELPERS } from "../phase4/phase4b-wave1-contract.mjs";
 
 export const CORE_POLICY_MIGRATION = "20260901064245_production_adoption_core_policy_reconciliation.sql";
-export const CORE_POLICY_SHA256 = "cfa44bed4c7feb033087a4ea632986e5f37174dc93bbe730ee9168dc84a63a34";
+export const CORE_POLICY_SHA256 = "839ce75ab6961d1bcc304957e571aebe669b33473089dd95d4e1a03285f80ee1";
 export const CORE_POLICY_TABLES = Object.freeze([...new Set(PHASE3_POLICY_MATRIX.map((p) => p.table))]);
 export const CORE_POLICY_QUERY_ID = "phase3_core_policy_inventory";
+// pg_get_expr output, not raw CREATE POLICY text: preserve literal case and casts.
+export const CORE_POLICY_LEGACY_EXPRESSION = "(user_id = COALESCE((auth.jwt() ->> 'sub'::text), (auth.uid())::text))";
+export const CORE_POLICY_RETIRED = Object.freeze([
+  { table: "notification_events", name: "Users can read own notification events", command: "SELECT" },
+  { table: "match_preparations", name: "match_preparations_authenticated_manage_own", command: "ALL" },
+  { table: "post_match_reviews", name: "post_match_reviews_authenticated_manage_own", command: "ALL" },
+]);
+export const isRetiredCorePolicy = (p) => p?.schema === "public"
+  && CORE_POLICY_RETIRED.some((r) => r.table === p.table && r.name === p.name);
+export function legacyCorePoliciesExact(policies) {
+  return CORE_POLICY_RETIRED.every((r) => {
+    const matches = policies.filter((p) => isRetiredCorePolicy(p) && p.table === r.table && p.name === r.name);
+    const p = matches[0];
+    return matches.length === 1 && p.command === r.command && p.permissive === true
+      && JSON.stringify(p.roles) === '["authenticated"]'
+      && p.using === CORE_POLICY_LEGACY_EXPRESSION
+      && p.withCheck === (r.command === "ALL" ? CORE_POLICY_LEGACY_EXPRESSION : null);
+  });
+}
 const literal = (s) => `'${s.replaceAll("'", "''")}'`;
 const tables = CORE_POLICY_TABLES.map(literal).join(",");
 const productDigests = CORE_POLICY_TABLES.map((table) => `(select pg_catalog.md5(coalesce(
@@ -69,6 +88,7 @@ export function buildCorePolicyBatch() {
 const key = (p) => `${p.schema}.${p.table}.${p.name}`;
 const targetedKeys = new Set(PHASE3_POLICY_MATRIX.map((p) => `public.${p.table}.${p.name}`));
 export const nonTargetPolicies = (policies) => policies.filter((p) => !targetedKeys.has(key(p)));
+export const preservedCorePolicies = (policies) => nonTargetPolicies(policies).filter((p) => !isRetiredCorePolicy(p));
 const stable = (value) => JSON.stringify(value, (_, v) => v && !Array.isArray(v) && typeof v === "object"
   ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v);
 const exactRows = (a, b) => Array.isArray(a) && Array.isArray(b)
@@ -118,7 +138,8 @@ export function classifyCorePolicyInventory(payload, baseline, predecessorExact,
       && exactRows(payload.tables, baseline.tables),
     tableAclPreserved: exactRows(payload.table_acl, baseline.table_acl),
     columnAclPreserved: exactRows(payload.column_acl, baseline.column_acl),
-    nonTargetPoliciesPreserved: exactRows(nonTargetPolicies(payload.policies), nonTargetPolicies(baseline.policies)),
+    approvedLegacyInputExact: legacyCorePoliciesExact(baseline.policies),
+    nonTargetPoliciesPreserved: exactRows(preservedCorePolicies(payload.policies), preservedCorePolicies(baseline.policies)),
     historicalFingerprintsPreserved: payload.productFingerprint === baseline.productFingerprint,
     protectedObjectsPreserved: payload.protectedObjectsHash === baseline.protectedObjectsHash,
     phase4Absent: payload.phase4Absent === true, cutoverAbsent: payload.cutoverAbsent === true,
@@ -127,6 +148,18 @@ export function classifyCorePolicyInventory(payload, baseline, predecessorExact,
   };
   const observed = new Map(payload.policies.filter((p) => targetedKeys.has(key(p))).map((p) => [key(p), p]));
   const canonicalExact = PHASE3_POLICY_MATRIX.every((p) => targetExact(observed.get(`public.${p.table}.${p.name}`), p, false));
+  const legacyAbsent = !payload.policies.some(isRetiredCorePolicy);
+  const installed = canonicalExact && legacyAbsent;
+  const postBoundary = post || installed;
+  checks.legacyPolicyTransitionExact = postBoundary ? legacyAbsent : legacyCorePoliciesExact(payload.policies);
+  checks.noLegacyBrowserPath = !postBoundary || !payload.policies.some((p) =>
+    ["notification_events", "match_preparations", "post_match_reviews"].includes(p.table)
+    && p.roles.some((role) => role === "authenticated" || role === "PUBLIC")
+    && /auth\s*\.\s*(jwt|uid)\s*\(/i.test(`${p.using} ${p.withCheck}`));
+  checks.noAuthenticatedDelete = !postBoundary || !payload.policies.some((p) =>
+    ["match_preparations", "post_match_reviews"].includes(p.table)
+    && p.roles.some((role) => role === "authenticated" || role === "PUBLIC")
+    && ["ALL", "DELETE"].includes(p.command));
   const historicalExact = PHASE3_POLICY_MATRIX.every((p) => {
     const actual = observed.get(`public.${p.table}.${p.name}`);
     return !actual || targetExact(actual, p, true);
@@ -134,10 +167,12 @@ export function classifyCorePolicyInventory(payload, baseline, predecessorExact,
   checks.targetPoliciesExact = post ? canonicalExact : historicalExact;
   const failedChecks = Object.keys(checks).filter((k) => !checks[k]);
   const classification = failedChecks.length ? "BLOCKER" : post ? "EXACT"
-    : canonicalExact ? "ALREADY_INSTALLED_POST" : "EXECUTABLE_PRE";
+    : installed ? "ALREADY_INSTALLED_POST" : "EXECUTABLE_PRE";
   return { classification, executablePre: classification === "EXECUTABLE_PRE", checks, failedChecks,
     missingTargets: PHASE3_POLICY_MATRIX.filter((p) => !observed.has(`public.${p.table}.${p.name}`)).map((p) => p.name),
-    targetedCount: observed.size, nonTargetCount: nonTargetPolicies(payload.policies).length };
+    targetedCount: observed.size, nonTargetCount: nonTargetPolicies(payload.policies).length,
+    preservedNonTargetCount: preservedCorePolicies(payload.policies).length,
+    legacyPoliciesRemaining: payload.policies.filter(isRetiredCorePolicy).length };
 }
 export function classifyCorePolicyBatch(results, baseline, options = {}) {
   if (!(results instanceof Map) || !results.has(CORE_POLICY_QUERY_ID)) return { classification: "UNKNOWN", executablePre: false };
@@ -147,5 +182,5 @@ export function classifyCorePolicyBatch(results, baseline, options = {}) {
 
 export const CORE_POLICY_MUTATIONS = Object.freeze({ productInserts: 0, productUpdates: 0, productDeletes: 0,
   backfill: 0, ledgerWrites: 0, schemaStateWrites: 0, markerWrites: 0, notifications: 0,
-  phase4Writes: 0, runtimeEnablement: 0, cutover: 0, maxPolicyDrops: 22, policyCreates: 22,
+  phase4Writes: 0, runtimeEnablement: 0, cutover: 0, maxPolicyDrops: 25, policyCreates: 22,
   functions: 0, schemas: 0, indexes: 0, constraints: 0, triggers: 0, grants: 0, owners: 0, rlsChanges: 0 });

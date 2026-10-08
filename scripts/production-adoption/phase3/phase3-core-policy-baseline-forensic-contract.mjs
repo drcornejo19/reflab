@@ -1,7 +1,7 @@
 import { buildSqlBatch, jsonQuery } from "../../production-preflight/queries.mjs";
 import { installerIdentityQuery, INSTALLER_IDENTITY_QUERY_ID } from "../bootstrap/run-production-installer-identity-attestation.mjs";
 import { ROLE_BOOTSTRAP_MANAGED_INSTALLER_ATTRIBUTES } from "../bootstrap/production-role-bootstrap-contract.mjs";
-import { CORE_POLICY_TABLES, CORE_POLICY_QUERY_ID, corePolicyQuery, normalizeCorePolicyExpression } from "./phase3-core-policy-contract.mjs";
+import { CORE_POLICY_TABLES, CORE_POLICY_QUERY_ID, corePolicyQuery, normalizeCorePolicyExpression, isRetiredCorePolicy } from "./phase3-core-policy-contract.mjs";
 import { PHASE3_POLICY_MATRIX } from "./phase3-security-contract.mjs";
 import { IDENTITY_BRIDGE_POST_QUERY_ID, identityBridgePostQuery, identityBridgePostExact } from "./phase3-identity-security-bridge-ddl-contract.mjs";
 
@@ -133,7 +133,8 @@ export function classifyCorePolicyBaselineObservation(results, { targetExact = f
       productFingerprint: p?.productFingerprint ?? null, protectedObjectsHash: p?.protectedObjectsHash ?? null } : null,
     tableSecurityInventory: tableShape ? stable(p.tables.map((r) => select(r, tableFields))) : [],
     targetPolicyInventory: [...targetPolicies, ...missingTargetSlots],
-    nonTargetPolicyInventory: policies.filter((r) => !matrix.has(policyKey(r))).map((r) => ({ ...r, label: "NON_TARGET", intendedEffect: "PRESERVE" })),
+    nonTargetPolicyInventory: policies.filter((r) => !matrix.has(policyKey(r))).map((r) => ({ ...r, label: "NON_TARGET",
+      intendedEffect: isRetiredCorePolicy(r) ? "RETIRE_IF_EXACT_APPROVED_PRE" : "PRESERVE" })),
     tableAclInventory: checks.tableAclEvidenceComplete ? stable(p.table_acl.map((r) => ({ ...select(r, aclFields), object: `public.${r.table}` }))) : [],
     columnAclInventory: checks.columnAclEvidenceComplete ? stable(p.column_acl.map((r) => ({ ...select(r, [...aclFields, "column"]), object: `public.${r.table}.${r.column}` }))) : [],
     targetedObservedPolicies: targetPolicies.length, missingTargetSlots,
