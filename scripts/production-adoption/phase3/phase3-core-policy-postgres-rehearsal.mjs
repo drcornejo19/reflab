@@ -5,10 +5,13 @@ import { readFileSync } from "node:fs";
 import { executeReadOnlyBatch } from "../../production-preflight/run.mjs";
 import { classifyIdentityBridgePostBatch } from "./phase3-identity-security-bridge-ddl-contract.mjs";
 import { CORE_POLICY_QUERY_ID, CORE_POLICY_SHA256, CORE_POLICY_MUTATIONS,
-  buildCorePolicyBatch, classifyCorePolicyBatch, preservedCorePolicies, isRetiredCorePolicy,
+  classifyCorePolicyBatch, preservedCorePolicies, isRetiredCorePolicy,
   corePolicyQuery, classifyCorePolicyInventory } from "./phase3-core-policy-contract.mjs";
 import { classifyCorePolicyPreAttestation } from "./phase3-core-policy-pre-attestation-contract.mjs";
 import { buildCorePolicyBaselineForensicBatch, classifyCorePolicyBaselineObservation } from "./phase3-core-policy-baseline-forensic-contract.mjs";
+import { APPROVED_CORE_POLICY_PRODUCTION_BASELINE, CORE_POLICY_BASELINE_DIGEST,
+  buildApprovedCorePolicyPreBatch, corePolicyProductionApproval, validateCorePolicyProductionApproval,
+  canonicalCorePolicyBaseline, corePolicyFixtureStructure } from "./phase3-core-policy-production-baseline-contract.mjs";
 
 // This entry point only receives the disposable harness's loopback connection.
 export function holdCorePolicyLock(psql, environment) {
@@ -41,8 +44,8 @@ export function invokeCorePolicyIfExecutable(result, migration, execute) {
 export async function rehearseCorePolicy({ sql, execute, lock, checkpoint, restore, migration }) {
   assert.equal(createHash("sha256").update(migration).digest("hex"), CORE_POLICY_SHA256);
   sql(readFileSync(new URL("./phase3-core-policy-production-lineage-fixture.sql", import.meta.url), "utf8"));
-  const observe = () => executeReadOnlyBatch(buildCorePolicyBatch(), {}, { processEnvironment: {},
-    spawn: () => ({ status: 0, stdout: sql(buildCorePolicyBatch()), stderr: "" }) });
+  const observe = () => executeReadOnlyBatch(buildApprovedCorePolicyPreBatch(), {}, { processEnvironment: {},
+    spawn: () => ({ status: 0, stdout: sql(buildApprovedCorePolicyPreBatch()), stderr: "" }) });
   const initial = observe();
   const observeBaseline = () => classifyCorePolicyBaselineObservation(executeReadOnlyBatch(
     buildCorePolicyBaselineForensicBatch(), {}, { processEnvironment: {},
@@ -59,11 +62,27 @@ export async function rehearseCorePolicy({ sql, execute, lock, checkpoint, resto
   assert.equal(forensicPre.tableSecurityInventory.length, 10);
   assert.equal(classifyIdentityBridgePostBatch(initial).classification, "EXACT");
   const baseline = structuredClone(initial.get(CORE_POLICY_QUERY_ID));
-  // Approval belongs only to this disposable fixture, never to the Production CLI.
-  const localApproval = { projectRef: "nagjddldrldwavmfaytc", migrationSha: CORE_POLICY_SHA256,
-    reviewed: true, exactTargetInput: true, inventory: baseline };
+  const productionApproval = APPROVED_CORE_POLICY_PRODUCTION_BASELINE;
+  assert.equal(validateCorePolicyProductionApproval(productionApproval).classification, "EXACT");
+  assert.equal(forensicPre.targetedObservedPolicies + baseline.policies.filter(isRetiredCorePolicy).length,
+    productionApproval.baseline.mutations.policyDrops);
+  assert.deepEqual(canonicalCorePolicyBaseline(corePolicyFixtureStructure(baseline)),
+    canonicalCorePolicyBaseline(corePolicyFixtureStructure(productionApproval.inventory)));
+  // The immutable Production snapshot remains pinned. Only this disposable fixture
+  // substitutes its catalog OIDs and synthetic-data fingerprints after structural parity.
+  const fixtureData = structuredClone(productionApproval.baseline);
+  const policyOids = new Map(baseline.policies.map((row) => [`${row.table}.${row.name}`, row.oid]));
+  for (const row of [...fixtureData.targetSlots.filter((slot) => slot.policy).map((slot) => slot.policy),
+    ...fixtureData.legacyPolicies, ...fixtureData.preservedPolicies]) row.oid = policyOids.get(`${row.table}.${row.name}`);
+  fixtureData.historical.productFingerprint = baseline.productFingerprint;
+  fixtureData.historical.protectedObjectsHash = baseline.protectedObjectsHash;
+  const localApproval = corePolicyProductionApproval(fixtureData);
+  const localComposition = { validateApproval: (candidate) => ({ classification: candidate === localApproval
+    && validateCorePolicyProductionApproval(productionApproval).classification === "EXACT" ? "EXACT" : "BLOCKER",
+    checks: { approvedProductionStructureExact: candidate === localApproval } }) };
   assert.equal(classifyCorePolicyPreAttestation(initial).classification, "BLOCKER");
-  assert.equal(classifyCorePolicyPreAttestation(initial, localApproval).classification, "64245_PRE_EXECUTABLE_EXACT");
+  const approvedPre = classifyCorePolicyPreAttestation(initial, localApproval, localComposition);
+  assert.equal(approvedPre.classification, "64245_PRE_EXECUTABLE_EXACT", JSON.stringify(approvedPre.failedChecks));
   const pre = (evidence) => classifyCorePolicyBatch(evidence, baseline);
   const post = (evidence) => classifyCorePolicyBatch(evidence, baseline, { post: true });
   assert.equal(pre(initial).classification, "EXECUTABLE_PRE", JSON.stringify(pre(initial).failedChecks));
@@ -113,8 +132,10 @@ export async function rehearseCorePolicy({ sql, execute, lock, checkpoint, resto
     if (command === "all") cases.push([`${table}_legacy_check`, `alter policy ${identity} with check(true);`]);
   }
   for (const [name, change] of cases) {
-    const result = pre(changedEvidence(change));
+    const changed = changedEvidence(change);
+    const result = pre(changed);
     assert.equal(result.classification, "BLOCKER", name);
+    assert.equal(classifyCorePolicyPreAttestation(changed, localApproval, localComposition).classification, "BLOCKER", name);
     let calls = 0;
     invokeCorePolicyIfExecutable(result, migration, () => { calls++; });
     assert.equal(calls, 0, name);
@@ -126,7 +147,18 @@ export async function rehearseCorePolicy({ sql, execute, lock, checkpoint, resto
   assert.equal(missing.classification, "EXECUTABLE_PRE", JSON.stringify({ failedChecks: missing.failedChecks,
     identity: classifyIdentityBridgePostBatch(missingEvidence) }));
   assert.equal(missing.missingTargets.length, 19);
-  assert.equal(classifyCorePolicyPreAttestation(missingEvidence, localApproval).classification, "BLOCKER");
+  assert.equal(classifyCorePolicyPreAttestation(missingEvidence, localApproval, localComposition).classification, "BLOCKER");
+  for (const [name, change] of [
+    ["approved_target_missing", "drop policy user_profiles_own_read on public.user_profiles;"],
+    ["approved_missing_slot_present", "create policy match_preparations_own_read on public.match_preparations for select to authenticated using(user_id=reflab_private.request_user_id() or reflab_private.is_super_admin());"],
+  ]) {
+    const result = classifyCorePolicyPreAttestation(changedEvidence(change), localApproval, localComposition);
+    assert.equal(result.classification, "BLOCKER", name);
+    let calls = 0;
+    invokeCorePolicyIfExecutable(result, migration, () => { calls++; });
+    assert.equal(calls, 0);
+    negatives.push({ name, migrationInvocations: calls, result: "PASS" });
+  }
 
   const rollbacks = [];
   const requireFailure = (name, statement, state) => {
@@ -135,6 +167,8 @@ export async function rehearseCorePolicy({ sql, execute, lock, checkpoint, resto
     assert.match(String(result.stderr), new RegExp(`(?:ERROR|FATAL):\\s+${state}:`), name);
     assert.equal(pre(observe()).classification, "EXECUTABLE_PRE", name);
     assert.deepEqual(observe().get(CORE_POLICY_QUERY_ID), baseline, name);
+    assert.equal(classifyCorePolicyPreAttestation(observe(), localApproval, localComposition).classification,
+      "64245_PRE_EXECUTABLE_EXACT", name);
     rollbacks.push({ name, sqlstate: state, exactPreRestored: true, result: "PASS" });
   };
   const release = await lock();
@@ -143,6 +177,8 @@ export async function rehearseCorePolicy({ sql, execute, lock, checkpoint, resto
   assert.notEqual(locked.status, 0);
   assert.match(String(locked.stderr), /ERROR:\s+55P03:/);
   assert.deepEqual(observe().get(CORE_POLICY_QUERY_ID), baseline);
+  assert.equal(classifyCorePolicyPreAttestation(observe(), localApproval, localComposition).classification,
+    "64245_PRE_EXECUTABLE_EXACT", "lock_timeout");
   rollbacks.push({ name: "lock_timeout", sqlstate: "55P03", exactPreRestored: true, result: "PASS" });
   const beforeCommit = (injection) => {
     assert.match(migration, /commit;\s*$/i);
@@ -178,14 +214,18 @@ export async function rehearseCorePolicy({ sql, execute, lock, checkpoint, resto
   negatives.push({ name: "insufficient_installer_authority", migrationInvocations: authorityCalls,
     forcedLocalBypassInvocations: 1, forcedSqlstate: "42501", result: "PASS" });
 
-  const invocation = invokeCorePolicyIfExecutable(pre(observe()), migration, execute);
+  const ready = observe();
+  assert.equal(classifyCorePolicyPreAttestation(ready, localApproval, localComposition).classification, "64245_PRE_EXECUTABLE_EXACT");
+  const invocation = invokeCorePolicyIfExecutable(pre(ready), migration, execute);
   assert.equal(invocation.invoked, 1);
   assert.equal(invocation.result.status, 0, "LOCAL_64245_MIGRATION_FAILED");
   assert.equal(/WARNING:|ADVERTENCIA:/.test(String(invocation.result.stderr)), false);
   const final = observe();
   assert.equal(post(final).classification, "EXACT", JSON.stringify(post(final).failedChecks));
   assert.equal(pre(final).classification, "ALREADY_INSTALLED_POST");
-  assert.equal(classifyCorePolicyPreAttestation(final, localApproval).classification, "64245_ALREADY_INSTALLED_POST");
+  const installedAttestation = classifyCorePolicyPreAttestation(final, localApproval, localComposition);
+  assert.equal(installedAttestation.classification, "64245_ALREADY_INSTALLED_POST");
+  assert.equal(installedAttestation.executablePre, false);
   const forensicPost = observeBaseline();
   assert.equal(forensicPost.classification, "OBSERVATION_COMPLETE");
   assert.equal(forensicPost.approval, "NOT_PERFORMED");
@@ -195,6 +235,7 @@ export async function rehearseCorePolicy({ sql, execute, lock, checkpoint, resto
   assert.equal(final.get(CORE_POLICY_QUERY_ID).policies.filter(isRetiredCorePolicy).length, 0);
   assert.equal(post(final).checks.noAuthenticatedDelete, true);
   assert.equal(post(final).checks.noLegacyBrowserPath, true);
+  assert.equal(post(final).targetedCount, productionApproval.baseline.mutations.policyCreates);
   const postNegatives = [];
   for (const [name, statement] of [
     ["browser_delete", "create policy unexpected_delete on public.match_preparations for delete to authenticated using(true);"],
@@ -219,5 +260,7 @@ export async function rehearseCorePolicy({ sql, execute, lock, checkpoint, resto
     preservation: "EXACT", missingTargetInput: "EXPLICITLY_ALLOWED", negatives, postNegatives, rollbacks,
     legacyPoliciesRetired: 3, observedPolicyDrops: 7, observedPolicyCreates: 22,
     privilegeWarnings: 0, mutations: CORE_POLICY_MUTATIONS, laterProvidersExecuted: 0,
+    approvedBaselineStructure: "EXACT", approvedBaselineDigest: CORE_POLICY_BASELINE_DIGEST,
+    attestationPre: "64245_PRE_EXECUTABLE_EXACT", attestationPost: installedAttestation.classification,
     baselineForensic: { pre: forensicPre.classification, post: forensicPost.classification, approval: "NOT_PERFORMED" } };
 }

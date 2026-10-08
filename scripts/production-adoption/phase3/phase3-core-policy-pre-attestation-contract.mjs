@@ -1,14 +1,14 @@
 import { createHash } from "node:crypto";
-import { CORE_POLICY_QUERY_ID, CORE_POLICY_SHA256, CORE_POLICY_TABLES, classifyCorePolicyBatch,
+import { CORE_POLICY_QUERY_ID, CORE_POLICY_TABLES, classifyCorePolicyBatch,
   nonTargetPolicies, preservedCorePolicies, isRetiredCorePolicy } from "./phase3-core-policy-contract.mjs";
 import { classifyIdentityBridgePostBatch } from "./phase3-identity-security-bridge-ddl-contract.mjs";
 import { CANONICAL_RUNTIME_INSTALLED_POST_QUERY_ID } from "../phase2b/phase2b-canonical-runtime-installed-contract.mjs";
+import { APPROVED_CORE_POLICY_PRODUCTION_BASELINE, validateCorePolicyProductionApproval,
+  productionCorePolicyBaselineChecks } from "./phase3-core-policy-production-baseline-contract.mjs";
 
 export const CORE_POLICY_ATTESTATION_FORMAT = "REFLAB_20260901064245_CURRENT_PRODUCTION_PRE_ATTESTATION_V1";
-// No independently reviewed Production inventory has been committed. Never approve an
-// observation by comparing it with itself or with the disposable rehearsal fixture.
-export const APPROVED_PRODUCTION_CORE_POLICY_BASELINE = null;
-const project = "nagjddldrldwavmfaytc";
+// The CLI independently verifies this artifact in its clean approved committed HEAD.
+export const APPROVED_PRODUCTION_CORE_POLICY_BASELINE = APPROVED_CORE_POLICY_PRODUCTION_BASELINE;
 const fields = {
   tables: ["schema", "table", "owner", "rls", "force", "installer_authority"],
   table_acl: ["table", "grantee", "grantor", "privilege", "grantable"],
@@ -26,11 +26,12 @@ function projectInventory(payload) {
 }
 
 export function classifyCorePolicyPreAttestation(results, approval = APPROVED_PRODUCTION_CORE_POLICY_BASELINE,
-  { classifyIdentity = classifyIdentityBridgePostBatch, classifyCore = classifyCorePolicyBatch } = {}) {
+  { classifyIdentity = classifyIdentityBridgePostBatch, classifyCore = classifyCorePolicyBatch,
+    validateApproval = validateCorePolicyProductionApproval, classifyBaseline = productionCorePolicyBaselineChecks } = {}) {
   const evidence = results instanceof Map ? results : new Map();
   const inventory = projectInventory(evidence.get(CORE_POLICY_QUERY_ID));
-  const approved = approval?.projectRef === project && approval?.migrationSha === CORE_POLICY_SHA256
-    && approval?.reviewed === true && approval?.inventory != null;
+  const validation = validateApproval(approval);
+  const approved = validation.classification === "EXACT";
   const identity = classifyIdentity(evidence);
   const core = classifyCore(evidence, approved ? approval.inventory : null);
   const runtime = evidence.get(CANONICAL_RUNTIME_INSTALLED_POST_QUERY_ID);
@@ -43,7 +44,8 @@ export function classifyCorePolicyPreAttestation(results, approval = APPROVED_PR
   const checks = {
     transactionReadOnly: evidence.get("read_only_guard") === "on",
     predecessorExact: identity.classification === "EXACT",
-    productionBaselineApproved: approved ? true : "UNKNOWN",
+    productionBaselineApproved: approved,
+    ...validation.checks,
     approvedTargetInputExact: core.classification === "ALREADY_INSTALLED_POST" || approved
       && JSON.stringify(targets(inventory)) === JSON.stringify(targets(approval.inventory)),
     corePolicyEvidenceComplete: core.classification === "UNKNOWN" ? "UNKNOWN" : true,
@@ -53,11 +55,11 @@ export function classifyCorePolicyPreAttestation(results, approval = APPROVED_PR
     schemaStateEmpty: counts.schema_state_rows === 0,
     canonicalMarkerAbsent: runtime?.checks?.canonicalMarkerAbsent === true,
     developmentObjectsAbsent: runtime?.checks?.developmentObjectsAbsent === true,
+    ...classifyBaseline(evidence, approval, { installedPost: core.classification === "ALREADY_INSTALLED_POST" }),
     ...Object.fromEntries(Object.entries(core.checks ?? {}).map(([k, v]) => [`core.${k}`, v])),
   };
   const failedChecks = Object.keys(checks).filter((key) => checks[key] === false);
   const unknownChecks = Object.keys(checks).filter((key) => checks[key] === "UNKNOWN");
-  if (!approved) unknownChecks.push("PRODUCTION_BASELINE_REVIEW_REQUIRED");
   const exact = failedChecks.length === 0 && unknownChecks.length === 0;
   const classification = exact && core.classification === "EXECUTABLE_PRE" ? "64245_PRE_EXECUTABLE_EXACT"
     : exact && core.classification === "ALREADY_INSTALLED_POST" ? "64245_ALREADY_INSTALLED_POST" : "BLOCKER";
@@ -65,8 +67,16 @@ export function classifyCorePolicyPreAttestation(results, approval = APPROVED_PR
   const nonTargets = nonTargetPolicies(policies);
   const nonTargetSet = new Set(nonTargets);
   return {
-    format: CORE_POLICY_ATTESTATION_FORMAT, classification, checkCount: Object.keys(checks).length,
+    format: CORE_POLICY_ATTESTATION_FORMAT, classification, executablePre: classification === "64245_PRE_EXECUTABLE_EXACT",
+    checkCount: Object.keys(checks).length,
     checks, failedChecks, unknownChecks,
+    baselineApproval: { status: approved ? "INTEGRATED_APPROVED_TRANSITION" : "BLOCKER",
+      version: Number.isInteger(approval?.baseline?.version) ? approval.baseline.version : null,
+      digest: /^[a-f0-9]{64}$/.test(approval?.digest ?? "") ? approval.digest : null,
+      committedArtifactVerified: approval?.committedArtifactVerified === true },
+    TABLE_ACL_BASELINE_PURPOSE: "PRESERVATION_ONLY",
+    TABLE_ACL_SECURITY_STATUS: "PENDING_RECONCILIATION",
+    TABLE_ACL_RECONCILIATION_STILL_REQUIRED: true,
     adoptionState: { ledgerRows: counts.ledger_rows ?? null, schemaStateRows: counts.schema_state_rows ?? null,
       finalPhaseOrder: runtime?.ledger_rows?.at(-1)?.phase_order ?? null,
       finalPhaseKey: runtime?.ledger_rows?.at(-1)?.phase_key ?? null,

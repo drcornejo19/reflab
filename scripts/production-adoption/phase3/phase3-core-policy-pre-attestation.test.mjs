@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { CORE_POLICY_QUERY_ID, CORE_POLICY_SHA256, buildCorePolicyBatch,
+import { CORE_POLICY_QUERY_ID, CORE_POLICY_SHA256,
   classifyCorePolicyInventory } from "./phase3-core-policy-contract.mjs";
+import { APPROVED_CORE_POLICY_PRODUCTION_BASELINE, buildApprovedCorePolicyPreBatch } from "./phase3-core-policy-production-baseline-contract.mjs";
 import { CANONICAL_RUNTIME_INSTALLED_POST_QUERY_ID } from "../phase2b/phase2b-canonical-runtime-installed-contract.mjs";
 import { classifyCorePolicyPreAttestation } from "./phase3-core-policy-pre-attestation-contract.mjs";
 import { CORE_POLICY_ATTESTATION_OPERATION, CORE_POLICY_ATTESTATION_VARIABLES,
@@ -41,7 +42,13 @@ function evidence(payload = inventory()) {
 // Only unit-level composition is stubbed. The disposable PG17 rehearsal exercises
 // the full authoritative predecessor classifier with actual catalog evidence.
 const composition = { classifyIdentity: () => ({ classification: "EXACT", checks: { exact: true }, failedChecks: [] }),
-  classifyCore: (e, b) => classifyCorePolicyInventory(e.get(CORE_POLICY_QUERY_ID), b, true) };
+  classifyCore: (e, b) => classifyCorePolicyInventory(e.get(CORE_POLICY_QUERY_ID), b, true),
+  classifyBaseline: () => ({}),
+  validateApproval: (a) => {
+    const valid = a?.reviewed === true && a?.projectRef === "nagjddldrldwavmfaytc"
+      && a?.migrationSha === CORE_POLICY_SHA256 && a?.inventory != null;
+    return { classification: valid ? "EXACT" : "BLOCKER", checks: { fixtureApprovalExact: valid } };
+  } };
 const classify = (e, a = approval, d = composition) => classifyCorePolicyPreAttestation(e, a, d);
 
 test("independently approved historical PRE and canonical POST remain distinct", () => {
@@ -65,7 +72,7 @@ test("no baseline or unreviewed/wrong-project approval cannot authorize itself",
   for (const a of [null, {}, { ...approval, reviewed: false }, { ...approval, projectRef: "other" }, { ...approval, migrationSha: "wrong" }]) {
     const r = classify(evidence(), a);
     assert.equal(r.classification, "BLOCKER");
-    assert.ok(r.unknownChecks.includes("PRODUCTION_BASELINE_REVIEW_REQUIRED"));
+    assert.ok(r.failedChecks.includes("productionBaselineApproved"));
     assert.equal(r.tableSecurityState.tables.length, 10);
     assert.equal(r.targetPolicyState.policies.length, 22);
   }
@@ -123,6 +130,7 @@ function environment(extra = {}) {
 }
 function dependencies(extra = {}) {
   return { argument: CORE_POLICY_ATTESTATION_OPERATION, git: (a) => a[0] === "rev-parse" ? head : "",
+    assertBaseline: () => APPROVED_CORE_POLICY_PRODUCTION_BASELINE,
     executeReadOnly: () => new Map([["read_only_guard", "on"]]), ...extra };
 }
 async function failure(e, d, reason) {
@@ -155,20 +163,21 @@ test("result shape and READ ONLY are required", async () => {
   await failure(environment(), dependencies({ executeReadOnly: () => ({}) }), "QUERY_RESULT_SHAPE_MISMATCH");
   await failure(environment(), dependencies({ executeReadOnly: () => new Map() }), "READ_ONLY_GUARD_FAILED");
 });
-test("one bounded read-only batch; absent baseline stays BLOCKER", () => {
+test("one bounded read-only batch; incomplete evidence remains BLOCKER with integrated baseline", () => {
   let calls = 0;
   const report = runProductionCorePolicyPreAttestation(environment(), dependencies({ executeReadOnly: (sql) => {
-    calls++; assert.equal(sql, buildCorePolicyBatch()); return evidence();
+    calls++; assert.equal(sql, buildApprovedCorePolicyPreBatch()); return evidence();
   } }));
   assert.equal(calls, 1); assert.equal(report.classification, "BLOCKER");
-  assert.ok(report.unknownChecks.includes("PRODUCTION_BASELINE_REVIEW_REQUIRED"));
+  assert.equal(report.checks.productionBaselineApproved, true);
+  assert.equal(report.baselineApproval.status, "INTEGRATED_APPROVED_TRANSITION");
 });
 test("credentials and URLs are rejected before output", () => {
   for (const value of ["fixture-password", environment()[CORE_POLICY_ATTESTATION_VARIABLES[5]], "https://example.invalid/private"])
     assert.throws(() => serializeCorePolicyAttestation({ value }, environment()));
 });
 test("batch contains no mutation and is bounded by BEGIN READ ONLY / ROLLBACK", () => {
-  const sql = buildCorePolicyBatch();
+  const sql = buildApprovedCorePolicyPreBatch();
   assert.match(sql, /^begin read only;/); assert.match(sql, /rollback;\s*$/);
   assert.equal((sql.match(/begin read only;/g) ?? []).length, 1);
   assert.match(sql, /statement_timeout = '15s'/); assert.match(sql, /lock_timeout = '2s'/);

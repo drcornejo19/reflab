@@ -5,8 +5,11 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { assertNoInheritedPgState } from "../bootstrap/run-production-installer-identity-attestation.mjs";
 import { resolveProductionManagedPostgresTarget } from "../bootstrap/production-managed-postgres-target.mjs";
-import { CORE_POLICY_MIGRATION, CORE_POLICY_SHA256, buildCorePolicyBatch } from "./phase3-core-policy-contract.mjs";
+import { CORE_POLICY_MIGRATION, CORE_POLICY_SHA256 } from "./phase3-core-policy-contract.mjs";
 import { classifyCorePolicyPreAttestation } from "./phase3-core-policy-pre-attestation-contract.mjs";
+import { CORE_POLICY_BASELINE_PATH, CORE_POLICY_BASELINE_ARTIFACT_SHA, CORE_POLICY_BASELINE_SHARED_SHA,
+  APPROVED_CORE_POLICY_PRODUCTION_BASELINE, validateCorePolicyProductionApproval,
+  buildApprovedCorePolicyPreBatch } from "./phase3-core-policy-production-baseline-contract.mjs";
 import { IdentitySecurityBridgePreAttestationFailure, classifyIdentitySecurityBridgePreAttestationFailure,
   executeIdentitySecurityBridgePreReadOnlyBatch, assertIdentitySecurityBridgeSessionPoolerTarget,
   formatIdentitySecurityBridgePreAttestationFailure } from "./run-production-identity-security-bridge-pre-attestation.mjs";
@@ -44,6 +47,19 @@ export function assertCorePolicyArtifact() {
   if (createHash("sha256").update(bytes).digest("hex") !== CORE_POLICY_SHA256)
     fail("MIGRATION_HASH", "REPOSITORY_ARTIFACT_MISMATCH");
 }
+export function assertCorePolicyCommittedBaseline(git) {
+  for (const [path, expected] of [[CORE_POLICY_BASELINE_PATH, CORE_POLICY_BASELINE_ARTIFACT_SHA],
+    ["scripts/production-adoption/phase3/phase3-core-policy-contract.mjs", CORE_POLICY_BASELINE_SHARED_SHA]]) {
+    const blob = git(["show", `HEAD:${path}`]);
+    const bytes = Buffer.isBuffer(blob) ? blob : Buffer.from(blob, "utf8");
+    const checkout = readFileSync(resolve(root, path), "utf8").replaceAll("\r\n", "\n");
+    if (createHash("sha256").update(bytes).digest("hex") !== expected || checkout !== bytes.toString("utf8"))
+      fail("BASELINE_ARTIFACT", "REPOSITORY_ARTIFACT_MISMATCH");
+  }
+  if (validateCorePolicyProductionApproval(APPROVED_CORE_POLICY_PRODUCTION_BASELINE).classification !== "EXACT")
+    fail("BASELINE_APPROVAL", "REPOSITORY_ARTIFACT_MISMATCH");
+  return { ...APPROVED_CORE_POLICY_PRODUCTION_BASELINE, committedArtifactVerified: true };
+}
 export function runProductionCorePolicyPreAttestation(environment = process.env, dependencies = {}) {
   if (dependencies.argument !== CORE_POLICY_ATTESTATION_OPERATION) fail("OPERATION", "OPERATION_NOT_AUTHORIZED");
   assertCorePolicyReadOnlyAuthorization(environment);
@@ -54,6 +70,8 @@ export function runProductionCorePolicyPreAttestation(environment = process.env,
   const status = guarded("WORKTREE_READ", "WORKTREE_READ_FAILED", () => git(["status", "--porcelain", "--untracked-files=all"]));
   if (status.trim()) fail("WORKTREE", "WORKTREE_DIRTY");
   guarded("MIGRATION_HASH", "REPOSITORY_ARTIFACT_MISMATCH", dependencies.assertArtifact ?? assertCorePolicyArtifact);
+  const approval = guarded("BASELINE_ARTIFACT", "REPOSITORY_ARTIFACT_MISMATCH", () =>
+    (dependencies.assertBaseline ?? assertCorePolicyCommittedBaseline)(git));
   const target = guarded("TARGET", "TARGET_MISMATCH", () => {
     const resolved = resolveProductionManagedPostgresTarget(environment, {
       projectRefVariable: CORE_POLICY_ATTESTATION_VARIABLES[3], databaseUrlVariable: CORE_POLICY_ATTESTATION_VARIABLES[5],
@@ -61,13 +79,13 @@ export function runProductionCorePolicyPreAttestation(environment = process.env,
     });
     return assertIdentitySecurityBridgeSessionPoolerTarget(resolved);
   });
-  const batch = guarded("SQL_BUILD", "LOCAL_PROGRAMMING_ERROR", buildCorePolicyBatch);
+  const batch = guarded("SQL_BUILD", "LOCAL_PROGRAMMING_ERROR", buildApprovedCorePolicyPreBatch);
   const evidence = guarded("READ_ONLY_BATCH", undefined, () =>
     (dependencies.executeReadOnly ?? executeIdentitySecurityBridgePreReadOnlyBatch)(batch, target.connectionEnvironment,
       { processEnvironment: environment, ...(dependencies.spawn ? { spawn: dependencies.spawn } : {}) }));
   if (!(evidence instanceof Map)) fail("RESULT_SHAPE", "QUERY_RESULT_SHAPE_MISMATCH");
   if (evidence.get("read_only_guard") !== "on") fail("TRANSACTION", "READ_ONLY_GUARD_FAILED");
-  return guarded("CLASSIFICATION", "PRE_CLASSIFICATION_FAILED", () => classifyCorePolicyPreAttestation(evidence));
+  return guarded("CLASSIFICATION", "PRE_CLASSIFICATION_FAILED", () => classifyCorePolicyPreAttestation(evidence, approval));
 }
 
 // Reject, rather than partially print, an unexpected secret-bearing observation.

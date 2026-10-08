@@ -84,8 +84,17 @@ are preservation invariants, not cleanup targets. ACL reconciliation remains a
 separate mandatory pre-runtime boundary, including MAINTAIN, TRUNCATE, TRIGGER
 and REFERENCES review. This does not authorize a later provider or Production.
 The historical forensic report remains immutable and observation-only. The PRE
-attestation still needs a separately committed/reviewed Production baseline;
-the local rehearsal inventory must never approve Production by observation.
+attestation integrates `phase3-core-policy-production-baseline.mjs`, version 1,
+as the independently adjudicated transition snapshot. Before querying Production,
+the runner requires its pinned committed Git blob, canonical semantic digest,
+corrected migration hash and shared-contract compatibility in a clean approved
+HEAD. No temporary forensic file or arbitrary observed inventory can self-approve.
+The snapshot freezes 301 table ACL and 20 column ACL entries for preservation
+only: `TABLE_ACL_SECURITY_STATUS = PENDING_RECONCILIATION`, not final canonical
+security approval. The disposable rehearsal verifies structural parity but its
+local catalog OIDs and synthetic aggregate hashes never approve Production.
+Implementation changes still require commit and remote-readiness review; no
+Production attestation or DDL is authorized by the local rehearsal.
 
 ## Identity helper migration
 
