@@ -187,16 +187,16 @@ test("Development identity infrastructure remains forbidden", () => {
 });
 
 test("browser grant matrix covers SELECT and every DML privilege object by object", () => {
-  assert.equal(PHASE3_BROWSER_GRANT_MATRIX.length, 13 * 2 * 7);
+  assert.equal(PHASE3_BROWSER_GRANT_MATRIX.length, 13 * 2 * 8);
   for (const entry of PHASE3_BROWSER_GRANT_MATRIX) {
     assert.ok(["anon", "authenticated"].includes(entry.role));
-    assert.ok(["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"].includes(entry.privilege));
+    assert.ok(["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"].includes(entry.privilege));
     assert.notEqual(entry.decision, "unknown_requires_evidence");
   }
   const legacyAttemptInsert = PHASE3_BROWSER_GRANT_MATRIX.find((entry) =>
     entry.object === "public.attempts" && entry.role === "authenticated" && entry.privilege === "INSERT",
   );
-  assert.equal(legacyAttemptInsert?.decision, "legacy_required_temporarily");
+  assert.equal(legacyAttemptInsert?.decision, "legacy_safe_to_remove");
   assert.equal(legacyAttemptInsert?.canonicalExpected, false);
   const crossUserDelete = PHASE3_BROWSER_GRANT_MATRIX.find((entry) =>
     entry.object === "public.user_profiles" && entry.role === "authenticated" && entry.privilege === "DELETE",
@@ -206,8 +206,8 @@ test("browser grant matrix covers SELECT and every DML privilege object by objec
 
 test("privilege migration is explicit and contains no global revoke or default ACL mutation", () => {
   assert.doesNotMatch(grantSql, /on all tables|alter default privileges|grant all|revoke all privileges/i);
-  assert.match(grantSql, /revoke delete, truncate, references, trigger on table/i);
-  assert.match(grantSql, /grant insert on table public\.attempts, public\.exam_results, public\.rules_exam_results/i);
+  assert.match(grantSql, /revoke insert, update, delete, truncate, references, trigger, maintain on table public\.attempts/i);
+  assert.doesNotMatch(grantSql, /grant insert on table public\.attempts/i);
   for (const grant of PHASE3_TEMPORARY_LEGACY_GRANTS) assert.ok(typeof grant === "string" && grant.length > 0);
 });
 

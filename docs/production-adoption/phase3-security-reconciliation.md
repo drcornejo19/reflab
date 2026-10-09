@@ -155,11 +155,42 @@ Each migration is one transaction with a five-second lock timeout, a conservativ
 | Reviewed policy drift/missing | 22 selected policies | 0 selected drift | all unselected canonical policies |
 | Reviewed anon grants | explicit broad fixture access | 0 | global browser grant inventory |
 | Reviewed destructive authenticated grants | 13-table fixture access | 0 | unselected tables |
-| Temporary browser writes | historical fixture access | 9 reviewed grants | runtime cutover |
+| Historical browser writes | observed all-eight grants | retired on attempts/exam/rules and profile table | server/RPC paths; profile column contract |
 | Unexpected routine EXECUTE | not globally reconciled | unchanged except helper hardening | privileged routine inventory |
 
 This is not a claim that the historical Production blocker totals are zero. Triggers, indexes, remaining functions, institution policies, Storage, semantic sidecar teardown, runtime cutover, and canonical marker remain open.
 
 ## Go/no-go gates
+
+### Corrected 64249 browser-only boundary
+
+The transition baseline freezes the completed 13-table Production forensic as
+`OBSERVED_PRODUCTION_PRE_INPUT`, adjudicated for this transition only. It does not
+overwrite the historical 64245 baseline or approve broad service-role authority.
+The eight-privilege PostgreSQL 17 matrix includes MAINTAIN. All anon grants are
+removed; authenticated keeps SELECT on all 13 tables and INSERT/UPDATE on the
+five owned match/psychology tables. Profiles retain table SELECT plus exactly
+20 INSERT and 19 UPDATE column grants (no user_id UPDATE). Historical exam and
+training INSERT policies are preserved definitions, but no longer authorize
+browser INSERT because the table privilege is absent.
+
+`referee_exam_sessions` intentionally receives only the authenticated SELECT
+ACL. Its authenticated SELECT policy is absent at this boundary; RLS therefore
+denies browser rows. This is NOT full browser capability readiness. No policy is
+created, changed or dropped by 64249. All 55 policies, non-browser table/column
+grants, table owners, RLS/FORCE, 64236 functions and adoption state are preserved.
+
+The dedicated classifier distinguishes executable observed PRE, already-installed
+POST and BLOCKER; installed POST never invokes the migration again. Production
+classification pins the observed aggregate digests. The disposable PG17 harness
+uses the exact observed catalog and ACL topology, but synthetic row data and local
+OID-dependent digests, explicitly marked `LOCAL_SYNTHETIC_DATA_ONLY`. It is not a
+new Production attestation. The unchanged mechanical forensic fixture remains
+mechanical only, independent of this transition fixture.
+
+Service-role reconciliation, infrastructure cleanup and TRUNCATE/TRIGGER/
+REFERENCES/MAINTAIN review for other roles remain separate. Global ACL security
+is incomplete; runtime remains blocked by the final privilege wave. 64253 still
+requires independent review. No remote authorization is granted by local tests.
 
 Phase 3 is locally acceptable only when static tests, disposable PostgreSQL rehearsal, attacks, rollback cases, historical fingerprints, marker/ledger assertions, and the full preceding adoption battery pass. Production execution still requires a fresh privileged read-only fingerprint whose object-level state matches these preconditions exactly.

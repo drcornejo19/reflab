@@ -1,3 +1,4 @@
+import { PG17_TABLE_PRIVILEGES, browserPostPrivileges } from "./phase3-browser-privilege-matrix.mjs";
 export const PHASE3_PLAN_VERSION = "production_security_reconciliation_v1";
 
 export const PHASE3_SOURCE_HASH_CONTRACT =
@@ -122,7 +123,7 @@ export const PHASE3_POLICY_MATRIX = Object.freeze([
   ...serverWriteTables.map(ownedRead),
 ]);
 
-const browserPrivileges = Object.freeze(["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]);
+const browserPrivileges = PG17_TABLE_PRIVILEGES;
 
 function grantDecision(table, role, contract) {
   return browserPrivileges.map((privilege) => ({
@@ -140,13 +141,13 @@ function grantDecision(table, role, contract) {
 }
 
 const authenticatedGrantContracts = Object.freeze({
-  user_profiles: { keep: ["SELECT", "INSERT", "UPDATE"], canonical: ["SELECT"], caller: "legacy profile browser flow; final contract uses column grants" },
+  user_profiles: { keep: ["SELECT"], canonical: ["SELECT"], caller: "profile table read; writes are column-scoped" },
   user_global_roles: { keep: ["SELECT"], canonical: ["SELECT"], caller: "canonical access snapshot" },
   user_subscriptions: { keep: ["SELECT"], canonical: ["SELECT"], caller: "canonical access snapshot" },
-  attempts: { keep: ["SELECT", "INSERT"], canonical: ["SELECT"], caller: "legacy Training browser insert until runtime cutover" },
-  exam_results: { keep: ["SELECT", "INSERT"], canonical: ["SELECT"], caller: "legacy Exam browser insert until runtime cutover" },
-  rules_exam_results: { keep: ["SELECT", "INSERT"], canonical: ["SELECT"], caller: "legacy Rules Exam browser insert until runtime cutover" },
-  referee_exam_sessions: { keep: ["SELECT"], canonical: ["SELECT"], caller: "canonical exam read" },
+  attempts: { keep: ["SELECT"], canonical: ["SELECT"], caller: "canonical browser read; inserts are server/RPC-only" },
+  exam_results: { keep: ["SELECT"], canonical: ["SELECT"], caller: "canonical browser read; inserts are server-only" },
+  rules_exam_results: { keep: ["SELECT"], canonical: ["SELECT"], caller: "canonical browser read; inserts are server-only" },
+  referee_exam_sessions: { keep: ["SELECT"], canonical: ["SELECT"], caller: "SELECT ACL reserved; browser policy absent at 64249" },
   notification_events: { keep: ["SELECT"], canonical: ["SELECT"], caller: "canonical notification read" },
   match_preparations: { keep: ["SELECT", "INSERT", "UPDATE"], canonical: ["SELECT", "INSERT", "UPDATE"], caller: "canonical owned browser flow" },
   post_match_reviews: { keep: ["SELECT", "INSERT", "UPDATE"], canonical: ["SELECT", "INSERT", "UPDATE"], caller: "canonical owned browser flow" },
@@ -157,13 +158,13 @@ const authenticatedGrantContracts = Object.freeze({
 
 export const PHASE3_BROWSER_GRANT_MATRIX = Object.freeze([
   ...Object.keys(authenticatedGrantContracts).flatMap((table) => grantDecision(table, "anon", { keep: [], canonical: [], caller: null })),
-  ...Object.entries(authenticatedGrantContracts).flatMap(([table, contract]) => grantDecision(table, "authenticated", contract)),
+  ...Object.entries(authenticatedGrantContracts).flatMap(([table, contract]) => grantDecision(table, "authenticated", {
+    ...contract, keep: browserPostPrivileges(table,"authenticated"), canonical: browserPostPrivileges(table,"authenticated"),
+    caller: table === "referee_exam_sessions" ? "SELECT ACL only; authenticated policy absent until separate reviewed provider" : "reviewed canonical capability; profile writes use column ACLs",
+  })),
 ]);
 
 export const PHASE3_TEMPORARY_LEGACY_GRANTS = Object.freeze([
-  "authenticated:INSERT:public.attempts",
-  "authenticated:INSERT:public.exam_results",
-  "authenticated:INSERT:public.rules_exam_results",
   ...PHASE3_LEGACY_IDENTITY_HELPERS.flatMap((helper) =>
     helper.executeRoles.map((role) => `${role}:EXECUTE:${helper.signature}`),
   ),

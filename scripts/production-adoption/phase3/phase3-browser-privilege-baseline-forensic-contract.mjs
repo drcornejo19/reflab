@@ -20,7 +20,7 @@ export const BROWSER_FORENSIC_MUTATIONS = Object.freeze({productDml:0,policyDdl:
   ledgerWrites:0,schemaStateWrites:0,markerWrites:0,notificationWrites:0,runtimeWrites:0,cutoverWrites:0});
 export const BROWSER_ARTIFACT = Object.freeze({
   path: "supabase/migrations/20260901064249_production_adoption_browser_privilege_reconciliation.sql",
-  sha256: "36b46987605a8c441227584d0729d4d657536b018138aa19aaaf8b2705bd2b8b",
+  sha256: "4ddd6a1fd30b9508297b3f2819925bca507e1ef8005144f4f02acae6d335f12c",
   purpose: "LOCAL_ARTIFACT_METADATA_ONLY_NOT_DATABASE_AUTHORITY",
 });
 const list = (values) => values.map((v) => `'${v}'`).join(",");
