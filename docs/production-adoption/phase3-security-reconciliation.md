@@ -222,4 +222,37 @@ including credential-bearing errors. Service-role reconciliation, infrastructure
 cleanup, 64253 review and runtime/cutover remain independent blocked boundaries.
 Remote PRE execution still requires a separate committed-candidate review.
 
-Phase 3 is locally acceptable only when static tests, disposable PostgreSQL rehearsal, attacks, rollback cases, historical fingerprints, marker/ledger assertions, and the full preceding adoption battery pass. Production execution still requires a fresh privileged read-only fingerprint whose object-level state matches these preconditions exactly.
+### Dedicated 64249 one-shot DDL runner (local implementation only)
+
+`npm.cmd run execute:production-browser-privilege-64249` selects only
+`--execute-production-browser-privilege-64249`. It requires exactly
+`ALLOW_PRODUCTION_DDL=true`, `ALLOW_PRODUCTION_BROWSER_PRIVILEGE_64249_DDL=true`,
+and `REFLAB_PRODUCTION_DDL_PROJECT_REF`, `REFLAB_PRODUCTION_DDL_APPROVED_HEAD`,
+`REFLAB_PRODUCTION_DDL_DB_URL`. Read-only opt-ins are not substitutes. Foreign
+Production authorization, inherited PG variables, dirty/staged/untracked state,
+wrong HEAD, target or committed artifact hashes fail before connection.
+
+One persistent psql session owns BEGIN, live PRE, the exact committed migration
+body, live POST and COMMIT. The SHA-verified outer BEGIN/COMMIT alone are removed
+in memory; the committed migration is never regenerated or rewritten. Explicit
+ordered table locks serialize the observed ACL transition. Local transaction
+bounds are 5s lock, 60s statement, 180s transaction and 15s idle-in-transaction;
+the existing bounded session transport is reused without modification.
+
+The execution-only adapter changes the transport applicability, not catalog
+evidence or the protected read-only runner. It reports a writable transaction
+explicitly, requires the live `transaction_read_only=off` guard and every
+unchanged catalog check. POST is verified before COMMIT. Failures roll back;
+installed POST refuses reexecution with zero migration calls. Loss of COMMIT
+acknowledgement is UNKNOWN, never automatically replayed: the only permitted
+next diagnostic is a separately authorized READ ONLY post-state forensic.
+
+The current externally reported PRE is CURRENTLY_ATTESTED_EXECUTABLE_EXACT;
+no second external PRE is needed merely to implement/review this runner. That
+evidence is not hardcoded as live state and does not authorize remote DDL here.
+Structured secret checks occur before serialization, including DDL credentials.
+The PG17 rehearsal uses observed catalog definitions with synthetic row data,
+never Production fingerprints. Browser-only success still leaves service-role
+reconciliation, infrastructure cleanup, 64253 review and runtime/cutover blocked.
+
+Phase 3 is locally acceptable only when static tests, disposable PostgreSQL rehearsal, attacks, rollback cases, historical fingerprints, marker/ledger assertions, and the full preceding adoption battery pass. Production execution requires separately reviewed authorization and an exact live PRE inside the one-shot transaction.
