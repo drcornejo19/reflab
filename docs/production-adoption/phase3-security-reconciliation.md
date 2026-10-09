@@ -193,4 +193,33 @@ REFERENCES/MAINTAIN review for other roles remain separate. Global ACL security
 is incomplete; runtime remains blocked by the final privilege wave. 64253 still
 requires independent review. No remote authorization is granted by local tests.
 
+### Dedicated 64249 READ ONLY PRE attestation
+
+`npm.cmd run attest:production-browser-privilege-pre` uses the dedicated
+`--production-browser-privilege-pre-attestation` operation. It requires only
+`ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT`,
+`ALLOW_PRODUCTION_PRIVILEGED_READ_ONLY_ATTESTATION`, and
+`ALLOW_PRODUCTION_BROWSER_PRIVILEGE_PRE_ATTESTATION`, each exactly `true`, plus
+the privileged read-only project ref, approved HEAD and DB URL variables. The
+gate rejects dirty/staged/untracked state, all inherited PG variables, unrelated
+Production opt-ins and DDL configuration. It verifies committed Git blob hashes
+and normalized checkout equality for the migration, baseline, classifier,
+shared security matrix, observation code and hardened output serializer.
+
+The runner collects current evidence in one bounded `BEGIN READ ONLY`
+transaction, verifies `transaction_read_only = on`, and ends with `ROLLBACK`.
+Lock/statement timeouts are 2s/15s. A database error closes the single psql
+session, rolling back its read-only transaction; no retry or second connection
+is made. The historical forensic TXT is never a runtime input. The exact
+Session Pooler, project, database, SSL mode and managed postgres installer are
+required. No migration is loaded for execution and no DDL is authorized.
+
+The output distinguishes executable PRE, already-installed POST and BLOCKER.
+PRE-only and POST-only checks expose their applicability explicitly, so exact
+installed POST is non-executable rather than a failed PRE approval. Structured
+values are validated before JSON serialization; unsafe payloads are discarded,
+including credential-bearing errors. Service-role reconciliation, infrastructure
+cleanup, 64253 review and runtime/cutover remain independent blocked boundaries.
+Remote PRE execution still requires a separate committed-candidate review.
+
 Phase 3 is locally acceptable only when static tests, disposable PostgreSQL rehearsal, attacks, rollback cases, historical fingerprints, marker/ledger assertions, and the full preceding adoption battery pass. Production execution still requires a fresh privileged read-only fingerprint whose object-level state matches these preconditions exactly.
