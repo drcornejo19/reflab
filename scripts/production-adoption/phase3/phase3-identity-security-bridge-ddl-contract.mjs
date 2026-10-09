@@ -78,12 +78,12 @@ export const identityBridgePostQueries = Object.freeze([
 export function buildIdentityBridgePostBatch() {
   return buildSqlBatch(identityBridgePostQueries);
 }
-export function classifyIdentityBridgePostBatch(results) {
+export function classifyIdentityBridgePostBatch(results, { classifyPredecessor = classifyCanonicalRuntimeInstalledEvidence } = {}) {
   if (!(results instanceof Map) || identityBridgePostQueries.some((q) => !results.has(q.id))) {
     return { classification: "UNKNOWN" };
   }
   try {
-    const predecessor = classifyCanonicalRuntimeInstalledEvidence(results, { post: true });
+    const predecessor = classifyPredecessor(results, { post: true });
     const identity = results.get(identitySecurityBridgePreQuery.id);
     const checks = {
       predecessorsPreservedExact: predecessor.composition?.classification === "EXACT",

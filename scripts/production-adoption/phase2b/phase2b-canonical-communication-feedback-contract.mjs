@@ -180,7 +180,7 @@ const requiredChecks = Object.freeze([
   "sourceConstraintPresent", "laterAdoptionAbsent", "rlsOwnerCreateAbsent",
 ]);
 
-export function classifyCanonicalCommunicationState(payload, { post = false } = {}) {
+export function classifyCanonicalCommunicationState(payload, { post = false, transactionReadOnly = "on" } = {}) {
   if (!payload?.checks || !payload?.counts
       || requiredChecks.some((name) => typeof payload.checks[name] !== "boolean")
       || !Array.isArray(payload.function_acl)) return { classification: "UNKNOWN" };
@@ -188,7 +188,7 @@ export function classifyCanonicalCommunicationState(payload, { post = false } = 
     && payload.counts.attempts === 37 && payload.counts.exam_results === 6
     && payload.counts.notification_events === 60 && payload.counts.clips === 30
     && payload.counts.communication_attempts === 0 && payload.counts.payload_hash_nulls === 37
-    && classifyCanonicalTrainingPreservation(payload.training_preservation).classification === "EXACT";
+    && classifyCanonicalTrainingPreservation(payload.training_preservation, { transactionReadOnly }).classification === "EXACT";
   const expectedExpression = post
     ? CANONICAL_COMMUNICATION_POST_SOURCE_TYPE_EXPRESSION
     : CANONICAL_COMMUNICATION_PRE_SOURCE_TYPE_EXPRESSION;
@@ -204,7 +204,7 @@ export function classifyCanonicalCommunicationState(payload, { post = false } = 
   }
   const details = {
     trainingPreservationExact:
-      classifyCanonicalTrainingPreservation(payload.training_preservation).classification === "EXACT",
+      classifyCanonicalTrainingPreservation(payload.training_preservation, { transactionReadOnly }).classification === "EXACT",
     sourceConstraintExact: constraintExact,
     functionExact: functionExact(payload.function),
     functionAclExact: aclExact(payload.function_acl),
@@ -213,7 +213,7 @@ export function classifyCanonicalCommunicationState(payload, { post = false } = 
     checks: { ...payload.checks, ...details } };
 }
 
-export function classifyCanonicalCommunicationCompletionPreservation(payload) {
+export function classifyCanonicalCommunicationCompletionPreservation(payload, { transactionReadOnly = "on" } = {}) {
   if (!payload?.checks || !payload?.training_preservation?.checks
       || !payload.training_preservation?.prerequisite_preservation?.checks) {
     return { classification: "UNKNOWN" };
@@ -240,7 +240,7 @@ export function classifyCanonicalCommunicationCompletionPreservation(payload) {
       },
     },
   };
-  const result = classifyCanonicalCommunicationState(completionPayload, { post: true });
+  const result = classifyCanonicalCommunicationState(completionPayload, { post: true, transactionReadOnly });
   return {
     ...result,
     stage: "POST_CANONICAL_RUNTIME_INSTALLED",

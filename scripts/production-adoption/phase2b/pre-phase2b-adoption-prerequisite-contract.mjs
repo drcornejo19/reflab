@@ -307,10 +307,10 @@ export function classifyPrePhase2bPost(payload, installer) {
   return classify(payload, installer, "EXACT");
 }
 
-export function classifyPrePhase2bPreservation(payload) {
+export function classifyPrePhase2bPreservation(payload, { transactionReadOnly = "on" } = {}) {
   if (!complete(payload)) return { classification: "UNKNOWN" };
   const exact = payload.caller === "postgres" && payload.session_user === "postgres"
-    && payload.transaction_read_only === "on"
+    && ["on", "off"].includes(transactionReadOnly) && payload.transaction_read_only === transactionReadOnly
     && Math.trunc(payload.server_version_num / 10000) === 17
     && PRE_PHASE2B_PRESERVATION_CHECKS.every((check) => payload.checks[check] === true)
     && payload.counts.attempts === 37 && payload.counts.exam_results === 6

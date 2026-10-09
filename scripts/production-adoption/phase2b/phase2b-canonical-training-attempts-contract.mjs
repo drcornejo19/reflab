@@ -357,7 +357,7 @@ const requiredChecks = Object.freeze([
   "rlsOwnerCreateAbsent",
 ]);
 
-function classifyCanonicalTrainingPostPayload(payload, { requireLaterProvidersAbsent }) {
+function classifyCanonicalTrainingPostPayload(payload, { requireLaterProvidersAbsent, transactionReadOnly = "on" }) {
   const requiredPostChecks = requireLaterProvidersAbsent
     ? requiredChecks
     : requiredChecks.filter((name) => name !== "laterProvidersAbsent");
@@ -386,15 +386,15 @@ function classifyCanonicalTrainingPostPayload(payload, { requireLaterProvidersAb
       === normalizeSqlExpression(CANONICAL_TRAINING_CHECK_EXPRESSION),
     indexExact: payload.index_definition === CANONICAL_TRAINING_INDEX_DEFINITION,
     prerequisitePreservationExact:
-      classifyPrePhase2bPreservation(payload.prerequisite_preservation).classification === "EXACT",
+      classifyPrePhase2bPreservation(payload.prerequisite_preservation, { transactionReadOnly }).classification === "EXACT",
   };
   const exact = common && payload.counts.payload_hash_nulls === 37
     && Object.values(details).every(Boolean);
   return { classification: exact ? "EXACT" : "BLOCKER", checks: { ...payload.checks, ...details } };
 }
 
-export function classifyCanonicalTrainingPreservation(payload) {
-  return classifyCanonicalTrainingPostPayload(payload, { requireLaterProvidersAbsent: false });
+export function classifyCanonicalTrainingPreservation(payload, { transactionReadOnly = "on" } = {}) {
+  return classifyCanonicalTrainingPostPayload(payload, { requireLaterProvidersAbsent: false, transactionReadOnly });
 }
 
 export function classifyCanonicalTrainingState(payload, { post = false } = {}) {

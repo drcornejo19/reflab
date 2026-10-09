@@ -331,7 +331,7 @@ export function classifyPhase2aSemanticAuditPre(payload) {
     ? "EXACT" : "BLOCKER";
 }
 
-export function classifyPhase2aSemanticAuditPost(payload) {
+export function classifyPhase2aSemanticAuditPost(payload, { transactionReadOnly = "on" } = {}) {
   const complete = payload?.checks && payload?.counts
     && expectedPostChecks.every((field) => typeof payload.checks[field] === "boolean")
     && typeof payload.function_source_base64 === "string"
@@ -344,7 +344,7 @@ export function classifyPhase2aSemanticAuditPost(payload) {
       === SEMANTIC_AUDIT_SOURCE_HASH;
   } catch {}
   const exact = payload.caller === "postgres" && payload.session_user === "postgres"
-    && payload.transaction_read_only === "on"
+    && ["on", "off"].includes(transactionReadOnly) && payload.transaction_read_only === transactionReadOnly
     && Math.trunc(payload.server_version_num / 10000) === 17
     && sourceHashExact
     && expectedPostChecks.every((field) => payload.checks[field] === true)
