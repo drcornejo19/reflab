@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { BROWSER_FORENSIC_QUERY_ID, BROWSER_FORENSIC_TABLES, BROWSER_EXTRA_TABLES, TABLE_PRIVILEGES,
-  buildBrowserPrivilegeForensicBatch, classifyBrowserPrivilegeObservation } from "./phase3-browser-privilege-baseline-forensic-contract.mjs";
+  buildBrowserPrivilegeForensicBatch, classifyBrowserPrivilegeObservation, browserPolicyExpressionsEqual,
+  normalizeBrowserPolicyExpression } from "./phase3-browser-privilege-baseline-forensic-contract.mjs";
 import { browserForensicFixtureEvidence, buildBrowserForensicMechanicalFixture, BROWSER_FIXTURE_STATUS } from "./phase3-browser-privilege-forensic-fixture.mjs";
 import { BROWSER_FORENSIC_OPERATION, BROWSER_FORENSIC_VARIABLES, runProductionBrowserPrivilegeBaselineForensic,
-  runBrowserPrivilegeForensicCli, executeBrowserForensicReadOnly } from "./run-production-browser-privilege-baseline-forensic.mjs";
+  runBrowserPrivilegeForensicCli, executeBrowserForensicReadOnly, sanitizeBrowserForensicOutput,
+  serializeBrowserForensic } from "./run-production-browser-privilege-baseline-forensic.mjs";
+import { IdentitySecurityBridgePreAttestationFailure } from "./run-production-identity-security-bridge-pre-attestation.mjs";
 import { IDENTITY_BRIDGE_POST_QUERY_ID } from "./phase3-identity-security-bridge-ddl-contract.mjs";
 import { CORE_BASELINE_ADOPTION_QUERY_ID } from "./phase3-core-policy-baseline-forensic-contract.mjs";
 import { CORE_POLICY_QUERY_ID } from "./phase3-core-policy-contract.mjs";
@@ -178,4 +181,115 @@ for(const classification of ["64245_PRE_EXECUTABLE_EXACT","EXECUTABLE_PRE","APPR
 test("production runner has no migration execution path",() => {
   const source=readFileSync(new URL("./run-production-browser-privilege-baseline-forensic.mjs",import.meta.url),"utf8");
   assert.doesNotMatch(source,/executeMigration|executeDdl|executeCorePolicy|buildBrowserForensicMechanicalFixture/);
+});
+
+const difficultPasswords=[`abc"def`,"abc'def","abc\\def","abc%22def","abc:def@ghi","abc/def",
+  "abc?x=1&y=2","abc&def","abc=def","abc def",`a b"c\\d%`,"abc%def","abc:def","abc@def"];
+function secretEnvironment(password) {
+  return env({[BROWSER_FORENSIC_VARIABLES[5]]:env()[BROWSER_FORENSIC_VARIABLES[5]].replace("fixture-password",encodeURIComponent(password))});
+}
+function assertNoRecoverableSecret(text,password,environment) {
+  const variants=[password,encodeURIComponent(password),JSON.stringify(password).slice(1,-1),environment[BROWSER_FORENSIC_VARIABLES[5]]];
+  for(const candidate of [text,JSON.stringify(JSON.parse(text))]) for(const secret of variants) assert.ok(!candidate.includes(secret));
+  const walk=(v) => {
+    if(typeof v==="string") {
+      const candidates=[v];
+      for(let i=0;i<2;i++) try {candidates.push(decodeURIComponent(candidates.at(-1)));} catch {break;}
+      for(const value of candidates) assert.ok(!value.includes(password));
+    } else if(v && typeof v==="object") Object.entries(v).forEach(([k,value]) => {walk(k);walk(value);});
+  };
+  walk(JSON.parse(text));
+}
+async function capture(environment,dependencies) {
+  let stdout="",stderr="";
+  const code=await runBrowserPrivilegeForensicCli(environment,{...dependencies,writeStdout:(s) => {stdout+=s;},writeStderr:(s) => {stderr+=s;}});
+  return {code,stdout,stderr};
+}
+for(const [index,password] of difficultPasswords.entries()) {
+  test(`difficult credential ${index}: clean successful observation is secret-free`,async() => {
+    const environment=secretEnvironment(password);
+    const result=await capture(environment,deps());assert.equal(result.code,0);assert.equal(result.stderr,"");
+    assertNoRecoverableSecret(result.stdout,password,environment);
+    assert.equal(JSON.parse(result.stdout).approval,"NOT_PERFORMED");
+  });
+  test(`difficult credential ${index}: tainted structured payload fails before output`,async() => {
+    const environment=secretEnvironment(password);
+    const unicode=[...password].map((c) => `\\u${c.charCodeAt(0).toString(16).padStart(4,"0")}`).join("");
+    const variants=[password,encodeURIComponent(password),encodeURIComponent(encodeURIComponent(password)),
+      JSON.stringify(password).slice(1,-1),unicode,Buffer.from(password).toString("base64"),environment[BROWSER_FORENSIC_VARIABLES[5]]];
+    try {variants.push(decodeURIComponent(password));} catch { /* Literal malformed percent sequences are tested unchanged. */ }
+    variants.push("diagnostic\n"+JSON.stringify(password).slice(1,-1).replace(/^./,(c) => `\\u${c.charCodeAt(0).toString(16).padStart(4,"0")}`));
+    for(const value of variants) {
+      const result=await capture(environment,deps({run:() => ({classification:"OBSERVATION_COMPLETE",approval:"NOT_PERFORMED",mutationCount:0,
+        nested:[{value}]})}));
+      assert.equal(result.code,1);assert.equal(result.stdout,"");assert.equal(JSON.parse(result.stderr).classification,"BLOCKER");
+      assertNoRecoverableSecret(result.stderr,password,environment);
+    }
+  });
+  test(`difficult credential ${index}: driver and structured exceptions are secret-free`,async() => {
+    const environment=secretEnvironment(password);
+    for(const value of [password,encodeURIComponent(password),JSON.stringify(password).slice(1,-1),environment[BROWSER_FORENSIC_VARIABLES[5]]]) {
+      const d=deps({spawn:() => ({status:1,stderr:`ERROR: 57014: password=${value}`})});delete d.executeReadOnly;
+      const processResult=await capture(environment,d);assert.equal(processResult.code,1);assert.equal(processResult.stdout,"");
+      assertNoRecoverableSecret(processResult.stderr,password,environment);
+      const exception=await capture(environment,deps({run:() => {throw new IdentitySecurityBridgePreAttestationFailure("FAIL","FAIL",value,{query:value});}}));
+      assert.equal(exception.code,1);assert.equal(exception.stdout,"");assertNoRecoverableSecret(exception.stderr,password,environment);
+    }
+  });
+}
+test("quoted-password committed-review reproducer is now rejected",async() => {
+  const password=`synthetic"credential`;const environment=secretEnvironment(password);const e=browserForensicFixtureEvidence();
+  payload(e).policies[0].using=`'${password}' = '${password}'`;
+  const result=await capture(environment,deps({executeReadOnly:() => e}));
+  assert.equal(result.code,1);assert.equal(result.stdout,"");assertNoRecoverableSecret(result.stderr,password,environment);
+});
+test("password fragments split across structured values cannot reconstruct the secret",() => {
+  assert.throws(() => sanitizeBrowserForensicOutput({values:["fixture-","password"]},env()));
+  assert.throws(() => serializeBrowserForensic({value:"password=partial-credential"},env()));
+  assert.throws(() => serializeBrowserForensic({value:"host=example.invalid dbname=postgres user=installer"},env()));
+});
+test("sanitizer rejects serialization hooks, getters, cycles, and secret-bearing keys",() => {
+  let invoked=false;
+  for(const value of [{toJSON:() => {invoked=true;return "fixture-password";}},
+    {get value() {invoked=true;return "fixture-password";}}, {["fixture-password"]:"value"}])
+    assert.throws(() => sanitizeBrowserForensicOutput(value,env()));
+  const cycle={};cycle.self=cycle;assert.throws(() => sanitizeBrowserForensicOutput(cycle,env()));assert.equal(invoked,false);
+});
+for(const [index,left,right] of [
+  [0,"current_setting('reflab.training_user_id'::text, true)","current_setting('reflab.training_user_id '::text, true)"],
+  [1,"'abc'","' abc'"],[2,"'abc'","'abc '"],[3,"'a b'","'ab'"],
+  [4,"'a''b'","'a'' b'"],[5,'"user_id"','"user_id "'],[6,'"a""b"','"a"" b"'],
+  [7,"$$a b$$","$$ab$$"],[8,"$tag$abc$tag$","$tag$abc $tag$"],
+  [9,"E'a\\'b'","E'a\\' b'"],
+]) test(`SQL literal/quoted identifier difference ${index} never compares exact`,() => {
+  assert.notEqual(normalizeBrowserPolicyExpression(left),null);assert.notEqual(normalizeBrowserPolicyExpression(right),null);
+  assert.equal(browserPolicyExpressionsEqual(left,right),false);
+});
+test("syntactic whitespace and redundant parentheses normalize without changing precedence",() => {
+  assert.equal(browserPolicyExpressionsEqual("(user_id = platform_request_user_id())"," ( user_id\n =\tplatform_request_user_id ( ) ) "),true);
+  assert.equal(browserPolicyExpressionsEqual("(user_id = current_setting('a b'::text,true))","user_id = current_setting( 'a b' :: text , true )"),true);
+  assert.equal(browserPolicyExpressionsEqual("a = b or c = d and e = f","(a=b OR (c=d AND e=f))"),true);
+  assert.equal(browserPolicyExpressionsEqual("a = b or c = d and e = f","((a=b OR c=d) AND e=f)"),false);
+  assert.equal(browserPolicyExpressionsEqual("'a''b'","'a''b'"),true);
+  assert.equal(browserPolicyExpressionsEqual("$tag$a b$tag$","$tag$a b$tag$"),true);
+});
+for(const value of ["'unterminated",'"unterminated',"$tag$unterminated","(a = b", "a = b)","a /* comment */ = b","'a\\b'",""])
+  test("ambiguous/unsupported SQL fails closed, even when both inputs are identical",() => {
+    assert.equal(normalizeBrowserPolicyExpression(value),null);assert.equal(browserPolicyExpressionsEqual(value,value),false);
+  });
+for(const [name,change] of [
+  ["literal mutation",(p) => {p.using=p.using.replace("reflab.training_user_id","reflab.training_user_id ");}],
+  ["role mutation",(p) => {p.roles=["authenticated"];}],
+  ["command mutation",(p) => {p.command="ALL";}],
+  ["permissiveness mutation",(p) => {p.permissive=false;}],
+  ["USING mutation",(p) => {p.using="true";}],
+  ["WITH CHECK mutation",(p) => {p.withCheck="true";}],
+]) test(`preserved policy ${name} is NOT_EXACT while remaining observation-only`,() => {
+  const e=browserForensicFixtureEvidence();const p=payload(e).policies.find((p) => p.name==="training_attempt_profile_read");change(p);
+  const r=observe(e);assert.equal(r.classification,"OBSERVATION_COMPLETE");assert.equal(r["64245PostState"].comparison,"NOT_EXACT");
+  assert.equal(r["64245PostState"].preservedNonTargetPoliciesExact,false);assert.equal(r.approval,"NOT_PERFORMED");assert.equal(r.mutationCount,0);
+});
+test("all twenty exact preserved policies still compare exact",() => {
+  assert.equal(observe()["64245PostState"].preservedNonTargetPoliciesExact,true);
+  assert.equal(observe()["64245PostState"].comparison,"EXACT");
 });

@@ -1,6 +1,6 @@
 import { buildSqlBatch, jsonQuery } from "../../production-preflight/queries.mjs";
 import { installerIdentityQuery } from "../bootstrap/run-production-installer-identity-attestation.mjs";
-import { corePolicyQuery, normalizeCorePolicyExpression, isRetiredCorePolicy } from "./phase3-core-policy-contract.mjs";
+import { corePolicyQuery, isRetiredCorePolicy } from "./phase3-core-policy-contract.mjs";
 import { PHASE3_POLICY_MATRIX } from "./phase3-security-contract.mjs";
 import { identityBridgePostQuery } from "./phase3-identity-security-bridge-ddl-contract.mjs";
 import { coreBaselineAdoptionQuery, classifyCorePolicyBaselineObservation } from "./phase3-core-policy-baseline-forensic-contract.mjs";
@@ -88,10 +88,101 @@ const strings = (r,keys) => r && keys.every((k) => typeof r[k] === "string");
 const rows = (r,check) => Array.isArray(r) && r.every(check);
 const scoped = (r) => r?.schema === "public" && BROWSER_FORENSIC_TABLES.includes(r.table);
 const key = (p) => `${p.table}.${p.name}`;
+// Conservative expression grammar for the reviewed policies, not a SQL reformatter.
+// Quoted token bytes are preserved; unsupported syntax cannot compare as exact.
+export function normalizeBrowserPolicyExpression(source) {
+  if(typeof source !== "string" || !source.trim() || source.length>65536) return null;
+  try {
+    const tokens=[];let i=0;
+    const add=(kind,value) => tokens.push({kind,value});
+    while(i<source.length) {
+      if(/\s/.test(source[i])) {i++;continue;}
+      const start=i;
+      const escaped=/^[eE]'/.test(source.slice(i));
+      if(source[i]==="'" || source[i]==='"' || escaped) {
+        if(escaped) i++;
+        const quote=source[i++];let closed=false;
+        while(i<source.length) {
+          if(source[i]==="\\") {
+            if(!escaped) throw new Error("AMBIGUOUS_ESCAPE");
+            i+=2;continue;
+          }
+          if(source[i]===quote) {
+            if(source[i+1]===quote) {i+=2;continue;}
+            i++;closed=true;break;
+          }
+          i++;
+        }
+        if(!closed) throw new Error("UNTERMINATED_QUOTE");
+        add(quote==='"' ? "identifier" : "literal",source.slice(start,i));continue;
+      }
+      const dollar=source.slice(i).match(/^\$(?:[a-zA-Z_][a-zA-Z0-9_]*)?\$/)?.[0];
+      if(dollar) {
+        const end=source.indexOf(dollar,i+dollar.length);
+        if(end<0) throw new Error("UNTERMINATED_DOLLAR_QUOTE");
+        i=end+dollar.length;add("literal",source.slice(start,i));continue;
+      }
+      const word=source.slice(i).match(/^[a-zA-Z_][a-zA-Z0-9_$]*/)?.[0];
+      if(word) {i+=word.length;add("identifier",word.toLowerCase());continue;}
+      const number=source.slice(i).match(/^\d+(?:\.\d+)?/)?.[0];
+      if(number) {i+=number.length;add("literal",number);continue;}
+      const operator=source.slice(i).match(/^(?:::|<>|!=|<=|>=|[=<>(),.])/)?.[0];
+      if(!operator) throw new Error("UNSUPPORTED_SQL_TOKEN");
+      i+=operator.length;add("syntax",operator);
+    }
+    let position=0;let depth=0;
+    const at=(value) => tokens[position]?.value===value;
+    const consume=(value) => {if(!at(value)) throw new Error("SQL_TOKEN_EXPECTED");position++;};
+    function name() {
+      if(tokens[position]?.kind!=="identifier") throw new Error("SQL_IDENTIFIER_EXPECTED");
+      const parts=[tokens[position++].value];
+      while(at(".")) {position++;if(tokens[position]?.kind!=="identifier") throw new Error("SQL_IDENTIFIER_EXPECTED");parts.push(tokens[position++].value);}
+      return parts;
+    }
+    function atom() {
+      let node;
+      if(at("(")) {position++;node=expression(0);consume(")");}
+      else if(tokens[position]?.kind==="literal") node=["literal",tokens[position++].value];
+      else {
+        const parts=name();node=["name",parts];
+        if(at("(")) {
+          position++;const args=[];
+          if(!at(")")) {args.push(expression(0));while(at(",")) {position++;args.push(expression(0));}}
+          consume(")");node=["call",parts,args];
+        }
+      }
+      while(at("::")) {position++;node=["cast",node,name()];}
+      return node;
+    }
+    function expression(minimum) {
+      if(++depth>64) throw new Error("SQL_NESTING_LIMIT");
+      let left=atom();
+      while(position<tokens.length) {
+        const op=tokens[position].value;
+        const priority=op==="or" ? 1 : op==="and" ? 2 : ["=","<>","!=","<",">","<=",">=","is"].includes(op) ? 3 : 0;
+        if(!priority || priority<minimum) break;
+        position++;
+        if(op==="is") {
+          const negated=at("not");if(negated) position++;
+          consume("null");left=[negated ? "is_not_null" : "is_null",left];
+        } else left=[op,left,expression(priority+1)];
+      }
+      depth--;return left;
+    }
+    const tree=expression(0);
+    if(position!==tokens.length) return null;
+    return JSON.stringify(tree);
+  } catch {return null;}
+}
+export function browserPolicyExpressionsEqual(left,right) {
+  if(left===null || right===null) return left===null && right===null;
+  const normalized=normalizeBrowserPolicyExpression(left);
+  return normalized!==null && normalized===normalizeBrowserPolicyExpression(right);
+}
 const samePolicy = (a,b) => a?.schema === b.schema && a.table === b.table && a.name === b.name
   && a.command === b.command && a.permissive === b.permissive
   && JSON.stringify([...a.roles].sort()) === JSON.stringify([...b.roles].sort())
-  && ["using","withCheck"].every((k) => normalizeCorePolicyExpression(a[k]) === normalizeCorePolicyExpression(b[k]));
+  && ["using","withCheck"].every((k) => browserPolicyExpressionsEqual(a[k],b[k]));
 
 export function observeCorePolicyPost(policies) {
   const core = policies.filter((p) => BROWSER_FORENSIC_TABLES.slice(0,10).includes(p.table));

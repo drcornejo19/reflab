@@ -4,7 +4,6 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { assertNoInheritedPgState } from "../bootstrap/run-production-installer-identity-attestation.mjs";
 import { resolveProductionManagedPostgresTarget } from "../bootstrap/production-managed-postgres-target.mjs";
-import { serializeCorePolicyAttestation } from "./run-production-core-policy-pre-attestation.mjs";
 import { IdentitySecurityBridgePreAttestationFailure, classifyIdentitySecurityBridgePreAttestationFailure,
   executeIdentitySecurityBridgePreReadOnlyBatch, assertIdentitySecurityBridgeSessionPoolerTarget,
   formatIdentitySecurityBridgePreAttestationFailure } from "./run-production-identity-security-bridge-pre-attestation.mjs";
@@ -36,13 +35,75 @@ export function executeBrowserForensicReadOnly(sql,connectionEnvironment,{proces
   return executeIdentitySecurityBridgePreReadOnlyBatch(sql,connectionEnvironment,{processEnvironment,
     spawn:(program,args,options) => spawn(program,[...args,"--set","VERBOSITY=verbose"],{...options,timeout:120000})});
 }
-export function serializeBrowserForensic(result,environment) {
-  const text=serializeCorePolicyAttestation(result,environment);
+const escapedJsonString=(text) => text.replace(/["\\\u0000-\u001f]/g,(c) => ({'"':'\\"',"\\":"\\\\",
+  "\b":"\\b","\f":"\\f","\n":"\\n","\r":"\\r","\t":"\\t"}[c] ?? `\\u${c.charCodeAt(0).toString(16).padStart(4,"0")}`));
+function secretDetector(environment) {
   const url=environment[BROWSER_FORENSIC_VARIABLES[5]];
-  let encodedPassword="";
-  try { encodedPassword=url ? new URL(url).password : ""; } catch { /* Authorization handles invalid URLs. */ }
-  if(encodedPassword && text.includes(encodedPassword)) fail("OUTPUT","LOCAL_PROGRAMMING_ERROR");
-  return text;
+  const secrets=new Set();
+  const add=(text) => {if(typeof text==="string" && text) secrets.add(text);};
+  add(url);
+  try {
+    const parsed=new URL(url);const passwords=[decodeURIComponent(parsed.password)];add(parsed.password);
+    for(let i=0;i<2;i++) {
+      try {const decoded=decodeURIComponent(passwords.at(-1));if(decoded===passwords.at(-1)) break;passwords.push(decoded);} catch {break;}
+    }
+    for(const password of passwords) for(const value of [password,encodeURIComponent(password),encodeURI(password),
+      new URLSearchParams({p:password}).toString().slice(2),escapedJsonString(password),
+      [...password].map((c) => `\\u${c.charCodeAt(0).toString(16).padStart(4,"0")}`).join(""),
+      Buffer.from(password).toString("base64"),Buffer.from(`${parsed.username}:${password}`).toString("base64")]) add(value);
+    add(parsed.toString());
+  } catch { /* Authorization rejects invalid targets; never include a parser diagnostic. */ }
+  for(const value of [...secrets]) {
+    add(encodeURIComponent(value));
+    add(value.replace(/%[0-9a-f]{2}/gi,(s) => s.toLowerCase()));
+    add(value.replace(/%[0-9a-f]{2}/gi,(s) => s.toUpperCase()));
+  }
+  return (text) => {
+    const candidates=[text];
+    for(let i=0;i<2;i++) {
+      try {const decoded=decodeURIComponent(candidates.at(-1));if(decoded===candidates.at(-1)) break;candidates.push(decoded);} catch {break;}
+    }
+    for(const candidate of [...candidates]) candidates.push(candidate.replace(/\\(?:["\\/bfnrt]|u[0-9a-f]{4})/gi,
+      (token) => {try {return JSON.parse(`"${token}"`);} catch {return token;}}));
+    return candidates.some((candidate) => [...secrets].some((secret) => candidate.includes(secret))
+      || /(?:postgres(?:ql)?|https?):\/\/|\beyJ[A-Za-z0-9_-]{10,}\./i.test(candidate)
+      || /\b(?:password|passwd|pwd|pgpassword)\s*[:=]/i.test(candidate)
+      || /\b(?:host|dbname|user|port|sslmode)\s*=\S+\s+(?:host|dbname|user|port|sslmode|password)\s*=/i.test(candidate));
+  };
+}
+// Reject the complete payload rather than redact catalog evidence and claim completion.
+export function sanitizeBrowserForensicOutput(value,environment={}) {
+  const unsafe=secretDetector(environment);const active=new Set();const fragments=[];let nodes=0;
+  function visit(input,depth) {
+    if(++nodes>200000 || depth>32) fail("OUTPUT","OUTPUT_LIMIT_EXCEEDED");
+    if(typeof input==="string") {
+      if(unsafe(input)) fail("OUTPUT","LOCAL_PROGRAMMING_ERROR");
+      fragments.push(input);return input;
+    }
+    if(input===null || typeof input==="boolean" || typeof input==="number" && Number.isFinite(input)) return input;
+    if(typeof input!=="object" || active.has(input)) fail("OUTPUT","LOCAL_PROGRAMMING_ERROR");
+    if(!Array.isArray(input) && ![Object.prototype,null].includes(Object.getPrototypeOf(input))) fail("OUTPUT","LOCAL_PROGRAMMING_ERROR");
+    active.add(input);const descriptors=Object.getOwnPropertyDescriptors(input);
+    if(Reflect.ownKeys(input).some((k) => typeof k!=="string")) fail("OUTPUT","LOCAL_PROGRAMMING_ERROR");
+    const output=Array.isArray(input) ? [] : Object.create(null);
+    for(const [key,descriptor] of Object.entries(descriptors)) {
+      if(Array.isArray(input) && key==="length") continue;
+      if(!descriptor.enumerable || !Object.hasOwn(descriptor,"value") || key==="toJSON"
+        || unsafe(key) || /password|passwd|pgpassword|connection.?string/i.test(key)) fail("OUTPUT","LOCAL_PROGRAMMING_ERROR");
+      output[key]=visit(descriptor.value,depth+1);
+    }
+    active.delete(input);return output;
+  }
+  const safe=visit(value,0);
+  if(unsafe(fragments.join(""))) fail("OUTPUT","LOCAL_PROGRAMMING_ERROR");
+  return safe;
+}
+export function serializeBrowserForensic(result,environment={}) {
+  const safe=sanitizeBrowserForensicOutput(result,environment);
+  const text=JSON.stringify(safe,null,2);
+  if(text.length>4*1024*1024) fail("OUTPUT","OUTPUT_LIMIT_EXCEEDED");
+  if(secretDetector(environment)(text)) fail("OUTPUT","LOCAL_PROGRAMMING_ERROR");
+  return `${text}\n`;
 }
 export function runProductionBrowserPrivilegeBaselineForensic(environment = process.env,dependencies = {}) {
   if (dependencies.argument !== BROWSER_FORENSIC_OPERATION) fail("OPERATION","OPERATION_NOT_AUTHORIZED");
@@ -82,7 +143,13 @@ export async function runBrowserPrivilegeForensicCli(environment = process.env,d
     const lines = formatIdentitySecurityBridgePreAttestationFailure(error).trim().split("\n").slice(1);
     const result = {format:BROWSER_FORENSIC_FORMAT,classification:"BLOCKER",approval:"NOT_PERFORMED",mutationCount:0,
       ...Object.fromEntries(lines.map((s) => { const i=s.indexOf("="); return [s.slice(0,i),s.slice(i+1)]; }))};
-    (dependencies.writeStderr ?? ((s) => process.stderr.write(s)))(`${JSON.stringify(result)}\n`);
+    let output;
+    try {output=serializeBrowserForensic(result,environment);} catch {
+      // Error details are untrusted too. Discard them if the structured check fails.
+      try {output=serializeBrowserForensic({format:BROWSER_FORENSIC_FORMAT,classification:"BLOCKER",approval:"NOT_PERFORMED",
+        mutationCount:0,reason:"LOCAL_PROGRAMMING_ERROR"},environment);} catch {output="";}
+    }
+    if(output) (dependencies.writeStderr ?? ((s) => process.stderr.write(s)))(output);
     return 1;
   }
 }
