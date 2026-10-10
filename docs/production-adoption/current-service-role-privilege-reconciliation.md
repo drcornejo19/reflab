@@ -70,3 +70,86 @@ the canonical five-argument overload, whereas the supplied forensic
 observed only the historical overload. Runtime and cutover remain
 unauthorized. Global table ACL reconciliation remains incomplete.
 64253_INDEPENDENT_REVIEW_REQUIRED = YES.
+
+## Dedicated Production Harness (Local Engineering Only)
+
+Neither remote PRE nor DDL is authorized. Commit and independently review
+this harness first, then separately authorize one external READ-ONLY PRE.
+Only after that evidence is reviewed may a future isolated DDL execution
+be considered. Successful PRE is not DDL authorization.
+
+Commands reserved for future authorization:
+
+```powershell
+npm.cmd run preflight:production-current-service-role
+npm.cmd run execute:production-current-service-role-reconciliation
+```
+
+Operations are `--production-current-service-role-pre-attestation` and
+`--execute-production-current-service-role-reconciliation`, respectively.
+PRE requires exactly these Production variables:
+
+```text
+ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT=true
+ALLOW_PRODUCTION_PRIVILEGED_READ_ONLY_ATTESTATION=true
+ALLOW_PRODUCTION_CURRENT_SERVICE_ROLE_PRE=true
+REFLAB_PRODUCTION_PRIVILEGED_READ_ONLY_PROJECT_REF
+REFLAB_PRODUCTION_PRIVILEGED_READ_ONLY_APPROVED_HEAD
+REFLAB_PRODUCTION_PRIVILEGED_READ_ONLY_DB_URL
+```
+
+DDL requires its distinct variables (read-only flags cannot substitute):
+
+```text
+ALLOW_PRODUCTION_DDL=true
+ALLOW_PRODUCTION_CURRENT_SERVICE_ROLE_DDL=true
+REFLAB_PRODUCTION_DDL_PROJECT_REF
+REFLAB_PRODUCTION_DDL_APPROVED_HEAD
+REFLAB_PRODUCTION_DDL_DB_URL
+REFLAB_PRODUCTION_DDL_MIGRATION_SHA=f4634ee7b18643d3672cf6767ebe8b5085e13b2e66dd5cd813c4d6b92e601fa0
+```
+
+The only target is project `nagjddldrldwavmfaytc`, Session Pooler
+`aws-1-sa-east-1.pooler.supabase.com:5432`, database `postgres`,
+`sslmode=require`, installer `postgres.nagjddldrldwavmfaytc`.
+Foreign Production opt-ins and all inherited PG connection overrides fail
+before connection. Exact approved HEAD, a clean worktree, fixed hashes of
+approved transition artifacts, and approved-HEAD bytes for the complete
+static import closure are mandatory. Executing runner bytes are hashed
+against their committed Git blob, with no self-referential embedded hash.
+Uncommitted harnesses cannot pass these Production gates.
+
+PRE uses one `BEGIN READ ONLY`, verifies read-only mode, sets LOCAL
+lock/statement/idle/transaction timeouts to 2s/15s/15s/180s and always
+ROLLBACKs. It observes only and invokes no migration. DDL uses one
+persistent connection, one transaction, deterministic primary-table locks,
+and LOCAL 5s/60s/15s/180s timeouts. Live exact PRE precedes exactly one
+invocation of the verified committed body; live exact POST and protected
+catalog equality precede COMMIT. Structural extraction removes only the
+two verified outer transaction statements, preserving all remaining bytes.
+Installed POST refuses replay; partial transitions fail closed.
+
+Pre-COMMIT failures roll back. Unacknowledged COMMIT returns
+`UNKNOWN_COMMIT_OUTCOME`, forbids automatic retry, never claims rollback,
+and requires a separately authorized read-only post forensic. Structured
+output is checked for secrets before serialization; contaminated payloads
+are discarded rather than reported as successful evidence.
+
+The approved 2741-test inventory remains frozen and byte-unchanged.
+New harness tests deliberately use `.spec.mjs` and an explicit separate
+command, not the historical `.test.mjs` discovery namespace. Execute both
+commands; never substitute the new suite for the frozen baseline:
+
+```powershell
+node scripts/production-adoption/phase3/run-current-service-role-static-regression.mjs
+node --test scripts/production-adoption/phase3/phase3-current-service-role-harness.spec.mjs
+node scripts/production-adoption/phase3/run-current-service-role-pre-postgres.mjs
+node scripts/production-adoption/phase3/run-current-service-role-ddl-postgres.mjs
+```
+
+Report frozen baseline 2741, new harness tests N, and unique total 2741+N
+separately. Disposable PG17 evidence remains synthetic, never Production
+truth. The migration still implements only 72/2 (12 REVOKE, 2 GRANT).
+Future 70/3 cutover privileges are not implemented; generic Supabase push,
+64253 execution, Phase4 execution, runtime enablement and cutover remain
+forbidden. Current runtime usability is not established.
