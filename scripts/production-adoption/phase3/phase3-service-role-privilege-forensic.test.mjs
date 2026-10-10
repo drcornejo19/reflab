@@ -7,7 +7,7 @@ import { SERVICE_FORENSIC_FORMAT, SERVICE_FORENSIC_QUERY_ID, PRIMARY_TABLES, ADD
   RELEVANT_FUNCTIONS, DELETE_CALLER_TABLES, buildServiceRoleForensicBatch, classifyServiceRoleForensic, serviceRolePaths,
   privilegeOrigins, currentDesignDelta, classifyLocalServiceRoleForensic, PREDEFINED_TABLE_AUTHORITIES } from "./phase3-service-role-privilege-forensic-contract.mjs";
 import { serviceRoleFixtureEvidence, refreshServiceFixtureCounts, buildServiceRoleMechanicalFixture, SERVICE_FIXTURE_STATUS } from "./phase3-service-role-privilege-forensic-fixture.mjs";
-import { SERVICE_FORENSIC_OPERATION, SERVICE_FORENSIC_VARIABLES, SERVICE_FORENSIC_ARTIFACTS, runProductionServiceRolePrivilegeForensic,
+import { SERVICE_FORENSIC_OPERATION, SERVICE_FORENSIC_RUNNER_PATH, SERVICE_FORENSIC_VARIABLES, SERVICE_FORENSIC_ARTIFACTS, runProductionServiceRolePrivilegeForensic,
   serializeServiceRoleForensic, runServiceRoleForensicCli } from "./run-production-service-role-privilege-forensic.mjs";
 import { BROWSER_FORENSIC_QUERY_ID } from "./phase3-browser-privilege-baseline-forensic-contract.mjs";
 import { CORE_POLICY_QUERY_ID } from "./phase3-core-policy-contract.mjs";
@@ -22,7 +22,7 @@ const environment = (password = "synthetic-only-password") => Object.fromEntries
   i < 3 ? "true" : i === 3 ? "nagjddldrldwavmfaytc" : i === 4 ? head :
     `postgresql://postgres.nagjddldrldwavmfaytc:${encodeURIComponent(password)}@aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require`]));
 const readCheckout = (p) => readFileSync(resolve(root, p), "utf8");
-const git = (args) => args[0] === "rev-parse" ? head : args[0] === "status" ? "" : readCheckout(args[1].slice(5)).replaceAll("\r\n", "\n");
+const git = (args) => args[0] === "rev-parse" ? head : args[0] === "status" ? "" : readCheckout(args[1].slice(args[1].indexOf(":") + 1)).replaceAll("\r\n", "\n");
 const run = (env = environment(), overrides = {}) => runProductionServiceRolePrivilegeForensic(env, {
   argument: SERVICE_FORENSIC_OPERATION, git, readCheckout, executeReadOnly: () => serviceRoleFixtureEvidence(), ...overrides,
 });
@@ -191,7 +191,47 @@ for (const [name, mutate] of Object.entries(driftCases)) test(`fail closed on ${
 test("all committed/checkout artifact pins match normalized local bytes", () => {
   for (const [p, hash] of Object.entries(SERVICE_FORENSIC_ARTIFACTS)) assert.equal(createHash("sha256").update(readCheckout(p).replaceAll("\r\n", "\n")).digest("hex"), hash, p);
 });
-test("exact gate invokes only the injected read-only collector", () => {assert.equal(run().classification, "SERVICE_ROLE_FORENSIC_OBSERVATION_COMPLETE");});
+test("exact gate verifies approved committed runner bytes before the read-only collector", () => {
+  let verified = false, requested = false, calls = 0;
+  const result = run(environment(), {
+    git: (args) => {if (args[0] === "show" && args[1] === `${head}:${SERVICE_FORENSIC_RUNNER_PATH}`) requested = true; return git(args);},
+    readRunnerBytes: (path) => {assert.ok(requested); assert.equal(path, resolve(root, SERVICE_FORENSIC_RUNNER_PATH)); verified = true; return readFileSync(path);},
+    executeReadOnly: () => {assert.ok(verified); calls++; return serviceRoleFixtureEvidence();},
+  });
+  assert.equal(calls, 1); assert.equal(result.classification, "SERVICE_ROLE_FORENSIC_OBSERVATION_COMPLETE");
+  assert.equal(result.runnerArtifactExact, true); assert.equal(result.checks.runnerArtifactExact, true);
+});
+for (const drift of ["appended bytes", "single byte", "EOL", "non-byte result"]) test(`runner ${drift} drift rejects clean mocked worktree before any connector/session`, async () => {
+  let reads = 0, collectors = 0, sessions = 0, stderr = "";
+  const status = await runServiceRoleForensicCli(environment(), {
+    argument: SERVICE_FORENSIC_OPERATION, git, readCheckout,
+    readRunnerBytes: (path) => {
+      reads++; const bytes = readFileSync(path);
+      if (drift === "appended bytes") return Buffer.concat([bytes, Buffer.from("\n// synthetic drift\n")]);
+      if (drift === "single byte") {bytes[0] ^= 1; return bytes;}
+      if (drift === "EOL") return Buffer.from(bytes.toString("utf8").replaceAll("\n", "\r\n"));
+      return bytes.toString("utf8");
+    },
+    executeReadOnly: () => {collectors++; throw new Error("collector must not be created");},
+    spawn: () => {sessions++; throw new Error("session must not be created");},
+    writeStdout: () => assert.fail("runner drift cannot succeed"), writeStderr: (s) => stderr += s,
+  });
+  assert.equal(status, 1); assert.equal(reads, 1); assert.equal(collectors, 0); assert.equal(sessions, 0);
+  assert.equal(JSON.parse(stderr).classification, "BLOCKER");
+  assert.equal(JSON.parse(stderr).mutationCount, 0);
+});
+test("different approved-commit runner bytes reject unchanged executing bytes before connection", () => {
+  let calls = 0;
+  assert.throws(() => run(environment(), {
+    git: (args) => args[0] === "show" && args[1] === `${head}:${SERVICE_FORENSIC_RUNNER_PATH}` ? "synthetic committed drift" : git(args),
+    executeReadOnly: () => {calls++;},
+  }));
+  assert.equal(calls, 0);
+});
+test("local PG17 delta report carries the exact non-Production evidence marker", () => {
+  const source = readCheckout("scripts/production-adoption/phase3/run-service-role-privilege-forensic-postgres.mjs");
+  assert.match(source, /deltaEvidence: "SYNTHETIC_FIXTURE_ONLY_NOT_PRODUCTION_TRUTH",\s*effectivePrivilegeEntryRevocations: final\.currentVsDesignDelta\.effectivePrivilegeEntryRevocations,\s*effectivePrivilegeEntryGrants: final\.currentVsDesignDelta\.effectivePrivilegeEntryGrants/);
+});
 for (const key of SERVICE_FORENSIC_VARIABLES.slice(0, 3)) test(`missing dedicated authorization ${key} refuses before connection`, () => {
   const env = environment(); delete env[key]; let calls = 0;
   assert.throws(() => run(env, {executeReadOnly: () => {calls++;}})); assert.equal(calls, 0);
@@ -205,8 +245,11 @@ for (const key of ["PGHOST", "PGOPTIONS", "pgpassword", "ALLOW_PRODUCTION_DDL", 
 for (const state of [" M local", "M  local", "?? local"]) test(`dirty/staged/untracked ${state} refuses before connection`, () => {
   let calls = 0; assert.throws(() => run(environment(), {git: (args) => args[0] === "status" ? state : git(args), executeReadOnly: () => {calls++;}})); assert.equal(calls, 0);
 });
-test("wrong approved HEAD refuses before connection", () => {let calls = 0; const env = environment(); env[SERVICE_FORENSIC_VARIABLES[4]] = "0".repeat(40);
-  assert.throws(() => run(env, {executeReadOnly: () => {calls++;}})); assert.equal(calls, 0);});
+test("wrong approved HEAD refuses before runner bytes, connector or session are requested", () => {
+  let calls = 0, reads = 0, sessions = 0; const env = environment(); env[SERVICE_FORENSIC_VARIABLES[4]] = "0".repeat(40);
+  assert.throws(() => run(env, {readRunnerBytes: () => {reads++;}, executeReadOnly: () => {calls++;}, spawn: () => {sessions++;}}));
+  assert.equal(calls, 0); assert.equal(reads, 0); assert.equal(sessions, 0);
+});
 for (const path of Object.keys(SERVICE_FORENSIC_ARTIFACTS)) test(`artifact drift ${path} refuses before connection`, () => {
   let calls = 0; assert.throws(() => run(environment(), {git: (args) => args[0] === "show" && args[1] === `HEAD:${path}` ? "wrong" : git(args), executeReadOnly: () => {calls++;}})); assert.equal(calls, 0);
 });

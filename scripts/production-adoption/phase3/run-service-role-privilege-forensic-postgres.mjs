@@ -126,10 +126,12 @@ try {
     historicalEvidence: "LOCAL_SYNTHETIC_DATA_ONLY", cases: Object.keys(outcomes).length, outcomes, observations,
     primaryTables: PRIMARY_TABLES.length, additionalTables: ADDITIONAL_TABLES.length, primaryEffectivePrivilegeResults: 104,
     primaryEffectiveColumnResults: final.primaryEffectiveColumnPrivileges.length, policies: final.policies.length,
+    deltaEvidence: "SYNTHETIC_FIXTURE_ONLY_NOT_PRODUCTION_TRUTH",
     effectivePrivilegeEntryRevocations: final.currentVsDesignDelta.effectivePrivilegeEntryRevocations,
     effectivePrivilegeEntryGrants: final.currentVsDesignDelta.effectivePrivilegeEntryGrants,
     transactionReadOnly: true, transaction: "ROLLBACK", migrationsExecuted: 0, mutationCount: 0, collectorMutations: 0,
     fixtureSetupMutations: "LOCAL_ONLY_OUTSIDE_FORENSIC_AUTHORIZED_BY_USER", approval: "NOT_PERFORMED", warnings};
+  assert.equal(report.deltaEvidence, "SYNTHETIC_FIXTURE_ONLY_NOT_PRODUCTION_TRUTH");
 } finally {
   if (started || existsSync(join(data, "postmaster.pid"))) command("pg_ctl", ["-D", data, "-m", "immediate", "-w", "stop"]);
   if (existsSync(join(data, "postmaster.pid"))) throw new Error("LOCAL_PG17_RESIDUAL_CLUSTER");

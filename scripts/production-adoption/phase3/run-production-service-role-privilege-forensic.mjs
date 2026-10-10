@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { BROWSER_PRE_ARTIFACTS } from "./phase3-browser-privilege-pre-attestation-contract.mjs";
 import { validateBrowserBaseline } from "./phase3-browser-privilege-contract.mjs";
 import { resolveProductionManagedPostgresTarget } from "../bootstrap/production-managed-postgres-target.mjs";
@@ -14,6 +14,7 @@ import { SERVICE_FORENSIC_FORMAT, buildServiceRoleForensicBatch, classifyService
 
 const root = resolve(import.meta.dirname, "../../..");
 export const SERVICE_FORENSIC_OPERATION = "--production-service-role-privilege-forensic";
+export const SERVICE_FORENSIC_RUNNER_PATH = "scripts/production-adoption/phase3/run-production-service-role-privilege-forensic.mjs";
 export const SERVICE_FORENSIC_VARIABLES = Object.freeze([
   "ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT", "ALLOW_PRODUCTION_PRIVILEGED_READ_ONLY_ATTESTATION",
   "ALLOW_PRODUCTION_SERVICE_ROLE_PRIVILEGE_FORENSIC", "REFLAB_PRODUCTION_PRIVILEGED_READ_ONLY_PROJECT_REF",
@@ -50,13 +51,24 @@ export function assertServiceForensicArtifacts(git, readCheckout = (p) => readFi
   }
   if (!validateBrowserBaseline()) fail("BASELINE", "REPOSITORY_ARTIFACT_MISMATCH");
 }
+export function assertServiceForensicRunnerArtifact(git, approvedHead, readRunnerBytes = readFileSync) {
+  // The approved commit pins the runner without a self-referential embedded hash.
+  const committed = git(["show", `${approvedHead}:${SERVICE_FORENSIC_RUNNER_PATH}`]);
+  const committedBytes = Buffer.isBuffer(committed) ? committed : Buffer.from(committed, "utf8");
+  const executingBytes = readRunnerBytes(fileURLToPath(import.meta.url));
+  if (!Buffer.isBuffer(executingBytes)
+    || createHash("sha256").update(committedBytes).digest("hex") !== createHash("sha256").update(executingBytes).digest("hex"))
+    fail("ARTIFACT", "REPOSITORY_ARTIFACT_MISMATCH");
+  return true;
+}
 export function runProductionServiceRolePrivilegeForensic(environment = process.env, dependencies = {}) {
   if (dependencies.argument !== SERVICE_FORENSIC_OPERATION) fail("OPERATION", "OPERATION_NOT_AUTHORIZED");
   assertServiceForensicAuthorization(environment);
-  const git = dependencies.git ?? ((args) => execFileSync("git", args, {cwd: root, encoding: "utf8", windowsHide: true}));
+  const git = dependencies.git ?? ((args) => execFileSync("git", args, {cwd: root, encoding: args[0] === "show" ? undefined : "utf8", windowsHide: true}));
   const head = git(["rev-parse", "HEAD"]).trim();
   if (!/^[a-f0-9]{40}$/.test(head) || head !== environment[SERVICE_FORENSIC_VARIABLES[4]]) fail("HEAD", "HEAD_MISMATCH");
   if (git(["status", "--porcelain", "--untracked-files=all"]).trim()) fail("WORKTREE", "WORKTREE_DIRTY");
+  const runnerArtifactExact = assertServiceForensicRunnerArtifact(git, head, dependencies.readRunnerBytes);
   assertServiceForensicArtifacts(git, dependencies.readCheckout);
   const target = assertIdentitySecurityBridgeSessionPoolerTarget(resolveProductionManagedPostgresTarget(environment, {
     projectRefVariable: SERVICE_FORENSIC_VARIABLES[3], databaseUrlVariable: SERVICE_FORENSIC_VARIABLES[5],
@@ -66,9 +78,10 @@ export function runProductionServiceRolePrivilegeForensic(environment = process.
     {processEnvironment: environment, ...(dependencies.spawn ? {spawn: dependencies.spawn} : {})});
   if (!(evidence instanceof Map)) fail("RESULT", "QUERY_RESULT_SHAPE_MISMATCH");
   if (evidence.get("read_only_guard") !== "on") fail("TRANSACTION", "READ_ONLY_GUARD_FAILED");
-  return classifyServiceRoleForensic(evidence, {approvedHead: head, targetExact: true,
+  const report = classifyServiceRoleForensic(evidence, {approvedHead: head, targetExact: true,
     target: {project: "nagjddldrldwavmfaytc", host: "aws-1-sa-east-1.pooler.supabase.com", port: 5432, database: "postgres",
       sslmode: "require", installer: "postgres.nagjddldrldwavmfaytc"}});
+  return {...report, runnerArtifactExact, checks: {...report.checks, runnerArtifactExact}};
 }
 export const serializeServiceRoleForensic = serializeBrowserForensic;
 export async function runServiceRoleForensicCli(environment = process.env, dependencies = {}) {
