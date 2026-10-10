@@ -255,4 +255,67 @@ The PG17 rehearsal uses observed catalog definitions with synthetic row data,
 never Production fingerprints. Browser-only success still leaves service-role
 reconciliation, infrastructure cleanup, 64253 review and runtime/cutover blocked.
 
+### Service-role privilege forensic (local implementation only)
+
+`npm.cmd run forensic:production-service-role-privileges` selects only
+`--production-service-role-privilege-forensic`. It requires exactly `true` for
+`ALLOW_PRODUCTION_READ_ONLY_PREFLIGHT`,
+`ALLOW_PRODUCTION_PRIVILEGED_READ_ONLY_ATTESTATION`, and
+`ALLOW_PRODUCTION_SERVICE_ROLE_PRIVILEGE_FORENSIC`, together with
+`REFLAB_PRODUCTION_PRIVILEGED_READ_ONLY_PROJECT_REF`,
+`REFLAB_PRODUCTION_PRIVILEGED_READ_ONLY_APPROVED_HEAD`, and
+`REFLAB_PRODUCTION_PRIVILEGED_READ_ONLY_DB_URL`. Foreign Production opt-ins,
+DDL configuration, inherited PG variables, wrong target/HEAD, or any dirty,
+staged or untracked file reject execution before connection. Committed and
+checkout artifact pins cover the protected browser lineage and reused security
+transport. Implementation and fixture results grant no remote authorization.
+
+One `BEGIN READ ONLY` verifies `transaction_read_only=on`, applies transaction-local
+2s lock and 15s statement bounds, and always ends with `ROLLBACK`; errors close
+the single session without retry. It does not execute migrations, approve a
+baseline, or mutate any database object. Structured secret validation precedes
+serialization; unsafe payloads, including driver messages, are discarded.
+
+The primary thirteen tables remain distinct from the explicitly enumerated
+57 additional runtime objects. Missing additional objects are reported absent,
+not substituted with expected state. Institutional invitations use membership,
+membership-role and group-membership tables; institutional exams use assessment,
+assignment/session and referee-session tables. The four DELETE caller tables
+and coach rate-limit bucket have dedicated evidence sections. None of the
+additional objects is authorized to enter a privilege-mutation wave.
+
+All eight PG17 privileges, including MAINTAIN, are observed as raw ACL entries
+and effective service-role privileges separately. Every effective path must be
+explainable by direct grants, PUBLIC, ownership ACLs, inherited grants, implicit
+database ownership, PG17 predefined read/write/maintenance roles or superuser
+status. The full membership graph records edge
+direction, grantor and PG17 INHERIT/SET options; SET ROLE reachability is not
+treated as automatically inherited authority. Role attributes and FORCE/RLS
+determine the reported row-security path, rather than Supabase conventions.
+Column ACLs and table-derived effective column capabilities remain separate.
+
+Relevant RPC overloads report source hashes, owner, language, security mode,
+configuration and EXECUTE provenance. SECURITY DEFINER access executes as its
+observed owner; invoker access executes as the caller. Absent RPCs are explicit.
+This evidence is not a transitive static proof of arbitrary function bodies.
+The protected function/schema fingerprint independently rejects any drift from
+the completed browser lineage. All 55 policies use literal-sensitive comparison;
+64236, 64245, 64249 POST, adoption boundaries and Production data fingerprints
+remain independently pinned.
+
+Current-versus-design deltas are computed from actual effective entries. The
+proposed thirteen-table matrix is design input only. The carried-forward local
+fixture yields 70 revocation entries and 3 grant entries; these are not assumed
+Production truth or SQL statement counts. No executable authorization is emitted:
+`approval=NOT_PERFORMED`, `mutationCount=0`.
+
+The PG17 fixture is `LOCAL_MECHANICAL_FIXTURE_ONLY`, with separately labelled
+synthetic data and RPC stubs. Its setup/variant DDL and DML is disposable local
+test infrastructure, expressly authorized by the user, never collector behavior
+or a migration execution. Production comparisons cannot accept the local
+historical proof adapter. Browser reconciliation is complete by carried-forward
+execution evidence; global table ACL reconciliation remains incomplete. The
+service-role wave, infrastructure lifecycle, independent 64253 review, Phase4,
+runtime and cutover remain unauthorized.
+
 Phase 3 is locally acceptable only when static tests, disposable PostgreSQL rehearsal, attacks, rollback cases, historical fingerprints, marker/ledger assertions, and the full preceding adoption battery pass. Production execution requires separately reviewed authorization and an exact live PRE inside the one-shot transaction.
