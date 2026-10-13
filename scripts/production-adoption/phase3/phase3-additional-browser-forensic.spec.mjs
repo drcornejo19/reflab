@@ -3,9 +3,10 @@ import test from "node:test";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { TABLES, PRIVILEGES, COMPLETE, OPERATION, RUNNER, VARIABLES, TARGET, HARNESS_ROOT, inventorySql,
-  functionsSql, parseCatalogTree, inspectCatalogTree, buildBrowserReport, prepareBrowserForensic, serializeCurrentHarness } from "./phase3-additional-browser-forensic-contract.mjs";
+  functionsSql, parseCatalogTree, inspectCatalogTree, buildBrowserReport, prepareBrowserForensic, serializeCurrentHarness,
+  functionSourceSha256, SOURCE_HASH_BASIS } from "./phase3-additional-browser-forensic-contract.mjs";
 import { browserFixtureEvidence } from "./phase3-additional-browser-forensic-fixture.mjs";
-import { runProductionBrowserForensic, attestBrowserCatalog, runBrowserForensicCli } from "./run-production-additional-browser-forensic.mjs";
+import { runProductionBrowserForensic, attestBrowserCatalog, runBrowserForensicCli, observeBrowserCatalog } from "./run-production-additional-browser-forensic.mjs";
 import { PINNED_ARTIFACTS } from "./phase3-additional-runtime-pre-contract.mjs";
 
 const head = "a".repeat(40), password = "fixture_only_P@ss!";
@@ -30,7 +31,8 @@ for (const table of TABLES) {
   test(`missing policy-count observation ${table} is UNKNOWN`, () => { const e = browserFixtureEvidence(); e.tables.find((t) => t.table === table).policyCount++;
     assert.equal(buildBrowserReport(e, []).classification, "UNKNOWN"); });
   test(`missing column ${table} is UNKNOWN`, () => { const e = browserFixtureEvidence(); e.columns = e.columns.filter((c) => c.table !== table);
-    assert.equal(buildBrowserReport(e, []).classification, "UNKNOWN"); });
+    const r = buildBrowserReport(e, []); assert.equal(r.classification, "UNKNOWN");
+    assert.equal(r.additionalRuntimeTables.find((t) => t.table === table).columnAclObservationComplete, false); });
   test(`missing browser effective cell ${table} is UNKNOWN`, () => { const e = browserFixtureEvidence(); e.effectiveTables.splice(e.effectiveTables.findIndex((x) => x.table === table), 1);
     assert.equal(buildBrowserReport(e, []).classification, "UNKNOWN"); });
   test(`incomplete raw table ACL ${table} is UNKNOWN`, () => { const e = browserFixtureEvidence(); e.tables.find((t) => t.table === table).rawAclEntryCount++;
@@ -48,7 +50,8 @@ test("same-count browser redistribution still reports exact cell drift", () => {
 test("raw column ACL is never manufactured from table privileges", () => { const r = buildBrowserReport(browserFixtureEvidence(), []);
   assert.equal(r.additionalRuntimeColumnRawAcls.length, 0); assert.ok(r.additionalRuntimeEffectiveAuthenticatedColumnPrivileges.some((e) => e.effective)); });
 test("column-only privilege remains distinct from table capability", () => { const e = browserFixtureEvidence();
-  e.columnAcls.push({ table: "institutional_leads", column: "id", grantee: "anon", grantor: "postgres", privilege: "INSERT", grantable: false });
+  e.columnAcls.push({ schema: "public", table: "institutional_leads", column: "id", grantee: "anon", grantor: "postgres", privilege: "INSERT", grantable: false });
+  e.tables.find((t) => t.table === "institutional_leads").columnAcls.push({ ...e.columnAcls[0] });
   e.columns.find((c) => c.table === "institutional_leads").rawAclEntryCount++;
   const c = e.effectiveColumns.find((e) => e.table === "institutional_leads" && e.role === "anon" && e.privilege === "INSERT"); c.effective = true;
   const r = buildBrowserReport(e, []); assert.equal(r.institutionalLeadsEvidence.tableCapabilities.find((e) => e.role === "anon").effective, false);
@@ -87,7 +90,9 @@ test("non-read-only session evidence is BLOCKER", () => { const e = browserFixtu
 test("nested invoker keeps DEFINER owner's execution identity", () => {
   const e = browserFixtureEvidence(); e.policies[0].usingTree = "{FUNCEXPR :funcid 100}";
   const fn = (oid, securityDefiner, sqlBodyTree) => ({ oid, schema: "public", name: `helper_${oid}`, identityArguments: "", returnType: "boolean",
-    language: "sql", owner: "postgres", securityDefiner, sqlBodyTree, sourceHash: "a".repeat(32), volatility: "v", strict: false, leakproof: false,
+    language: "sql", owner: "postgres", securityDefiner, sqlBodyTree,
+    sourceSha256: functionSourceSha256({ sourceText: "fixture", sqlBodyTree }), sourceHashBasis: SOURCE_HASH_BASIS,
+    volatility: "v", strict: false, leakproof: false,
     executeAcls: [], executeAclEntryCount: 0, catalogDependencies: [], relationIdentities: [], effectiveExecute: ["anon", "authenticated", "PUBLIC", "service_role", "postgres"].map((role) => ({ role, effective: true })) });
   const r = buildBrowserReport(e, [fn(100, true, "{FUNCEXPR :funcid 101}"), fn(101, false, "{CONST :consttype 16}")]);
   assert.equal(r.classification, COMPLETE); assert.equal(r.policyFunctionExecutionPaths.find((p) => p.functionOid === 101).executionRole, "postgres");
@@ -161,3 +166,112 @@ test("unsafe collected evidence yields a safe BLOCKER, never an altered COMPLETE
   const code = await runBrowserForensicCli(env(), { run: async () => report, write: (v) => { output += v; } });
   assert.equal(code, 1); assert.equal(output.includes(password), false); assert.equal(JSON.parse(output).classification, "BLOCKER");
   assert.equal(JSON.parse(output).reason, "OUTPUT_REDACTION_FAILED"); });
+
+for (const kind of ["using", "withCheck"]) {
+  for (const [name, value] of [["missing", undefined], ["undefined", undefined], ["null", null], ["empty string", ""],
+    ["empty array", []], ["malformed", "{FUNCEXPR :funcid"], ["incomplete function", "{FUNCEXPR}"], ["unobserved", {}]]) {
+    test(`${kind} existing predicate with ${name} dependency tree is UNKNOWN`, () => {
+      const e = browserFixtureEvidence(), p = e.policies[0]; p[`${kind}Expression`] = "pg_catalog.int4eq(1, 1)";
+      if (name === "missing") delete p[`${kind}Tree`]; else p[`${kind}Tree`] = value;
+      const r = buildBrowserReport(e, []), observed = r.additionalRuntimePolicies[0][`${kind}DependencyEvidence`];
+      assert.equal(r.classification, "UNKNOWN"); assert.equal(observed.expressionPresent, true);
+      assert.ok(r.unknownChecks.some((reason) => reason.startsWith(kind)));
+      assert.equal(r.additionalRuntimePolicies[0].resolvedFunctionOids, null);
+      assert.doesNotThrow(() => serializeCurrentHarness(r, {}));
+    });
+  }
+  test(`${kind} NULL predicate legitimately needs no tree`, () => {
+    const e = browserFixtureEvidence(), p = e.policies[0]; p[`${kind}Expression`] = null; delete p[`${kind}Tree`];
+    const r = buildBrowserReport(e, []); assert.equal(r.classification, COMPLETE);
+    assert.equal(r.additionalRuntimePolicies[0][`${kind}DependencyEvidence`].treeStatus, "NOT_REQUIRED_NULL_EXPRESSION");
+  });
+}
+test("complete builtin predicate tree retains normal OID resolution", () => {
+  const e = browserFixtureEvidence(); e.policies[0].usingExpression = "pg_catalog.int4eq(1, 1)";
+  e.policies[0].usingTree = "{FUNCEXPR :funcid 65}";
+  const r = buildBrowserReport(e, []); assert.equal(r.additionalRuntimePolicies[0].usingDependencyEvidence.treeStatus, "OBSERVED_COMPLETE");
+  assert.deepEqual(r.additionalRuntimePolicies[0].resolvedFunctionOids, [65]); assert.equal(r.classification, "UNKNOWN");
+  assert.ok(r.unknownChecks.includes("functionsComplete"));
+});
+test("source SHA-256 known-answer and exact canonical bytes", () => {
+  const value = functionSourceSha256({ sourceText: "return true;", sqlBodyTree: null });
+  assert.match(value, /^[a-f0-9]{64}$/);
+  assert.equal(value, "7d384e04e64511fdb943c77d9d6cb17e3fb7cd17edfa9577e87e38749d85990e");
+  assert.equal(functionSourceSha256({ sourceText: "return true;", sqlBodyTree: null }), value);
+  assert.notEqual(functionSourceSha256({ sourceText: "return false;", sqlBodyTree: null }), value);
+  assert.notEqual(functionSourceSha256({ sourceText: "return True;", sqlBodyTree: null }), value);
+  assert.notEqual(functionSourceSha256({ sourceText: "return true;", sqlBodyTree: "" }), value);
+});
+test("source components cannot collide through ambiguous concatenation", () => {
+  assert.notEqual(functionSourceSha256({ sourceText: "a", sqlBodyTree: "bc" }), functionSourceSha256({ sourceText: "ab", sqlBodyTree: "c" }));
+  assert.notEqual(functionSourceSha256({ sourceText: "return true;\n", sqlBodyTree: null }), functionSourceSha256({ sourceText: "return true;\r\n", sqlBodyTree: null }));
+});
+for (const input of [{ sqlBodyTree: null }, { sourceText: "x" }, { sourceText: "x", sqlBodyTree: undefined }])
+  test(`incomplete raw source material fails closed ${JSON.stringify(input)}`, () => assert.throws(() => functionSourceSha256(input)));
+test("function source SQL has no MD5 or extension dependency", () => {
+  const sql = functionsSql([65]); assert.equal(/md5|pgcrypto|digest\(/i.test(sql), false);
+  assert.ok(sql.includes('p.prosrc as "sourceText"'));
+  assert.notEqual(SOURCE_HASH_BASIS, "MD5_PROSRC_AND_CATALOG_SQL_BODY");
+});
+for (const value of ["a".repeat(32), "a".repeat(40), "A".repeat(64), "z".repeat(64)])
+  test(`non-SHA256 source evidence rejected ${value.length}/${value[0]}`, () => {
+    const e = browserFixtureEvidence(); e.policies[0].usingTree = "{FUNCEXPR :funcid 65}";
+    const f = { oid: 65, schema: "pg_catalog", name: "int4eq", identityArguments: "integer, integer", returnType: "boolean",
+      language: "internal", owner: "postgres", securityDefiner: false, sqlBodyTree: null, sourceSha256: value, sourceHashBasis: SOURCE_HASH_BASIS,
+      volatility: "i", strict: true, leakproof: true, executeAcls: [], executeAclEntryCount: 0, catalogDependencies: [],
+      effectiveExecute: ["anon", "authenticated", "PUBLIC", "service_role", "postgres"].map((role) => ({ role, effective: true })) };
+    const r = buildBrowserReport(e, [f]); assert.equal(r.classification, "UNKNOWN"); assert.ok(r.unknownChecks.includes("functionSourceSha256Complete"));
+  });
+for (const table of TABLES) {
+  test(`${table}: explicit column ACL [] is observed, never inferred`, () => {
+    const r = buildBrowserReport(browserFixtureEvidence(), []), t = r.additionalRuntimeTables.find((t) => t.table === table);
+    assert.deepEqual(t.columnAcls, []); assert.equal(t.columnAclObservationComplete, true);
+  });
+  for (const [name, value] of [["missing", undefined], ["null", null], ["malformed", {}]])
+    test(`${table}: ${name} per-table column ACL cannot use global empty count`, () => {
+      const e = browserFixtureEvidence(), t = e.tables.find((t) => t.table === table);
+      if (name === "missing") delete t.columnAcls; else t.columnAcls = value;
+      const r = buildBrowserReport(e, []); assert.equal(r.classification, "UNKNOWN");
+      assert.ok(r.unknownChecks.includes("perTableColumnAclsComplete"));
+      assert.equal(r.additionalRuntimeTables.find((t) => t.table === table).columnAclObservationComplete, false);
+    });
+}
+test("one and multiple raw grants are exact, ordered, and separate from capabilities", () => {
+  const e = browserFixtureEvidence(), table = "clips", t = e.tables.find((t) => t.table === table);
+  const row = { schema: "public", table, column: "id", grantee: "anon", grantor: "postgres", privilege: "SELECT", grantable: false };
+  e.columnAcls.push(row); t.columnAcls.push({ ...row }); e.columns.find((c) => c.table === table).rawAclEntryCount++;
+  let r = buildBrowserReport(e, []); assert.equal(r.classification, COMPLETE); assert.deepEqual(r.additionalRuntimeTables.find((t) => t.table === table).columnAcls, [row]);
+  const second = { ...row, grantee: "authenticated", privilege: "INSERT" };
+  e.columnAcls.push(second); t.columnAcls.unshift({ ...second }); e.columns.find((c) => c.table === table).rawAclEntryCount++;
+  r = buildBrowserReport(e, []); assert.equal(r.classification, COMPLETE);
+  assert.deepEqual(r.additionalRuntimeTables.find((t) => t.table === table).columnAcls, [row, second]);
+  assert.ok(r.additionalRuntimeEffectiveAuthenticatedColumnPrivileges.length > 0);
+});
+test("malformed per-table column ACL rows cannot pass through matching global rows", () => {
+  const e = browserFixtureEvidence(); const row = { table: "clips", column: "id", grantee: "anon", grantor: "postgres", privilege: "SELECT", grantable: false };
+  e.columnAcls.push(row); e.tables.find((t) => t.table === "clips").columnAcls.push(row); e.columns.find((c) => c.table === "clips").rawAclEntryCount++;
+  assert.equal(buildBrowserReport(e, []).classification, "UNKNOWN");
+});
+test("collector emits only SHA256 source identity and rejects the legacy MD5 basis", async () => {
+  const e = browserFixtureEvidence(); e.policies[0].usingExpression = "pg_catalog.int4eq(1, 1)";
+  e.policies[0].usingTree = "{FUNCEXPR :funcid 65}";
+  const f = { oid: 65, schema: "pg_catalog", name: "int4eq", identityArguments: "integer, integer", returnType: "boolean",
+    language: "internal", owner: "postgres", securityDefiner: false, sourceText: password, sqlBodyTree: null,
+    volatility: "i", strict: true, leakproof: true, executeAcls: [], executeAclEntryCount: 0, catalogDependencies: [],
+    effectiveExecute: ["anon", "authenticated", "PUBLIC", "service_role", "postgres"].map((role) => ({ role, effective: true })) };
+  const frame = (query, payload) => `REFLAB_PREFLIGHT_V1\t${query}\t${Buffer.from(JSON.stringify({ query, payload_row_count: 1, payload })).toString("base64")}\n`;
+  let calls = 0;
+  const r = await observeBrowserCatalog({ query: async () => ++calls === 1 ? frame("additional_browser_inventory", e) : frame("additional_browser_functions", [f]) });
+  assert.equal(r.classification, COMPLETE); assert.equal(calls, 2);
+  assert.match(r.additionalRuntimePolicyFunctions[0].sourceSha256, /^[a-f0-9]{64}$/);
+  assert.equal(Object.hasOwn(r.additionalRuntimePolicyFunctions[0], "sourceText"), false);
+  assert.equal(serializeCurrentHarness(r, env()).includes(password), false);
+  r.additionalRuntimePolicyFunctions[0].sourceHashBasis = "MD5_PROSRC_AND_CATALOG_SQL_BODY";
+  assert.equal(buildBrowserReport(e, r.additionalRuntimePolicyFunctions).classification, "UNKNOWN");
+});
+for (const [table, kind, context] of [["clips", "using", "clipsEvidence"], ["institutional_leads", "withCheck", "institutionalLeadsEvidence"]])
+  test(`${table}: dedicated evidence never calls an unobserved dependency set empty`, () => {
+    const e = browserFixtureEvidence(), p = e.policies.find((p) => p.table === table);
+    p[`${kind}Expression`] = "pg_catalog.int4eq(1, 1)"; delete p[`${kind}Tree`];
+    const r = buildBrowserReport(e, []); assert.equal(r.classification, "UNKNOWN"); assert.equal(r[context].policyFunctionOids, null);
+  });

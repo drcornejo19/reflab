@@ -6,14 +6,16 @@ export function browserFixtureEvidence() {
   const effectiveTables = [...additionalBrowserMatrix().map((e) => ({ schema: e.schema, table: e.table, role: e.role, privilege: e.privilege, effective: e.granted })),
     ...TABLES.flatMap((table) => PRIVILEGES.map((privilege) => ({ schema: "public", table, role: "PUBLIC", privilege, effective: false })))];
   const tables = TABLES.map((table, i) => ({ schema: "public", table, oid: 1000 + i, owner: "postgres", rls: true,
-    force: false, rawAcl: null, policyCount: 0, columnCount: 1,
+    force: false, rawAcl: null, policyCount: 0, columnCount: 1, columnAcls: [],
     rawAclEntryCount: effectiveTables.filter((e) => e.table === table && e.effective).length }));
   const policies = [
     { table: "clips", name: "authenticated_read", roles: ["authenticated"], command: "r", usingExpression: "true", withCheckExpression: null },
     { table: "institutions", name: "anon_read", roles: ["anon"], command: "r", usingExpression: "true", withCheckExpression: null },
     { table: "appointments", name: "public_read", roles: ["PUBLIC"], command: "r", usingExpression: "true", withCheckExpression: null },
     { table: "institutional_leads", name: "anon_insert", roles: ["anon"], command: "a", usingExpression: null, withCheckExpression: "true" },
-  ].map((p, i) => ({ ...p, schema: "public", oid: 2000 + i, mode: "PERMISSIVE", usingTree: null, withCheckTree: null, catalogFunctionOids: [] }));
+  ].map((p, i) => ({ ...p, schema: "public", oid: 2000 + i, mode: "PERMISSIVE",
+    usingTree: p.usingExpression === null ? null : "{CONST :consttype 16 :constisnull false}",
+    withCheckTree: p.withCheckExpression === null ? null : "{CONST :consttype 16 :constisnull false}", catalogFunctionOids: [] }));
   for (const p of policies) tables.find((t) => t.table === p.table).policyCount++;
   return { transactionReadOnly: "on", serverVersion: "170009", tables, policies, columns, roleCount: 5, membershipCount: 0, operatorFunctions: [],
     roleAttributes: ["anon", "authenticated", "service_role", "postgres", "reflab_rls_owner"].map((name) => ({ name,
@@ -50,6 +52,7 @@ export function buildBrowserFixtureSetup() {
     grant browser_policy_group to authenticated with inherit true;
     create policy browser_membership on public.teams for select to browser_policy_group using(true);
     create policy browser_operator on public.venues for select to authenticated using(id=id);
+    create policy browser_hash_probe on public.coach_evidence for select to authenticated using(pg_catalog.int4eq(1,1));
   `;
 }
 

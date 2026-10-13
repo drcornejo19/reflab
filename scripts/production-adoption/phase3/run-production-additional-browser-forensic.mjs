@@ -4,7 +4,8 @@ import { resolve } from "node:path";
 import { parseJsonResults } from "../../production-preflight/run.mjs";
 import { createCorePolicyPsqlSession } from "./phase3-core-policy-psql-session.mjs";
 import { BEGIN, FORMAT, COMPLETE, prepareBrowserForensic, inventorySql, functionsSql, policyFunctionOids,
-  inspectCatalogTree, buildBrowserReport, serializeCurrentHarness, safeHarnessFailure, failHarness } from "./phase3-additional-browser-forensic-contract.mjs";
+  inspectCatalogTree, buildBrowserReport, functionSourceSha256, SOURCE_HASH_BASIS,
+  serializeCurrentHarness, safeHarnessFailure, failHarness } from "./phase3-additional-browser-forensic-contract.mjs";
 
 export async function observeBrowserCatalog(session) {
   const inventory = parseJsonResults(await session.query(inventorySql())).get("additional_browser_inventory");
@@ -15,7 +16,11 @@ export async function observeBrowserCatalog(session) {
     if (++rounds > 100 || functions.size + pending.length > 10000) failHarness("DEPENDENCY_BOUND_EXCEEDED");
     const rows = parseJsonResults(await session.query(functionsSql(pending))).get("additional_browser_functions");
     if (!Array.isArray(rows) || pending.some((oid) => !rows.some((f) => f.oid === oid))) failHarness("FUNCTION_OBSERVATION_INCOMPLETE");
-    for (const f of rows) functions.set(f.oid, f);
+    for (const f of rows) {
+      const observed = { ...f, sourceSha256: functionSourceSha256(f), sourceHashBasis: SOURCE_HASH_BASIS };
+      delete observed.sourceText;
+      functions.set(f.oid, observed);
+    }
     pending = [...new Set(rows.flatMap((f) => [...f.catalogDependencies.filter((d) => d.catalog === "pg_proc").map((d) => d.oid),
       ...inspectCatalogTree(f.sqlBodyTree, inventory.operatorFunctions).functionOids]))].filter((oid) => !functions.has(oid)).sort((a, b) => a - b);
   }

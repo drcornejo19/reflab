@@ -3,7 +3,8 @@ import { withCurrentServiceLocalPg } from "./phase3-current-service-role-harness
 import { buildAdditionalFixtureSetup } from "./phase3-additional-runtime-service-role-fixture.mjs";
 import { buildBrowserFixtureSetup, fixturePreservationSql } from "./phase3-additional-browser-forensic-fixture.mjs";
 import { attestBrowserCatalog } from "./run-production-additional-browser-forensic.mjs";
-import { COMPLETE, serializeCurrentHarness } from "./phase3-additional-browser-forensic-contract.mjs";
+import { COMPLETE, serializeCurrentHarness, buildBrowserReport, functionSourceSha256, inventorySql, SOURCE_HASH_BASIS } from "./phase3-additional-browser-forensic-contract.mjs";
+import { parseJsonResults } from "../../production-preflight/run.mjs";
 
 const result = await withCurrentServiceLocalPg(async ({ sql, createSession }) => {
   sql(buildAdditionalFixtureSetup()); sql(buildBrowserFixtureSetup());
@@ -43,6 +44,42 @@ const result = await withCurrentServiceLocalPg(async ({ sql, createSession }) =>
   check(() => assert.equal(report.mutationCount + report.ddlCount + report.dmlCount + report.migrationInvocationCount, 0));
   check(() => assert.doesNotThrow(() => serializeCurrentHarness(report, {})));
   check(() => assert.equal(sql(fixturePreservationSql), before));
+  check(() => assert.ok(report.additionalRuntimeTables.every((t) => Array.isArray(t.columnAcls) && t.columnAclObservationComplete)));
+  check(() => assert.deepEqual(report.additionalRuntimeTables.find((t) => t.table === "coach_rate_limit_buckets").columnAcls, []));
+  check(() => assert.equal(report.additionalRuntimeTables.find((t) => t.table === "institutional_leads").columnAcls.length, 1));
+  check(() => assert.ok(report.additionalRuntimePolicyFunctions.every((f) => /^[a-f0-9]{64}$/.test(f.sourceSha256) && f.sourceHashBasis === SOURCE_HASH_BASIS && !Object.hasOwn(f, "sourceText"))));
+  const material = JSON.parse(sql("select json_build_object('sourceText',prosrc,'sqlBodyTree',prosqlbody::text)::text from pg_proc where oid='public.browser_definer()'::regprocedure;"));
+  check(() => assert.equal(report.additionalRuntimePolicyFunctions.find((f) => f.name === "browser_definer").sourceSha256, functionSourceSha256(material)));
+  const session = createSession();
+  let inventory;
+  try {
+    await session.query("begin read only;");
+    inventory = parseJsonResults(await session.query(inventorySql())).get("additional_browser_inventory");
+  } finally { await session.rollback(); await session.close(); }
+  const project = (e) => buildBrowserReport(e, report.additionalRuntimePolicyFunctions);
+  check(() => assert.equal(project(inventory).classification, COMPLETE));
+  const probe = inventory.policies.find((p) => p.name === "browser_hash_probe");
+  check(() => assert.ok(probe.usingExpression.includes("int4eq") && probe.usingTree));
+  for (const kind of ["using", "withCheck"]) {
+    for (const state of ["missing", "undefined", "malformed", "incomplete"]) {
+      const e = structuredClone(inventory), p = e.policies.find((p) => p.oid === probe.oid);
+      p[`${kind}Expression`] = "pg_catalog.int4eq(1, 1)";
+      if (state === "missing") delete p[`${kind}Tree`];
+      else p[`${kind}Tree`] = state === "undefined" ? undefined : state === "malformed" ? "{FUNCEXPR :funcid" : "{FUNCEXPR}";
+      check(() => { const r = project(e); assert.equal(r.classification, "UNKNOWN");
+        assert.ok(r.unknownChecks.some((reason) => reason.startsWith(kind))); });
+    }
+    const e = structuredClone(inventory), p = e.policies.find((p) => p.oid === probe.oid);
+    p[`${kind}Expression`] = null; delete p[`${kind}Tree`];
+    check(() => assert.equal(project(e).classification, COMPLETE));
+  }
+  for (const invalid of ["missing", "null", "row"]) {
+    const e = structuredClone(inventory), t = e.tables.find((t) => t.table === "coach_rate_limit_buckets");
+    if (invalid === "missing") delete t.columnAcls; else t.columnAcls = invalid === "null" ? null : [{ privilege: "SELECT" }];
+    check(() => assert.equal(project(e).classification, "UNKNOWN"));
+  }
+  const badHash = structuredClone(report.additionalRuntimePolicyFunctions); badHash[0].sourceSha256 = "a".repeat(32);
+  check(() => assert.equal(buildBrowserReport(inventory, badHash).classification, "UNKNOWN"));
   sql("create policy browser_unknown on public.coach_runs for select to authenticated using(public.browser_dynamic());");
   const dynamic = await attestBrowserCatalog(createSession());
   check(() => assert.ok(dynamic.dependencyUnknowns.some((d) => d.signature.includes("browser_dynamic") && d.status.startsWith("UNKNOWN"))));

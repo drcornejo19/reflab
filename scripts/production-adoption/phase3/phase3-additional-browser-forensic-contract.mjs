@@ -11,6 +11,12 @@ export { TARGET, HARNESS_ROOT, defaultGit, hashBytes, failHarness, serializeCurr
 export const TABLES = ADDITIONAL_SERVICE_TABLES;
 export const PRIVILEGES = ADDITIONAL_PRIVILEGES;
 export const COLUMN_PRIVILEGES = ["SELECT", "INSERT", "UPDATE", "REFERENCES"];
+export const SOURCE_HASH_BASIS = "SHA256_JSON_ARRAY_PROSRC_SQLBODY_V1";
+export function functionSourceSha256({ sourceText, sqlBodyTree }) {
+  if (typeof sourceText !== "string" || !(sqlBodyTree === null || typeof sqlBodyTree === "string"))
+    failHarness("FUNCTION_SOURCE_OBSERVATION_INCOMPLETE");
+  return hashBytes(Buffer.from(JSON.stringify([SOURCE_HASH_BASIS, sourceText, sqlBodyTree]), "utf8"));
+}
 export const FORMAT = "REFLAB_ADDITIONAL_RUNTIME_BROWSER_POLICY_COLUMN_FORENSIC_V1";
 export const COMPLETE = "ADDITIONAL_RUNTIME_BROWSER_POLICY_COLUMN_OBSERVATION_COMPLETE";
 export const OPERATION = "--production-additional-runtime-browser-policy-column-forensic";
@@ -92,6 +98,9 @@ export function inventorySql() {
       c.relrowsecurity as rls,c.relforcerowsecurity as force,c.relacl as "rawAcl",
       (select count(*) from pg_policy p where p.polrelid=c.oid) as "policyCount",
       (select count(*) from aclexplode(coalesce(c.relacl,acldefault('r',c.relowner)))) as "rawAclEntryCount",
+      ${aggregate(`${aclRows("'public' as schema,c.relname as table,b.attname as column")}
+        from pg_attribute b cross join lateral aclexplode(b.attacl) a where b.attrelid=c.oid
+        and b.attnum>0 and not b.attisdropped order by b.attnum,a.grantee,a.privilege_type,a.grantor`)} as "columnAcls",
       (select count(*) from pg_attribute a where a.attrelid=c.oid and a.attnum>0 and not a.attisdropped) as "columnCount"
       from pg_class c where ${scope} order by c.relname`)},
     'tableAcls',${aggregate(`${aclRows("'public' as schema,c.relname as table,case when c.relacl is null then 'POSTGRESQL_DEFAULT_ACL' else 'EXPLICIT_ACL' end as basis")}
@@ -133,7 +142,7 @@ export function functionsSql(oids) {
     pg_get_function_identity_arguments(p.oid) as "identityArguments",pg_get_function_result(p.oid) as "returnType",
     l.lanname as language,pg_get_userbyid(p.proowner) as owner,p.prosecdef as "securityDefiner",p.proconfig as configuration,
     p.provolatile as volatility,p.proisstrict as strict,p.proleakproof as leakproof,
-    md5(p.prosrc || coalesce(p.prosqlbody::text,'')) as "sourceHash",'MD5_PROSRC_AND_CATALOG_SQL_BODY' as "sourceHashBasis",
+    p.prosrc as "sourceText",
     p.proacl as "rawAcl",p.prosqlbody::text as "sqlBodyTree",
     (select count(*) from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner)))) as "executeAclEntryCount",
     ${aggregate(`select d.refobjid::bigint as oid,d.refclassid::regclass::text as catalog,d.refobjsubid as subobject
@@ -190,6 +199,8 @@ export function inspectCatalogTree(text, operators = []) {
   const functions = new Set(), tableOperations = [], unresolved = [];
   function walk(node) {
     if (!node || typeof node !== "object") return;
+    for (const [tag, key] of [["FUNCEXPR", "funcid"], ["AGGREF", "aggfnoid"], ["WINDOWFUNC", "winfnoid"]])
+      if (node.tag === tag && (!Number.isSafeInteger(node[key]) || node[key] <= 0)) unresolved.push("FUNCTION_OID_NOT_OBSERVED");
     if (["COERCEVIAIO", "COERCETODOMAIN", "NEXTVALUEEXPR"].includes(node.tag)) unresolved.push(node.tag);
     for (const key of ["funcid", "opfuncid", "aggfnoid", "winfnoid", "hashfuncid", "negfuncid"]) if (Number(node[key]) > 0) functions.add(Number(node[key]));
     if (Number(node.opno) > 0 && !Number(node.opfuncid)) {
@@ -217,9 +228,30 @@ export function policyFunctionOids(inventory) {
   const result = new Set();
   for (const p of inventory.policies) {
     for (const oid of p.catalogFunctionOids) result.add(oid);
-    for (const tree of [p.usingTree, p.withCheckTree]) for (const oid of inspectCatalogTree(tree, inventory.operatorFunctions).functionOids) result.add(oid);
+    for (const kind of ["using", "withCheck"]) for (const oid of predicateDependencyEvidence(p, kind, inventory.operatorFunctions).functionOids ?? []) result.add(oid);
   }
   return [...result].sort((a, b) => a - b);
+}
+
+export function predicateDependencyEvidence(policy, kind, operators = []) {
+  const expressionKey = `${kind}Expression`, treeKey = `${kind}Tree`;
+  const expression = policy[expressionKey], tree = policy[treeKey];
+  const base = { expressionObserved: Object.hasOwn(policy, expressionKey) && expression !== undefined,
+    expressionPresent: null, treeObserved: Object.hasOwn(policy, treeKey) && tree !== undefined,
+    treeStatus: "UNKNOWN", functionOids: null, reason: `${kind}ExpressionNotObserved` };
+  if (base.expressionObserved && expression === null) return { ...base, expressionPresent: false,
+    treeStatus: "NOT_REQUIRED_NULL_EXPRESSION", functionOids: [], reason: null };
+  if (typeof expression !== "string" || !expression.trim()) return base;
+  base.expressionPresent = true;
+  if (!base.treeObserved || tree === null) return { ...base, treeStatus: "MISSING", reason: `${kind}PredicateTreeMissing` };
+  try {
+    if (typeof tree !== "string" || !tree.trim()) throw new Error("TREE_MALFORMED");
+    const root = parseCatalogTree(tree);
+    if (!root || Array.isArray(root) || typeof root !== "object" || typeof root.tag !== "string") throw new Error("TREE_MALFORMED");
+    const inspected = inspectCatalogTree(tree, operators);
+    return { ...base, treeStatus: inspected.unresolved.length ? "UNRESOLVED" : "OBSERVED_COMPLETE",
+      functionOids: inspected.functionOids, reason: inspected.unresolved.length ? `${kind}PredicateDependencyUnresolved` : null };
+  } catch { return { ...base, treeStatus: "MALFORMED", reason: `${kind}PredicateTreeMalformed` }; }
 }
 
 export function inheritancePaths(inventory, role, target) {
@@ -267,6 +299,16 @@ export function buildBrowserReport(inventory, functions) {
     && inventory.columnAcls.every((a) => inventory.columns.some((c) => c.table === a.table && c.column === a.column)
       && COLUMN_PRIVILEGES.includes(a.privilege) && typeof a.grantee === "string" && typeof a.grantor === "string" && typeof a.grantable === "boolean")
     && unique(inventory.columnAcls, (a) => `${a.table}:${a.column}:${a.grantee}:${a.grantor}:${a.privilege}`));
+  const aclIdentity = (a) => JSON.stringify([a.schema, a.table, a.column, a.grantee, a.grantor, a.privilege, a.grantable]);
+  const validColumnAcl = (a, table) => a && typeof a === "object" && a.schema === "public" && a.table === table
+    && inventory.columns.some((c) => c.table === table && c.column === a.column) && COLUMN_PRIVILEGES.includes(a.privilege)
+    && typeof a.grantee === "string" && typeof a.grantor === "string" && typeof a.grantable === "boolean";
+  const tableColumnComplete = (t) => Object.hasOwn(t, "columnAcls") && Array.isArray(t.columnAcls)
+    && inventory.columns.filter((c) => c.table === t.table).length === t.columnCount
+    && inventory.columns.filter((c) => c.table === t.table).every((c) => t.columnAcls.filter((a) => a?.column === c.column).length === c.rawAclEntryCount)
+    && t.columnAcls.every((a) => validColumnAcl(a, t.table))
+    && JSON.stringify(t.columnAcls.map(aclIdentity).sort()) === JSON.stringify(inventory.columnAcls.filter((a) => a.table === t.table).map(aclIdentity).sort());
+  check("perTableColumnAclsComplete", inventory.tables.every(tableColumnComplete));
   check("effectiveColumnsComplete", inventory.effectiveColumns.length === inventory.columns.length * 8
     && inventory.columns.every((c) => ["anon", "authenticated"].every((role) => COLUMN_PRIVILEGES.every((privilege) =>
       inventory.effectiveColumns.filter((e) => e.table === c.table && e.column === c.column && e.role === role
@@ -286,7 +328,7 @@ export function buildBrowserReport(inventory, functions) {
       nestedFunctionOids: [...new Set([...tree.functionOids, ...f.catalogDependencies.filter((d) => d.catalog === "pg_proc").map((d) => d.oid)])].sort((a, b) => a - b),
       tableOperations: tree.tableOperations.map((t) => ({ ...t, relation: f.relationIdentities?.find((r) => r.oid === t.relationOid) ?? null,
         checkAsUser: t.checkAsUserOid ? inventory.roleAttributes.find((r) => r.oid === t.checkAsUserOid)?.name ?? "UNKNOWN" : "EXECUTION_ROLE" })),
-      unresolved: tree.unresolved, sourceHash: f.sourceHash };
+      unresolved: tree.unresolved, sourceSha256: f.sourceSha256 ?? null };
   });
   // Unknown body dependencies are explicit evidence, not invented catalog incompleteness.
   const policyRoleApplicability = inventory.policies.flatMap((p) => ["anon", "authenticated", "PUBLIC"].map((role) => ({
@@ -299,15 +341,24 @@ export function buildBrowserReport(inventory, functions) {
     && ["PERMISSIVE", "RESTRICTIVE"].includes(p.mode) && ["*", "r", "a", "w", "d"].includes(p.command)
     && [p.usingExpression, p.withCheckExpression].every((v) => v === null || typeof v === "string")));
   check("policyRolesResolved", inventory.policies.every((p) => p.roles.every((role) => role === "PUBLIC" || inventory.roleAttributes.some((r) => r.name === role))));
-  const policyEvidence = inventory.policies.map((p) => ({ ...p,
-    resolvedFunctionOids: policyFunctionOids({ policies: [p], operatorFunctions: inventory.operatorFunctions }),
-    referenceResolutionBasis: "PG_DEPEND_AND_PG17_CATALOG_NODE_OIDS" }));
-  check("policyReferencesResolved", inventory.policies.every((p) => [p.usingTree, p.withCheckTree].every((t) => !inspectCatalogTree(t, inventory.operatorFunctions).unresolved.length)));
+  const policyEvidence = inventory.policies.map((p) => {
+    const using = predicateDependencyEvidence(p, "using", inventory.operatorFunctions);
+    const withCheck = predicateDependencyEvidence(p, "withCheck", inventory.operatorFunctions);
+    for (const evidence of [using, withCheck]) if (evidence.reason && !unknownChecks.includes(evidence.reason)) unknownChecks.push(evidence.reason);
+    return { ...p, usingExpression: p.usingExpression ?? null, withCheckExpression: p.withCheckExpression ?? null,
+      usingTree: p.usingTree ?? null, withCheckTree: p.withCheckTree ?? null,
+      usingDependencyEvidence: using, withCheckDependencyEvidence: withCheck,
+      resolvedFunctionOids: using.reason || withCheck.reason ? null : policyFunctionOids({ policies: [p], operatorFunctions: inventory.operatorFunctions }),
+      referenceResolutionBasis: "PG_DEPEND_AND_PG17_CATALOG_NODE_OIDS" };
+  });
+  check("policyReferencesResolved", policyEvidence.every((p) => !p.usingDependencyEvidence.reason && !p.withCheckDependencyEvidence.reason));
   check("functionIdentityComplete", functions.every((f) => typeof f.securityDefiner === "boolean" && f.owner && f.language
-    && f.identityArguments !== undefined && f.returnType && f.sourceHash && Array.isArray(f.executeAcls)
+    && f.identityArguments !== undefined && f.returnType && Array.isArray(f.executeAcls)
     && typeof f.strict === "boolean" && typeof f.leakproof === "boolean" && ["i", "s", "v"].includes(f.volatility)
     && ["anon", "authenticated", "PUBLIC", "service_role", f.owner].every((role) =>
       f.effectiveExecute.some((e) => e.role === role && typeof e.effective === "boolean"))));
+  check("functionSourceSha256Complete", functions.every((f) => typeof f.sourceSha256 === "string"
+    && /^[a-f0-9]{64}$/.test(f.sourceSha256) && f.sourceHashBasis === SOURCE_HASH_BASIS && !Object.hasOwn(f, "sourceHash")));
   check("functionExecuteAclsComplete", functions.every((f) => f.executeAcls.length === f.executeAclEntryCount
     && f.executeAcls.every((a) => a.privilege === "EXECUTE" && typeof a.grantee === "string" && typeof a.grantor === "string"
       && typeof a.grantable === "boolean") && unique(f.executeAcls, (a) => `${a.grantee}:${a.grantor}:${a.privilege}`)));
@@ -332,8 +383,10 @@ export function buildBrowserReport(inventory, functions) {
     policies: policyEvidence.filter((p) => p.table === table && [command, "*"].includes(p.command)),
     columnRawAcls: inventory.columnAcls.filter((a) => a.table === table && a.privilege === privilege),
     effectiveBrowserColumns: inventory.effectiveColumns.filter((e) => e.table === table && e.privilege === privilege),
-    policyFunctionOids: policyFunctionOids({ policies: inventory.policies.filter((p) => p.table === table && [command, "*"].includes(p.command)),
-      operatorFunctions: inventory.operatorFunctions })
+    policyFunctionOids: policyEvidence.some((p) => p.table === table && [command, "*"].includes(p.command)
+      && (p.usingDependencyEvidence.reason || p.withCheckDependencyEvidence.reason)) ? null
+      : policyFunctionOids({ policies: inventory.policies.filter((p) => p.table === table && [command, "*"].includes(p.command)),
+        operatorFunctions: inventory.operatorFunctions })
   });
   const observed = Object.fromEntries(["anon", "authenticated"].map((role) => [role,
     inventory.effectiveTables.filter((e) => e.role === role && e.effective).length]));
@@ -347,7 +400,9 @@ export function buildBrowserReport(inventory, functions) {
     transactionReadOnly: checks.transactionReadOnly, roleAttributes: inventory.roleAttributes, roleMemberships: inventory.roleMemberships,
     membershipDirection: "member -> role; inherit_option controls implicit access; SET ROLE is not implicit applicability",
     additionalRuntimeTables: inventory.tables.map((t) => ({ ...t, policies: policyEvidence.filter((p) => p.table === t.table),
-      columns: inventory.columns.filter((c) => c.table === t.table) })),
+      columns: inventory.columns.filter((c) => c.table === t.table),
+      columnAcls: Array.isArray(t.columnAcls) ? [...t.columnAcls].sort((a, b) => aclIdentity(a) < aclIdentity(b) ? -1 : aclIdentity(a) > aclIdentity(b) ? 1 : 0)
+        : null, columnAclObservationComplete: tableColumnComplete(t) })),
     additionalBrowserTableRawAcls: inventory.tableAcls,
     additionalBrowserEffectiveTablePrivileges: inventory.effectiveTables,
     additionalRuntimePolicies: policyEvidence, additionalRuntimePolicyRoleApplicability: policyRoleApplicability,

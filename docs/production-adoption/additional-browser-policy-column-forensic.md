@@ -60,6 +60,10 @@ All user columns and raw column ACL grantors/grantees/grant options are collecte
 including grantees beyond the six explicitly requested. Effective anon/authenticated
 SELECT/INSERT/UPDATE/REFERENCES column capabilities are separate, with an explicit
 table-level capability indicator. No raw column grant is invented from table ACLs.
+Every table has its own observed `columnAcls` array, sorted by the canonical row
+identity (schema, table, column, grantee, grantor, privilege, grantable). An explicit
+`[]` means a completed zero-grant observation. Missing, null, malformed or globally
+inconsistent per-table evidence produces UNKNOWN; the global count cannot replace it.
 Dedicated institutional_leads INSERT and clips SELECT projections preserve the
 relevant policies, function OIDs, raw column grants and effective capabilities.
 
@@ -67,7 +71,15 @@ Policy function OIDs come from PostgreSQL catalog dependency records and parsed
 catalog node trees (including operator function OIDs), never function names or
 regex extraction from deparsed SQL. Function identity, owner, security mode,
 configuration/search_path, return type, language, volatility, strictness,
-leakproof status, source hash and raw/effective EXECUTE evidence are preserved.
+leakproof status, source SHA-256 and raw/effective EXECUTE evidence are preserved.
+The query collects exact `prosrc` as `sourceText` and the nullable catalog SQL-body
+representation. Node hashes the UTF-8 bytes of
+`JSON.stringify(["SHA256_JSON_ARRAY_PROSRC_SQLBODY_V1", sourceText, sqlBodyTree])`.
+No trimming, case folding, EOL normalization or concatenation is performed; JSON
+framing distinguishes component boundaries and null from an empty string.
+Output uses `sourceSha256` (64 lowercase hex) and the explicit algorithm basis.
+Raw `sourceText` is discarded before report construction. No hashing extension or
+MD5 source-hash contract is required or accepted.
 Nested catalog dependencies and parsed SQL-standard function bodies are traversed
 with cycle and size bounds. SQL-body relation permissions are recorded from PG17
 RTEPERMISSIONINFO nodes and resolved to catalog relation identities.
@@ -83,6 +95,12 @@ usability, safety approval, or a closed least-privilege target.
 Incomplete catalog observation, unresolved expression references, unsupported node
 constructs, missing function identity, rollback or transport failures produce
 UNKNOWN. An observed non-read-only transaction or preconnection gate failure blocks.
+USING and WITH CHECK are validated independently. A truly NULL expression needs no
+tree. A present predicate with missing, undefined, malformed or incomplete tree
+evidence produces UNKNOWN with a deterministic reason. Per-predicate evidence
+records expression presence, tree observation and resolution status; an unresolved
+function set is null, never an asserted empty dependency set. Existing unresolved
+dynamic-dependency behavior remains unchanged.
 Secret-bearing output is rejected in its entirety before serialization, not partially
 redacted and falsely claimed as exact evidence.
 
