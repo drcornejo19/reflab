@@ -105,6 +105,7 @@
     "forensic:production-core-policy-baseline": "node scripts/production-adoption/phase3/run-production-core-policy-baseline-forensic.mjs --production-core-policy-baseline-forensic",
     "forensic:production-browser-privilege-baseline": "node scripts/production-adoption/phase3/run-production-browser-privilege-baseline-forensic.mjs --production-browser-privilege-baseline-forensic",
     "forensic:production-service-role-privileges": "node scripts/production-adoption/phase3/run-production-service-role-privilege-forensic.mjs --production-service-role-privilege-forensic",
+    "forensic:production-additional-runtime-browser-policy-columns": "node scripts/production-adoption/phase3/run-production-additional-browser-forensic.mjs --production-additional-runtime-browser-policy-column-forensic",
     "preflight:production-current-service-role": "node scripts/production-adoption/phase3/run-production-current-service-role-pre.mjs --production-current-service-role-pre-attestation",
     "preflight:production-additional-runtime-service-role": "node scripts/production-adoption/phase3/run-production-additional-runtime-service-role-pre.mjs --production-additional-runtime-service-role-pre-attestation",
     "execute:production-additional-runtime-service-role-reconciliation": "node scripts/production-adoption/phase3/run-production-additional-runtime-service-role-reconciliation.mjs --execute-production-additional-runtime-service-role-reconciliation",
