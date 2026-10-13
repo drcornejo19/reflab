@@ -68,6 +68,7 @@ const canonicalMigrationManifest = [
   ["20260901064245", "production_adoption_core_policy_reconciliation", "production_adoption_security"],
   ["20260901064249", "production_adoption_browser_privilege_reconciliation", "production_adoption_security"],
   ["20261010041511", "production_adoption_current_service_role_privilege_reconciliation", "production_adoption_security"],
+  ["20261013131628", "production_adoption_additional_runtime_service_role_privilege_reconciliation", "production_adoption_security"],
   ["20260901064253", "production_adoption_inert_private_helpers", "production_adoption_structural"],
   ["20260901064257", "production_adoption_non_unique_indexes", "production_adoption_structural"],
   ["20260901064301", "production_adoption_pre_cutover_evidence_boundary", "production_adoption_evidence"],
