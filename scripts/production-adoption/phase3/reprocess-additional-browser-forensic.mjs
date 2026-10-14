@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import { FORMAT, COMPLETE, policyDependencyEvidence, policyRoleActionEvidence, hashBytes, inspectCatalogTree, functionEvidenceComplete,
   serializeCurrentHarness, safeHarnessFailure } from "./phase3-additional-browser-forensic-contract.mjs";
+import { validateSupplementalForMerge, sameSupplementalFunction } from "./phase3-additional-browser-supplemental-contract.mjs";
 
 export function parseSavedBrowserForensic(bytes) {
   if (!Buffer.isBuffer(bytes)) throw new Error("ARCHIVE_BYTES_REQUIRED");
@@ -55,14 +56,30 @@ export function reprocessBrowserForensic(archive) {
       authorization: "NONE" }, remoteBrowserForensicAuthorized: false, remoteDdlAuthorized: false };
 }
 
-export function reprocessBrowserFile(path) {
-  const bytes = readFileSync(path), report = reprocessBrowserForensic(parseSavedBrowserForensic(bytes));
+export function mergeBrowserSupplemental(archive, supplemental, archiveSha) {
+  validateSupplementalForMerge(supplemental, archiveSha, archive.target);
+  const functions = new Map(archive.additionalRuntimePolicyFunctions.map((f) => [f.oid, f]));
+  for (const f of [...supplemental.directFunctionEvidence, ...supplemental.ioFunctionEvidence]) {
+    if (functions.has(f.oid) && !sameSupplementalFunction(functions.get(f.oid), f))
+      throw new Error("ARCHIVED_FUNCTION_CONFLICT");
+    if (!functions.has(f.oid)) functions.set(f.oid, f);
+  }
+  const combined = { ...archive, additionalRuntimePolicyFunctions: [...functions.values()].sort((a,b) => a.oid-b.oid),
+    additionalRuntimePolicyTypeIoCatalog: supplemental.typeEvidence };
+  const report = reprocessBrowserForensic(combined);
+  return { ...report, supplementalProvenance: { archiveSha256: archiveSha, approvedHead: supplemental.approvedHead,
+    target: supplemental.target, functionOids: [...new Set([...supplemental.directFunctionEvidence, ...supplemental.ioFunctionEvidence].map((f) => f.oid))],
+    boundary: "SEPARATE_READ_ONLY_OBSERVATIONS_NOT_A_SINGLE_TRANSACTION_SNAPSHOT" } };
+}
+export function reprocessBrowserFile(path, supplemental = null) {
+  const bytes = readFileSync(path), archive = parseSavedBrowserForensic(bytes);
+  const report = supplemental === null ? reprocessBrowserForensic(archive) : mergeBrowserSupplemental(archive, supplemental, hashBytes(bytes));
   return { ...report, archiveBytesSha256: hashBytes(bytes) };
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
-    if (process.argv.length !== 3) throw new Error("ONE_LOCAL_ARCHIVE_PATH_REQUIRED");
-    const report = reprocessBrowserFile(process.argv[2]);
+    if (![3,4].includes(process.argv.length)) throw new Error("ARCHIVE_AND_OPTIONAL_SUPPLEMENT_PATH_REQUIRED");
+    const report = reprocessBrowserFile(process.argv[2], process.argv[3] ? JSON.parse(readFileSync(process.argv[3], "utf8").replace(/^\uFEFF/, "")) : null);
     process.stdout.write(serializeCurrentHarness(report, {}) + "\n");
     process.exitCode = report.classification === COMPLETE ? 0 : 1;
   } catch (error) { process.stderr.write(safeHarnessFailure(error) + "\n"); process.exitCode = 1; }
