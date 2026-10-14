@@ -63,6 +63,17 @@ export function buildBrowserFixtureSetup() {
     create policy browser_scalar_array on public.fixtures for all to authenticated
       using(id = any(array[id])) with check(id = any(array[id]));
     create policy browser_hash_probe on public.coach_evidence for select to authenticated using(pg_catalog.int4eq(1,1));
+    create schema auth;
+    create function auth.uid() returns uuid language sql set search_path=pg_catalog
+      return '00000000-0000-0000-0000-000000000001'::uuid;
+    create function auth.jwt() returns jsonb language sql set search_path=pg_catalog return '{"sub":"fixture_only"}'::jsonb;
+    create policy browser_real_coalesce on public.readiness_scores for all to authenticated
+      using(id::text=coalesce(auth.jwt()->>'sub',auth.uid()::text)) with check(id::text=coalesce(auth.jwt()->>'sub',auth.uid()::text));
+    create policy browser_real_sublink on public.institution_contents for all to authenticated
+      using(exists(select 1 from public.institutions institution_row where institution_row.id=institution_contents.id
+        and public.browser_invoker() and exists(select 1 from public.institution_memberships member_row where member_row.id=institution_row.id)))
+      with check(exists(select 1 from public.institutions institution_row where institution_row.id=institution_contents.id));
+    create policy browser_owner_cast on public.clips for select to reflab_rls_owner using(id::text=auth.uid()::text);
   `;
 }
 

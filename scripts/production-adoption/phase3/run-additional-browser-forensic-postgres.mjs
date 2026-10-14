@@ -4,7 +4,7 @@ import { buildAdditionalFixtureSetup } from "./phase3-additional-runtime-service
 import { buildBrowserFixtureSetup, fixturePreservationSql } from "./phase3-additional-browser-forensic-fixture.mjs";
 import { attestBrowserCatalog } from "./run-production-additional-browser-forensic.mjs";
 import { COMPLETE, serializeCurrentHarness, buildBrowserReport, functionSourceSha256, inventorySql, SOURCE_HASH_BASIS,
-  inspectPredicateTree } from "./phase3-additional-browser-forensic-contract.mjs";
+  inspectPredicateTree, parseCatalogTree } from "./phase3-additional-browser-forensic-contract.mjs";
 import { parseJsonResults } from "../../production-preflight/run.mjs";
 
 const result = await withCurrentServiceLocalPg(async ({ sql, createSession }) => {
@@ -57,12 +57,61 @@ const result = await withCurrentServiceLocalPg(async ({ sql, createSession }) =>
     await session.query("begin read only;");
     inventory = parseJsonResults(await session.query(inventorySql())).get("additional_browser_inventory");
   } finally { await session.rollback(); await session.close(); }
+  inventory.policyTypeIoCatalog = report.additionalRuntimePolicyTypeIoCatalog;
   const project = (e) => buildBrowserReport(e, report.additionalRuntimePolicyFunctions);
   check(() => assert.equal(project(inventory).classification, COMPLETE));
   const probe = inventory.policies.find((p) => p.name === "browser_hash_probe");
   check(() => assert.ok(probe.usingExpression.includes("int4eq") && probe.usingTree));
   const operatorProbe = inventory.policies.find((p) => p.name === "browser_operator");
   const scalarProbe = inventory.policies.find((p) => p.name === "browser_scalar_array");
+  const realCoalesce = inventory.policies.find((p) => p.name === "browser_real_coalesce");
+  const realSublink = inventory.policies.find((p) => p.name === "browser_real_sublink");
+  for (const kind of ["using", "withCheck"]) {
+    const coalesced = inspectPredicateTree(realCoalesce[`${kind}Tree`],inventory.operatorFunctions,inventory);
+    check(() => assert.ok(realCoalesce[`${kind}Tree`].includes("{COALESCEEXPR")));
+    check(() => assert.ok(realCoalesce[`${kind}Tree`].includes("{COERCEVIAIO")));
+    check(() => assert.deepEqual(coalesced.unresolved,[]));
+    check(() => assert.ok(coalesced.functionOids.length>=5));
+    check(() => assert.ok(coalesced.typeIoDependencies.every(d=>d.sourceType && d.targetType
+      && d.sourceOutputFunctionOid===d.sourceType.typoutput && d.targetInputFunctionOid===d.targetType.typinput)));
+    check(() => assert.ok(coalesced.typeIoDependencies.every(d=>report.additionalRuntimePolicyFunctions.some(f=>f.oid===d.sourceOutputFunctionOid)
+      && report.additionalRuntimePolicyFunctions.some(f=>f.oid===d.targetInputFunctionOid))));
+    const subquery = inspectPredicateTree(realSublink[`${kind}Tree`],inventory.operatorFunctions,inventory);
+    check(() => assert.ok(realSublink[`${kind}Tree`].includes("{SUBLINK")));
+    check(() => assert.deepEqual(subquery.unresolved,[]));
+    check(() => assert.ok(subquery.relationDependencies.some(d=>d.table==="institutions" && d.resolvedPrivileges.includes("SELECT")
+      && d.selectedColumns.some(c=>c.column==="id") && d.checkAsUser===0 && d.executionRole==="POLICY_CALLER")));
+    if(kind==="using") {
+      check(() => assert.equal(subquery.subqueries.length,2));
+      check(() => assert.ok(subquery.relationDependencies.some(d=>d.table==="institution_memberships")));
+      check(() => assert.ok(subquery.functionOids.length>=2));
+    }
+    for(const state of ["source output missing","target input missing","missing function","unknown child"]) check(()=>{
+      const e=structuredClone(inventory),p=e.policies.find(p=>p.oid===realCoalesce.oid);
+      const io=coalesced.typeIoDependencies[0];
+      if(state==="source output missing")delete e.policyTypeIoCatalog.find(t=>t.oid===io.sourceTypeOid).typoutput;
+      if(state==="target input missing")delete e.policyTypeIoCatalog.find(t=>t.oid===io.targetTypeOid).typinput;
+      if(state==="unknown child")p[`${kind}Tree`]=p[`${kind}Tree`].replace(/\{COERCEVIAIO/,"{UNOBSERVED");
+      const functions=state==="missing function"?report.additionalRuntimePolicyFunctions.filter(f=>f.oid!==io.sourceOutputFunctionOid):report.additionalRuntimePolicyFunctions;
+      const r=buildBrowserReport(e,functions);assert.equal(r.classification,"UNKNOWN");assert.equal(r.additionalRuntimePolicies.find(p=>p.oid===realCoalesce.oid).resolvedFunctionOids,null);
+    });
+    for(const state of ["missing relation","bad bitmap","unsupported qual","missing permission","explicit checkAsUser"]) check(()=>{
+      const e=structuredClone(inventory),p=e.policies.find(p=>p.oid===realSublink.oid),root=parseCatalogTree(p[`${kind}Tree`]);
+      function visit(n){if(!n||typeof n!=="object")return;if(n.tag==="RTEPERMISSIONINFO"){
+        if(state==="bad bitmap")n.selectedCols=["b",999999];if(state==="explicit checkAsUser")n.checkAsUser=e.roleAttributes.find(r=>r.name==="postgres").oid;
+      }if(n.tag==="QUERY"){if(state==="missing permission")n.rteperminfos="<>";if(state==="unsupported qual")n.jointree.quals={tag:"UNOBSERVED"};}
+      for(const v of Object.values(n))visit(v);}
+      visit(root);
+      if(state==="missing relation")e.tables=e.tables.filter(t=>t.table!=="institutions");
+      const serialize=n=>Array.isArray(n)?`(${n.map(serialize).join(" ")})`:n&&typeof n==="object"?`{${n.tag} ${Object.entries(n).filter(([k])=>k!=="tag").map(([k,v])=>`:${k} ${serialize(v)}`).join(" ")}}`:String(n);
+      p[`${kind}Tree`]=serialize(root);
+      const r=project(e);
+      if(state==="explicit checkAsUser"){assert.equal(r.classification,COMPLETE);assert.ok(r.additionalRuntimePolicies.find(p=>p.oid===realSublink.oid)[`${kind}DependencyEvidence`].relationDependencies.every(d=>d.executionRole==="postgres"));}
+      else assert.equal(r.classification,"UNKNOWN");
+    });
+  }
+  check(()=>{const e=structuredClone(inventory);e.policies.find(p=>p.name==="browser_owner_cast").usingTree="{UNOBSERVED}";
+    const r=project(e);assert.equal(r.classification,"UNKNOWN");assert.equal(r.clipsEvidence.roleActionEvidence.find(r=>r.role==="authenticated").status,"DEPENDENCY_EVIDENCE_COMPLETE");});
   for (const kind of ["using", "withCheck"]) {
     for (const [name, tree] of [["OPEXPR", operatorProbe.usingTree], ["SCALARARRAYOPEXPR", scalarProbe[`${kind}Tree`]]]) {
       check(() => {

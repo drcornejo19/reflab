@@ -6,10 +6,16 @@ import { createCorePolicyPsqlSession } from "./phase3-core-policy-psql-session.m
 import { BEGIN, FORMAT, COMPLETE, prepareBrowserForensic, inventorySql, functionsSql, policyFunctionOids,
   inspectCatalogTree, buildBrowserReport, functionSourceSha256, SOURCE_HASH_BASIS,
   serializeCurrentHarness, safeHarnessFailure, failHarness } from "./phase3-additional-browser-forensic-contract.mjs";
+import { typeIoSql, predicateDependencyEvidence } from "./phase3-additional-browser-forensic-contract.mjs";
 
 export async function observeBrowserCatalog(session) {
   const inventory = parseJsonResults(await session.query(inventorySql())).get("additional_browser_inventory");
   if (!inventory) failHarness("INVENTORY_INCOMPLETE");
+  const typeOids = [...new Set(inventory.policies.flatMap((p) => ["using", "withCheck"].flatMap((kind) =>
+    predicateDependencyEvidence(p, kind, inventory.operatorFunctions, inventory).requiredTypeOids ?? [])))].sort((a,b) => a-b);
+  inventory.policyTypeIoCatalog = typeOids.length
+    ? parseJsonResults(await session.query(typeIoSql(typeOids))).get("additional_browser_type_io") : [];
+  if (!Array.isArray(inventory.policyTypeIoCatalog)) failHarness("TYPE_IO_OBSERVATION_INCOMPLETE");
   const functions = new Map();
   let pending = policyFunctionOids(inventory), rounds = 0;
   while (pending.length) {

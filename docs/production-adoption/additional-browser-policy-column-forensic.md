@@ -102,7 +102,8 @@ records expression presence, tree observation and resolution status; an unresolv
 function set is null, never an asserted empty dependency set. Existing unresolved
 dynamic-dependency behavior remains unchanged.
 Predicate validation has a separate explicit node contract: CONST, VAR, FUNCEXPR,
-OPEXPR, SCALARARRAYOPEXPR, BOOLEXPR, NULLTEST and ARRAYEXPR. Each declares mandatory
+OPEXPR, SCALARARRAYOPEXPR, BOOLEXPR, NULLTEST, ARRAYEXPR, COALESCEEXPR, COERCEVIAIO
+and SUBLINK. Each declares mandatory
 structural evidence, expression children and dependency semantics. Unsupported
 nodes (including nested nodes), missing mandatory fields or malformed children
 produce UNKNOWN. Additional node types must be implemented and exercised before
@@ -113,12 +114,41 @@ identifiers fail closed. Operator evidence preserves operator OID, function OID
 and resolution basis; scalar-array hash/negator function OIDs are included when
 present. A non-null incomplete predicate never projects an empty resolved function
 set, including the dedicated institutional_leads and clips evidence.
+COALESCEEXPR traverses every argument; it adds no callable of its own.
+COERCEVIAIO records the explicit source/result type OIDs and requires observed
+pg_type namespace/name and source typoutput / target typinput function OIDs.
+Only referenced type OIDs are queried, and those I/O function OIDs enter the
+existing pg_proc/sourceSha256/EXECUTE pipeline. No builtin identity is inferred
+from an OID convention, local fixture, or function name. Known partial function
+references are retained for collection even while a cast remains UNKNOWN.
+
+SUBLINK support is deliberately limited to the observed PG17 EXISTS / SELECT
+shape with relation RANGETBLENTRYs, matching RTEPERMISSIONINFOs, FROMEXPR /
+RANGETBLREFs and TARGETENTRYs. Nested supported EXISTS queries are traversed;
+unimplemented joins, CTEs, write queries, unknown children or missing fields remain
+UNKNOWN. Relation OIDs resolve uniquely from observed table/column identities.
+Permission bitmasks and selected/inserted/updated column bitmaps remain raw evidence;
+decoded privileges and columns are additional evidence. PG17 sysattr.h defines
+FirstLowInvalidHeapAttributeNumber=-7, so each bitmap member maps to attnum=member-7.
+Whole-row references remain explicit; unobserved system/other columns are UNKNOWN.
+checkAsUser=0 is POLICY_CALLER; nonzero identities require captured role metadata.
+These direct policy relation dependencies are separate from function-owner access
+and the policy target's own ACL. They do not authorize privileges.
+
+Per-predicate and per-policy dependency completeness is explicit. Per-role/action
+projections consider only applicable policies and action-relevant predicates;
+SELECT uses USING, while INSERT uses WITH CHECK (or PostgreSQL's USING fallback).
+An unrelated owner-only policy cannot mask an independently complete authenticated
+policy. Global observation can still remain UNKNOWN. These projections describe
+dependency catalog evidence, not full helper-body knowledge or policy usability.
 Secret-bearing output is rejected in its entirety before serialization, not partially
 redacted and falsely claimed as exact evidence.
 
 ## Local Validation
 
 New static tests: `node --test scripts/production-adoption/phase3/phase3-additional-browser-forensic.spec.mjs`
+
+Real-node tests: `node --test scripts/production-adoption/phase3/phase3-additional-browser-real-nodes.spec.mjs`
 
 Disposable PG17: `node scripts/production-adoption/phase3/run-additional-browser-forensic-postgres.mjs`
 
@@ -132,6 +162,25 @@ dynamic SQL bodies. No fixture value is asserted to describe Production.
 Protected static counts remain 2741 frozen + 157 primary harness + 1058 additional
 reconciliation + 371 additional harness = 4327, with new tests counted separately.
 No migration, PRE, DDL, Phase4, 64253, runtime or cutover is authorized here.
+
+## Offline Archived Evidence
+
+`node scripts/production-adoption/phase3/reprocess-additional-browser-forensic.mjs <absolute-archive-path>`
+
+The reprocessor reads UTF-8 or BOM-marked UTF-16LE JSON/npm output without changing
+the archive. It has no connector or Production runner import and never supplies
+missing catalog values from the local database. Original nondependency checks and
+integrity facts remain archived evidence, not a new remote attestation.
+
+The completed Production archive does not suffice for full resolution of any of
+the three newly supported families: COALESCEEXPR needs missing function evidence
+for OID 3214 and its nested cast; COERCEVIAIO needs pg_type records for 2950 and 25
+and the corresponding observed typoutput/typinput pg_proc identities. SUBLINK
+relations 18067 and 20506 resolve from archived table and column observations,
+but function OID 2956 lacks pg_proc evidence. No names or I/O function OIDs are
+guessed. A separately reviewed, narrowly authorized supplement would need only
+these type records and the missing/discovered function identity/EXECUTE evidence,
+not a broader table snapshot. No such observation is authorized by this change.
 
 Next step: commit and independently review this forensic candidate before any
 explicit human authorization for one future READ-ONLY Production observation.

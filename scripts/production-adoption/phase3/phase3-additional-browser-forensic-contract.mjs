@@ -6,6 +6,7 @@ import { HARNESS_ROOT, TARGET, defaultGit, hashBytes, failHarness, resolveCurren
   serializeCurrentHarness, safeHarnessFailure } from "./phase3-current-service-role-pre-contract.mjs";
 import { jsonQuery } from "../../production-preflight/queries.mjs";
 import { assertReadOnlySql } from "../../production-preflight/sql-safety.mjs";
+import { resolveTypeIo, inspectSublink, observedOid } from "./phase3-additional-browser-subquery.mjs";
 
 export { TARGET, HARNESS_ROOT, defaultGit, hashBytes, failHarness, serializeCurrentHarness, safeHarnessFailure };
 export const TABLES = ADDITIONAL_SERVICE_TABLES;
@@ -163,6 +164,14 @@ export function functionsSql(oids) {
   assertReadOnlySql(query); return query;
 }
 
+export function typeIoSql(oids) {
+  if (!oids.length || oids.some((oid) => !observedOid(oid) || typeof oid !== "number")) failHarness("TYPE_OID_REJECTED");
+  const query = jsonQuery("additional_browser_type_io", aggregate(`select t.oid::bigint as oid,n.nspname as schema,t.typname as name,
+    t.typinput::oid::bigint as typinput,t.typoutput::oid::bigint as typoutput
+    from pg_type t join pg_namespace n on n.oid=t.typnamespace where t.oid in (${[...new Set(oids)].sort((a,b) => a-b).join(",")}) order by t.oid`)).sql + ";";
+  assertReadOnlySql(query); return query;
+}
+
 // Parse PostgreSQL's catalog node serialization, not deparsed SQL or function names.
 export function parseCatalogTree(text) {
   if (text === null || text === undefined) return null;
@@ -229,7 +238,10 @@ export function policyFunctionOids(inventory) {
   const result = new Set();
   for (const p of inventory.policies) {
     for (const oid of p.catalogFunctionOids) result.add(oid);
-    for (const kind of ["using", "withCheck"]) for (const oid of predicateDependencyEvidence(p, kind, inventory.operatorFunctions).functionOids ?? []) result.add(oid);
+    for (const kind of ["using", "withCheck"]) {
+      const evidence = predicateDependencyEvidence(p, kind, inventory.operatorFunctions, inventory);
+      for (const oid of evidence.knownFunctionOids ?? evidence.functionOids ?? []) result.add(oid);
+    }
   }
   return [...result].sort((a, b) => a - b);
 }
@@ -260,21 +272,29 @@ export const PREDICATE_NODE_CONTRACT = Object.freeze({
     && [0, 1].includes(n.nulltesttype) && catalogBoolean(n.argisrow) },
   ARRAYEXPR: { children: ["elements"], dependency: "NONE", valid: (n) => catalogOid(n.array_typeid)
     && catalogOid(n.element_typeid) && catalogBoolean(n.multidims) && expressionList(n.elements) },
+  COALESCEEXPR: { children: ["args"], dependency: "NONE", valid: (n) => catalogOid(n.coalescetype)
+    && Array.isArray(n.args) && n.args.length > 0 && expressionList(n.args) },
+  COERCEVIAIO: { children: ["arg"], dependency: "TYPE_IO", valid: (n) => catalogOid(n.resulttype) && expressionNode(n.arg) },
+  SUBLINK: { children: [], dependency: "SUBQUERY", valid: (n) => expressionNode(n.subselect) },
 });
 
-export function inspectPredicateTree(text, operators = []) {
-  const functions = new Set(), unresolved = [], operatorDependencies = [];
+export function inspectPredicateTree(text, operators = [], catalog = {}) {
+  const functions = new Set(), unresolved = [], operatorDependencies = [], typeIoDependencies = [], relationDependencies = [], subqueries = [];
+  const requiredTypes = new Set();
+  const requiredOperators = new Set();
   const unknown = (tag, reason) => unresolved.push(`${tag}_${reason}`);
   function walk(node) {
     if (!expressionNode(node)) { unknown("NODE", "STRUCTURE_INCOMPLETE"); return; }
     const contract = Object.hasOwn(PREDICATE_NODE_CONTRACT, node.tag) ? PREDICATE_NODE_CONTRACT[node.tag] : null;
     if (!contract) { unknown(node.tag, "UNSUPPORTED_NODE"); return; }
+    if (contract.dependency === "SUBQUERY") { inspectSublink(node, catalog, walk, unknown, relationDependencies, subqueries); return; }
     if (["funcid", "opno", "opfuncid", "hashfuncid", "negfuncid", "aggfnoid", "winfnoid"].some((key) =>
       Object.hasOwn(node, key) && !(contract.identityFields ?? []).includes(key))) unknown(node.tag, "UNEXPECTED_DEPENDENCY_FIELD");
     if (contract.dependency === "FUNCTION") {
       if (!catalogOid(node.funcid)) unknown(node.tag, "FUNCTION_IDENTITY_INCOMPLETE"); else functions.add(node.funcid);
     }
     if (contract.dependency === "OPERATOR") {
+      if (catalogOid(node.opno)) requiredOperators.add(node.opno);
       const provided = (key) => Object.hasOwn(node, key);
       const invalid = (provided("opno") && !catalogOid(node.opno))
         || ["opfuncid", "hashfuncid", "negfuncid"].some((key) => provided(key) && node[key] !== 0 && !catalogOid(node[key]));
@@ -293,6 +313,7 @@ export function inspectPredicateTree(text, operators = []) {
       }
     }
     if (!contract.valid(node)) { unknown(node.tag, "STRUCTURE_INCOMPLETE"); return; }
+    if (contract.dependency === "TYPE_IO") typeIoDependencies.push(resolveTypeIo(node, catalog, unknown, functions, requiredTypes));
     for (const key of contract.children) {
       const child = node[key];
       if (Array.isArray(child)) for (const expression of child) walk(expression);
@@ -305,10 +326,12 @@ export function inspectPredicateTree(text, operators = []) {
     }
   }
   walk(parseCatalogTree(text));
-  return { functionOids: [...functions].sort((a, b) => a - b), operatorDependencies, unresolved: [...new Set(unresolved)].sort() };
+  return { functionOids: [...functions].sort((a, b) => a - b), operatorDependencies, typeIoDependencies, relationDependencies, subqueries,
+    requiredTypeOids: [...requiredTypes].sort((a,b) => a-b), requiredOperatorOids: [...requiredOperators].sort((a,b) => a-b),
+    unresolved: [...new Set(unresolved)].sort() };
 }
 
-export function predicateDependencyEvidence(policy, kind, operators = []) {
+export function predicateDependencyEvidence(policy, kind, operators = [], catalog = {}) {
   const expressionKey = `${kind}Expression`, treeKey = `${kind}Tree`;
   const expression = policy[expressionKey], tree = policy[treeKey];
   const base = { expressionObserved: Object.hasOwn(policy, expressionKey) && expression !== undefined,
@@ -323,11 +346,73 @@ export function predicateDependencyEvidence(policy, kind, operators = []) {
     if (typeof tree !== "string" || !tree.trim()) throw new Error("TREE_MALFORMED");
     const root = parseCatalogTree(tree);
     if (!root || Array.isArray(root) || typeof root !== "object" || typeof root.tag !== "string") throw new Error("TREE_MALFORMED");
-    const inspected = inspectPredicateTree(tree, operators);
+    const inspected = inspectPredicateTree(tree, operators, catalog);
     return { ...base, treeStatus: inspected.unresolved.length ? "UNKNOWN" : "OBSERVED_COMPLETE",
       functionOids: inspected.unresolved.length ? null : inspected.functionOids, operatorDependencies: inspected.operatorDependencies,
+      knownFunctionOids: inspected.functionOids, requiredTypeOids: inspected.requiredTypeOids,
+      requiredOperatorOids: inspected.requiredOperatorOids,
+      typeIoDependencies: inspected.typeIoDependencies, relationDependencies: inspected.relationDependencies, subqueries: inspected.subqueries,
       unresolved: inspected.unresolved, reason: inspected.unresolved.length ? `${kind}_${inspected.unresolved[0]}` : null };
   } catch { return { ...base, treeStatus: "MALFORMED", reason: `${kind}PredicateTreeMalformed` }; }
+}
+
+export function policyDependencyEvidence(inventory, functions) {
+  return inventory.policies.map((p) => {
+    const using = predicateDependencyEvidence(p, "using", inventory.operatorFunctions, inventory);
+    const withCheck = predicateDependencyEvidence(p, "withCheck", inventory.operatorFunctions, inventory);
+    const knownFunctionOids = policyFunctionOids({ ...inventory, policies: [p] });
+    const missingFunctionOids = knownFunctionOids.filter((oid) => !functions.some((f) => f.oid === oid && functionEvidenceComplete(f)));
+    for (const [kind, evidence] of [["using", using], ["withCheck", withCheck]]) {
+      evidence.missingFunctionOids = (evidence.knownFunctionOids ?? evidence.functionOids ?? []).filter((oid) =>
+        !functions.some((f) => f.oid === oid && functionEvidenceComplete(f)));
+      evidence.dependencyUnknownChecks = [...new Set([evidence.reason, ...(evidence.unresolved ?? []).map((reason) => `${kind}_${reason}`), evidence.missingFunctionOids.length
+        ? `policy_${p.oid}_${kind}_FUNCTION_EVIDENCE_MISSING_${evidence.missingFunctionOids.join("_")}` : null].filter(Boolean))];
+      evidence.dependencyComplete = evidence.dependencyUnknownChecks.length === 0;
+    }
+    const reasons = [...new Set([...using.dependencyUnknownChecks, ...withCheck.dependencyUnknownChecks,
+      missingFunctionOids.length ? `policy_${p.oid}_FUNCTION_EVIDENCE_MISSING_${missingFunctionOids.join("_")}` : null].filter(Boolean))];
+    return { ...p, usingExpression: p.usingExpression ?? null, withCheckExpression: p.withCheckExpression ?? null,
+      usingTree: p.usingTree ?? null, withCheckTree: p.withCheckTree ?? null,
+      usingDependencyEvidence: using, withCheckDependencyEvidence: withCheck, knownFunctionOids, missingFunctionOids,
+      dependencyComplete: reasons.length === 0, dependencyUnknownChecks: reasons,
+      resolvedFunctionOids: reasons.length ? null : knownFunctionOids,
+      relationDependencies: [...(using.relationDependencies ?? []), ...(withCheck.relationDependencies ?? [])],
+      referenceResolutionBasis: "PG_DEPEND_AND_PG17_CATALOG_NODE_OIDS" };
+  });
+}
+
+export function functionEvidenceComplete(f) {
+  return f && typeof f.securityDefiner === "boolean" && f.owner && f.language && f.schema && f.name
+    && f.identityArguments !== undefined && f.returnType && Array.isArray(f.catalogDependencies)
+    && typeof f.strict === "boolean" && typeof f.leakproof === "boolean" && ["i", "s", "v"].includes(f.volatility)
+    && Array.isArray(f.executeAcls) && f.executeAcls.length === f.executeAclEntryCount
+    && f.executeAcls.every((a) => a.privilege === "EXECUTE" && typeof a.grantee === "string" && typeof a.grantor === "string" && typeof a.grantable === "boolean")
+    && new Set(f.executeAcls.map((a) => `${a.grantee}:${a.grantor}:${a.privilege}`)).size === f.executeAcls.length
+    && ["anon", "authenticated", "PUBLIC", "service_role", f.owner].every((role) =>
+      f.effectiveExecute?.some((e) => e.role === role && typeof e.effective === "boolean"))
+    && typeof f.sourceSha256 === "string" && /^[a-f0-9]{64}$/.test(f.sourceSha256)
+    && f.sourceHashBasis === SOURCE_HASH_BASIS && !Object.hasOwn(f, "sourceHash");
+}
+
+export function policyRoleActionEvidence(policyEvidence, applicability) {
+  return TABLES.flatMap((table) => ["anon", "authenticated", "PUBLIC"].flatMap((role) => ["r", "a", "w", "d"].map((command) => {
+    const policies = policyEvidence.filter((p) => p.table === table && [command, "*"].includes(p.command)
+      && applicability.some((a) => a.policyOid === p.oid && a.role === role && a.applies));
+    const perPolicy = policies.map((p) => {
+      const using = p.usingDependencyEvidence, withCheck = p.withCheckDependencyEvidence;
+      const predicates = command === "a" ? [withCheck.expressionPresent === false ? using : withCheck]
+        : command === "w" ? [using, withCheck.expressionPresent === false ? using : withCheck] : [using];
+      return { policyOid: p.oid, name: p.name, mode: p.mode, dependencyComplete: predicates.every((e) => e.dependencyComplete),
+        knownFunctionOids: [...new Set(predicates.flatMap((e) => e.knownFunctionOids ?? e.functionOids ?? []))],
+        unknownChecks: [...new Set(predicates.flatMap((e) => e.dependencyUnknownChecks))],
+        relationDependencies: predicates.flatMap((e) => e.relationDependencies ?? []).map((d) =>
+          ({ ...d, executionRole: d.executionRole === "POLICY_CALLER" ? role : d.executionRole })) };
+    });
+    return { table, role, command, applicablePolicyOids: policies.map((p) => p.oid),
+      status: !policies.length ? "OBSERVED_NO_APPLICABLE_POLICY" : perPolicy.every((p) => p.dependencyComplete) ? "DEPENDENCY_EVIDENCE_COMPLETE" : "UNKNOWN",
+      policyEvidence: perPolicy,
+      boundary: "DEPENDENCY_EVIDENCE_NOT_POLICY_USABILITY_OR_ACL_AUTHORIZATION" };
+  })));
 }
 
 export function inheritancePaths(inventory, role, target) {
@@ -417,17 +502,9 @@ export function buildBrowserReport(inventory, functions) {
     && ["PERMISSIVE", "RESTRICTIVE"].includes(p.mode) && ["*", "r", "a", "w", "d"].includes(p.command)
     && [p.usingExpression, p.withCheckExpression].every((v) => v === null || typeof v === "string")));
   check("policyRolesResolved", inventory.policies.every((p) => p.roles.every((role) => role === "PUBLIC" || inventory.roleAttributes.some((r) => r.name === role))));
-  const policyEvidence = inventory.policies.map((p) => {
-    const using = predicateDependencyEvidence(p, "using", inventory.operatorFunctions);
-    const withCheck = predicateDependencyEvidence(p, "withCheck", inventory.operatorFunctions);
-    for (const evidence of [using, withCheck]) if (evidence.reason && !unknownChecks.includes(evidence.reason)) unknownChecks.push(evidence.reason);
-    return { ...p, usingExpression: p.usingExpression ?? null, withCheckExpression: p.withCheckExpression ?? null,
-      usingTree: p.usingTree ?? null, withCheckTree: p.withCheckTree ?? null,
-      usingDependencyEvidence: using, withCheckDependencyEvidence: withCheck,
-      resolvedFunctionOids: using.reason || withCheck.reason ? null : policyFunctionOids({ policies: [p], operatorFunctions: inventory.operatorFunctions }),
-      referenceResolutionBasis: "PG_DEPEND_AND_PG17_CATALOG_NODE_OIDS" };
-  });
-  check("policyReferencesResolved", policyEvidence.every((p) => !p.usingDependencyEvidence.reason && !p.withCheckDependencyEvidence.reason));
+  const policyEvidence = policyDependencyEvidence(inventory, functions);
+  for (const p of policyEvidence) for (const reason of p.dependencyUnknownChecks) if (!unknownChecks.includes(reason)) unknownChecks.push(reason);
+  check("policyReferencesResolved", policyEvidence.every((p) => p.dependencyComplete));
   check("functionIdentityComplete", functions.every((f) => typeof f.securityDefiner === "boolean" && f.owner && f.language
     && f.identityArguments !== undefined && f.returnType && Array.isArray(f.executeAcls)
     && typeof f.strict === "boolean" && typeof f.leakproof === "boolean" && ["i", "s", "v"].includes(f.volatility)
@@ -459,10 +536,9 @@ export function buildBrowserReport(inventory, functions) {
     policies: policyEvidence.filter((p) => p.table === table && [command, "*"].includes(p.command)),
     columnRawAcls: inventory.columnAcls.filter((a) => a.table === table && a.privilege === privilege),
     effectiveBrowserColumns: inventory.effectiveColumns.filter((e) => e.table === table && e.privilege === privilege),
-    policyFunctionOids: policyEvidence.some((p) => p.table === table && [command, "*"].includes(p.command)
-      && (p.usingDependencyEvidence.reason || p.withCheckDependencyEvidence.reason)) ? null
-      : policyFunctionOids({ policies: inventory.policies.filter((p) => p.table === table && [command, "*"].includes(p.command)),
-        operatorFunctions: inventory.operatorFunctions })
+    policyFunctionOids: policyEvidence.some((p) => p.table === table && [command, "*"].includes(p.command) && !p.dependencyComplete) ? null
+      : policyFunctionOids({ ...inventory, policies: inventory.policies.filter((p) => p.table === table && [command, "*"].includes(p.command)) }),
+    roleActionEvidence: policyRoleActionEvidence(policyEvidence, policyRoleApplicability).filter((e) => e.table === table && e.command === command)
   });
   const observed = Object.fromEntries(["anon", "authenticated"].map((role) => [role,
     inventory.effectiveTables.filter((e) => e.role === role && e.effective).length]));
@@ -482,6 +558,10 @@ export function buildBrowserReport(inventory, functions) {
     additionalBrowserTableRawAcls: inventory.tableAcls,
     additionalBrowserEffectiveTablePrivileges: inventory.effectiveTables,
     additionalRuntimePolicies: policyEvidence, additionalRuntimePolicyRoleApplicability: policyRoleApplicability,
+    additionalRuntimePolicyRoleActionEvidence: policyRoleActionEvidence(policyEvidence, policyRoleApplicability),
+    additionalRuntimePolicyTypeIoCatalog: inventory.policyTypeIoCatalog ?? null,
+    additionalRuntimePolicyOperatorFunctions: (inventory.operatorFunctions ?? []).filter((o) => policyEvidence.some((p) =>
+      [p.usingDependencyEvidence, p.withCheckDependencyEvidence].some((e) => e.requiredOperatorOids?.includes(o.oid)))),
     additionalRuntimePolicyFunctions: functions.map((f) => ({ ...f, securityMode: f.securityDefiner ? "SECURITY DEFINER" : "SECURITY INVOKER",
       searchPathConfiguration: f.configuration?.filter((c) => c.startsWith("search_path=")) ?? [],
       searchPathStatus: f.configuration?.some((c) => c.startsWith("search_path=")) ? "FUNCTION_CONFIGURED" : "CALLER_SESSION_SETTING" })),

@@ -191,7 +191,8 @@ test("complete builtin predicate tree retains normal OID resolution", () => {
   const e = browserFixtureEvidence(); e.policies[0].usingExpression = "pg_catalog.int4eq(1, 1)";
   e.policies[0].usingTree = functionPredicateTree(65);
   const r = buildBrowserReport(e, []); assert.equal(r.additionalRuntimePolicies[0].usingDependencyEvidence.treeStatus, "OBSERVED_COMPLETE");
-  assert.deepEqual(r.additionalRuntimePolicies[0].resolvedFunctionOids, [65]); assert.equal(r.classification, "UNKNOWN");
+  assert.deepEqual(r.additionalRuntimePolicies[0].knownFunctionOids, [65]); assert.equal(r.additionalRuntimePolicies[0].resolvedFunctionOids, null);
+  assert.equal(r.classification, "UNKNOWN");
   assert.ok(r.unknownChecks.includes("functionsComplete"));
 });
 test("source SHA-256 known-answer and exact canonical bytes", () => {
@@ -358,7 +359,7 @@ for (const kind of ["using", "withCheck"]) {
     });
 }
 test("supported predicate node contract is explicit and narrow", () => {
-  assert.deepEqual(Object.keys(PREDICATE_NODE_CONTRACT).sort(), ["ARRAYEXPR", "BOOLEXPR", "CONST", "FUNCEXPR", "NULLTEST", "OPEXPR", "SCALARARRAYOPEXPR", "VAR"]);
+  assert.deepEqual(Object.keys(PREDICATE_NODE_CONTRACT).sort(), ["ARRAYEXPR", "BOOLEXPR", "COALESCEEXPR", "COERCEVIAIO", "CONST", "FUNCEXPR", "NULLTEST", "OPEXPR", "SCALARARRAYOPEXPR", "SUBLINK", "VAR"]);
 });
 test("operator resolution preserves OID, function OID, and authoritative basis", () => {
   assert.deepEqual(inspectPredicateTree(operatorPredicateTree(), [{ oid: 90, functionOid: 65 }]).operatorDependencies,
