@@ -1,6 +1,14 @@
 import { TABLES, PRIVILEGES, COLUMN_PRIVILEGES } from "./phase3-additional-browser-forensic-contract.mjs";
 import { additionalBrowserMatrix, additionalAccounting } from "./phase3-additional-runtime-service-role-matrix.mjs";
 
+export const BOOLEAN_CONST_TREE = "{CONST :consttype 16 :constisnull false :constvalue 1 [ 1 ]}";
+export const BOOLEAN_VAR_TREE = "{VAR :varno 1 :varattno 1 :vartype 16 :varlevelsup 0}";
+export const functionPredicateTree = (oid) => `{FUNCEXPR :funcid ${oid} :funcresulttype 16 :args <>}`;
+export const operatorPredicateTree = (identity = ":opno 90 :opfuncid 0") =>
+  `{OPEXPR ${identity} :opresulttype 16 :args (${BOOLEAN_CONST_TREE} ${BOOLEAN_CONST_TREE})}`;
+export const scalarArrayPredicateTree = (identity = ":opno 90 :opfuncid 0") =>
+  `{SCALARARRAYOPEXPR ${identity} :useOr true :args (${BOOLEAN_CONST_TREE} {ARRAYEXPR :array_typeid 1000 :element_typeid 16 :multidims false :elements (${BOOLEAN_CONST_TREE})})}`;
+
 export function browserFixtureEvidence() {
   const columns = TABLES.map((table) => ({ schema: "public", table, column: "id", attnum: 1, rawAcl: null, rawAclEntryCount: 0 }));
   const effectiveTables = [...additionalBrowserMatrix().map((e) => ({ schema: e.schema, table: e.table, role: e.role, privilege: e.privilege, effective: e.granted })),
@@ -14,8 +22,8 @@ export function browserFixtureEvidence() {
     { table: "appointments", name: "public_read", roles: ["PUBLIC"], command: "r", usingExpression: "true", withCheckExpression: null },
     { table: "institutional_leads", name: "anon_insert", roles: ["anon"], command: "a", usingExpression: null, withCheckExpression: "true" },
   ].map((p, i) => ({ ...p, schema: "public", oid: 2000 + i, mode: "PERMISSIVE",
-    usingTree: p.usingExpression === null ? null : "{CONST :consttype 16 :constisnull false}",
-    withCheckTree: p.withCheckExpression === null ? null : "{CONST :consttype 16 :constisnull false}", catalogFunctionOids: [] }));
+    usingTree: p.usingExpression === null ? null : BOOLEAN_CONST_TREE,
+    withCheckTree: p.withCheckExpression === null ? null : BOOLEAN_CONST_TREE, catalogFunctionOids: [] }));
   for (const p of policies) tables.find((t) => t.table === p.table).policyCount++;
   return { transactionReadOnly: "on", serverVersion: "170009", tables, policies, columns, roleCount: 5, membershipCount: 0, operatorFunctions: [],
     roleAttributes: ["anon", "authenticated", "service_role", "postgres", "reflab_rls_owner"].map((name) => ({ name,
@@ -52,6 +60,8 @@ export function buildBrowserFixtureSetup() {
     grant browser_policy_group to authenticated with inherit true;
     create policy browser_membership on public.teams for select to browser_policy_group using(true);
     create policy browser_operator on public.venues for select to authenticated using(id=id);
+    create policy browser_scalar_array on public.fixtures for all to authenticated
+      using(id = any(array[id])) with check(id = any(array[id]));
     create policy browser_hash_probe on public.coach_evidence for select to authenticated using(pg_catalog.int4eq(1,1));
   `;
 }

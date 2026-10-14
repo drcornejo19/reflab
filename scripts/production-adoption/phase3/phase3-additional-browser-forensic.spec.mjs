@@ -4,8 +4,9 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { TABLES, PRIVILEGES, COMPLETE, OPERATION, RUNNER, VARIABLES, TARGET, HARNESS_ROOT, inventorySql,
   functionsSql, parseCatalogTree, inspectCatalogTree, buildBrowserReport, prepareBrowserForensic, serializeCurrentHarness,
-  functionSourceSha256, SOURCE_HASH_BASIS } from "./phase3-additional-browser-forensic-contract.mjs";
-import { browserFixtureEvidence } from "./phase3-additional-browser-forensic-fixture.mjs";
+  functionSourceSha256, SOURCE_HASH_BASIS, inspectPredicateTree, PREDICATE_NODE_CONTRACT } from "./phase3-additional-browser-forensic-contract.mjs";
+import { browserFixtureEvidence, BOOLEAN_CONST_TREE, BOOLEAN_VAR_TREE, functionPredicateTree,
+  operatorPredicateTree, scalarArrayPredicateTree } from "./phase3-additional-browser-forensic-fixture.mjs";
 import { runProductionBrowserForensic, attestBrowserCatalog, runBrowserForensicCli, observeBrowserCatalog } from "./run-production-additional-browser-forensic.mjs";
 import { PINNED_ARTIFACTS } from "./phase3-additional-runtime-pre-contract.mjs";
 
@@ -88,7 +89,7 @@ test("row-comparison operator dependencies captured", () => {
 test("non-read-only session evidence is BLOCKER", () => { const e = browserFixtureEvidence(); e.transactionReadOnly = "off";
   assert.equal(buildBrowserReport(e, []).classification, "BLOCKER"); });
 test("nested invoker keeps DEFINER owner's execution identity", () => {
-  const e = browserFixtureEvidence(); e.policies[0].usingTree = "{FUNCEXPR :funcid 100}";
+  const e = browserFixtureEvidence(); e.policies[0].usingTree = functionPredicateTree(100);
   const fn = (oid, securityDefiner, sqlBodyTree) => ({ oid, schema: "public", name: `helper_${oid}`, identityArguments: "", returnType: "boolean",
     language: "sql", owner: "postgres", securityDefiner, sqlBodyTree,
     sourceSha256: functionSourceSha256({ sourceText: "fixture", sqlBodyTree }), sourceHashBasis: SOURCE_HASH_BASIS,
@@ -188,7 +189,7 @@ for (const kind of ["using", "withCheck"]) {
 }
 test("complete builtin predicate tree retains normal OID resolution", () => {
   const e = browserFixtureEvidence(); e.policies[0].usingExpression = "pg_catalog.int4eq(1, 1)";
-  e.policies[0].usingTree = "{FUNCEXPR :funcid 65}";
+  e.policies[0].usingTree = functionPredicateTree(65);
   const r = buildBrowserReport(e, []); assert.equal(r.additionalRuntimePolicies[0].usingDependencyEvidence.treeStatus, "OBSERVED_COMPLETE");
   assert.deepEqual(r.additionalRuntimePolicies[0].resolvedFunctionOids, [65]); assert.equal(r.classification, "UNKNOWN");
   assert.ok(r.unknownChecks.includes("functionsComplete"));
@@ -215,7 +216,7 @@ test("function source SQL has no MD5 or extension dependency", () => {
 });
 for (const value of ["a".repeat(32), "a".repeat(40), "A".repeat(64), "z".repeat(64)])
   test(`non-SHA256 source evidence rejected ${value.length}/${value[0]}`, () => {
-    const e = browserFixtureEvidence(); e.policies[0].usingTree = "{FUNCEXPR :funcid 65}";
+    const e = browserFixtureEvidence(); e.policies[0].usingTree = functionPredicateTree(65);
     const f = { oid: 65, schema: "pg_catalog", name: "int4eq", identityArguments: "integer, integer", returnType: "boolean",
       language: "internal", owner: "postgres", securityDefiner: false, sqlBodyTree: null, sourceSha256: value, sourceHashBasis: SOURCE_HASH_BASIS,
       volatility: "i", strict: true, leakproof: true, executeAcls: [], executeAclEntryCount: 0, catalogDependencies: [],
@@ -254,7 +255,7 @@ test("malformed per-table column ACL rows cannot pass through matching global ro
 });
 test("collector emits only SHA256 source identity and rejects the legacy MD5 basis", async () => {
   const e = browserFixtureEvidence(); e.policies[0].usingExpression = "pg_catalog.int4eq(1, 1)";
-  e.policies[0].usingTree = "{FUNCEXPR :funcid 65}";
+  e.policies[0].usingTree = functionPredicateTree(65);
   const f = { oid: 65, schema: "pg_catalog", name: "int4eq", identityArguments: "integer, integer", returnType: "boolean",
     language: "internal", owner: "postgres", securityDefiner: false, sourceText: password, sqlBodyTree: null,
     volatility: "i", strict: true, leakproof: true, executeAcls: [], executeAclEntryCount: 0, catalogDependencies: [],
@@ -275,3 +276,93 @@ for (const [table, kind, context] of [["clips", "using", "clipsEvidence"], ["ins
     p[`${kind}Expression`] = "pg_catalog.int4eq(1, 1)"; delete p[`${kind}Tree`];
     const r = buildBrowserReport(e, []); assert.equal(r.classification, "UNKNOWN"); assert.equal(r[context].policyFunctionOids, null);
   });
+
+const predicateFunction = (oid = 65) => ({ oid, schema: "pg_catalog", name: "int4eq", identityArguments: "integer, integer",
+  returnType: "boolean", language: "internal", owner: "postgres", securityDefiner: false, sqlBodyTree: null,
+  sourceSha256: functionSourceSha256({ sourceText: "synthetic builtin", sqlBodyTree: null }), sourceHashBasis: SOURCE_HASH_BASIS,
+  volatility: "i", strict: true, leakproof: true, executeAcls: [], executeAclEntryCount: 0, catalogDependencies: [],
+  effectiveExecute: ["anon", "authenticated", "PUBLIC", "service_role", "postgres"].map((role) => ({ role, effective: true })) });
+const invalidPredicateTrees = [
+  ["bare OPEXPR", "{OPEXPR}"], ["bare SCALARARRAYOPEXPR", "{SCALARARRAYOPEXPR}"], ["unsupported node", "{UNOBSERVED}"],
+  ["operator identity missing", operatorPredicateTree("")], ["scalar operator identity missing", scalarArrayPredicateTree("")],
+  ["malformed opno", operatorPredicateTree(':opno "bad"')], ["malformed opfuncid", operatorPredicateTree(':opfuncid "bad"')],
+  ["negative operator", operatorPredicateTree(":opno -1")], ["fractional operator", operatorPredicateTree(":opno 1.5")],
+  ["overflow operator", operatorPredicateTree(":opno 4294967296")], ["zero identities", operatorPredicateTree(":opno 0 :opfuncid 0")],
+  ["unmapped operator", operatorPredicateTree(":opno 999 :opfuncid 0")],
+  ["malformed scalar opno", scalarArrayPredicateTree(':opno "bad"')],
+  ["malformed scalar opfuncid", scalarArrayPredicateTree(':opfuncid "bad"')],
+  ["unmapped scalar operator", scalarArrayPredicateTree(":opno 999 :opfuncid 0")],
+  ["nested unsupported", `{BOOLEXPR :boolop and :args (${BOOLEAN_CONST_TREE} {UNOBSERVED})}`],
+  ["malformed child", "{BOOLEXPR :boolop not :args (42)}"],
+  ["missing container child", "{BOOLEXPR :boolop and}"],
+  ["malformed boolean operator", `{BOOLEXPR :boolop unknown :args (${BOOLEAN_CONST_TREE})}`],
+  ["incomplete function children", "{FUNCEXPR :funcid 65 :funcresulttype 16}"],
+  ["incomplete operator children", "{OPEXPR :opfuncid 65 :opresulttype 16}"],
+  ["incomplete scalar children", "{SCALARARRAYOPEXPR :opfuncid 65 :useOr true}"],
+  ["malformed scalar hash function", scalarArrayPredicateTree(':opfuncid 65 :hashfuncid "bad"')],
+  ["incomplete CONST", "{CONST :consttype 16 :constisnull false}"], ["incomplete VAR", "{VAR :vartype 16}"],
+  ["missing NULLTEST child", "{NULLTEST :nulltesttype 0 :argisrow false}"],
+  ["missing ARRAYEXPR elements", "{ARRAYEXPR :array_typeid 1000 :element_typeid 16 :multidims false}"],
+  ["hidden unexpected child", BOOLEAN_CONST_TREE.replace("}", " :unmodeled {UNOBSERVED}}")],
+  ["CONST data field cannot hide a child in VAR", BOOLEAN_VAR_TREE.replace("}", " :constvalue {UNOBSERVED}}")],
+  ["VAR bitmap cannot hide a child", BOOLEAN_VAR_TREE.replace("}", " :varnullingrels (b {UNOBSERVED})}")],
+  ["CONST cannot hide function identity", BOOLEAN_CONST_TREE.replace("}", " :funcid 65}")],
+  ["VAR cannot hide operator identity", BOOLEAN_VAR_TREE.replace("}", " :opfuncid 65}")],
+  ["function cannot hide aggregate identity", functionPredicateTree(65).replace("}", " :aggfnoid 65}")],
+  ["invalid zero operator despite direct function", operatorPredicateTree(":opno 0 :opfuncid 65")],
+  ["invalid zero scalar operator despite direct function", scalarArrayPredicateTree(":opno 0 :opfuncid 65")],
+];
+for (const kind of ["using", "withCheck"]) for (const [table, context] of [["clips", "clipsEvidence"], ["institutional_leads", "institutionalLeadsEvidence"]]) {
+  for (const [name, tree] of invalidPredicateTrees) test(`${table} ${kind}: ${name} fails closed with null dependencies`, () => {
+    const e = browserFixtureEvidence(), p = e.policies.find((p) => p.table === table);
+    e.operatorFunctions = [{ oid: 90, functionOid: 65 }]; p[`${kind}Expression`] = "1 = 1"; p[`${kind}Tree`] = tree;
+    const r = buildBrowserReport(e, [predicateFunction()]), observed = r.additionalRuntimePolicies.find((p) => p.table === table);
+    assert.equal(r.classification, "UNKNOWN"); assert.equal(observed[`${kind}DependencyEvidence`].treeStatus, "UNKNOWN");
+    assert.equal(observed[`${kind}DependencyEvidence`].functionOids, null); assert.equal(observed.resolvedFunctionOids, null);
+    assert.equal(r[context].policyFunctionOids, null);
+    assert.ok(r.unknownChecks.includes(observed[`${kind}DependencyEvidence`].reason));
+    assert.ok(observed[`${kind}DependencyEvidence`].reason.startsWith(kind + "_"));
+  });
+}
+for (const kind of ["using", "withCheck"]) {
+  for (const [name, tree, expected] of [
+    ["mapped OPEXPR", operatorPredicateTree(), [65]], ["direct OPEXPR", operatorPredicateTree(":opfuncid 65"), [65]],
+    ["mapped SCALARARRAYOPEXPR", scalarArrayPredicateTree(), [65]],
+    ["direct SCALARARRAYOPEXPR", scalarArrayPredicateTree(":opfuncid 65"), [65]],
+    ["complete FUNCEXPR", functionPredicateTree(65), [65]], ["complete CONST", BOOLEAN_CONST_TREE, []],
+    ["complete VAR", BOOLEAN_VAR_TREE, []], ["complete NULL CONST", "{CONST :consttype 16 :constisnull true :constvalue <>}", []],
+    ["complete VAR bitmap", BOOLEAN_VAR_TREE.replace("}", " :varnullingrels (b 1 2)}"), []],
+    ["complete boolean container", `{BOOLEXPR :boolop and :args (${BOOLEAN_CONST_TREE} ${BOOLEAN_VAR_TREE})}`, []],
+    ["complete NULLTEST", `{NULLTEST :arg ${BOOLEAN_VAR_TREE} :nulltesttype 0 :argisrow false}`, []],
+  ]) test(`${kind}: ${name} proves complete dependency resolution`, () => {
+    const e = browserFixtureEvidence(); e.operatorFunctions = [{ oid: 90, functionOid: 65 }];
+    e.policies[0][`${kind}Expression`] = "synthetic complete predicate"; e.policies[0][`${kind}Tree`] = tree;
+    const r = buildBrowserReport(e, expected.map((oid) => predicateFunction(oid)));
+    assert.equal(r.classification, COMPLETE); assert.deepEqual(r.additionalRuntimePolicies[0].resolvedFunctionOids, expected);
+    assert.equal(r.additionalRuntimePolicies[0][`${kind}DependencyEvidence`].treeStatus, "OBSERVED_COMPLETE");
+  });
+  for (const mappings of [[{ oid: 90, functionOid: 65 }, { oid: 90, functionOid: 65 }], [{ oid: 90, functionOid: "65" }],
+    [{ oid: 90, functionOid: 66 }]]) test(`${kind}: ambiguous/invalid/conflicting operator evidence ${JSON.stringify(mappings)}`, () => {
+    const e = browserFixtureEvidence(); e.operatorFunctions = mappings; e.policies[0][`${kind}Expression`] = "1 = 1";
+    e.policies[0][`${kind}Tree`] = operatorPredicateTree(":opno 90 :opfuncid 65");
+    const r = buildBrowserReport(e, [predicateFunction()]); assert.equal(r.classification, "UNKNOWN");
+    assert.equal(r.additionalRuntimePolicies[0].resolvedFunctionOids, null);
+  });
+  for (const tree of [`{BOOLEXPR :boolop not :args ({UNOBSERVED}) :args (${BOOLEAN_CONST_TREE})}`,
+    "{UNOBSERVED :tag CONST :consttype 16 :constisnull true :constvalue <>}"])
+    test(`${kind}: duplicate fields cannot erase unknown dependency evidence ${tree}`, () => {
+      const e = browserFixtureEvidence(); e.policies[0][`${kind}Expression`] = "1 = 1"; e.policies[0][`${kind}Tree`] = tree;
+      const r = buildBrowserReport(e, []); assert.equal(r.classification, "UNKNOWN");
+      assert.equal(r.additionalRuntimePolicies[0][`${kind}DependencyEvidence`].treeStatus, "MALFORMED");
+      assert.equal(r.additionalRuntimePolicies[0].resolvedFunctionOids, null);
+    });
+}
+test("supported predicate node contract is explicit and narrow", () => {
+  assert.deepEqual(Object.keys(PREDICATE_NODE_CONTRACT).sort(), ["ARRAYEXPR", "BOOLEXPR", "CONST", "FUNCEXPR", "NULLTEST", "OPEXPR", "SCALARARRAYOPEXPR", "VAR"]);
+});
+test("operator resolution preserves OID, function OID, and authoritative basis", () => {
+  assert.deepEqual(inspectPredicateTree(operatorPredicateTree(), [{ oid: 90, functionOid: 65 }]).operatorDependencies,
+    [{ nodeType: "OPEXPR", operatorOid: 90, functionOid: 65, basis: "PG_OPERATOR_OPRCODE" }]);
+  assert.deepEqual(inspectPredicateTree(scalarArrayPredicateTree(":opno 90 :opfuncid 65 :hashfuncid 66 :negfuncid 67"),
+    [{ oid: 90, functionOid: 65 }]).functionOids, [65, 66, 67]);
+});

@@ -3,7 +3,8 @@ import { withCurrentServiceLocalPg } from "./phase3-current-service-role-harness
 import { buildAdditionalFixtureSetup } from "./phase3-additional-runtime-service-role-fixture.mjs";
 import { buildBrowserFixtureSetup, fixturePreservationSql } from "./phase3-additional-browser-forensic-fixture.mjs";
 import { attestBrowserCatalog } from "./run-production-additional-browser-forensic.mjs";
-import { COMPLETE, serializeCurrentHarness, buildBrowserReport, functionSourceSha256, inventorySql, SOURCE_HASH_BASIS } from "./phase3-additional-browser-forensic-contract.mjs";
+import { COMPLETE, serializeCurrentHarness, buildBrowserReport, functionSourceSha256, inventorySql, SOURCE_HASH_BASIS,
+  inspectPredicateTree } from "./phase3-additional-browser-forensic-contract.mjs";
 import { parseJsonResults } from "../../production-preflight/run.mjs";
 
 const result = await withCurrentServiceLocalPg(async ({ sql, createSession }) => {
@@ -60,6 +61,51 @@ const result = await withCurrentServiceLocalPg(async ({ sql, createSession }) =>
   check(() => assert.equal(project(inventory).classification, COMPLETE));
   const probe = inventory.policies.find((p) => p.name === "browser_hash_probe");
   check(() => assert.ok(probe.usingExpression.includes("int4eq") && probe.usingTree));
+  const operatorProbe = inventory.policies.find((p) => p.name === "browser_operator");
+  const scalarProbe = inventory.policies.find((p) => p.name === "browser_scalar_array");
+  for (const kind of ["using", "withCheck"]) {
+    for (const [name, tree] of [["OPEXPR", operatorProbe.usingTree], ["SCALARARRAYOPEXPR", scalarProbe[`${kind}Tree`]]]) {
+      check(() => {
+        assert.ok(tree.includes(`{${name}`));
+        const inspected = inspectPredicateTree(tree, inventory.operatorFunctions);
+        assert.deepEqual(inspected.unresolved, []); assert.ok(inspected.functionOids.length > 0);
+        assert.ok(inspected.operatorDependencies.every((d) => d.operatorOid > 0 && d.functionOid > 0));
+        assert.ok(inspected.functionOids.every((oid) => report.additionalRuntimePolicyFunctions.some((f) => f.oid === oid)));
+        const e = structuredClone(inventory), p = e.policies.find((p) => p.oid === probe.oid);
+        p[`${kind}Expression`] = name === "OPEXPR" ? "id = id" : "id = ANY(ARRAY[id])"; p[`${kind}Tree`] = tree;
+        assert.equal(project(e).classification, COMPLETE);
+      });
+      check(() => {
+        const mappedTree = tree.replace(/:opfuncid \d+/, ":opfuncid 0");
+        const inspected = inspectPredicateTree(mappedTree, inventory.operatorFunctions);
+        assert.deepEqual(inspected.unresolved, []);
+        assert.ok(inspected.operatorDependencies.some((d) => d.basis === "PG_OPERATOR_OPRCODE"));
+        assert.deepEqual(inspected.functionOids, inspectPredicateTree(tree, inventory.operatorFunctions).functionOids);
+      });
+    }
+    for (const tree of ["{OPEXPR}", "{SCALARARRAYOPEXPR}", "{UNOBSERVED}",
+      "{BOOLEXPR :boolop not :args ({UNOBSERVED})}", "{BOOLEXPR :boolop not :args (42)}",
+      "{CONST :consttype 16 :constisnull true :constvalue <> :funcid 65}",
+      "{OPEXPR :opno 0 :opfuncid 65 :opresulttype 16 :args ({CONST :consttype 16 :constisnull true :constvalue <>})}"]) {
+      for (const table of ["clips", "institutional_leads"]) check(() => {
+        const e = structuredClone(inventory), p = e.policies.find((p) => p.table === table);
+        p[`${kind}Expression`] = "1 = 1"; p[`${kind}Tree`] = tree;
+        const r = project(e), observed = r.additionalRuntimePolicies.find((v) => v.oid === p.oid);
+        assert.equal(r.classification, "UNKNOWN"); assert.equal(observed[`${kind}DependencyEvidence`].treeStatus, "UNKNOWN");
+        assert.equal(observed.resolvedFunctionOids, null); assert.equal(observed[`${kind}DependencyEvidence`].functionOids, null);
+        assert.equal(r[table === "clips" ? "clipsEvidence" : "institutionalLeadsEvidence"].policyFunctionOids, null);
+        assert.ok(r.unknownChecks.includes(observed[`${kind}DependencyEvidence`].reason));
+      });
+    }
+    for (const table of ["clips", "institutional_leads"]) check(() => {
+      const e = structuredClone(inventory), p = e.policies.find((p) => p.table === table);
+      p[`${kind}Expression`] = "1 = 1";
+      p[`${kind}Tree`] = "{UNOBSERVED :tag CONST :consttype 16 :constisnull true :constvalue <>}";
+      const r = project(e); assert.equal(r.classification, "UNKNOWN");
+      assert.equal(r.additionalRuntimePolicies.find((v) => v.oid === p.oid)[`${kind}DependencyEvidence`].treeStatus, "MALFORMED");
+      assert.equal(r[table === "clips" ? "clipsEvidence" : "institutionalLeadsEvidence"].policyFunctionOids, null);
+    });
+  }
   for (const kind of ["using", "withCheck"]) {
     for (const state of ["missing", "undefined", "malformed", "incomplete"]) {
       const e = structuredClone(inventory), p = e.policies.find((p) => p.oid === probe.oid);

@@ -101,6 +101,18 @@ evidence produces UNKNOWN with a deterministic reason. Per-predicate evidence
 records expression presence, tree observation and resolution status; an unresolved
 function set is null, never an asserted empty dependency set. Existing unresolved
 dynamic-dependency behavior remains unchanged.
+Predicate validation has a separate explicit node contract: CONST, VAR, FUNCEXPR,
+OPEXPR, SCALARARRAYOPEXPR, BOOLEXPR, NULLTEST and ARRAYEXPR. Each declares mandatory
+structural evidence, expression children and dependency semantics. Unsupported
+nodes (including nested nodes), missing mandatory fields or malformed children
+produce UNKNOWN. Additional node types must be implemented and exercised before
+being accepted; the SQL-body inspector does not substitute for this predicate gate.
+OPEXPR and SCALARARRAYOPEXPR require a valid direct opfuncid or a valid opno with
+one authoritative pg_operator.oprcode mapping. Invalid, ambiguous or conflicting
+identifiers fail closed. Operator evidence preserves operator OID, function OID
+and resolution basis; scalar-array hash/negator function OIDs are included when
+present. A non-null incomplete predicate never projects an empty resolved function
+set, including the dedicated institutional_leads and clips evidence.
 Secret-bearing output is rejected in its entirety before serialization, not partially
 redacted and falsely claimed as exact evidence.
 

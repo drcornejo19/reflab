@@ -176,6 +176,7 @@ export function parseCatalogTree(text) {
       while (tokens[at] !== "}") {
         const key = tokens[at++];
         if (!key?.startsWith(":")) throw new Error("CATALOG_TREE_FIELD");
+        if (Object.hasOwn(node, key.slice(1))) throw new Error("CATALOG_TREE_DUPLICATE_FIELD");
         const values = [];
         while (at < tokens.length && tokens[at] !== "}" && !tokens[at].startsWith(":")) values.push(value(depth + 1));
         node[key.slice(1)] = values.length === 1 ? values[0] : values;
@@ -233,6 +234,80 @@ export function policyFunctionOids(inventory) {
   return [...result].sort((a, b) => a - b);
 }
 
+const catalogOid = (value) => Number.isSafeInteger(value) && value > 0 && value <= 4294967295;
+const catalogBoolean = (value) => value === "true" || value === "false";
+const expressionNode = (value) => value && !Array.isArray(value) && typeof value === "object" && typeof value.tag === "string";
+const expressionList = (value) => value === "<>" || (Array.isArray(value) && value.every(expressionNode));
+// Only predicate nodes exercised by local fixtures are supported. SQL-body inspection is separate.
+export const PREDICATE_NODE_CONTRACT = Object.freeze({
+  CONST: { children: [], dependency: "NONE", valid: (n) => catalogOid(n.consttype) && catalogBoolean(n.constisnull)
+    && (n.constisnull === "true" ? n.constvalue === "<>" : Array.isArray(n.constvalue)
+      && Number.isSafeInteger(n.constvalue[0]) && n.constvalue[0] > 0 && n.constvalue[1] === "["
+      && n.constvalue.length > 3 && n.constvalue.at(-1) === "]"
+      && n.constvalue.slice(2, -1).every((v) => Number.isInteger(v) && v >= -128 && v <= 255)) },
+  VAR: { children: [], scalarCollections: ["varnullingrels"], dependency: "NONE", valid: (n) => catalogOid(n.varno) && catalogOid(n.vartype)
+    && Number.isInteger(n.varattno) && Number.isSafeInteger(n.varlevelsup) && n.varlevelsup >= 0
+    && (!Object.hasOwn(n, "varnullingrels") || n.varnullingrels === "<>" || (Array.isArray(n.varnullingrels)
+      && n.varnullingrels[0] === "b" && n.varnullingrels.slice(1).every((v) => Number.isSafeInteger(v) && v >= 0))) },
+  FUNCEXPR: { children: ["args"], identityFields: ["funcid"], dependency: "FUNCTION", valid: (n) => catalogOid(n.funcid) && catalogOid(n.funcresulttype) && expressionList(n.args) },
+  OPEXPR: { children: ["args"], identityFields: ["opno", "opfuncid"], dependency: "OPERATOR", valid: (n) => catalogOid(n.opresulttype)
+    && Array.isArray(n.args) && n.args.length > 0 && n.args.length <= 2 && expressionList(n.args) },
+  SCALARARRAYOPEXPR: { children: ["args"], identityFields: ["opno", "opfuncid", "hashfuncid", "negfuncid"], dependency: "OPERATOR", valid: (n) => catalogBoolean(n.useOr)
+    && Array.isArray(n.args) && n.args.length === 2 && expressionList(n.args) },
+  BOOLEXPR: { children: ["args"], dependency: "NONE", valid: (n) => ["and", "or", "not"].includes(n.boolop)
+    && Array.isArray(n.args) && expressionList(n.args) && (n.boolop === "not" ? n.args.length === 1 : n.args.length >= 2) },
+  NULLTEST: { children: ["arg"], dependency: "NONE", valid: (n) => expressionNode(n.arg)
+    && [0, 1].includes(n.nulltesttype) && catalogBoolean(n.argisrow) },
+  ARRAYEXPR: { children: ["elements"], dependency: "NONE", valid: (n) => catalogOid(n.array_typeid)
+    && catalogOid(n.element_typeid) && catalogBoolean(n.multidims) && expressionList(n.elements) },
+});
+
+export function inspectPredicateTree(text, operators = []) {
+  const functions = new Set(), unresolved = [], operatorDependencies = [];
+  const unknown = (tag, reason) => unresolved.push(`${tag}_${reason}`);
+  function walk(node) {
+    if (!expressionNode(node)) { unknown("NODE", "STRUCTURE_INCOMPLETE"); return; }
+    const contract = Object.hasOwn(PREDICATE_NODE_CONTRACT, node.tag) ? PREDICATE_NODE_CONTRACT[node.tag] : null;
+    if (!contract) { unknown(node.tag, "UNSUPPORTED_NODE"); return; }
+    if (["funcid", "opno", "opfuncid", "hashfuncid", "negfuncid", "aggfnoid", "winfnoid"].some((key) =>
+      Object.hasOwn(node, key) && !(contract.identityFields ?? []).includes(key))) unknown(node.tag, "UNEXPECTED_DEPENDENCY_FIELD");
+    if (contract.dependency === "FUNCTION") {
+      if (!catalogOid(node.funcid)) unknown(node.tag, "FUNCTION_IDENTITY_INCOMPLETE"); else functions.add(node.funcid);
+    }
+    if (contract.dependency === "OPERATOR") {
+      const provided = (key) => Object.hasOwn(node, key);
+      const invalid = (provided("opno") && !catalogOid(node.opno))
+        || ["opfuncid", "hashfuncid", "negfuncid"].some((key) => provided(key) && node[key] !== 0 && !catalogOid(node[key]));
+      const mappings = Array.isArray(operators) ? operators.filter((o) => o.oid === node.opno) : [];
+      const mapped = mappings.length === 1 && catalogOid(mappings[0].functionOid) ? mappings[0].functionOid : null;
+      const direct = catalogOid(node.opfuncid) ? node.opfuncid : null;
+      if (invalid || (!direct && !catalogOid(node.opno))) unknown(node.tag, "OPERATOR_IDENTITY_INCOMPLETE");
+      else if ((!direct && !mapped) || mappings.length > 1 || (direct && mappings.length && mapped !== direct))
+        unknown(node.tag, "OPERATOR_DEPENDENCY_UNRESOLVED");
+      else {
+        const functionOid = direct ?? mapped;
+        functions.add(functionOid);
+        for (const key of ["hashfuncid", "negfuncid"]) if (catalogOid(node[key])) functions.add(node[key]);
+        operatorDependencies.push({ nodeType: node.tag, operatorOid: catalogOid(node.opno) ? node.opno : null,
+          functionOid, basis: direct ? "CATALOG_OPFUNCID" : "PG_OPERATOR_OPRCODE" });
+      }
+    }
+    if (!contract.valid(node)) { unknown(node.tag, "STRUCTURE_INCOMPLETE"); return; }
+    for (const key of contract.children) {
+      const child = node[key];
+      if (Array.isArray(child)) for (const expression of child) walk(expression);
+      else if (child !== "<>") walk(child);
+    }
+    // Unexpected nested expressions cannot hide outside the declared child fields.
+    for (const [key, value] of Object.entries(node)) if (!contract.children.includes(key)
+      && !(contract.scalarCollections ?? []).includes(key) && !(node.tag === "CONST" && key === "constvalue")) {
+      if (value && typeof value === "object") unknown(node.tag, "UNEXPECTED_CHILD_FIELD");
+    }
+  }
+  walk(parseCatalogTree(text));
+  return { functionOids: [...functions].sort((a, b) => a - b), operatorDependencies, unresolved: [...new Set(unresolved)].sort() };
+}
+
 export function predicateDependencyEvidence(policy, kind, operators = []) {
   const expressionKey = `${kind}Expression`, treeKey = `${kind}Tree`;
   const expression = policy[expressionKey], tree = policy[treeKey];
@@ -248,9 +323,10 @@ export function predicateDependencyEvidence(policy, kind, operators = []) {
     if (typeof tree !== "string" || !tree.trim()) throw new Error("TREE_MALFORMED");
     const root = parseCatalogTree(tree);
     if (!root || Array.isArray(root) || typeof root !== "object" || typeof root.tag !== "string") throw new Error("TREE_MALFORMED");
-    const inspected = inspectCatalogTree(tree, operators);
-    return { ...base, treeStatus: inspected.unresolved.length ? "UNRESOLVED" : "OBSERVED_COMPLETE",
-      functionOids: inspected.functionOids, reason: inspected.unresolved.length ? `${kind}PredicateDependencyUnresolved` : null };
+    const inspected = inspectPredicateTree(tree, operators);
+    return { ...base, treeStatus: inspected.unresolved.length ? "UNKNOWN" : "OBSERVED_COMPLETE",
+      functionOids: inspected.unresolved.length ? null : inspected.functionOids, operatorDependencies: inspected.operatorDependencies,
+      unresolved: inspected.unresolved, reason: inspected.unresolved.length ? `${kind}_${inspected.unresolved[0]}` : null };
   } catch { return { ...base, treeStatus: "MALFORMED", reason: `${kind}PredicateTreeMalformed` }; }
 }
 
