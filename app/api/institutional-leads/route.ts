@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import {
   sendInstitutionalLeadEmails,
   type InstitutionalLeadEmailData,
@@ -50,24 +50,6 @@ function cleanInstitutionType(value: unknown): InstitutionType | null {
     : null;
 }
 
-function createLeadWriteClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error(
-      "Faltan NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY."
-    );
-  }
-
-  return createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
-}
-
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as LeadPayload;
@@ -109,7 +91,7 @@ export async function POST(request: Request) {
       createdAt,
     };
 
-    const supabase = createLeadWriteClient();
+    const supabase = createSupabaseAdminClient();
     const { error } = await supabase.from("institutional_leads").insert({
       full_name: lead.fullName,
       role: lead.role,
