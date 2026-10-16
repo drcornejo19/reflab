@@ -10,7 +10,7 @@ import { RESULT_FRAME_PREFIX } from "../../production-preflight/queries.mjs";
 import { CorePolicySessionFailure } from "./phase3-core-policy-psql-session.mjs";
 import { FORMAT, OPERATION, RUNNER, VARIABLES, PROTECTED, MIGRATION, PRE, POST, TARGET, HARNESS_ROOT,
   EXPECTED_ACCOUNTING, verifyArtifacts, extractProvider, verifyAccounting, serialize } from "./phase3-institutional-leads-runner-contract.mjs";
-import { executeLeadAtomic, runProductionLeadProvider, runLeadProviderCli } from "./run-production-institutional-leads-provider.mjs";
+import { LeadExecutionSafety, executeLeadAtomic, runProductionLeadProvider, runLeadProviderCli } from "./run-production-institutional-leads-provider.mjs";
 
 const head = "a".repeat(40), password = 'local test"\\credential%:@/?';
 const url = `postgresql://postgres.nagjddldrldwavmfaytc:${encodeURIComponent(password)}@aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require`;
@@ -201,5 +201,204 @@ test("credential-bearing structured success is rejected before serialization", a
   const r = await executeLeadAtomic(session(), bytes); let output = "";
   assert.equal(await runLeadProviderCli(env(), { run: async () => ({ ...r, detail: url }), write: (v) => { output = v; } }), 1);
   assert(!output.includes(password)); assert(!output.includes(url));
-  assert.equal(JSON.parse(output).classification, "BLOCKER");
+  assert.equal(JSON.parse(output).classification, "OUTPUT_FAILURE");
+  assert.equal(JSON.parse(output).commitOutcome, "ACKNOWLEDGED");
+});
+
+// Independently decode the documented emergency wire format; never derive expectations from the encoder.
+function decodeSafety(text) {
+  const value = JSON.parse(text);
+  if (!Array.isArray(value)) return value;
+  assert.equal(value.length, 13); assert.equal(value[0], 1);
+  assert.equal(value[9], 0); assert.equal(value[10], 0); assert.equal(value[11], 0);
+  return { executionStarted: value[1] === 1, mutationAttempted: value[2] === null ? null : value[2] === 1,
+    providerInvocationCount: value[3],
+    transaction: ["NOT_STARTED", "STARTED_STATE_OUTPUT_FAILURE", "ROLLBACK", "COMMIT", "UNKNOWN", "ROLLBACK_UNCONFIRMED_CONNECTION_CLOSE_REQUIRED"][value[4]],
+    commitOutcome: ["NOT_COMMITTED", "ACKNOWLEDGED", "AMBIGUOUS", "UNKNOWN"][value[5]],
+    rollbackOutcome: ["NOT_CONFIRMED", "CONFIRMED", "UNCONFIRMED"][value[6]],
+    postAttestationOutcome: ["NOT_STARTED", "EXACT", "FAILED", "UNKNOWN"][value[7]],
+    forensicReviewRequired: value[8] === 1, automaticRetryAuthorized: false,
+    forensicExecutionAuthorized: false, providerExecutionAuthorized: false, commitAcknowledged: value[12] === 1 };
+}
+async function emitted(report, environment = env(), extra = {}) {
+  let output = "";
+  const code = await runLeadProviderCli(environment, { run: async () => report, ...extra, write: (text) => { output += text; } });
+  return { code, output, result: output ? decodeSafety(output) : null };
+}
+function assertNoSecret(output, credential = password, environment = env()) {
+  for (const secret of [credential, encodeURIComponent(credential), JSON.stringify(credential).slice(1, -1),
+    Buffer.from(credential).toString("base64"), environment.REFLAB_PRODUCTION_DDL_DB_URL]) assert(!output.includes(secret));
+  // Check the real detector, including escaped/encoded/recoverable variants, on every emergency representation.
+  assert.doesNotThrow(() => serialize(JSON.parse(output), environment));
+}
+
+for (const [ambiguous, collision] of [[false, "COMMITTED_POST_EXACT"], [true, "UNKNOWN_COMMIT_OUTCOME"],
+  [false, "ACKNOWLEDGED"], [true, "AMBIGUOUS"], [false, "COMMIT"], [true, "readOnlyForensicRequired"]]) {
+  test(`independent post-execution credential collision ${collision}`, async () => {
+    const environment = env(); environment.REFLAB_PRODUCTION_DDL_DB_URL = url.replace(encodeURIComponent(password), collision);
+    let connections = 0; const s = session({ commitFailure: ambiguous });
+    // Real local gates and real runner state machine; only the transport is nonconnecting synthetic evidence.
+    const r = await runProductionLeadProvider(environment, deps(() => { connections++; return s; }));
+    assert.equal(connections, 1); assert.equal(r.providerInvocationCount, 1);
+    assert.equal(r.commitOutcome, ambiguous ? "AMBIGUOUS" : "ACKNOWLEDGED");
+    const { code, result, output } = await emitted(r, environment);
+    assert.equal(code, 1); assert.equal(result.executionStarted, true);
+    assert.equal(result.providerInvocationCount, 1); assert.notEqual(result.transaction, "NOT_STARTED");
+    assert.equal(result.commitOutcome, ambiguous ? "AMBIGUOUS" : "ACKNOWLEDGED");
+    assert.equal(result.automaticRetryAuthorized, false);
+    assert.equal(result.forensicExecutionAuthorized, false); assert.equal(result.providerExecutionAuthorized, false);
+    if (ambiguous) assert.equal(result.forensicReviewRequired, true);
+    assertNoSecret(output, collision, environment);
+  });
+}
+
+test("authorization failure positively precedes any connection", async () => {
+  let connections = 0, output;
+  const environment = env(); delete environment.ALLOW_PRODUCTION_DDL;
+  const code = await runLeadProviderCli(environment, { ...deps(() => { connections++; }), write: (v) => { output = v; } });
+  const r = decodeSafety(output); assert.equal(code, 1); assert.equal(connections, 0);
+  assert.equal(r.executionStarted, false); assert.equal(r.transaction, "NOT_STARTED"); assert.equal(r.providerInvocationCount, 0);
+  assert.equal(r.automaticRetryAuthorized, false);
+});
+test("connection failure cannot be reset to a never-started operation", async () => {
+  let output, connections = 0;
+  const code = await runLeadProviderCli(env(), { ...deps(() => { connections++; throw Error(url); }), write: (v) => { output = v; } });
+  const r = decodeSafety(output); assert.equal(code, 1); assert.equal(connections, 1);
+  assert.equal(r.executionStarted, true); assert.notEqual(r.transaction, "NOT_STARTED");
+  assert.equal(r.providerInvocationCount, 0); assert.equal(r.mutationAttempted, false); assertNoSecret(output);
+});
+test("unknown thrown execution cannot manufacture zero invocations or non-commit", async () => {
+  const { result, code, output } = await emitted(undefined, env(), { run: async () => { throw Error(url); } });
+  assert.equal(code, 1); assert.equal(result.executionStarted, true); assert.equal(result.providerInvocationCount, null);
+  assert.equal(result.mutationAttempted, null); assert.equal(result.commitOutcome, "UNKNOWN");
+  assert.equal(result.forensicReviewRequired, true); assert.equal(result.automaticRetryAuthorized, false); assertNoSecret(output);
+});
+
+const outputStates = {
+  notStarted: () => executeLeadAtomic(session(), Buffer.from("wrong bytes")),
+  preFailure: () => executeLeadAtomic(session(), bytes, { checkpoint: (stage) => { if (stage === "BEFORE_PRE") throw Error("forced"); } }),
+  mutationFailure: () => executeLeadAtomic(session({ fail: (sql) => sql === extracted.body }), bytes),
+  postFailure: () => executeLeadAtomic(session(), bytes, { checkpoint: (stage) => { if (stage === "AFTER_GRANT") throw Error("forced"); } }),
+  rollbackUnconfirmed: () => {
+    const s = session(); s.rollback = async () => { throw Error(url); };
+    return executeLeadAtomic(s, bytes, { checkpoint: (stage) => { if (stage === "AFTER_GRANT") throw Error("forced"); } });
+  },
+  acknowledged: () => executeLeadAtomic(session(), bytes),
+  ambiguous: () => executeLeadAtomic(session({ commitFailure: true }), bytes),
+};
+const outputFailures = {
+  validation: (r) => { r.format = "INVALID"; },
+  accounting: (r) => { r.scopeBoundary = {}; },
+  rawCredential: (r) => { r.detail = password; },
+  encodedCredential: (r) => { r.detail = encodeURIComponent(password); },
+  escapedCredential: (r) => { r.detail = JSON.stringify(password).slice(1, -1); },
+  credentialUrl: (r) => { r.detail = url; },
+  circular: (r) => { r.detail = r; },
+  bigint: (r) => { r.detail = 1n; },
+  serializationException: (r) => { Object.defineProperty(r, "detail", { enumerable: true, get() { throw Error(url); } }); },
+  formattingException: (r) => { r.toJSON = () => { throw Error(url); }; },
+};
+for (const [state, build] of Object.entries(outputStates)) for (const [failure, corrupt] of Object.entries(outputFailures)) {
+  test(`monotonic output state ${state}/${failure}`, async () => {
+    const report = await build(); const count = report.providerInvocationCount, commit = report.commitOutcome, transaction = report.transaction;
+    const forensic = report.readOnlyForensicRequired === true;
+    corrupt(report); const { result, code, output } = await emitted(report);
+    assert.equal(code, 1); assert.equal(result.automaticRetryAuthorized, false); assertNoSecret(output);
+    assert(result.providerInvocationCount >= count);
+    if (transaction !== "NOT_STARTED") assert.notEqual(result.transaction, "NOT_STARTED");
+    if (count) { assert.equal(result.mutationAttempted, true); assert(result.providerInvocationCount >= 1); }
+    if (commit === "ACKNOWLEDGED") { assert.equal(result.commitOutcome, commit); assert.equal(result.commitAcknowledged, true); }
+    if (commit === "AMBIGUOUS") assert.equal(result.commitOutcome, commit);
+    if (forensic) assert.equal(result.forensicReviewRequired, true);
+    if (transaction === "ROLLBACK") { assert.equal(result.transaction, transaction); assert.equal(result.rollbackOutcome, "CONFIRMED"); }
+    if (transaction.includes("UNCONFIRMED")) { assert.equal(result.rollbackOutcome, "UNCONFIRMED"); assert.equal(result.commitOutcome, "UNKNOWN"); }
+    if (state === "notStarted") assert.equal(result.transaction, "NOT_STARTED");
+    if (["acknowledged", "ambiguous"].includes(state)) assert.equal(result.postAttestationOutcome, "EXACT");
+    if (state === "postFailure") assert.equal(result.postAttestationOutcome, "FAILED");
+  });
+}
+for (const state of ["acknowledged", "ambiguous", "postFailure"]) {
+  test(`serializer itself throws after ${state}`, async () => {
+    const report = await outputStates[state]();
+    const { code, result, output } = await emitted(report, env(), { serialize: () => { throw Error(url); } });
+    assert.equal(code, 1); assert.equal(result.providerInvocationCount, 1); assert.equal(result.automaticRetryAuthorized, false);
+    assert.notEqual(result.transaction, "NOT_STARTED");
+    if (state !== "postFailure") assert.equal(result.commitOutcome, report.commitOutcome);
+    if (report.readOnlyForensicRequired) assert.equal(result.forensicReviewRequired, true);
+    assertNoSecret(output);
+  });
+  for (const asynchronous of [false, true]) test(`output sink failure after ${state}/${asynchronous}`, async () => {
+    const report = await outputStates[state](); let writes = 0;
+    const code = await runLeadProviderCli(env(), { run: async () => ({ ...report, detail: url }), write: (text) => {
+      writes++; const r = decodeSafety(text); assert.equal(r.providerInvocationCount, 1);
+      assert.notEqual(r.transaction, "NOT_STARTED"); assert.equal(r.automaticRetryAuthorized, false);
+      if (state !== "postFailure") assert.equal(r.commitOutcome, report.commitOutcome);
+      if (report.readOnlyForensicRequired) assert.equal(r.forensicReviewRequired, true);
+      assertNoSecret(text);
+      if (asynchronous) return Promise.reject(Error(url));
+      throw Error(url);
+    } });
+    assert.equal(code, 1); assert.equal(writes, 1);
+  });
+}
+test("independent internal safety facts survive final serializer failure", async () => {
+  let output; const s = session();
+  // Exercise the real entrypoint with a nonconnecting transport, not an injected completed result.
+  const d = deps(() => s);
+  const code = await runLeadProviderCli(env(), { ...d, serialize: () => { throw Error(url); }, write: (text) => { output = text; } });
+  const r = decodeSafety(output); assert.equal(code, 1); assert.equal(r.commitOutcome, "ACKNOWLEDGED");
+  assert.equal(r.providerInvocationCount, 1); assert.equal(r.postAttestationOutcome, "EXACT"); assertNoSecret(output);
+});
+for (const ambiguous of [false, true]) test(`exception after execution returns no rich report/${ambiguous}`, async () => {
+  let output;
+  const code = await runLeadProviderCli(env(), { ...deps(() => session({ commitFailure: ambiguous })),
+    run: async (environment, dependencies) => { await runProductionLeadProvider(environment, dependencies); throw Error(url); },
+    write: (text) => { output = text; } });
+  const r = decodeSafety(output); assert.equal(code, 1); assert.equal(r.executionStarted, true);
+  assert.equal(r.providerInvocationCount, 1); assert.equal(r.commitOutcome, ambiguous ? "AMBIGUOUS" : "ACKNOWLEDGED");
+  assert.equal(r.automaticRetryAuthorized, false);
+  if (ambiguous) assert.equal(r.forensicReviewRequired, true);
+  assertNoSecret(output);
+});
+test("append-only facts cannot be cleared by a later initial-looking report", () => {
+  for (const commit of ["ACKNOWLEDGED", "AMBIGUOUS"]) {
+    const safety = new LeadExecutionSafety();
+    safety.capture({ providerInvocationCount: 1, transaction: "COMMIT", commitOutcome: commit, readOnlyForensicRequired: true });
+    const before = safety.snapshot();
+    safety.capture({ providerInvocationCount: 0, transaction: "NOT_STARTED", commitOutcome: "NOT_COMMITTED", readOnlyForensicRequired: false });
+    assert.deepEqual(safety.snapshot(), before); assert.equal(Object.isFrozen(before), true);
+  }
+});
+test("lost or conflicting commit data escalates uncertainty without erasing evidence", () => {
+  const safety = new LeadExecutionSafety(); safety.mark("mutation");
+  assert.equal(safety.snapshot().commitOutcome, "UNKNOWN"); assert.equal(safety.snapshot().providerInvocationCount, 1);
+  safety.mark("commitAck"); safety.mark("commitAmbiguous");
+  assert.equal(safety.snapshot().commitOutcome, "UNKNOWN"); assert.equal(safety.snapshot().commitAcknowledged, true);
+  assert.equal(safety.snapshot().forensicReviewRequired, true); assert.equal(safety.snapshot().automaticRetryAuthorized, false);
+});
+test("unreadable safety getters are never invoked and fail conservatively", async () => {
+  let accessed = 0;
+  const report = { format: "INVALID", get transaction() { accessed++; throw Error(url); } };
+  const { result } = await emitted(report); assert.equal(accessed, 0);
+  assert.equal(result.executionStarted, true); assert.equal(result.providerInvocationCount, null);
+  assert.equal(result.commitOutcome, "UNKNOWN"); assert.equal(result.forensicReviewRequired, true);
+  const acknowledged = await outputStates.acknowledged(); acknowledged.readOnlyForensicRequired = true;
+  acknowledged.postFailedChecks = new Proxy([], { get() { throw Error(url); } });
+  const failedCapture = await emitted(acknowledged);
+  assert.equal(failedCapture.result.commitOutcome, "ACKNOWLEDGED");
+  assert.equal(failedCapture.result.providerInvocationCount, 1);
+  assert.equal(failedCapture.result.forensicReviewRequired, true); assertNoSecret(failedCapture.output);
+});
+test("even numeric emergency output must pass unchanged secret detection", async () => {
+  const environment = env(); environment.REFLAB_PRODUCTION_DDL_DB_URL = url.replace(encodeURIComponent(password), "1");
+  const report = await outputStates.acknowledged(); report.detail = "1";
+  const { output, code } = await emitted(report, environment);
+  assert.equal(code, 1); assert.equal(output, "");
+  assert.equal(report.commitOutcome, "ACKNOWLEDGED"); assert.equal(report.providerInvocationCount, 1);
+});
+test("initial constructor exists only before atomic execution", () => {
+  const source = checkout(RUNNER).toString();
+  assert.equal((source.match(/initial\(\)/g) ?? []).length, 1);
+  assert(source.indexOf("const report = initial()") < source.indexOf('safety.mark("begin")'));
+  assert.doesNotMatch(source.slice(source.indexOf("export async function runLeadProviderCli")), /initial\(/);
 });
