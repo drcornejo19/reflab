@@ -60,12 +60,3 @@ export async function GET(request: Request) {
     );
   }
 }
-
-export function assertReportFormat(value: string | null) {
-  if (value !== "csv") {
-    throw new InstitutionAccessError(
-      "El formato solicitado no esta disponible.",
-      400
-    );
-  }
-}

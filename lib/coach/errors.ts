@@ -1,6 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { IdentityLinkRequiredError } from "@/lib/access/server";
 
 export type CoachErrorCode =
   | "UNAUTHORIZED"
@@ -86,6 +87,19 @@ export class CoachProviderError extends CoachError {
 }
 
 export function coachErrorResponse(error: unknown, requestId?: string) {
+  if (error instanceof IdentityLinkRequiredError) {
+    return NextResponse.json(
+      {
+        error: "identity_link_required",
+        code: "IDENTITY_LINK_REQUIRED",
+        requestId: requestId ?? null,
+        setupRequired: false,
+        retryAfterSeconds: null,
+      },
+      { status: 409 }
+    );
+  }
+
   const coachError =
     error instanceof CoachError
       ? error

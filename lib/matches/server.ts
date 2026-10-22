@@ -1,6 +1,10 @@
 import "server-only";
 
-import { type SystemRole, normalizeRole } from "@/lib/institutionalRoles";
+import {
+  IdentityLinkRequiredError,
+  loadCanonicalAccessSnapshot,
+  resolveCanonicalAccessUserId,
+} from "@/lib/access/server";
 import {
   appointmentSourceLabels,
   appointmentStatusLabels,
@@ -39,16 +43,11 @@ import type {
   MatchesCatalogResponse,
   PostMatchReviewPayload,
 } from "@/lib/matches/api";
+import { MatchesAccessError } from "@/lib/matches/access";
 import { getSportDefinition, normalizeSportType, type SportType } from "@/lib/sports";
 import type { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
 type SupabaseAnyClient = ReturnType<typeof createSupabaseAdminClient>;
-
-type UserRoleRow = {
-  user_id?: string | null;
-  role?: string | null;
-  institution_id?: string | null;
-};
 
 type UserProfileRow = {
   user_id?: string | null;
@@ -120,12 +119,6 @@ const activeAppointmentStatusesForConflicts: AppointmentStatus[] = [
   "modified",
 ];
 
-const institutionAllowedRoles: SystemRole[] = [
-  "super_admin",
-  "institution_admin",
-  "institutional_instructor",
-];
-
 const matchesFoundationMigrationId = "202607130001_matches_foundation.sql";
 
 const matchesFoundationTables = new Set([
@@ -179,52 +172,6 @@ export function getMatchesSetupIssue(error: unknown): MatchesSetupIssue | null {
   return {
     missingTables,
     migrationId: matchesFoundationMigrationId,
-  };
-}
-
-export async function getMatchActorContext(
-  supabase: SupabaseAnyClient,
-  userId: string
-): Promise<MatchActorContext> {
-  const [roleRes, profileRes] = await Promise.all([
-    supabase.from("user_roles").select("user_id,role,institution_id").eq("user_id", userId).maybeSingle(),
-    supabase
-      .from("user_profiles")
-      .select(
-        "user_id,reflab_name,first_name,last_name,country,association,category,main_role,referee_type,ref_card_id,institution_id"
-      )
-      .eq("user_id", userId)
-      .maybeSingle(),
-  ]);
-
-  if (roleRes.error) throw new Error(roleRes.error.message);
-  if (profileRes.error) throw new Error(profileRes.error.message);
-
-  const roleRow = (roleRes.data ?? null) as UserRoleRow | null;
-  const profileRow = (profileRes.data ?? null) as UserProfileRow | null;
-  const role = normalizeRole(roleRow?.role);
-  const institutionId =
-    textOrNull(roleRow?.institution_id) ?? textOrNull(profileRow?.institution_id);
-  const institutionName = institutionId
-    ? await getInstitutionName(supabase, institutionId)
-    : null;
-
-  return {
-    userId,
-    role,
-    institutionId,
-    institutionName,
-    canManageInstitution: institutionAllowedRoles.includes(role) && Boolean(institutionId),
-    isSuperAdmin: role === "super_admin",
-    profile: {
-      displayName: resolveDisplayName(profileRow, userId),
-      refCardId: textOrNull(profileRow?.ref_card_id),
-      country: textOrNull(profileRow?.country),
-      association: textOrNull(profileRow?.association),
-      category: textOrNull(profileRow?.category),
-      mainRole: textOrNull(profileRow?.main_role),
-      refereeType: textOrNull(profileRow?.referee_type),
-    },
   };
 }
 
@@ -594,10 +541,12 @@ export async function createAppointment(
 ) {
   const sportType = normalizeSportType(payload.sportType);
   const sourceType = payload.sourceType === "institutional" ? "institutional" : "manual";
-  const targetUserId =
-    sourceType === "institutional" && actor.canManageInstitution
-      ? textOrNull(payload.targetUserId) ?? actor.userId
-      : actor.userId;
+  const targetUserId = await resolveAppointmentTargetUserId(
+    supabase,
+    actor,
+    sourceType,
+    payload.membershipId
+  );
   const status = payload.status ?? (sourceType === "institutional" ? "confirmed" : "pending_confirmation");
   const role = await getRoleBySportAndKey(supabase, sportType, payload.roleKey);
 
@@ -731,7 +680,7 @@ export async function createAppointment(
       sport_type: sportType,
       competition_id: competition.id,
       association_id: association.id,
-      institution_id: sourceType === "institutional" ? actor.institutionId : actor.institutionId,
+      institution_id: sourceType === "institutional" ? actor.institutionId : null,
       source_type: sourceType,
       status,
       created_by_user_id: actor.userId,
@@ -802,10 +751,12 @@ export async function createAppointmentFromFixture(
   payload: FixtureAppointmentPayload
 ) {
   const sourceType = payload.sourceType === "institutional" ? "institutional" : "manual";
-  const targetUserId =
-    sourceType === "institutional" && actor.canManageInstitution
-      ? textOrNull(payload.targetUserId) ?? actor.userId
-      : actor.userId;
+  const targetUserId = await resolveAppointmentTargetUserId(
+    supabase,
+    actor,
+    sourceType,
+    payload.membershipId
+  );
   const status = payload.status ?? "confirmed";
 
   if (sourceType === "institutional" && !actor.canManageInstitution) {
@@ -865,7 +816,7 @@ export async function createAppointmentFromFixture(
       sport_type: fixture.sport_type,
       competition_id: fixture.competition_id ?? null,
       association_id: fixture.association_id ?? null,
-      institution_id: actor.institutionId,
+      institution_id: sourceType === "institutional" ? actor.institutionId : null,
       source_type: sourceType,
       status,
       created_by_user_id: actor.userId,
@@ -944,12 +895,16 @@ export async function getAppointmentDetail(
 
   throwIfError(appointmentRes.error, "No se pudo cargar la designacion.");
 
-  const appointment = (appointmentRes.data ?? null) as AppointmentRecord | null;
-  if (!appointment) {
+  const storedAppointment = (appointmentRes.data ?? null) as AppointmentRecord | null;
+  if (!storedAppointment) {
     throw new Error("La designacion no existe.");
   }
 
-  enforceAppointmentAccess(actor, appointment);
+  const appointment = await canonicalizeStoredAppointmentUser(
+    supabase,
+    storedAppointment
+  );
+  enforceAppointmentAccess(actor, appointment, "read");
 
   const [
     fixture,
@@ -1110,12 +1065,16 @@ export async function updateAppointment(
     .maybeSingle();
 
   throwIfError(appointmentRes.error, "No se pudo cargar la designacion.");
-  const appointment = (appointmentRes.data ?? null) as AppointmentRecord | null;
-  if (!appointment) {
+  const storedAppointment = (appointmentRes.data ?? null) as AppointmentRecord | null;
+  if (!storedAppointment) {
     throw new Error("La designacion no existe.");
   }
 
-  enforceAppointmentAccess(actor, appointment);
+  const appointment = await canonicalizeStoredAppointmentUser(
+    supabase,
+    storedAppointment
+  );
+  enforceAppointmentAccess(actor, appointment, "manage");
 
   const patch: Record<string, unknown> = {};
   const roleId =
@@ -1335,21 +1294,31 @@ async function requireOwnedOrInstitutionAppointment(
     .maybeSingle();
 
   throwIfError(appointmentRes.error, "No se pudo cargar la designacion.");
-  const appointment = (appointmentRes.data ?? null) as AppointmentRecord | null;
+  const storedAppointment = (appointmentRes.data ?? null) as AppointmentRecord | null;
 
-  if (!appointment) {
+  if (!storedAppointment) {
     throw new Error("La designacion no existe.");
   }
 
-  enforceAppointmentAccess(actor, appointment);
+  const appointment = await canonicalizeStoredAppointmentUser(
+    supabase,
+    storedAppointment
+  );
+  enforceAppointmentAccess(actor, appointment, "manage");
   return appointment;
 }
 
-function enforceAppointmentAccess(actor: MatchActorContext, appointment: AppointmentRecord) {
+function enforceAppointmentAccess(
+  actor: MatchActorContext,
+  appointment: AppointmentRecord,
+  permission: "read" | "manage"
+) {
   if (appointment.user_id === actor.userId) return;
   if (
     actor.isSuperAdmin ||
-    (actor.canManageInstitution &&
+    ((permission === "read"
+      ? actor.canReadInstitution
+      : actor.canManageInstitution) &&
       actor.institutionId &&
       appointment.institution_id === actor.institutionId)
   ) {
@@ -1361,10 +1330,83 @@ function enforceAppointmentAccess(actor: MatchActorContext, appointment: Appoint
 
 function resolveScope(actor: MatchActorContext, requestedScope: Scope) {
   if (requestedScope === "admin" && actor.isSuperAdmin) return "admin" as const;
-  if (requestedScope === "institution" && actor.canManageInstitution) {
+  if (requestedScope === "institution" && actor.canReadInstitution) {
     return "institution" as const;
   }
   return "self" as const;
+}
+
+async function resolveAppointmentTargetUserId(
+  supabase: SupabaseAnyClient,
+  actor: MatchActorContext,
+  sourceType: "manual" | "institutional",
+  membershipId?: string | null
+) {
+  if (sourceType === "manual") return actor.userId;
+  if (!actor.canManageInstitution || !actor.institutionId) {
+    throw new MatchesAccessError("matches_manage_forbidden", 403);
+  }
+
+  const normalizedMembershipId = textOrNull(membershipId);
+  if (!normalizedMembershipId) {
+    throw new MatchesAccessError("membership_required", 403);
+  }
+
+  const membershipResult = await supabase
+    .from("institution_memberships")
+    .select("id,institution_id,user_id,status")
+    .eq("id", normalizedMembershipId)
+    .eq("institution_id", actor.institutionId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  throwIfError(
+    membershipResult.error,
+    "No se pudo validar la membresia institucional."
+  );
+
+  const targetUserId = textOrNull(membershipResult.data?.user_id);
+  if (!targetUserId) {
+    throw new MatchesAccessError("membership_forbidden", 403);
+  }
+
+  try {
+    const targetAccess = await loadCanonicalAccessSnapshot(
+      supabase,
+      targetUserId,
+      { provisionMissing: false }
+    );
+    return targetAccess.userId;
+  } catch {
+    throw new MatchesAccessError("canonical_target_required", 409);
+  }
+}
+
+async function canonicalizeStoredAppointmentUser(
+  supabase: SupabaseAnyClient,
+  appointment: AppointmentRecord
+) {
+  const storedUserId = requiredText(
+    appointment.user_id,
+    "La designacion no tiene una identidad valida."
+  );
+
+  try {
+    const canonicalUserId = await resolveCanonicalAccessUserId(
+      supabase,
+      storedUserId,
+      { provisionMissing: false }
+    );
+    await loadCanonicalAccessSnapshot(supabase, canonicalUserId, {
+      provisionMissing: false,
+    });
+    return { ...appointment, user_id: canonicalUserId };
+  } catch (error) {
+    if (error instanceof IdentityLinkRequiredError) {
+      throw new MatchesAccessError("matches_legacy_identity_unresolved", 409);
+    }
+    throw error;
+  }
 }
 
 async function validateEligibilityIfNeeded(
@@ -1410,16 +1452,36 @@ async function buildRecommendedPlan(
   sportType: SportType,
   roleKey: RefereeRoleKey
 ): Promise<MatchRecommendedPlan> {
+  const officialResultsRes = await supabase
+    .from("exam_results")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("sport_type", sportType);
+
+  if (officialResultsRes.error) {
+    return emptyPlan(
+      "No hay informacion suficiente para generar un plan personalizado."
+    );
+  }
+
+  const officialResultIds = uniqueIds(
+    (officialResultsRes.data ?? []).map((item: { id?: string | null }) => item.id)
+  );
+  const officialAttemptsQuery = supabase
+    .from("attempts")
+    .select(
+      "topic,score,technical_correct,restart_correct,discipline_correct,disciplinary_correct,created_at,sport_type,exam_result_id"
+    )
+    .eq("user_id", userId)
+    .eq("sport_type", sportType)
+    .not("exam_result_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(80);
+
   const [attemptsRes, performanceRes, psychologyRes] = await Promise.all([
-    supabase
-      .from("attempts")
-      .select(
-        "topic,score,technical_correct,restart_correct,discipline_correct,disciplinary_correct,created_at,sport_type"
-      )
-      .eq("user_id", userId)
-      .eq("sport_type", sportType)
-      .order("created_at", { ascending: false })
-      .limit(80),
+    officialResultIds.length
+      ? officialAttemptsQuery.in("exam_result_id", officialResultIds)
+      : Promise.resolve({ data: [], error: null }),
     supabase
       .from("performance_checkins")
       .select("readiness_score,fatigue,sleep_hours,created_at,sport_type")
@@ -2122,9 +2184,10 @@ async function loadInstitutionMembers(
   institutionId: string
 ) {
   const membersRes = await supabase
-    .from("institution_members")
-    .select("user_id,role")
+    .from("institution_memberships")
+    .select("id,user_id,status")
     .eq("institution_id", institutionId)
+    .eq("status", "active")
     .order("created_at", { ascending: true });
 
   throwIfError(
@@ -2133,8 +2196,9 @@ async function loadInstitutionMembers(
   );
 
   const memberRows = (membersRes.data ?? []) as Array<{
+    id?: string | null;
     user_id?: string | null;
-    role?: string | null;
+    status?: string | null;
   }>;
   const memberUserIds = uniqueIds(memberRows.map((item) => item.user_id));
   if (!memberUserIds.length) return [];
@@ -2143,34 +2207,21 @@ async function loadInstitutionMembers(
   const profileMap = new Map(profiles.map((item) => [item.userId, item]));
 
   return memberRows
-    .map((member) => {
+    .map((member): InstitutionMemberOption | null => {
+      const membershipId = textOrNull(member.id);
       const userId = textOrNull(member.user_id);
-      if (!userId) return null;
+      if (!membershipId || !userId) return null;
       const profile = profileMap.get(userId);
 
       return {
-        userId,
+        membershipId,
         displayName: profile?.displayName ?? userId,
         refCardId: profile?.refCardId ?? null,
-        role: textOrNull(member.role),
+        role: null,
         category: profile?.category ?? null,
       };
     })
     .filter((item): item is InstitutionMemberOption => item !== null);
-}
-
-async function getInstitutionName(
-  supabase: SupabaseAnyClient,
-  institutionId: string
-) {
-  const institutionRes = await supabase
-    .from("institutions")
-    .select("id,name")
-    .eq("id", institutionId)
-    .maybeSingle();
-
-  throwIfError(institutionRes.error, "No se pudo cargar la institucion.");
-  return textOrNull((institutionRes.data as InstitutionRow | null)?.name);
 }
 
 async function getInstitutionsByIds(

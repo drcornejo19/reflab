@@ -57,11 +57,14 @@ type NavItem = {
 
 const trainingActivePaths = [
   "/training",
+  "/training/video-analysis",
   "/mobile-var",
+  "/futsal/video-analysis",
   "/futsal/rules-practice",
 ];
 const trainingActivePrefixes = [
   "/training/decision",
+  "/training/video-analysis",
   "/training/var",
   "/training/english",
   "/training/communication",
@@ -70,20 +73,17 @@ const trainingActivePrefixes = [
   "/training/psychology",
   "/training/rules-practice",
   "/training/rules-premium-practice",
+  "/futsal/video-analysis",
   "/futsal/rules-practice",
 ];
 const evaluationsActivePaths = [
   "/evaluations",
   "/training/exam",
   "/training/rules-exam",
-  "/training/video-analysis",
-  "/futsal/video-analysis",
   "/futsal/rules-exam",
 ];
 const evaluationsActivePrefixes = [
   "/evaluations",
-  "/training/video-analysis",
-  "/futsal/video-analysis",
   "/futsal/rules-exam",
 ];
 const matchesActivePaths = ["/matches"];

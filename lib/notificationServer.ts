@@ -57,14 +57,14 @@ export function rowToPreferences(
 
 export async function getUserNotificationPreferences(
   supabase: SupabaseAnyClient,
-  userId: string
+  canonicalUserId: string
 ) {
   const { data, error } = await supabase
     .from("notification_preferences")
     .select(
       "training_enabled, exams_enabled, evolution_enabled, matches_enabled, new_content_enabled, push_enabled"
     )
-    .eq("user_id", userId)
+    .eq("user_id", canonicalUserId)
     .maybeSingle();
 
   if (error) {
@@ -76,7 +76,7 @@ export async function getUserNotificationPreferences(
 
 export async function upsertUserNotificationPreferences(
   supabase: SupabaseAnyClient,
-  userId: string,
+  canonicalUserId: string,
   preferences: NotificationPreferences
 ) {
   const now = new Date().toISOString();
@@ -84,7 +84,7 @@ export async function upsertUserNotificationPreferences(
     .from("notification_preferences")
     .upsert(
       {
-        user_id: userId,
+        user_id: canonicalUserId,
         ...preferencesToRow(preferences),
         updated_at: now,
       },
@@ -104,12 +104,12 @@ export async function upsertUserNotificationPreferences(
 
 export async function getEnabledNotificationTokens(
   supabase: SupabaseAnyClient,
-  userId: string
+  canonicalUserId: string
 ) {
   const { data, error } = await supabase
     .from("notification_tokens")
     .select("id, token")
-    .eq("user_id", userId)
+    .eq("user_id", canonicalUserId)
     .eq("enabled", true);
 
   if (error) {
@@ -121,7 +121,7 @@ export async function getEnabledNotificationTokens(
 
 export async function recordNotificationEvent(
   supabase: SupabaseAnyClient,
-  userId: string,
+  canonicalUserId: string,
   notification: SmartNotification,
   status: "queued" | "sent" | "failed" | "skipped",
   error?: string | null,
@@ -129,7 +129,7 @@ export async function recordNotificationEvent(
 ) {
   const now = new Date().toISOString();
   const { error: insertError } = await supabase.from("notification_events").insert({
-    user_id: userId,
+    user_id: canonicalUserId,
     appointment_id: context.appointmentId ?? null,
     fixture_id: context.fixtureId ?? null,
     sport_type: context.sportType ?? null,
@@ -148,7 +148,7 @@ export async function recordNotificationEvent(
 
   if (insertError) {
     console.error("Notification event insertError", {
-      userId,
+      canonicalUserId,
       type: notification.type,
       status,
       error: insertError,
@@ -158,18 +158,21 @@ export async function recordNotificationEvent(
 
 export async function sendSmartNotificationToUser(
   supabase: SupabaseAnyClient,
-  userId: string,
+  canonicalUserId: string,
   type: SmartNotificationType,
   overrides: Partial<Pick<SmartNotification, "message" | "actionUrl">> = {},
   context: NotificationContext = {}
 ) {
   const notification = getSmartNotification(type, overrides);
-  const preferences = await getUserNotificationPreferences(supabase, userId);
+  const preferences = await getUserNotificationPreferences(
+    supabase,
+    canonicalUserId
+  );
 
   if (!preferences.pushEnabled) {
     await recordNotificationEvent(
       supabase,
-      userId,
+      canonicalUserId,
       notification,
       "skipped",
       "Preferencia desactivada.",
@@ -184,11 +187,14 @@ export async function sendSmartNotificationToUser(
     };
   }
 
-  const tokens = await getEnabledNotificationTokens(supabase, userId);
+  const tokens = await getEnabledNotificationTokens(
+    supabase,
+    canonicalUserId
+  );
   if (tokens.length === 0) {
     await recordNotificationEvent(
       supabase,
-      userId,
+      canonicalUserId,
       notification,
       "skipped",
       "El usuario no tiene dispositivos registrados.",
@@ -233,7 +239,7 @@ export async function sendSmartNotificationToUser(
 
   await recordNotificationEvent(
     supabase,
-    userId,
+    canonicalUserId,
     notification,
     successCount > 0 ? "sent" : "failed",
     failed.length > 0 ? failed.map((result) => result.error).join(" | ") : null,

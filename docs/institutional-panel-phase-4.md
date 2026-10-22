@@ -32,7 +32,7 @@ fueron creados por `202607160001_institutional_multitenant_foundation.sql`.
 ## Seguridad
 
 - Todas las operaciones se ejecutan en Route Handlers del servidor.
-- El cliente no recibe `CLERK_SECRET_KEY` ni `SUPABASE_SERVICE_ROLE_KEY`.
+- El cliente no recibe `CLERK_SECRET_KEY` ni `SUPABASE_SECRET_KEY`.
 - Las lecturas y escrituras requieren permisos institucionales explicitos.
 - Una institucion no puede asignar miembros o grupos de otro tenant.
 - No se permite activar manualmente una invitacion no aceptada.

@@ -7,6 +7,10 @@ import {
   type InstitutionAuthorization,
 } from "@/lib/institutional/server";
 import {
+  INSTITUTIONAL_CONTENT_BUCKET,
+  requireInstitutionContentStoragePath,
+} from "@/lib/institutional/contentStorage";
+import {
   normalizeAssessmentRecord,
 } from "@/lib/institutional/assessment-server";
 import {
@@ -710,11 +714,17 @@ async function normalizeSessionItem(
 ): Promise<InstitutionSessionItem> {
   const snapshot = asRecord(row.item_snapshot);
   const metadata = asRecord(snapshot.metadata);
-  const storagePath = nullableText(snapshot.storagePath);
+  const rawStoragePath = nullableText(snapshot.storagePath);
+  const storagePath = rawStoragePath
+    ? requireInstitutionContentStoragePath(
+        rawStoragePath,
+        authorization.context.institution.id
+      )
+    : null;
   let accessUrl: string | null = null;
   if (storagePath) {
     const { data } = await authorization.supabase.storage
-      .from("institutional-content")
+      .from(INSTITUTIONAL_CONTENT_BUCKET)
       .createSignedUrl(storagePath, 3600);
     accessUrl = data?.signedUrl ?? null;
   }

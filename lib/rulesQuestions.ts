@@ -1,4 +1,4 @@
-import { withQuestionDefaults, type RuleQuestion } from "@/lib/questionBank";
+import { withQuestionDefaults, type RuleQuestion } from "./questionBank.ts";
 
 type LegacyRuleQuestion = Omit<
   RuleQuestion,

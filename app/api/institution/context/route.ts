@@ -18,6 +18,12 @@ export async function GET() {
       access.snapshot,
       requestedInstitutionId
     );
+    if (requestedInstitutionId !== null && !activeContext) {
+      throw new InstitutionAccessError(
+        "No tenes acceso a la institucion seleccionada.",
+        403
+      );
+    }
 
     return noStoreJson({
       ...access.snapshot,
@@ -42,8 +48,9 @@ export async function PATCH(request: Request) {
     }
 
     const access = await getInstitutionAccessForCurrentUser();
-    const context = access.snapshot.contexts.find(
-      (item) => item.institution.id === institutionId
+    const context = selectActiveInstitutionContext(
+      access.snapshot,
+      institutionId
     );
 
     if (!context) {
@@ -53,23 +60,25 @@ export async function PATCH(request: Request) {
       );
     }
 
+    const authorizedInstitutionId = context.institution.id;
+
     if (context.membership?.id) {
       const { error } = await access.supabase
         .from("institution_memberships")
         .update({ last_active_at: new Date().toISOString() })
         .eq("id", context.membership.id)
         .eq("user_id", access.userId)
-        .eq("institution_id", institutionId);
+        .eq("institution_id", authorizedInstitutionId);
 
       if (error) throw new InstitutionAccessError(error.message);
     }
 
     const response = noStoreJson({
       success: true,
-      activeInstitutionId: institutionId,
+      activeInstitutionId: authorizedInstitutionId,
       context,
     });
-    response.cookies.set(ACTIVE_INSTITUTION_COOKIE, institutionId, {
+    response.cookies.set(ACTIVE_INSTITUTION_COOKIE, authorizedInstitutionId, {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",

@@ -37,13 +37,14 @@ export type MatchActorContext = {
   role: SystemRole;
   institutionId: string | null;
   institutionName: string | null;
+  canReadInstitution: boolean;
   canManageInstitution: boolean;
   isSuperAdmin: boolean;
   profile: MatchActorProfileSummary;
 };
 
 export type InstitutionMemberOption = {
-  userId: string;
+  membershipId: string;
   displayName: string;
   refCardId: string | null;
   role: string | null;
@@ -211,7 +212,8 @@ export type ManualAppointmentPayload = {
   status?: AppointmentStatus;
   observations?: string | null;
   sourceType?: "manual" | "institutional";
-  targetUserId?: string | null;
+  institutionId?: string | null;
+  membershipId?: string | null;
 };
 
 export type FixtureAppointmentPayload = {
@@ -220,7 +222,8 @@ export type FixtureAppointmentPayload = {
   status?: AppointmentStatus;
   observations?: string | null;
   sourceType?: "manual" | "institutional";
-  targetUserId?: string | null;
+  institutionId?: string | null;
+  membershipId?: string | null;
   allowSameDateOverride?: boolean;
 };
 

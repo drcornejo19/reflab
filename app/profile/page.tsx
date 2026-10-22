@@ -30,32 +30,23 @@ import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { SportRadarGraphic } from "@/components/SportRadarGraphic";
-import { useSupabase } from "@/components/SupabaseProvider";
 import { getDisciplineDefinition } from "@/lib/discipline";
 import {
-  buildSportPerformanceDataset,
-  getSportPerformanceSummary,
-  getSportRadarData,
   type RadarMetric,
+  type SportPerformanceSummary,
 } from "@/lib/performanceBySport";
 import { getSportLabel } from "@/lib/sports";
 import { useI18n } from "@/lib/useI18n";
 import {
-  type AttemptRecord,
-  type ExamResultRecord,
-  type PerformanceClipRecord,
-  type RulesExamResultRecord,
-} from "@/lib/performance";
-import { generateRefCardId, getRefCardPublicUrl } from "@/lib/refCard";
+  buildCanonicalPerformanceSummary,
+  type CanonicalPerformanceSummaryModel,
+} from "@/lib/performance/canonicalSummaryModel";
+import { getRefCardPublicUrl } from "@/lib/refCard";
 import { planLabels } from "@/lib/subscription";
 import { useUserRole } from "@/lib/useUserRole";
 
 export const dynamic = "force-dynamic";
 
-type Attempt = AttemptRecord;
-type Exam = ExamResultRecord;
-type RulesExam = RulesExamResultRecord;
-type ProfileClip = PerformanceClipRecord;
 type RefCardTopic = {
   label: string;
   shortLabel: string;
@@ -92,7 +83,6 @@ export default function ProfilePage() {
 }
 
 function ProfilePageContent() {
-  const supabase = useSupabase();
   const { user, isLoaded } = useUser();
   const { currentDiscipline: sportType } = useDiscipline();
   const { t } = useI18n();
@@ -115,10 +105,9 @@ function ProfilePageContent() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [avatarCropFile, setAvatarCropFile] = useState<File | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [rulesResults, setRulesResults] = useState<RulesExam[]>([]);
-  const [clips, setClips] = useState<ProfileClip[]>([]);
+  const [performanceData, setPerformanceData] =
+    useState<CanonicalPerformanceSummaryModel | null>(null);
+  const [weeklyTrainingUsed, setWeeklyTrainingUsed] = useState(0);
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
@@ -155,10 +144,10 @@ function ProfilePageContent() {
     setAvatarUrl(profile.avatarUrl || profile.clerkImageUrl || "");
     setFirstName(profile.firstName ?? "");
     setLastName(profile.lastName ?? "");
-    setRefCardId(profile.refCardId || (user ? generateRefCardId(user.id) : ""));
+    setRefCardId(profile.refCardId ?? "");
     setShowRealNameInRanking(Boolean(profile.showRealNameInRanking));
     setPublicProfile(profile.publicProfile !== false);
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     async function loadProfile() {
@@ -189,35 +178,34 @@ function ProfilePageContent() {
           },
         }));
 
-      const [attemptsRes, examsRes, rulesRes, clipsRes, profileApiRes] = await Promise.all([
-        supabase
-          .from("attempts")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("exam_results")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("rules_exam_results")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("clips")
-          .select("*"),
+      const [profileApiRes, performanceResponse, usageResponse] = await Promise.all([
         profileRequest,
+        fetch(
+          `/api/performance/summary?sportType=${encodeURIComponent(sportType)}`,
+          { cache: "no-store" }
+        ).catch(() => null),
+        fetch(
+          `/api/training/usage?sportType=${encodeURIComponent(sportType)}`,
+          { cache: "no-store" }
+        ).catch(() => null),
       ]);
 
-      setAttempts((attemptsRes.data ?? []) as Attempt[]);
-      setExams((examsRes.data ?? []) as Exam[]);
-      setRulesResults(rulesRes.error ? [] : ((rulesRes.data ?? []) as RulesExam[]));
-      setClips(clipsRes.error ? [] : ((clipsRes.data ?? []) as ProfileClip[]));
+      if (performanceResponse?.ok) {
+        const performancePayload = (await performanceResponse.json()) as {
+          performance?: CanonicalPerformanceSummaryModel;
+        };
+        setPerformanceData(performancePayload.performance ?? null);
+      } else {
+        setPerformanceData(null);
+      }
 
-      if (rulesRes.error) {
-        console.warn("Rules exam profile metrics unavailable:", rulesRes.error.message);
+      if (usageResponse?.ok) {
+        const usagePayload = (await usageResponse.json()) as {
+          usage?: { weeklyUsed?: number };
+        };
+        setWeeklyTrainingUsed(usagePayload.usage?.weeklyUsed ?? 0);
+      } else {
+        setWeeklyTrainingUsed(0);
       }
 
       if (profileApiRes.response?.ok && profileApiRes.data.profile) {
@@ -239,14 +227,14 @@ function ProfilePageContent() {
         setFirstName(user.firstName ?? "");
         setLastName(user.lastName ?? "");
         setAvatarUrl(user.imageUrl ?? "");
-        setRefCardId(generateRefCardId(user.id));
+        setRefCardId("");
       }
 
       setLoading(false);
     }
 
     void loadProfile();
-  }, [applyProfile, isLoaded, supabase, user]);
+  }, [applyProfile, isLoaded, sportType, user]);
 
   async function saveProfile() {
     if (!user) return;
@@ -340,75 +328,55 @@ function ProfilePageContent() {
     }
   }
 
-  const dataset = useMemo(
+  const emptyPerformance = useMemo(
     () =>
-      buildSportPerformanceDataset({
-        attempts,
-        examResults: exams,
-        rulesExamResults: rulesResults,
-        clips,
+      buildCanonicalPerformanceSummary({
+        attempts: [],
+        examResults: [],
         sportType,
+        canonicalUserId: null,
       }),
-    [attempts, exams, rulesResults, clips, sportType]
+    [sportType]
   );
-
-  const summary = useMemo(
-    () => getSportPerformanceSummary(dataset.items, dataset.sessions, sportType),
-    [dataset.items, dataset.sessions, sportType]
-  );
+  const performance =
+    performanceData?.sportType === sportType ? performanceData : emptyPerformance;
+  const summary = performance.summary;
 
   const stats = useMemo(() => {
-    const trainingScores = dataset.sessions
-      .filter((session) => session.source === "training")
-      .map((session) => session.score)
-      .filter(isFiniteNumber);
-    const examScores = dataset.sessions
-      .filter((session) => session.source !== "training")
-      .map((session) => session.score)
-      .filter(isFiniteNumber);
-
     return {
       hasData: summary.hasData,
-      hasAttempts: trainingScores.length > 0,
-      hasExams: examScores.length > 0,
-      totalAttempts: summary.totalTrainings,
+      hasAttempts: weeklyTrainingUsed > 0,
+      hasExams: summary.totalEvaluations > 0,
+      totalAttempts: weeklyTrainingUsed,
       totalExams: summary.totalEvaluations,
-      avgAttempt: averageNumbers(trainingScores),
-      avgExam: averageNumbers(examScores),
-      bestExam: examScores.length ? Math.max(...examScores) : null,
+      avgExam: summary.avgScore,
+      bestExam: summary.bestScore,
       level: summary.hasData ? `Nivel ${summary.status}` : "Sin actividad",
-      activity: summary.totalTrainings + summary.totalEvaluations,
+      activity: weeklyTrainingUsed + summary.totalEvaluations,
       state: summary.status,
       rating: summary.avgScore ?? 0,
     };
-  }, [dataset.sessions, summary]);
+  }, [summary, weeklyTrainingUsed]);
 
-  const radarAxes = useMemo(
-    () => getSportRadarData(dataset.items, sportType),
-    [dataset.items, sportType]
-  );
+  const radarAxes = performance.radarAxes;
   const refCardTopics = useMemo(() => buildRefCardTopics(radarAxes), [radarAxes]);
   const trendScores = useMemo(
     () =>
-      dataset.sessions
+      performance.evolution.series
         .map((session) => session.score)
         .filter(isFiniteNumber)
         .slice(-8),
-    [dataset.sessions]
+    [performance.evolution.series]
   );
-  const lastTestDate = useMemo(() => {
-    const testSessions = dataset.sessions
-      .filter((session) => session.source !== "training" && session.date)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    return testSessions[0]?.date ?? exams[0]?.created_at ?? rulesResults[0]?.created_at ?? null;
-  }, [dataset.sessions, exams, rulesResults]);
+  const lastTestDate =
+    performance.evolution.series.at(-1)?.date ??
+    performance.examResults[0]?.submitted_at ??
+    performance.examResults[0]?.created_at ??
+    null;
   const refCardBadge = getRefCardBadge(summary, refereeType);
   const disciplineLabel = getSportLabel(sportType);
   const trendLabel = getTrendLabel(trendScores);
-  const effectiveRefCardId = useMemo(
-    () => (user ? refCardId || generateRefCardId(user.id) : ""),
-    [refCardId, user]
-  );
+  const effectiveRefCardId = refCardId;
   const refCardUrl = useMemo(
     () => (effectiveRefCardId ? getRefCardPublicUrl(effectiveRefCardId) : ""),
     [effectiveRefCardId]
@@ -580,7 +548,7 @@ function ProfilePageContent() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricCard icon={<Star />} title="Promedio training" value={stats.hasAttempts ? `${stats.avgAttempt}/100` : "-"} detail={stats.hasAttempts ? "Practicas individuales" : "Sin intentos"} />
+            <MetricCard icon={<Star />} title="Entrenamiento semanal" value={stats.hasAttempts ? String(stats.totalAttempts) : "-"} detail={stats.hasAttempts ? "Practicas separadas del rendimiento" : "Sin practicas esta semana"} />
             <MetricCard icon={<Trophy />} title="Promedio examen" value={stats.hasExams ? `${stats.avgExam}/100` : "-"} detail={stats.hasExams ? "Evaluaciones formales" : "Sin examenes"} />
             <MetricCard icon={<ClipboardList />} title="Actividad" value={stats.hasData ? stats.activity.toString() : "-"} detail={stats.hasData ? "Total registrado" : "Sin actividad"} />
             <MetricCard icon={<BadgeCheck />} title="Estado" value={stats.hasData ? stats.state : "-"} detail={stats.hasData ? "Lectura general" : "Sin evaluacion"} />
@@ -1306,11 +1274,6 @@ function isFiniteNumber(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function averageNumbers(values: number[]) {
-  if (values.length === 0) return null;
-  return Math.round(values.reduce((acc, value) => acc + value, 0) / values.length);
-}
-
 function buildRefCardTopics(radarAxes: RadarMetric[]): RefCardTopic[] {
   return radarAxes.map((axis) => ({
     label: axis.label,
@@ -1321,7 +1284,7 @@ function buildRefCardTopics(radarAxes: RadarMetric[]): RefCardTopic[] {
 }
 
 function getRefCardBadge(
-  summary: ReturnType<typeof getSportPerformanceSummary>,
+  summary: SportPerformanceSummary,
   refereeType: string
 ) {
   if (!summary.hasData) return refereeType || "Amateur";

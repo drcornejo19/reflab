@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireSuperAdminAccess } from "@/lib/adminAuthorization";
+import {
+  requireSuperAdminAccess,
+  requireSuperAdminReadAccess,
+} from "@/lib/adminAuthorization";
 import {
   buildPsychologyInterfaceData,
   normalizePsychologyModuleSlug,
@@ -18,7 +21,7 @@ type UpdateCategoryBody = {
 };
 
 export async function GET() {
-  const access = await requireSuperAdminAccess();
+  const access = await requireSuperAdminReadAccess();
   if (access.response) return access.response;
 
   const [checkinsRes, wellbeingRes, exercisesRes] = await Promise.all([
@@ -84,7 +87,7 @@ export async function PATCH(request: Request) {
       ? normalizePsychologyModuleSlug(body.moduleSlug.trim())
       : null;
 
-  if (!source || !recordId) {
+  if (!source || !recordId || !moduleSlug) {
     return NextResponse.json({ error: "Faltan datos para actualizar la categoria." }, { status: 400 });
   }
 
@@ -97,7 +100,7 @@ export async function PATCH(request: Request) {
 
   const { error } = await access.supabase
     .from(table)
-    .update({ module_slug: moduleSlug ?? "sin-clasificar" })
+    .update({ module_slug: moduleSlug })
     .eq("id", recordId);
 
   if (error) {

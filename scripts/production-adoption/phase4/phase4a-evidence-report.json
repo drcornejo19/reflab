@@ -1,0 +1,1131 @@
+{
+  "format": "production_structural_evidence_v2_plan",
+  "sourceFingerprintHash": "07a8f7875ecf326af3a68dfe997d0711cdb0808e9f117e4059f059f12e2e2a9d",
+  "triggerContractRepair": [
+    {
+      "table": "public.performance_sessions",
+      "classification": "duplicate_manifest_bug",
+      "appointmentTrigger": "performance_sessions_validate_appointment_context",
+      "appointmentFunction": "reflab_private.validate_user_appointment_context()",
+      "checkinTrigger": "performance_sessions_validate_checkin_owner",
+      "checkinFunction": "reflab_private.validate_performance_checkin_owner()",
+      "evidence": "The canonical SQL creates two independent triggers over appointment_id and checkin_id; the manifest generator reused the first suffix."
+    },
+    {
+      "table": "public.readiness_scores",
+      "classification": "duplicate_manifest_bug",
+      "appointmentTrigger": "readiness_scores_validate_appointment_context",
+      "appointmentFunction": "reflab_private.validate_user_appointment_context()",
+      "checkinTrigger": "readiness_scores_validate_checkin_owner",
+      "checkinFunction": "reflab_private.validate_performance_checkin_owner()",
+      "evidence": "The canonical SQL creates two independent triggers over appointment_id and checkin_id; the manifest generator reused the first suffix."
+    },
+    {
+      "table": "public.wellness_logs",
+      "classification": "duplicate_manifest_bug",
+      "appointmentTrigger": "wellness_logs_validate_appointment_context",
+      "appointmentFunction": "reflab_private.validate_user_appointment_context()",
+      "checkinTrigger": "wellness_logs_validate_checkin_owner",
+      "checkinFunction": "reflab_private.validate_performance_checkin_owner()",
+      "evidence": "The canonical SQL creates two independent triggers over appointment_id and checkin_id; the manifest generator reused the first suffix."
+    }
+  ],
+  "functions": {
+    "missing": [
+      "public.accept_canonical_institution_invitation(text, uuid, text[])",
+      "public.submit_referee_exam(text, uuid, uuid, text, jsonb)",
+      "reflab_private.can_access_user_data(text, uuid, text)",
+      "reflab_private.has_active_institution_membership(uuid)",
+      "reflab_private.has_institution_permission(uuid, text)",
+      "reflab_private.protect_referee_exam_session()",
+      "reflab_private.set_updated_at()",
+      "reflab_private.validate_assessment_session_assignment()",
+      "reflab_private.validate_attempt_exam_context()",
+      "reflab_private.validate_exam_result_context()",
+      "reflab_private.validate_institution_data_consent()",
+      "reflab_private.validate_institution_role_scope()",
+      "reflab_private.validate_institution_user_target()",
+      "reflab_private.validate_owned_appointment()",
+      "reflab_private.validate_performance_checkin_owner()",
+      "reflab_private.validate_referee_exam_manifest()",
+      "reflab_private.validate_referee_exam_session_context()",
+      "reflab_private.validate_user_appointment_context()"
+    ],
+    "drift": [
+      "public.consume_coach_rate_limit(text, text, integer, integer)"
+    ],
+    "classification": [
+      {
+        "signature": "reflab_private.can_access_user_data(text, uuid, text)",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.has_active_institution_membership(uuid)",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.has_institution_permission(uuid, text)",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.protect_referee_exam_session()",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.set_updated_at()",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.validate_assessment_session_assignment()",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.validate_attempt_exam_context()",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.validate_exam_result_context()",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.validate_institution_data_consent()",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.validate_institution_role_scope()",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.validate_institution_user_target()",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.validate_owned_appointment()",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.validate_performance_checkin_owner()",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.validate_referee_exam_manifest()",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.validate_referee_exam_session_context()",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "reflab_private.validate_user_appointment_context()",
+        "provider": "202607270000 baseline target; a future Phase 4B incremental provider is required",
+        "classification": "SAFE_INSTALL_PHASE4B",
+        "activation": "inert_until_trigger_or_policy_references_it"
+      },
+      {
+        "signature": "public.submit_referee_exam(text, uuid, uuid, text, jsonb)",
+        "provider": "future_production_adoption_incremental",
+        "classification": "CUTOVER_ONLY",
+        "activation": "runtime_rpc"
+      },
+      {
+        "signature": "public.accept_canonical_institution_invitation(text, uuid, text[])",
+        "provider": "202608210001",
+        "classification": "CUTOVER_ONLY",
+        "activation": "runtime_rpc"
+      },
+      {
+        "signature": "public.consume_coach_rate_limit(text, text, integer, integer)",
+        "provider": "202608200001",
+        "classification": "CUTOVER_ONLY",
+        "activation": "replace_historical_function_after_caller_and_write_contract_validation"
+      }
+    ]
+  },
+  "triggers": {
+    "canonicalExact": 1,
+    "historicalPairs": [
+      {
+        "canonical": "public.appointments.appointments_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.appointments.set_appointments_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.associations.associations_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.associations.set_associations_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.coach_data_consents.coach_data_consents_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.coach_data_consents.coach_data_consents_set_updated_at",
+        "historicalFunction": "public.set_coach_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.competition_categories.competition_categories_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.competition_categories.set_competition_categories_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.competition_seasons.competition_seasons_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.competition_seasons.set_competition_seasons_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.competitions.competitions_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.competitions.set_competitions_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.countries.countries_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.countries.set_countries_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.fixture_sync_logs.fixture_sync_logs_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.fixture_sync_logs.set_fixture_sync_logs_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.fixtures.fixtures_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.fixtures.set_fixtures_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.ifab_library_documents.ifab_library_documents_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.ifab_library_documents.set_ifab_library_documents_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institution_assessment_assignments.institution_assessment_assignments_validate_user",
+        "canonicalFunction": "reflab_private.validate_institution_user_target()",
+        "historical": "public.institution_assessment_assignments.validate_institution_assessment_assignments_tenant_links",
+        "historicalFunction": "public.validate_institution_tenant_links()",
+        "classification": "semantic_drift",
+        "decision": "LEGACY_REQUIRED_TEMPORARILY"
+      },
+      {
+        "canonical": "public.institution_assessment_sessions.institution_assessment_sessions_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institution_assessment_sessions.set_institution_assessment_sessions_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institution_assessments.institution_assessments_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institution_assessments.set_institution_assessments_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institution_cohorts.institution_cohorts_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institution_cohorts.set_institution_cohorts_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institution_content_assignments.institution_content_assignments_validate_user",
+        "canonicalFunction": "reflab_private.validate_institution_user_target()",
+        "historical": "public.institution_content_assignments.validate_institution_content_assignments_tenant_links",
+        "historicalFunction": "public.validate_institution_tenant_links()",
+        "classification": "semantic_drift",
+        "decision": "LEGACY_REQUIRED_TEMPORARILY"
+      },
+      {
+        "canonical": "public.institution_contents.institution_contents_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institution_contents.set_institution_contents_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institution_data_consents.institution_data_consents_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institution_data_consents.set_institution_data_consents_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institution_data_consents.institution_data_consents_validate_membership",
+        "canonicalFunction": "reflab_private.validate_institution_data_consent()",
+        "historical": "public.institution_data_consents.validate_institution_data_consents_tenant_links",
+        "historicalFunction": "public.validate_institution_tenant_links()",
+        "classification": "semantic_drift",
+        "decision": "LEGACY_REQUIRED_TEMPORARILY"
+      },
+      {
+        "canonical": "public.institution_group_memberships.institution_group_memberships_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institution_group_memberships.set_institution_group_memberships_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institution_groups.institution_groups_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institution_groups.set_institution_groups_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institution_members.institution_members_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institution_members.set_institution_members_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institution_membership_permission_overrides.institution_membership_permission_overrides_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institution_membership_permission_overrides.set_institution_membership_permission_overrides_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institution_membership_roles.institution_membership_roles_validate_scope",
+        "canonicalFunction": "reflab_private.validate_institution_role_scope()",
+        "historical": "public.institution_membership_roles.validate_institution_membership_roles_tenant_links",
+        "historicalFunction": "public.validate_institution_tenant_links()",
+        "classification": "semantic_drift",
+        "decision": "LEGACY_REQUIRED_TEMPORARILY"
+      },
+      {
+        "canonical": "public.institution_memberships.institution_memberships_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institution_memberships.set_institution_memberships_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institution_notification_campaigns.institution_notification_campaigns_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institution_notification_campaigns.set_institution_notification_campaigns_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institution_notification_recipients.institution_notification_recipients_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institution_notification_recipients.set_institution_notification_recipients_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institution_notification_recipients.institution_notification_recipients_validate_user",
+        "canonicalFunction": "reflab_private.validate_institution_user_target()",
+        "historical": "public.institution_notification_recipients.validate_institution_notification_recipients_tenant_links",
+        "historicalFunction": "public.validate_institution_tenant_links()",
+        "classification": "semantic_drift",
+        "decision": "LEGACY_REQUIRED_TEMPORARILY"
+      },
+      {
+        "canonical": "public.institution_permissions.institution_permissions_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institution_permissions.set_institution_permissions_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institution_role_permissions.institution_role_permissions_validate_scope",
+        "canonicalFunction": "reflab_private.validate_institution_role_scope()",
+        "historical": "public.institution_role_permissions.validate_institution_role_permissions_tenant_links",
+        "historicalFunction": "public.validate_institution_tenant_links()",
+        "classification": "semantic_drift",
+        "decision": "LEGACY_REQUIRED_TEMPORARILY"
+      },
+      {
+        "canonical": "public.institution_roles.institution_roles_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institution_roles.set_institution_roles_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institutional_clips.institutional_clips_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institutional_clips.set_institutional_clips_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institutional_leads.institutional_leads_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institutional_leads.set_institutional_leads_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.institutions.institutions_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.institutions.set_institutions_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.match_context_snapshots.match_context_snapshots_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.match_context_snapshots.set_match_context_snapshots_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.match_officials.match_officials_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.match_officials.set_match_officials_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.match_preparations.match_preparations_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.match_preparations.set_match_preparations_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.performance_checkins.performance_checkins_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.performance_checkins.set_performance_checkins_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.performance_sessions.performance_sessions_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.performance_sessions.set_performance_sessions_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.physical_tests.physical_tests_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.physical_tests.set_physical_tests_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.post_match_reviews.post_match_reviews_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.post_match_reviews.set_post_match_reviews_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.psychology_checkins.psychology_checkins_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.psychology_checkins.set_psychology_checkins_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.psychology_exercise_sessions.psychology_exercise_sessions_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.psychology_exercise_sessions.set_psychology_exercise_sessions_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.psychology_wellbeing_assessments.psychology_wellbeing_assessments_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.psychology_wellbeing_assessments.set_psychology_wellbeing_assessments_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.referee_eligibility.referee_eligibility_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.referee_eligibility.set_referee_eligibility_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.referee_roles.referee_roles_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.referee_roles.set_referee_roles_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.teams.teams_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.teams.set_teams_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.user_profiles.user_profiles_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.user_profiles.set_user_profiles_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.user_roles.user_roles_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.user_roles.set_user_roles_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.venues.venues_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.venues.set_venues_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      },
+      {
+        "canonical": "public.wellness_logs.wellness_logs_set_updated_at",
+        "canonicalFunction": "reflab_private.set_updated_at()",
+        "historical": "public.wellness_logs.set_wellness_logs_updated_at",
+        "historicalFunction": "public.set_updated_at()",
+        "classification": "equivalent_different_name",
+        "decision": "SAFE_RENAME_OR_REUSE"
+      }
+    ],
+    "missingWithoutHistoricalSameEvent": [
+      "public.access_plans.access_plans_set_updated_at",
+      "public.attempts.attempts_validate_exam_context",
+      "public.capabilities.capabilities_set_updated_at",
+      "public.capability_overrides.capability_overrides_set_updated_at",
+      "public.clips.clips_set_updated_at",
+      "public.coach_rate_limit_buckets.coach_rate_limit_buckets_set_updated_at",
+      "public.exam_results.exam_results_validate_context",
+      "public.institution_assessment_sessions.institution_assessment_sessions_validate_assignment",
+      "public.institution_subscriptions.institution_subscriptions_set_updated_at",
+      "public.match_preparations.match_preparations_validate_appointment",
+      "public.notification_events.notification_events_set_updated_at",
+      "public.notification_events.notification_events_validate_appointment_context",
+      "public.notification_preferences.notification_preferences_set_updated_at",
+      "public.notification_tokens.notification_tokens_set_updated_at",
+      "public.performance_checkins.performance_checkins_validate_appointment_context",
+      "public.performance_sessions.performance_sessions_validate_appointment_context",
+      "public.performance_sessions.performance_sessions_validate_checkin_owner",
+      "public.platform_roles.platform_roles_set_updated_at",
+      "public.post_match_reviews.post_match_reviews_validate_appointment",
+      "public.psychology_checkins.psychology_checkins_validate_appointment_context",
+      "public.psychology_exercise_sessions.psychology_exercise_sessions_validate_appointment_context",
+      "public.psychology_modules.psychology_modules_set_updated_at",
+      "public.readiness_scores.readiness_scores_validate_appointment_context",
+      "public.readiness_scores.readiness_scores_validate_checkin_owner",
+      "public.referee_exam_sessions.referee_exam_sessions_protect_immutable",
+      "public.referee_exam_sessions.referee_exam_sessions_validate_context",
+      "public.referee_exam_sessions.referee_exam_sessions_validate_manifest",
+      "public.user_global_roles.user_global_roles_set_updated_at",
+      "public.user_subscriptions.user_subscriptions_set_updated_at",
+      "public.wellness_logs.wellness_logs_validate_appointment_context",
+      "public.wellness_logs.wellness_logs_validate_checkin_owner"
+    ]
+  },
+  "indexes": {
+    "missingNames": [
+      "attempts_exam_result_idx",
+      "attempts_sport_topic_created_idx",
+      "capability_overrides_unique_scope",
+      "capability_overrides_user_validity_idx",
+      "clips_mode_created_idx",
+      "clips_sport_topic_idx",
+      "competition_categories_provider_external_unique",
+      "competition_seasons_provider_external_unique",
+      "competitions_provider_external_unique",
+      "fixture_sync_logs_provider_created_idx",
+      "institution_assessment_assignments_group_idx",
+      "institution_assessment_assignments_user_idx",
+      "institution_assessment_feedback_session_idx",
+      "institution_assessment_history_assessment_idx",
+      "institution_assessment_items_assessment_idx",
+      "institution_assessments_tenant_status_idx",
+      "institution_cohorts_tenant_status_idx",
+      "institution_content_assignments_group_idx",
+      "institution_content_assignments_user_idx",
+      "institution_contents_tenant_status_idx",
+      "institution_data_consents_user_idx",
+      "institution_groups_tenant_status_idx",
+      "institution_members_legacy_user_idx",
+      "institution_permission_overrides_tenant_idx",
+      "institution_memberships_tenant_status_idx",
+      "institution_notification_campaigns_status_idx",
+      "institution_subscriptions_plan_status_idx",
+      "institutional_clips_institution_status_idx",
+      "institutional_clips_sport_topic_idx",
+      "notification_events_user_status_idx",
+      "notification_tokens_user_enabled_idx",
+      "psychology_checkins_user_module_created_idx",
+      "psychology_exercises_user_module_created_idx",
+      "psychology_wellbeing_user_module_created_idx",
+      "user_global_roles_role_idx",
+      "user_roles_institution_idx",
+      "user_subscriptions_plan_status_idx"
+    ],
+    "trulyMissing": [
+      {
+        "name": "attempts_exam_result_idx",
+        "table": "public.attempts",
+        "unique": false
+      },
+      {
+        "name": "attempts_sport_topic_created_idx",
+        "table": "public.attempts",
+        "unique": false
+      },
+      {
+        "name": "capability_overrides_unique_scope",
+        "table": "public.capability_overrides",
+        "unique": true
+      },
+      {
+        "name": "capability_overrides_user_validity_idx",
+        "table": "public.capability_overrides",
+        "unique": false
+      },
+      {
+        "name": "clips_mode_created_idx",
+        "table": "public.clips",
+        "unique": false
+      },
+      {
+        "name": "competition_categories_provider_external_unique",
+        "table": "public.competition_categories",
+        "unique": true
+      },
+      {
+        "name": "competition_seasons_provider_external_unique",
+        "table": "public.competition_seasons",
+        "unique": true
+      },
+      {
+        "name": "competitions_provider_external_unique",
+        "table": "public.competitions",
+        "unique": true
+      },
+      {
+        "name": "fixture_sync_logs_provider_created_idx",
+        "table": "public.fixture_sync_logs",
+        "unique": false
+      },
+      {
+        "name": "institution_assessment_assignments_group_idx",
+        "table": "public.institution_assessment_assignments",
+        "unique": false
+      },
+      {
+        "name": "institution_assessment_assignments_user_idx",
+        "table": "public.institution_assessment_assignments",
+        "unique": false
+      },
+      {
+        "name": "institution_assessment_feedback_session_idx",
+        "table": "public.institution_assessment_feedback",
+        "unique": false
+      },
+      {
+        "name": "institution_assessment_history_assessment_idx",
+        "table": "public.institution_assessment_history",
+        "unique": false
+      },
+      {
+        "name": "institution_assessment_items_assessment_idx",
+        "table": "public.institution_assessment_items",
+        "unique": false
+      },
+      {
+        "name": "institution_assessments_tenant_status_idx",
+        "table": "public.institution_assessments",
+        "unique": false
+      },
+      {
+        "name": "institution_cohorts_tenant_status_idx",
+        "table": "public.institution_cohorts",
+        "unique": false
+      },
+      {
+        "name": "institution_content_assignments_group_idx",
+        "table": "public.institution_content_assignments",
+        "unique": false
+      },
+      {
+        "name": "institution_content_assignments_user_idx",
+        "table": "public.institution_content_assignments",
+        "unique": false
+      },
+      {
+        "name": "institution_contents_tenant_status_idx",
+        "table": "public.institution_contents",
+        "unique": false
+      },
+      {
+        "name": "institution_data_consents_user_idx",
+        "table": "public.institution_data_consents",
+        "unique": false
+      },
+      {
+        "name": "institution_groups_tenant_status_idx",
+        "table": "public.institution_groups",
+        "unique": false
+      },
+      {
+        "name": "institution_members_legacy_user_idx",
+        "table": "public.institution_members",
+        "unique": false
+      },
+      {
+        "name": "institution_permission_overrides_tenant_idx",
+        "table": "public.institution_membership_permission_overrides",
+        "unique": false
+      },
+      {
+        "name": "institution_memberships_tenant_status_idx",
+        "table": "public.institution_memberships",
+        "unique": false
+      },
+      {
+        "name": "institution_notification_campaigns_status_idx",
+        "table": "public.institution_notification_campaigns",
+        "unique": false
+      },
+      {
+        "name": "institution_subscriptions_plan_status_idx",
+        "table": "public.institution_subscriptions",
+        "unique": false
+      },
+      {
+        "name": "institutional_clips_institution_status_idx",
+        "table": "public.institutional_clips",
+        "unique": false
+      },
+      {
+        "name": "institutional_clips_sport_topic_idx",
+        "table": "public.institutional_clips",
+        "unique": false
+      },
+      {
+        "name": "notification_events_user_status_idx",
+        "table": "public.notification_events",
+        "unique": false
+      },
+      {
+        "name": "notification_tokens_user_enabled_idx",
+        "table": "public.notification_tokens",
+        "unique": false
+      },
+      {
+        "name": "psychology_checkins_user_module_created_idx",
+        "table": "public.psychology_checkins",
+        "unique": false
+      },
+      {
+        "name": "psychology_exercises_user_module_created_idx",
+        "table": "public.psychology_exercise_sessions",
+        "unique": false
+      },
+      {
+        "name": "psychology_wellbeing_user_module_created_idx",
+        "table": "public.psychology_wellbeing_assessments",
+        "unique": false
+      },
+      {
+        "name": "user_global_roles_role_idx",
+        "table": "public.user_global_roles",
+        "unique": false
+      },
+      {
+        "name": "user_roles_institution_idx",
+        "table": "public.user_roles",
+        "unique": false
+      },
+      {
+        "name": "user_subscriptions_plan_status_idx",
+        "table": "public.user_subscriptions",
+        "unique": false
+      }
+    ],
+    "semanticDrifts": [
+      {
+        "table": "public.coach_data_consents",
+        "name": "coach_data_consents_user_idx",
+        "canonical": "(user_id, data_category, purpose)",
+        "observed": "(user_id, purpose, data_category)",
+        "classification": "wrong_order",
+        "evidenceRequiredBeforeWrite": true
+      },
+      {
+        "table": "public.coach_runs",
+        "name": "coach_runs_institution_created_idx",
+        "canonical": "(institution_id, created_at desc)",
+        "observed": "(institution_id, created_at desc) where institution_id is not null",
+        "classification": "subset_index",
+        "evidenceRequiredBeforeWrite": true
+      },
+      {
+        "table": "public.competitions",
+        "name": "competitions_association_sport_idx",
+        "canonical": "(association_id, sport_type, is_active)",
+        "observed": "(association_id, sport_type)",
+        "classification": "subset_index",
+        "evidenceRequiredBeforeWrite": true
+      },
+      {
+        "table": "public.fixtures",
+        "name": "fixtures_provider_external_unique",
+        "canonical": "(provider, external_id) where provider is not null and external_id is not null",
+        "observed": "(provider, external_id) where external_id is not null",
+        "classification": "wrong_predicate",
+        "evidenceRequiredBeforeWrite": true
+      },
+      {
+        "table": "public.institution_assessment_sessions",
+        "name": "institution_assessment_sessions_tenant_group_idx",
+        "canonical": "(institution_id, group_id, status)",
+        "observed": "(institution_id, group_id, created_at desc)",
+        "classification": "truly_incompatible",
+        "evidenceRequiredBeforeWrite": true
+      },
+      {
+        "table": "public.institution_demo_sessions",
+        "name": "institution_demo_sessions_user_status_idx",
+        "canonical": "(user_id, status, expires_at)",
+        "observed": "(user_id, status, expires_at desc)",
+        "classification": "wrong_order",
+        "evidenceRequiredBeforeWrite": true
+      },
+      {
+        "table": "public.institution_group_memberships",
+        "name": "institution_group_memberships_member_idx",
+        "canonical": "(membership_id, status)",
+        "observed": "(membership_id, status, group_id)",
+        "classification": "superset_index",
+        "evidenceRequiredBeforeWrite": true
+      },
+      {
+        "table": "public.institution_notification_recipients",
+        "name": "institution_notification_recipients_user_idx",
+        "canonical": "(user_id, delivery_status)",
+        "observed": "(user_id, delivery_status, created_at desc)",
+        "classification": "superset_index",
+        "evidenceRequiredBeforeWrite": true
+      },
+      {
+        "table": "public.performance_checkins",
+        "name": "performance_checkins_user_date_type_idx",
+        "canonical": "(user_id, date, checkin_type)",
+        "observed": "(user_id, date desc, checkin_type)",
+        "classification": "wrong_order",
+        "evidenceRequiredBeforeWrite": true
+      },
+      {
+        "table": "public.teams",
+        "name": "teams_provider_external_unique",
+        "canonical": "(provider, external_id) where provider is not null and external_id is not null",
+        "observed": "(provider, external_id) where external_id is not null",
+        "classification": "wrong_predicate",
+        "evidenceRequiredBeforeWrite": true
+      },
+      {
+        "table": "public.venues",
+        "name": "venues_provider_external_unique",
+        "canonical": "(provider, external_id) where provider is not null and external_id is not null",
+        "observed": "(provider, external_id) where external_id is not null",
+        "classification": "wrong_predicate",
+        "evidenceRequiredBeforeWrite": true
+      }
+    ],
+    "renamedEquivalent": [
+      {
+        "table": "public.clips",
+        "canonicalName": "clips_sport_topic_idx",
+        "observedName": "clips_sport_topic_active_idx",
+        "keys": [
+          "sport_type",
+          "topic",
+          "is_active"
+        ],
+        "classification": "SAFE_RENAME_OR_REUSE"
+      }
+    ]
+  },
+  "uniques": [
+    {
+      "table": "public.exam_results",
+      "name": "exam_results_user_submission_unique",
+      "columns": [
+        "user_id",
+        "submission_id"
+      ],
+      "equivalentIndex": "exam_results_user_submission_unique",
+      "evidence": "partial_equivalent",
+      "classification": "REQUIRES_DATA_VALIDATION",
+      "duplicateCount": null,
+      "maxDuplicateGroupSize": null
+    },
+    {
+      "table": "public.institution_assessment_assignments",
+      "name": "institution_assessment_assignments_id_tenant_assessment_unique",
+      "columns": [
+        "id",
+        "institution_id",
+        "assessment_id"
+      ],
+      "equivalentIndex": null,
+      "evidence": "requires_data_validation",
+      "classification": "REQUIRES_DATA_VALIDATION",
+      "duplicateCount": null,
+      "maxDuplicateGroupSize": null
+    },
+    {
+      "table": "public.institution_assessment_sessions",
+      "name": "institution_assessment_sessions_id_tenant_unique",
+      "columns": [
+        "id",
+        "institution_id"
+      ],
+      "equivalentIndex": null,
+      "evidence": "requires_data_validation",
+      "classification": "REQUIRES_DATA_VALIDATION",
+      "duplicateCount": null,
+      "maxDuplicateGroupSize": null
+    },
+    {
+      "table": "public.institution_assessments",
+      "name": "institution_assessments_id_tenant_unique",
+      "columns": [
+        "id",
+        "institution_id"
+      ],
+      "equivalentIndex": null,
+      "evidence": "requires_data_validation",
+      "classification": "REQUIRES_DATA_VALIDATION",
+      "duplicateCount": null,
+      "maxDuplicateGroupSize": null
+    },
+    {
+      "table": "public.institution_cohorts",
+      "name": "institution_cohorts_id_tenant_unique",
+      "columns": [
+        "id",
+        "institution_id"
+      ],
+      "equivalentIndex": null,
+      "evidence": "requires_data_validation",
+      "classification": "REQUIRES_DATA_VALIDATION",
+      "duplicateCount": null,
+      "maxDuplicateGroupSize": null
+    },
+    {
+      "table": "public.institution_contents",
+      "name": "institution_contents_id_tenant_unique",
+      "columns": [
+        "id",
+        "institution_id"
+      ],
+      "equivalentIndex": null,
+      "evidence": "requires_data_validation",
+      "classification": "REQUIRES_DATA_VALIDATION",
+      "duplicateCount": null,
+      "maxDuplicateGroupSize": null
+    },
+    {
+      "table": "public.institution_groups",
+      "name": "institution_groups_id_tenant_unique",
+      "columns": [
+        "id",
+        "institution_id"
+      ],
+      "equivalentIndex": null,
+      "evidence": "requires_data_validation",
+      "classification": "REQUIRES_DATA_VALIDATION",
+      "duplicateCount": null,
+      "maxDuplicateGroupSize": null
+    },
+    {
+      "table": "public.institution_memberships",
+      "name": "institution_memberships_id_tenant_unique",
+      "columns": [
+        "id",
+        "institution_id"
+      ],
+      "equivalentIndex": null,
+      "evidence": "requires_data_validation",
+      "classification": "REQUIRES_DATA_VALIDATION",
+      "duplicateCount": null,
+      "maxDuplicateGroupSize": null
+    },
+    {
+      "table": "public.institution_notification_campaigns",
+      "name": "institution_notification_campaigns_id_tenant_unique",
+      "columns": [
+        "id",
+        "institution_id"
+      ],
+      "equivalentIndex": null,
+      "evidence": "requires_data_validation",
+      "classification": "REQUIRES_DATA_VALIDATION",
+      "duplicateCount": null,
+      "maxDuplicateGroupSize": null
+    },
+    {
+      "table": "public.institution_roles",
+      "name": "institution_roles_id_tenant_unique",
+      "columns": [
+        "id",
+        "institution_id"
+      ],
+      "equivalentIndex": null,
+      "evidence": "requires_data_validation",
+      "classification": "REQUIRES_DATA_VALIDATION",
+      "duplicateCount": null,
+      "maxDuplicateGroupSize": null
+    },
+    {
+      "table": "public.institution_subscriptions",
+      "name": null,
+      "columns": [
+        "institution_id"
+      ],
+      "equivalentIndex": null,
+      "evidence": "requires_data_validation",
+      "classification": "REQUIRES_DATA_VALIDATION",
+      "duplicateCount": null,
+      "maxDuplicateGroupSize": null
+    },
+    {
+      "table": "public.user_profiles",
+      "name": null,
+      "columns": [
+        "ref_card_id"
+      ],
+      "equivalentIndex": "user_profiles_ref_card_id_unique",
+      "evidence": "partial_equivalent",
+      "classification": "REQUIRES_DATA_VALIDATION",
+      "duplicateCount": null,
+      "maxDuplicateGroupSize": null
+    },
+    {
+      "table": "public.user_subscriptions",
+      "name": null,
+      "columns": [
+        "user_id"
+      ],
+      "equivalentIndex": null,
+      "evidence": "requires_data_validation",
+      "classification": "REQUIRES_DATA_VALIDATION",
+      "duplicateCount": null,
+      "maxDuplicateGroupSize": null
+    }
+  ],
+  "constraints": {
+    "checks": {
+      "canonicalTotal": 297,
+      "cutoverOnly": [
+        "public.attempts.attempts_exam_source_check"
+      ],
+      "exact": 0,
+      "missing": 0,
+      "drift": 0,
+      "unknownRequiresV2": 296
+    },
+    "foreignKeys": {
+      "canonicalTotal": 61,
+      "exact": 0,
+      "missing": 0,
+      "drift": 0,
+      "unknownRequiresV2": 61
+    }
+  },
+  "blockers": {
+    "v2ProductionFingerprintRequired": true,
+    "privilegedDuplicateAggregatesRequired": true,
+    "legacyWriteValidationRequired": true
+  }
+}

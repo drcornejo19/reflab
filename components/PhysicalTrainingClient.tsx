@@ -21,9 +21,10 @@ import {
   VolumeX,
   Zap,
 } from "lucide-react";
-import { insertAttemptSafely } from "@/lib/attemptPersistence";
-import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
-import { useSupabase } from "@/components/SupabaseProvider";
+import {
+  createTrainingSubmissionId,
+  submitTrainingAttempt,
+} from "@/lib/training/attemptClient";
 
 type IconType = ComponentType<{ size?: number; className?: string }>;
 type Phase = "idle" | "preparation" | "work" | "rest" | "finished";
@@ -88,7 +89,6 @@ const countdownGain = 2.6;
 const beepGain = 0.72;
 
 export function PhysicalTrainingClient() {
-  const supabase = useSupabase();
   const { user } = useUser();
   const [preparation, setPreparation] = useState(defaultConfig.preparation);
   const [work, setWork] = useState(defaultConfig.work);
@@ -186,58 +186,27 @@ export function PhysicalTrainingClient() {
       return;
     }
 
-    const totalDuration = safePreparation + safeSets * safeWork + Math.max(0, safeSets - 1) * safeRest;
-    const preset = tabataPresets.find((item) => item.key === selectedPreset);
-    const workoutName = `Tabata arbitral - ${preset?.title ?? "Personalizado"}`;
-    const primaryPayload = {
-      user_id: user.id,
-      sport_type: DEFAULT_SPORT_TYPE,
-      activity_type: "physical_training",
-      module: "referee_preparation",
-      mode: "physical_training",
-      clip_title: workoutName,
-      workout_name: workoutName,
-      topic: "Preparacion fisica",
-      season: "2026/27",
-      source_version: "RefLab football_11 physical training",
-      score: null,
-      total_duration: totalDuration,
-      time_spent_seconds: totalDuration,
-      completed_rounds: safeSets,
-      total_rounds: safeSets,
-      completed: true,
-      feedback: `Rutina completada: ${workoutName} (${safeSets} sets)`,
-      created_at: new Date().toISOString(),
-    };
-
-    const fallbackPayload = {
-      user_id: user.id,
-      sport_type: DEFAULT_SPORT_TYPE,
-      activity_type: "physical_training",
-      clip_title: workoutName,
-      foul: null,
-      restart: null,
-      discipline: null,
-      var_review: null,
-      score: null,
-      topic: "Preparacion fisica",
-      season: "2026/27",
-      source_version: "RefLab football_11 physical training",
-      difficulty: "physical_training",
-      technical_correct: null,
-      restart_correct: null,
-      discipline_correct: null,
-      disciplinary_correct: null,
-      var_correct: null,
-    };
-
-    const result = await insertAttemptSafely(supabase, primaryPayload, fallbackPayload);
-    setSessionMessage(
-      result.saved
-        ? "Tabata registrado para futuras metricas de Preparacion Integral."
-        : "Rutina completada. Registro de sesiones en construccion hasta habilitar campos fisicos en Supabase."
-    );
-  }, [currentSet, playSoundOnce, safePreparation, safeRest, safeSets, safeWork, selectedPreset, soundEnabled, supabase, user]);
+    try {
+      await submitTrainingAttempt({
+        kind: "physical",
+        submissionId: createTrainingSubmissionId(),
+        preset: selectedPreset,
+        preparation: safePreparation,
+        work: safeWork,
+        rest: safeRest,
+        sets: safeSets,
+      });
+      setSessionMessage(
+        "Tabata registrado para futuras metricas de Preparacion Integral."
+      );
+    } catch (error) {
+      setSessionMessage(
+        error instanceof Error
+          ? error.message
+          : "Rutina completada. No se pudo guardar la sesion."
+      );
+    }
+  }, [currentSet, playSoundOnce, safePreparation, safeRest, safeSets, safeWork, selectedPreset, soundEnabled, user]);
 
   const advancePhase = useCallback(() => {
     if (phase === "preparation") {

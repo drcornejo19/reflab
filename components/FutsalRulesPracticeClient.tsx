@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { insertAttemptSafely } from "@/lib/attemptPersistence";
 import { futsalRulesPracticeQuestions } from "@/lib/futsalRulesQuestions";
-import { resolveRefCardId } from "@/lib/refCard";
-import { useSupabase } from "@/components/SupabaseProvider";
+import {
+  createTrainingSubmissionId,
+  submitTrainingAttempt,
+} from "@/lib/training/attemptClient";
 
 const FREE_LIMIT = 10;
 
 export function FutsalRulesPracticeClient() {
-  const supabase = useSupabase();
   const { user } = useUser();
   const questions = futsalRulesPracticeQuestions.slice(0, FREE_LIMIT);
 
@@ -37,56 +37,12 @@ export function FutsalRulesPracticeClient() {
 
     setSaving(true);
 
-    const profileRes = await supabase
-      .from("user_profiles")
-      .select("ref_card_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    const refCardId = resolveRefCardId(user.id, profileRes.data);
-
-    await insertAttemptSafely(
-      supabase,
-      {
-        user_id: user.id,
-        sport_type: "futsal",
-        activity_type: "rules_practice",
-        ref_card_id: refCardId,
-        module: "futsal_rules",
-        mode: "training",
-        topic: currentQuestion.topic,
-        subtopic: currentQuestion.subtopic ?? null,
-        rule_reference: currentQuestion.rule_reference,
-        season: currentQuestion.season,
-        source_version: currentQuestion.source_version,
-        difficulty: currentQuestion.difficulty,
-        score: isCorrect ? 100 : 0,
-        is_correct: isCorrect,
-        selected_decision:
-          selected === null ? null : currentQuestion.options[selected],
-        correct_decision: currentQuestion.options[currentQuestion.correct],
-        technical_correct: isCorrect,
-        criterion_result: {
-          question_id: currentQuestion.id,
-          selected_option: selected,
-          correct_option: currentQuestion.correct,
-          source_official: currentQuestion.source_official,
-        },
-        feedback: `Trivia futsal: ${isCorrect ? "correcta" : "incorrecta"}`,
-      },
-      {
-        user_id: user.id,
-        sport_type: "futsal",
-        activity_type: "rules_practice",
-        topic: currentQuestion.topic,
-        subtopic: currentQuestion.subtopic ?? null,
-        rule_reference: currentQuestion.rule_reference,
-        season: currentQuestion.season,
-        source_version: currentQuestion.source_version,
-        difficulty: currentQuestion.difficulty,
-        score: isCorrect ? 100 : 0,
-        technical_correct: isCorrect,
-      }
-    );
+    await submitTrainingAttempt({
+      kind: "futsal_rule",
+      submissionId: createTrainingSubmissionId(),
+      questionId: String(currentQuestion.id),
+      selectedOption: selected,
+    });
 
     setSaving(false);
   }

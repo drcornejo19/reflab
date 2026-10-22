@@ -1,11 +1,12 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import type { MatchPreparationPayload } from "@/lib/matches/api";
 import {
-  getMatchActorContext,
+  getMatchesAccessError,
+  requireMatchesActor,
+} from "@/lib/matches/access";
+import {
   saveMatchPreparation,
 } from "@/lib/matches/server";
-import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -14,13 +15,6 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ appointmentId: string }> }
 ) {
-  const session = await auth();
-  const userId = session.userId;
-
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   let body: MatchPreparationPayload;
   try {
     body = (await request.json()) as MatchPreparationPayload;
@@ -30,21 +24,26 @@ export async function PUT(
 
   try {
     const { appointmentId } = await params;
-    const supabase = createSupabaseAdminClient();
-    const actor = await getMatchActorContext(supabase, userId);
+    const authorization = await requireMatchesActor({
+      requestedInstitutionId: new URL(request.url).searchParams.get("institutionId"),
+    });
     const preparation = await saveMatchPreparation(
-      supabase,
-      actor,
+      authorization.supabase,
+      authorization.actor,
       appointmentId,
       body
     );
     return NextResponse.json({ success: true, preparation });
   } catch (error) {
+    const accessError = getMatchesAccessError(error);
+    if (accessError) {
+      return NextResponse.json(
+        { error: accessError.code },
+        { status: accessError.status }
+      );
+    }
     return NextResponse.json(
-      {
-        error: "No se pudo guardar la preparacion.",
-        technical: error instanceof Error ? error.message : "Error desconocido",
-      },
+      { error: "No se pudo guardar la preparacion." },
       { status: 400 }
     );
   }

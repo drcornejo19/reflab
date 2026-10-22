@@ -72,7 +72,7 @@ export const roleAccess: Record<
 };
 
 export function normalizeRole(value?: string | null): SystemRole {
-  if (value === "super_admin" || value === "video_admin") return "super_admin";
+  if (value === "super_admin") return "super_admin";
   if (value === "institution_admin") return "institution_admin";
   if (value === "institutional_instructor" || value === "instructor") {
     return "institutional_instructor";

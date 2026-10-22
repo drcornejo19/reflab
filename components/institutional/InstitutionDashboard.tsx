@@ -16,6 +16,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useDiscipline } from "@/components/DisciplineProvider";
 import { useInstitution } from "@/components/institutional/InstitutionProvider";
+import { InstitutionInvitationsPanel } from "@/components/institutional/InstitutionInvitationsPanel";
 import { getDisciplineDefinition } from "@/lib/discipline";
 import {
   hasEffectiveInstitutionPermission,
@@ -201,6 +202,13 @@ export function InstitutionDashboard() {
             ) : null}
           </div>
         </section>
+
+        <InstitutionInvitationsPanel
+          accent={discipline.theme.accent}
+          onAccepted={async () => {
+            await refreshInstitutions();
+          }}
+        />
 
         {contextError || overviewError ? (
           <ErrorPanel message={contextError || overviewError || "Error institucional"} />

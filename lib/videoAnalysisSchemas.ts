@@ -1,4 +1,4 @@
-import { normalizeSportTopicKey, type SportType } from "@/lib/sports";
+import { normalizeSportTopicKey, type SportType } from "./sports.ts";
 
 export type VideoFieldKey =
   | "technical_decision"

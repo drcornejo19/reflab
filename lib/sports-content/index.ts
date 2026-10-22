@@ -1,5 +1,5 @@
-import { football11Content } from "@/lib/sports-content/football11";
-import { futsalContent } from "@/lib/sports-content/futsal";
+import { football11Content } from "./football11/index.ts";
+import { futsalContent } from "./futsal/index.ts";
 
 export const sportContentRegistry = {
   football_11: football11Content,

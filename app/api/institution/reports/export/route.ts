@@ -1,4 +1,5 @@
 import { getInstitutionMetricsWorkspace } from "@/lib/institutional/metrics-server";
+import { assertReportFormat } from "@/lib/institutional/http";
 import {
   InstitutionAccessError,
   requireInstitutionPermission,
@@ -19,12 +20,7 @@ export async function GET(request: Request) {
         400
       );
     }
-    if (params.get("format") !== "csv") {
-      throw new InstitutionAccessError(
-        "El formato solicitado no esta disponible.",
-        400
-      );
-    }
+    assertReportFormat(params.get("format"));
     const authorization = await requireInstitutionPermission(
       "reports.export",
       params.get("institutionId")

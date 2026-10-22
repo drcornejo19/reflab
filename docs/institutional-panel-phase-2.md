@@ -29,9 +29,8 @@ Antes de consumir las tablas directamente desde la aplicacion:
 1. Activar la integracion de Supabase en Clerk.
 2. Agregar Clerk como proveedor Third-Party Auth en Supabase.
 3. Configurar `NEXT_PUBLIC_SUPABASE_URL`.
-4. Configurar `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` o mantener temporalmente
-   `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-5. Mantener `SUPABASE_SERVICE_ROLE_KEY` exclusivamente en servidor.
+4. Configurar `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` para el navegador.
+5. Mantener `SUPABASE_SECRET_KEY` exclusivamente en servidor.
 
 El nuevo `createSupabaseServerClient()` inyecta el token de Clerk. Las rutas
 que continuan usando `service_role` deben aplicar autorizacion institucional

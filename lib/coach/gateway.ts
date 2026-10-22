@@ -8,6 +8,7 @@ import {
   CoachProviderError,
   CoachSetupError,
 } from "@/lib/coach/errors";
+import { resolveCoachTextVerbosity } from "@/lib/coach/modelCompatibility";
 import type {
   CoachEvidence,
   CoachModelRequest,
@@ -30,6 +31,7 @@ export async function runCoachModel<T>(
 
   const runId = randomUUID();
   const model = process.env.REFLAB_COACH_MODEL?.trim() || DEFAULT_MODEL;
+  const textVerbosity = resolveCoachTextVerbosity(model);
   const startedAt = Date.now();
   const inputDigest = digest(request.input);
 
@@ -78,7 +80,7 @@ export async function runCoachModel<T>(
           schema: request.outputSchema.schema,
           strict: true,
         },
-        verbosity: "low",
+        ...(textVerbosity ? { verbosity: textVerbosity } : {}),
       },
     });
 

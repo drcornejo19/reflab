@@ -2,8 +2,13 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { auth } from "@clerk/nextjs/server";
+import { loadAccessSnapshot } from "@/lib/access/server";
 import type { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import { createSupabaseAdminClient as createAdminClient } from "@/lib/supabaseAdmin";
+import {
+  resolveCanonicalCoachIdentity,
+  type CoachIdentityDependencies,
+} from "@/lib/coach/canonicalIdentity";
 import type { CoachFeature } from "@/lib/coach/types";
 import {
   CoachRateLimitError,
@@ -26,19 +31,31 @@ const DEFAULT_RATE_WINDOW_SECONDS = 10 * 60;
 
 export async function prepareCoachRequest(
   request: Request,
-  feature: CoachFeature
+  feature: CoachFeature,
+  dependencies: CoachIdentityDependencies<SupabaseAdminClient> =
+    createCoachRequestDependencies()
 ): Promise<CoachRequestContext> {
-  const session = await auth();
-  if (!session.userId) throw new CoachUnauthorizedError();
+  const identity = await resolveCanonicalCoachIdentity(dependencies);
+  if (!identity) throw new CoachUnauthorizedError();
 
   const requestId = normalizeRequestId(request.headers.get("x-request-id"));
-  const supabase = createAdminClient();
-  await enforceCoachRateLimit(supabase, session.userId, feature);
+  await enforceCoachRateLimit(identity.client, identity.userId, feature);
 
   return {
-    userId: session.userId,
+    userId: identity.userId,
     requestId,
-    supabase,
+    supabase: identity.client,
+  };
+}
+
+function createCoachRequestDependencies(): CoachIdentityDependencies<SupabaseAdminClient> {
+  return {
+    getAuthenticatedUserId: async () => (await auth()).userId,
+    createAdminClient,
+    loadAccess: (supabase, externalSubject) =>
+      loadAccessSnapshot(supabase, externalSubject, {
+        provisionMissing: false,
+      }),
   };
 }
 

@@ -3,7 +3,7 @@ import {
   getGoverningBodyForSport,
   type GoverningBody,
   type SportType,
-} from "@/lib/sports";
+} from "./sports.ts";
 
 export type QuestionMode = "practice" | "exam";
 export type QuestionDifficulty = "Basica" | "Media" | "Avanzada";

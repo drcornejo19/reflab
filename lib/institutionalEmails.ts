@@ -35,13 +35,13 @@ export async function sendInstitutionalLeadEmails(
       subject: "Nueva solicitud de demo institucional - RefLab",
       html: buildInternalLeadHtml(lead, appUrl),
       text: buildInternalLeadText(lead, appUrl),
-    }),
+    }, { diagnostics: "controlled" }),
     sendTransactionalEmail({
       to: lead.email,
       subject: "Recibimos tu solicitud institucional - RefLab",
       html: buildConfirmationHtml(lead, institutionalEmail, appUrl),
       text: buildConfirmationText(lead, institutionalEmail, appUrl),
-    }),
+    }, { diagnostics: "controlled" }),
   ]);
 
   return { internal, confirmation };

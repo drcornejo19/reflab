@@ -11,6 +11,7 @@ import {
   requireInstitutionPermission,
   type InstitutionAuthorization,
 } from "@/lib/institutional/server";
+import { resolveInstitutionalInviteeIdentity } from "@/lib/institutional/institutionalIdentity";
 import {
   isInstitutionGroupRole,
   isInstitutionGroupType,
@@ -396,6 +397,7 @@ export async function inviteInstitutionMember(
   input: InviteInstitutionMemberInput
 ) {
   const access = await requireInstitutionPermission("members.invite", institutionId);
+  const authorizedInstitutionId = access.institutionId;
   assertInstitutionWriteAllowed(access);
   const email = input.email.trim().toLowerCase();
   if (!isEmail(email)) {
@@ -408,7 +410,7 @@ export async function inviteInstitutionMember(
   const { data: pendingMembership } = await access.supabase
     .from("institution_memberships")
     .select("id,status")
-    .eq("institution_id", institutionId)
+    .eq("institution_id", authorizedInstitutionId)
     .contains("metadata", { email })
     .neq("status", "revoked")
     .limit(1)
@@ -433,8 +435,17 @@ export async function inviteInstitutionMember(
   let invitationId: string | null = null;
 
   if (existingUser) {
-    userId = existingUser.id;
-    status = "active";
+    const identity = await resolveInstitutionalInviteeIdentity(
+      access.supabase,
+      existingUser.id
+    );
+    if (identity.kind === "linked") {
+      userId = identity.userId;
+      status = "active";
+    } else {
+      userId = `invitation:${crypto.randomUUID()}`;
+      status = "invited";
+    }
   } else {
     const invitation = await clerk.invitations.createInvitation({
       emailAddress: email,
@@ -442,7 +453,7 @@ export async function inviteInstitutionMember(
       ignoreExisting: true,
       redirectUrl: input.redirectUrl,
       publicMetadata: {
-        reflabInstitutionId: institutionId,
+        reflabInstitutionId: authorizedInstitutionId,
         reflabInstitutionRole: input.roleKey,
         reflabSportType: input.primarySport,
       },
@@ -455,7 +466,7 @@ export async function inviteInstitutionMember(
   const { data: existingMembership } = await access.supabase
     .from("institution_memberships")
     .select("id,status")
-    .eq("institution_id", institutionId)
+    .eq("institution_id", authorizedInstitutionId)
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -467,7 +478,7 @@ export async function inviteInstitutionMember(
   }
 
   const membershipPayload = {
-    institution_id: institutionId,
+    institution_id: authorizedInstitutionId,
     user_id: userId,
     status,
     primary_sport: input.primarySport,
@@ -512,7 +523,7 @@ export async function inviteInstitutionMember(
       access,
       membership.id,
       role.id,
-      institutionId
+      authorizedInstitutionId
     );
   } catch (roleError) {
     await access.supabase
@@ -532,24 +543,6 @@ export async function inviteInstitutionMember(
     throw roleError;
   }
 
-  if (existingUser) {
-    const { data: profile } = await access.supabase
-      .from("user_profiles")
-      .select("user_id")
-      .eq("user_id", existingUser.id)
-      .maybeSingle();
-    if (!profile) {
-      await access.supabase.from("user_profiles").insert({
-        user_id: existingUser.id,
-        email,
-        reflab_name: input.displayName,
-        first_name: existingUser.firstName,
-        last_name: existingUser.lastName,
-        avatar_url: existingUser.imageUrl,
-      });
-    }
-  }
-
   await writeAuditLog(access, {
     action: status === "invited" ? "member.invited" : "member.added",
     entityType: "institution_membership",
@@ -567,7 +560,7 @@ export async function inviteInstitutionMember(
     id: membership.id,
     userId: membership.user_id,
     status: normalizeMembershipStatus(membership.status),
-    invitationSent: status === "invited",
+    invitationSent: Boolean(invitationId),
   };
 }
 
@@ -577,12 +570,13 @@ export async function updateInstitutionMember(
   input: UpdateInstitutionMemberInput
 ) {
   const access = await requireInstitutionPermission("members.manage", institutionId);
+  const authorizedInstitutionId = access.institutionId;
   assertInstitutionWriteAllowed(access);
   const { data: membership, error } = await access.supabase
     .from("institution_memberships")
     .select("id,user_id,status,primary_sport,category")
     .eq("id", membershipId)
-    .eq("institution_id", institutionId)
+    .eq("institution_id", authorizedInstitutionId)
     .maybeSingle();
 
   if (error || !membership) {
@@ -639,12 +633,17 @@ export async function updateInstitutionMember(
       .from("institution_memberships")
       .update(updates)
       .eq("id", membershipId)
-      .eq("institution_id", institutionId);
+      .eq("institution_id", authorizedInstitutionId);
     if (updateError) throw new InstitutionAccessError(updateError.message);
   }
 
   if (role) {
-    await replaceMembershipRole(access, membershipId, role.id, institutionId);
+    await replaceMembershipRole(
+      access,
+      membershipId,
+      role.id,
+      authorizedInstitutionId
+    );
   }
 
   await writeAuditLog(access, {
@@ -673,12 +672,13 @@ export async function resendInstitutionInvitation(
   redirectUrl?: string
 ) {
   const access = await requireInstitutionPermission("members.invite", institutionId);
+  const authorizedInstitutionId = access.institutionId;
   assertInstitutionWriteAllowed(access);
   const { data: membership, error } = await access.supabase
     .from("institution_memberships")
     .select("id,user_id,status,metadata")
     .eq("id", membershipId)
-    .eq("institution_id", institutionId)
+    .eq("institution_id", authorizedInstitutionId)
     .maybeSingle();
   if (error || !membership) {
     throw new InstitutionAccessError("No se encontro la invitacion.", 404);
@@ -708,7 +708,7 @@ export async function resendInstitutionInvitation(
     ignoreExisting: true,
     redirectUrl,
     publicMetadata: {
-      reflabInstitutionId: institutionId,
+      reflabInstitutionId: authorizedInstitutionId,
     },
   });
 
@@ -739,6 +739,7 @@ export async function createInstitutionCohort(
   input: CreateInstitutionCohortInput
 ) {
   const access = await requireInstitutionPermission("groups.manage", institutionId);
+  const authorizedInstitutionId = access.institutionId;
   assertInstitutionWriteAllowed(access);
   assertEnabledSport(access, input.sportType);
   assertDateRange(input.startsOn, input.endsOn);
@@ -746,7 +747,7 @@ export async function createInstitutionCohort(
   const { data, error } = await access.supabase
     .from("institution_cohorts")
     .insert({
-      institution_id: institutionId,
+      institution_id: authorizedInstitutionId,
       name: input.name,
       sport_type: input.sportType,
       season_label: input.seasonLabel,
@@ -781,12 +782,13 @@ export async function updateInstitutionCohort(
   status: InstitutionLifecycleStatus
 ) {
   const access = await requireInstitutionPermission("groups.manage", institutionId);
+  const authorizedInstitutionId = access.institutionId;
   assertInstitutionWriteAllowed(access);
   const { error } = await access.supabase
     .from("institution_cohorts")
     .update({ status })
     .eq("id", cohortId)
-    .eq("institution_id", institutionId);
+    .eq("institution_id", authorizedInstitutionId);
   if (error) throw new InstitutionAccessError(error.message);
   await writeAuditLog(access, {
     action: "cohort.status_updated",
@@ -802,6 +804,7 @@ export async function createInstitutionGroup(
   input: CreateInstitutionGroupInput
 ) {
   const access = await requireInstitutionPermission("groups.manage", institutionId);
+  const authorizedInstitutionId = access.institutionId;
   assertInstitutionWriteAllowed(access);
   assertEnabledSport(access, input.sportType);
   assertDateRange(input.startsOn, input.endsOn);
@@ -811,7 +814,7 @@ export async function createInstitutionGroup(
       .from("institution_cohorts")
       .select("id,sport_type")
       .eq("id", input.cohortId)
-      .eq("institution_id", institutionId)
+      .eq("institution_id", authorizedInstitutionId)
       .maybeSingle();
     if (!cohort) {
       throw new InstitutionAccessError("La cohorte seleccionada no existe.", 400);
@@ -827,7 +830,7 @@ export async function createInstitutionGroup(
   const { data, error } = await access.supabase
     .from("institution_groups")
     .insert({
-      institution_id: institutionId,
+      institution_id: authorizedInstitutionId,
       cohort_id: input.cohortId,
       name: input.name,
       description: input.description,
@@ -868,12 +871,13 @@ export async function updateInstitutionGroup(
   status: InstitutionLifecycleStatus
 ) {
   const access = await requireInstitutionPermission("groups.manage", institutionId);
+  const authorizedInstitutionId = access.institutionId;
   assertInstitutionWriteAllowed(access);
   const { error } = await access.supabase
     .from("institution_groups")
     .update({ status })
     .eq("id", groupId)
-    .eq("institution_id", institutionId);
+    .eq("institution_id", authorizedInstitutionId);
   if (error) throw new InstitutionAccessError(error.message);
   await writeAuditLog(access, {
     action: "group.status_updated",
@@ -891,19 +895,20 @@ export async function assignInstitutionGroupMember(
   groupRole: InstitutionGroupRole
 ) {
   const access = await requireInstitutionPermission("groups.manage", institutionId);
+  const authorizedInstitutionId = access.institutionId;
   assertInstitutionWriteAllowed(access);
   const [{ data: group }, { data: membership }] = await Promise.all([
     access.supabase
       .from("institution_groups")
       .select("id")
       .eq("id", groupId)
-      .eq("institution_id", institutionId)
+      .eq("institution_id", authorizedInstitutionId)
       .maybeSingle(),
     access.supabase
       .from("institution_memberships")
       .select("id,status")
       .eq("id", membershipId)
-      .eq("institution_id", institutionId)
+      .eq("institution_id", authorizedInstitutionId)
       .in("status", ["active", "invited"])
       .maybeSingle(),
   ]);
@@ -918,7 +923,7 @@ export async function assignInstitutionGroupMember(
     .from("institution_group_memberships")
     .upsert(
       {
-        institution_id: institutionId,
+        institution_id: authorizedInstitutionId,
         group_id: groupId,
         membership_id: membershipId,
         group_role: groupRole,
@@ -953,6 +958,7 @@ export async function updateInstitutionGroupMember(
   }
 ) {
   const access = await requireInstitutionPermission("groups.manage", institutionId);
+  const authorizedInstitutionId = access.institutionId;
   assertInstitutionWriteAllowed(access);
   const updates: Record<string, unknown> = {};
   if (input.groupRole) updates.group_role = input.groupRole;
@@ -965,7 +971,7 @@ export async function updateInstitutionGroupMember(
     .update(updates)
     .eq("id", assignmentId)
     .eq("group_id", groupId)
-    .eq("institution_id", institutionId);
+    .eq("institution_id", authorizedInstitutionId);
   if (error) throw new InstitutionAccessError(error.message);
   await writeAuditLog(access, {
     action:

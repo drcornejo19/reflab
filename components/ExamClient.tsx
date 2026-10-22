@@ -1,40 +1,58 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useUser } from "@clerk/nextjs";
-import { insertAttemptSafely } from "@/lib/attemptPersistence";
-import { resolveRefCardId } from "@/lib/refCard";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_SPORT_TYPE } from "@/lib/sports";
-import { calculateScore, normalizeDiscipline } from "@/lib/scoring";
-import { getExamClips, type ClipRecord } from "@/lib/clips";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
-import { useSupabase } from "@/components/SupabaseProvider";
-import { FREE_WEEKLY_EXAM_LIMIT, getCurrentWeekStart } from "@/lib/subscription";
-import { useUserRole } from "@/lib/useUserRole";
 
-const TOTAL_QUESTIONS = 10;
 const MAX_VIDEO_PLAYS = 2;
 
-type ClipWithDetails = ClipRecord;
+type ExamQuestion = {
+  occurrenceId: string;
+  id: string;
+  title: string;
+  description: string | null;
+  videoUrl: string;
+  topic: string;
+  difficulty: string;
+};
+
+type ExamSession = {
+  id: string;
+  submissionId: string;
+  questions: ExamQuestion[];
+};
 
 type Answer = {
+  occurrenceId: string;
+  foul: boolean;
+  restart: string;
+  discipline: string;
+  offsideReason: string | null;
+  handballReason: string | null;
+};
+
+type CompletedAttempt = {
+  occurrenceId: string;
   clipId: string;
   clipTitle: string;
   topic: string;
   difficulty: string;
-  foul: boolean | null;
-  correctFoul: boolean | null;
-  restart: string;
-  correctRestart: string | null;
-  discipline: string;
-  correctDiscipline: string | null;
-  offsideReason?: string;
-  handballReason?: string;
-  technicalCorrect: boolean;
-  restartCorrect: boolean;
-  disciplineCorrect: boolean;
-  subtypeCorrect: boolean | null;
+  selectedDecision: string;
+  selectedRestart: string;
+  selectedDiscipline: string;
   score: number;
+  isCorrect: boolean;
+};
+
+type SubmissionResult = {
+  examResultId: string;
+  examSessionId: string;
+  submissionId: string;
+  avgScore: number;
+  correctCount: number;
+  totalQuestions: number;
+  idempotentReplay: boolean;
+  attempts: CompletedAttempt[];
 };
 
 const foulRestartOptions = [
@@ -61,17 +79,19 @@ const offsideReasonOptions = [
 const handballReasonOptions = ["inmediatez", "bloqueo", "deliberada"];
 
 export function ExamClient() {
-  const supabase = useSupabase();
-  const { user } = useUser();
-  const { isPro, loadingRole } = useUserRole();
-
-  const [clips, setClips] = useState<ClipWithDetails[]>([]);
+  const sessionRequestStarted = useRef(false);
+  const [session, setSession] = useState<ExamSession | null>(null);
+  const [clips, setClips] = useState<ExamQuestion[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [finished, setFinished] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [examSaved, setExamSaved] = useState(false);
   const [videoPlays, setVideoPlays] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [freeExamLimitReached, setFreeExamLimitReached] = useState(false);
+  const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
+  const [completedAttempts, setCompletedAttempts] = useState<CompletedAttempt[]>([]);
 
   const [foul, setFoul] = useState<boolean | null>(null);
   const [restart, setRestart] = useState("");
@@ -82,12 +102,10 @@ export function ExamClient() {
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
-  const [weeklyExamCount, setWeeklyExamCount] = useState(0);
 
   const currentClip = clips[index];
   const remainingVideoPlays = Math.max(MAX_VIDEO_PLAYS - videoPlays, 0);
-const videoLocked = remainingVideoPlays <= 0;
-  const freeExamLimitReached = !loadingRole && !isPro && weeklyExamCount >= FREE_WEEKLY_EXAM_LIMIT;
+  const videoLocked = remainingVideoPlays <= 0;
 
   const isOffsideClip = currentClip?.topic === "Offside";
   const isHandballClip = currentClip?.topic === "Handball";
@@ -109,72 +127,49 @@ const videoLocked = remainingVideoPlays <= 0;
     (!mustAnswerHandballReason || handballReason !== "");
 
   const examStats = useMemo(() => {
-    const totalScore = answers.reduce((acc, a) => acc + a.score, 0);
-    const avgScore =
-      answers.length > 0 ? Math.round(totalScore / answers.length) : 0;
-    const correctCount = answers.filter((a) => a.score >= 85).length;
-
+    const avgScore = submissionResult?.avgScore ?? 0;
     return {
-      totalScore,
+      totalScore: completedAttempts.reduce(
+        (total, attempt) => total + attempt.score,
+        0
+      ),
       avgScore,
-      correctCount,
+      correctCount: submissionResult?.correctCount ?? 0,
       level: getExamLevel(avgScore),
     };
-  }, [answers]);
+  }, [completedAttempts, submissionResult]);
 
   useEffect(() => {
-    async function loadClips() {
-      const { data, error } = await getExamClips(supabase);
+    if (sessionRequestStarted.current) return;
+    sessionRequestStarted.current = true;
 
-      if (error) {
-        console.error("Error cargando clips:", error);
-        setClips([]);
-      } else {
-        const shuffled = [...((data ?? []) as ClipWithDetails[])].sort(
-          () => Math.random() - 0.5
-        );
-
-        setClips(shuffled.slice(0, TOTAL_QUESTIONS));
+    async function startExam() {
+      try {
+        const response = await fetch("/api/exams/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sportType: DEFAULT_SPORT_TYPE }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          if (payload.error === "weekly_exam_limit_reached") {
+            setFreeExamLimitReached(true);
+          } else {
+            setLoadError(publicApiMessage(payload));
+          }
+          return;
+        }
+        setSession(payload.session as ExamSession);
+        setClips((payload.session?.questions ?? []) as ExamQuestion[]);
+      } catch {
+        setLoadError("No se pudo iniciar la evaluacion.");
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     }
 
-    loadClips();
-  }, [supabase]);
-
-  useEffect(() => {
-    async function loadWeeklyUsage() {
-      if (!user || isPro) {
-        setWeeklyExamCount(0);
-        return;
-      }
-
-      const weekStart = getCurrentWeekStart().toISOString();
-      const [examRes, rulesRes] = await Promise.all([
-        supabase
-          .from("exam_results")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", user.id)
-          .gte("created_at", weekStart),
-        supabase
-          .from("rules_exam_results")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", user.id)
-          .gte("created_at", weekStart),
-      ]);
-
-      if (examRes.error || rulesRes.error) {
-        console.warn("No se pudo calcular el limite semanal de examenes Basic.");
-        setWeeklyExamCount(0);
-        return;
-      }
-
-      setWeeklyExamCount((examRes.count ?? 0) + (rulesRes.count ?? 0));
-    }
-
-    loadWeeklyUsage();
-  }, [isPro, supabase, user]);
+    void startExam();
+  }, []);
 
   useEffect(() => {
     window.scrollTo({
@@ -186,25 +181,6 @@ const videoLocked = remainingVideoPlays <= 0;
   useEffect(() => {
     setVideoPlays(0);
   }, [currentClip?.id]);
-
-  useEffect(() => {
-    if (!currentClip) return;
-
-    const isNoOffside =
-      currentClip.topic === "Offside" && currentClip.sub_type === "no_offside";
-
-    const isNoHandball =
-      currentClip.topic === "Handball" &&
-      currentClip.sub_type === "no_sancionable";
-
-    if (isNoOffside || isNoHandball) {
-      setFoul(false);
-      setRestart("Seguir el juego");
-      setDiscipline("Sin sancion");
-      setOffsideReason("");
-      setHandballReason("");
-    }
-  }, [currentClip]);
 
   useEffect(() => {
     if (!currentClip) return;
@@ -244,7 +220,7 @@ const videoLocked = remainingVideoPlays <= 0;
       body: JSON.stringify({
         sportType: DEFAULT_SPORT_TYPE,
         answers: answers.map((answer) => ({
-          clipId: answer.clipId,
+          clipId: clips.find((clip) => clip.occurrenceId === answer.occurrenceId)?.id,
           foul: answer.foul,
           restart: answer.restart,
           discipline: answer.discipline,
@@ -274,198 +250,57 @@ function handleVideoEnded() {
   setVideoPlays((prev) => Math.min(prev + 1, MAX_VIDEO_PLAYS));
 }
 
-  function submitAnswer() {
-    if (!currentClip || !canSubmit) return;
-
-    const technicalCorrect = foul === currentClip.correct_foul;
-    const restartCorrect = restart === currentClip.correct_restart;
-    const disciplineCorrect =
-      normalizeDiscipline(discipline) ===
-      normalizeDiscipline(currentClip.correct_discipline);
-
-    const subtypeCorrect =
-      currentClip.topic === "Offside" && foul === true
-        ? offsideReason === currentClip.sub_type
-        : currentClip.topic === "Handball" && foul === true
-          ? handballReason === currentClip.sub_type
-          : null;
-
-    const baseScore = calculateScore(
-      {
-        foul,
-        restart,
-        discipline,
-        var: currentClip.correct_var,
-      },
-      {
-        foul: currentClip.correct_foul,
-        restart: currentClip.correct_restart,
-        discipline: currentClip.correct_discipline,
-        var: currentClip.correct_var,
-      }
-    );
-
-    let score = baseScore;
-
-    if (subtypeCorrect === false) score -= 20;
-
-    score = Math.max(score, 0);
-
+  async function submitAnswer() {
+    if (!currentClip || !session || !canSubmit || foul === null || saving) return;
     const answer: Answer = {
-      clipId: currentClip.id,
-      clipTitle: labelFromValue(currentClip.topic),
-      topic: currentClip.topic,
-      difficulty: currentClip.difficulty,
+      occurrenceId: currentClip.occurrenceId,
       foul,
-      correctFoul: currentClip.correct_foul ?? null,
       restart,
-      correctRestart: currentClip.correct_restart ?? null,
       discipline,
-      correctDiscipline: currentClip.correct_discipline ?? null,
-      offsideReason: offsideReason || undefined,
-      handballReason: handballReason || undefined,
-      technicalCorrect,
-      restartCorrect,
-      disciplineCorrect,
-      subtypeCorrect,
-      score,
+      offsideReason: offsideReason || null,
+      handballReason: handballReason || null,
     };
-
     const nextAnswers = [...answers, answer];
-    setAnswers(nextAnswers);
-
-    resetInputs();
-
     if (index >= clips.length - 1) {
-      setFinished(true);
-    } else {
-      setIndex((prev) => prev + 1);
-    }
-  }
-
-  async function saveExam() {
-    if (!user) {
-      alert("Tenes que iniciar sesion.");
-      return;
-    }
-
-    if (examSaved) {
-      alert("Este examen ya fue guardado.");
-      return;
-    }
-
-    if (freeExamLimitReached) {
-      alert("Ya usaste tu examen gratuito de esta semana. Desbloquea RefLab Pro para rendir examenes ilimitados.");
-      return;
-    }
-
-    setSaving(true);
-
-    const totalScore = answers.reduce((acc, a) => acc + a.score, 0);
-    const avgScore = Math.round(totalScore / answers.length);
-    const correctCount = answers.filter((a) => a.score >= 85).length;
-
-    const profileRes = await supabase
-      .from("user_profiles")
-      .select("ref_card_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    const refCardId = resolveRefCardId(user.id, profileRes.data);
-
-    const { error } = await supabase.from("exam_results").insert([
-      {
-        user_id: user.id,
-        sport_type: DEFAULT_SPORT_TYPE,
-        activity_type: "video_exam",
-        season: "2026/27",
-        source_version: "RefLab football_11 video exam",
-        total_questions: answers.length,
-        total_score: totalScore,
-        avg_score: avgScore,
-        correct_count: correctCount,
-        details: answers,
-      },
-    ]);
-
-    if (error) {
-      alert(error.message);
-    } else {
-      const attemptResults = await Promise.all(
-        answers.map((answer) =>
-          insertAttemptSafely(
-            supabase,
-            {
-              user_id: user.id,
-              sport_type: DEFAULT_SPORT_TYPE,
-              activity_type: "video_exam",
-              ref_card_id: refCardId,
-              clip_id: answer.clipId,
-              clip_title: answer.clipTitle,
-              module: answer.topic === "VAR" ? "var_lab" : "decision",
-              mode: "exam",
-              topic: answer.topic,
-              season: "2026/27",
-              source_version: "RefLab football_11 video exam",
-              difficulty: answer.difficulty,
-              score: answer.score,
-              is_correct: answer.score >= 85,
-              selected_decision: decisionLabel(answer.foul),
-              correct_decision: decisionLabel(answer.correctFoul),
-              selected_restart: answer.restart,
-              correct_restart: answer.correctRestart,
-              selected_discipline: answer.discipline,
-              correct_discipline: answer.correctDiscipline,
-              foul: answer.foul,
-              restart: answer.restart,
-              discipline: answer.discipline,
-              technical_correct: answer.technicalCorrect,
-              restart_correct: answer.restartCorrect,
-              discipline_correct: answer.disciplineCorrect,
-              disciplinary_correct: answer.disciplineCorrect,
-              subtype_correct: answer.subtypeCorrect,
-              criterion_result: {
-                technical: answer.technicalCorrect,
-                restart: answer.restartCorrect,
-                discipline: answer.disciplineCorrect,
-                subtype: answer.subtypeCorrect,
-              },
-              feedback: `Examen arbitral: ${answer.score}/100`,
-              created_at: new Date().toISOString(),
-            },
-            {
-              user_id: user.id,
-              sport_type: DEFAULT_SPORT_TYPE,
-              activity_type: "video_exam",
-              clip_title: answer.clipTitle,
-              foul: answer.foul,
-              restart: answer.restart,
-              discipline: answer.discipline,
-              score: answer.score,
-              topic: answer.topic,
-              season: "2026/27",
-              source_version: "RefLab football_11 video exam",
-              difficulty: answer.difficulty,
-              technical_correct: answer.technicalCorrect,
-              restart_correct: answer.restartCorrect,
-              discipline_correct: answer.disciplineCorrect,
-              disciplinary_correct: answer.disciplineCorrect,
-              subtype_correct: answer.subtypeCorrect,
-            }
-          )
-        )
-      );
-      const failedAttempt = attemptResults.find((result) => !result.saved);
-
-      if (failedAttempt) {
-        alert(`El examen se guardo, pero no se pudieron registrar todos los intentos: ${failedAttempt.error ?? "error desconocido"}`);
-      } else {
-        setExamSaved(true);
-        if (!isPro) setWeeklyExamCount((prev) => prev + 1);
-        alert("Examen guardado correctamente. Las respuestas impactan en tus estadisticas por topico y criterio.");
+      setSaving(true);
+      setSubmitError(null);
+      try {
+        const response = await fetch(`/api/exams/sessions/${session.id}/submit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            submission_id: session.submissionId,
+            answers: nextAnswers.map((item) => ({
+              occurrence_id: item.occurrenceId,
+              foul: item.foul,
+              restart: item.restart,
+              discipline: item.discipline,
+              offside_reason: item.offsideReason,
+              handball_reason: item.handballReason,
+            })),
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          setSubmitError(publicApiMessage(payload));
+          return;
+        }
+        const result = payload.result as SubmissionResult;
+        setAnswers(nextAnswers);
+        setSubmissionResult(result);
+        setCompletedAttempts(result.attempts);
+        setFinished(true);
+        resetInputs();
+      } catch {
+        setSubmitError("No se pudo guardar la evaluacion. Podes reintentar de forma segura.");
+      } finally {
+        setSaving(false);
       }
+      return;
     }
-
-    setSaving(false);
+    setAnswers(nextAnswers);
+    resetInputs();
+    setIndex((previous) => previous + 1);
   }
 
   function resetInputs() {
@@ -488,21 +323,21 @@ function handleVideoEnded() {
     );
   }
 
-  if (clips.length === 0) {
-    return (
-      <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-4 text-zinc-400 sm:p-8">
-        No hay clips suficientes para iniciar examen.
-      </div>
-    );
-  }
-
-  if (freeExamLimitReached && !finished) {
+  if (freeExamLimitReached) {
     return (
       <ProUpgradeCard
         title="Ya usaste tu examen gratuito de esta semana"
-        description="El plan Basic permite 1 examen semanal para que puedas probar la experiencia. RefLab Pro desbloquea examenes ilimitados, estadisticas completas y evolucion avanzada."
-        reason={`Limite Basic: ${FREE_WEEKLY_EXAM_LIMIT} examen por semana.`}
+        description="El plan Basic permite 1 examen semanal. RefLab Pro desbloquea evaluaciones ilimitadas."
+        reason="Limite Basic: 1 examen por semana."
       />
+    );
+  }
+
+  if (loadError || clips.length === 0) {
+    return (
+      <div className="rounded-3xl border border-red-400/20 bg-red-400/10 p-4 text-red-100 sm:p-8">
+        {loadError ?? "No hay clips suficientes para iniciar la evaluacion."}
+      </div>
     );
   }
 
@@ -523,7 +358,7 @@ function handleVideoEnded() {
           </p>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-3 sm:gap-4 lg:mt-8">
-            <FinalStat title="Preguntas" value={answers.length.toString()} />
+            <FinalStat title="Preguntas" value={completedAttempts.length.toString()} />
             <FinalStat
               title="Aprobadas"
               value={examStats.correctCount.toString()}
@@ -533,13 +368,9 @@ function handleVideoEnded() {
 
           <div className="mt-6 flex flex-col gap-3 lg:mt-8 lg:flex-row">
             <div className="flex-1 space-y-3">
-              <button
-                onClick={saveExam}
-                disabled={saving || examSaved}
-                className="min-h-14 w-full rounded-2xl bg-[#6fc11f] px-5 py-4 font-black text-black disabled:opacity-50"
-              >
-                {examSaved ? "EXAMEN GUARDADO" : saving ? "GUARDANDO..." : "GUARDAR EXAMEN"}
-              </button>
+              <div className="rounded-2xl border border-[#6fc11f]/30 bg-[#6fc11f]/10 px-5 py-4 text-center font-black text-[#6fc11f]">
+                EVALUACION GUARDADA
+              </div>
 
               <button
                 onClick={generateAIAnalysis}
@@ -584,7 +415,7 @@ function handleVideoEnded() {
           <h3 className="text-xl font-black">Detalle del examen</h3>
 
           <div className="mt-6 space-y-3">
-            {answers.map((a, i) => (
+            {completedAttempts.map((a, i) => (
               <div
                 key={`${a.clipId}-${i}`}
                 className="rounded-2xl border border-white/10 bg-black/30 p-4"
@@ -598,18 +429,6 @@ function handleVideoEnded() {
                     <p className="mt-1 text-xs text-zinc-500">
                       {a.topic} - {translateDifficulty(a.difficulty)}
                     </p>
-
-                    {a.offsideReason && (
-                      <p className="mt-1 text-xs text-[#6fc11f]">
-                        Motivo FDJ: {labelFromValue(a.offsideReason)}
-                      </p>
-                    )}
-
-                    {a.handballReason && (
-                      <p className="mt-1 text-xs text-[#6fc11f]">
-                        Tipo de mano: {labelFromValue(a.handballReason)}
-                      </p>
-                    )}
                   </div>
 
                   <p
@@ -680,7 +499,7 @@ function handleVideoEnded() {
           <div className="relative overflow-hidden rounded-2xl bg-black">
   <video
     className="aspect-video w-full max-w-full bg-black object-contain"
-    src={currentClip.video_url}
+    src={currentClip.videoUrl}
     controls={!videoLocked}
     onPlay={handleVideoPlay}
     onEnded={handleVideoEnded}
@@ -843,13 +662,21 @@ function handleVideoEnded() {
               </div>
             </DecisionBlock>
 
+            {submitError && (
+              <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm font-bold text-red-100">
+                {submitError}
+              </p>
+            )}
+
             <button
-              disabled={!canSubmit}
-              onClick={submitAnswer}
+              disabled={!canSubmit || saving}
+              onClick={() => void submitAnswer()}
               className="min-h-14 w-full rounded-xl bg-[#6fc11f] px-5 py-4 font-black text-black transition hover:bg-[#82dc2a] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {index === clips.length - 1
-                ? "FINALIZAR EXAMEN"
+              {saving
+                ? "GUARDANDO EVALUACION..."
+                : index === clips.length - 1
+                  ? submitError ? "REINTENTAR ENTREGA" : "FINALIZAR Y GUARDAR"
                 : "SIGUIENTE PREGUNTA"}
             </button>
           </div>
@@ -900,10 +727,10 @@ function labelFromValue(value?: string | null) {
   return dictionary[value] ?? value;
 }
 
-function decisionLabel(value: boolean | null) {
-  if (value === true) return "Infraccion";
-  if (value === false) return "No infraccion";
-  return "Sin respuesta";
+function publicApiMessage(payload: unknown) {
+  if (!payload || typeof payload !== "object") return "No se pudo completar la evaluacion.";
+  const message = (payload as { message?: unknown }).message;
+  return typeof message === "string" && message.trim() ? message : "No se pudo completar la evaluacion.";
 }
 
 function InfoBox({ title, value }: { title: string; value: string }) {

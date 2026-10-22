@@ -34,19 +34,33 @@ export function getEmailConfig() {
   };
 }
 
-export async function sendTransactionalEmail(input: SendEmailInput): Promise<EmailResult> {
+type EmailOptions = {
+  diagnostics?: "controlled";
+};
+
+function controlledEmailFailure(): EmailResult {
+  // Discard dependency diagnostics before they can reach a response or log.
+  return { ok: false, error: "No se pudo enviar el email." };
+}
+
+export async function sendTransactionalEmail(
+  input: SendEmailInput,
+  options: EmailOptions = {}
+): Promise<EmailResult> {
   const config = getEmailConfig();
+  const controlledDiagnostics = options.diagnostics === "controlled";
 
   if (config.emailProvider === "smtp") {
-    return sendSmtpEmail(input, config);
+    return sendSmtpEmail(input, config, controlledDiagnostics);
   }
 
-  return sendResendEmail(input, config);
+  return sendResendEmail(input, config, controlledDiagnostics);
 }
 
 async function sendSmtpEmail(
   input: SendEmailInput,
-  config: ReturnType<typeof getEmailConfig>
+  config: ReturnType<typeof getEmailConfig>,
+  controlledDiagnostics: boolean
 ): Promise<EmailResult> {
   const { smtpHost, smtpPort, smtpUser, smtpPassword, smtpFromEmail } = config;
 
@@ -79,6 +93,8 @@ async function sendSmtpEmail(
 
     return { ok: true, id: result.messageId };
   } catch (error) {
+    if (controlledDiagnostics) return controlledEmailFailure();
+
     console.error("SMTP emailError", {
       to: input.to,
       subject: input.subject,
@@ -98,7 +114,8 @@ async function sendSmtpEmail(
 
 async function sendResendEmail(
   input: SendEmailInput,
-  config: ReturnType<typeof getEmailConfig>
+  config: ReturnType<typeof getEmailConfig>,
+  controlledDiagnostics: boolean
 ): Promise<EmailResult> {
   const { resendApiKey, resendFromEmail } = config;
 
@@ -130,6 +147,8 @@ async function sendResendEmail(
       | null;
 
     if (!response.ok) {
+      if (controlledDiagnostics) return controlledEmailFailure();
+
       console.error("Resend emailError", {
         status: response.status,
         to: input.to,
@@ -148,6 +167,8 @@ async function sendResendEmail(
 
     return { ok: true, id: data?.id };
   } catch (error) {
+    if (controlledDiagnostics) return controlledEmailFailure();
+
     console.error("Resend emailError", {
       to: input.to,
       subject: input.subject,

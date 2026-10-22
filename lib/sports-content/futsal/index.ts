@@ -1,7 +1,7 @@
 import {
   defineTopic,
   type SportContentDefinition,
-} from "@/lib/sports-content/types";
+} from "../types.ts";
 
 export const futsalContent = {
   key: "futsal",

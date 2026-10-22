@@ -3,9 +3,9 @@ import {
   institutionalErrorResponse,
   institutionalJson,
   nullableText,
+  parseContentInput,
 } from "@/lib/institutional/http";
 import { requireInstitutionUserId } from "@/lib/institutional/server";
-import { parseContentInput } from "@/app/api/institution/contents/route";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

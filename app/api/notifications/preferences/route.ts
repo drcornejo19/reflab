@@ -1,6 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
+import { requireCanonicalRequestIdentity } from "@/lib/identity/canonicalRequestIdentity";
 import {
   getUserNotificationPreferences,
   upsertUserNotificationPreferences,
@@ -10,16 +9,14 @@ import { normalizeNotificationPreferences } from "@/lib/notifications";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await auth();
-  const userId = session.userId;
-
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const identity = await requireCanonicalRequestIdentity();
+  if (identity.response) return identity.response;
 
   try {
-    const supabase = createSupabaseAdminClient();
-    const preferences = await getUserNotificationPreferences(supabase, userId);
+    const preferences = await getUserNotificationPreferences(
+      identity.supabase,
+      identity.canonicalUserId
+    );
 
     return NextResponse.json({ preferences });
   } catch (error) {
@@ -34,20 +31,15 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const session = await auth();
-  const userId = session.userId;
-
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const identity = await requireCanonicalRequestIdentity();
+  if (identity.response) return identity.response;
 
   try {
     const body = await request.json();
     const preferences = normalizeNotificationPreferences(body?.preferences ?? body);
-    const supabase = createSupabaseAdminClient();
     const saved = await upsertUserNotificationPreferences(
-      supabase,
-      userId,
+      identity.supabase,
+      identity.canonicalUserId,
       preferences
     );
 

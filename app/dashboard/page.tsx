@@ -8,46 +8,25 @@ import { useDiscipline } from "@/components/DisciplineProvider";
 import { PageShellFallback } from "@/components/PageShellFallback";
 import { ProUpgradeCard } from "@/components/ProUpgradeCard";
 import { SportRadarGraphic } from "@/components/SportRadarGraphic";
-import { useSupabase } from "@/components/SupabaseProvider";
 import { getDisciplineAction, getDisciplineDefinition } from "@/lib/discipline";
 import {
-  buildSportPerformanceDataset,
-  getSportCriterionPerformance,
-  getSportPerformanceSummary,
   getSportRecommendedPlan,
-  getSportRadarData,
-  getSportTopicPerformance,
   type RadarMetric,
   type SportCriterionMetric,
+  type SportPerformanceSummary,
 } from "@/lib/performanceBySport";
+import {
+  buildCanonicalPerformanceSummary,
+  type CanonicalPerformanceSummaryModel,
+} from "@/lib/performance/canonicalSummaryModel";
 import {
   formatPercent,
   formatScore,
-  type AttemptRecord,
-  type ExamResultRecord,
-  type PerformanceClipRecord,
-  type RulesExamResultRecord,
 } from "@/lib/performance";
 import { getFreemiumUsage } from "@/lib/subscription";
 import { useUserRole } from "@/lib/useUserRole";
 
 export const dynamic = "force-dynamic";
-
-type DashboardData = {
-  attempts: AttemptRecord[];
-  examResults: ExamResultRecord[];
-  rulesResults: RulesExamResultRecord[];
-  clips: DashboardClip[];
-};
-
-type DashboardClip = PerformanceClipRecord;
-
-const emptyData: DashboardData = {
-  attempts: [],
-  examResults: [],
-  rulesResults: [],
-  clips: [],
-};
 
 export default function DashboardPage() {
   return (
@@ -58,12 +37,14 @@ export default function DashboardPage() {
 }
 
 function DashboardPageContent() {
-  const supabase = useSupabase();
   const { user, isLoaded } = useUser();
   const { currentDiscipline: sportType } = useDiscipline();
   const { isPro, loadingRole } = useUserRole();
   const theme = getDisciplineDefinition(sportType).theme;
-  const [data, setData] = useState<DashboardData>(emptyData);
+  const [data, setData] = useState<CanonicalPerformanceSummaryModel | null>(
+    null
+  );
+  const [weeklyTrainingUsed, setWeeklyTrainingUsed] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -72,7 +53,8 @@ function DashboardPageContent() {
       if (!isLoaded) return;
 
       if (!user) {
-        setData(emptyData);
+        setData(null);
+        setWeeklyTrainingUsed(0);
         setLoading(false);
         return;
       }
@@ -80,83 +62,73 @@ function DashboardPageContent() {
       setLoading(true);
       setLoadError(null);
 
-      const [attemptsRes, examsRes, rulesRes, clipsRes] = await Promise.all([
-        supabase
-          .from("attempts")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("exam_results")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("rules_exam_results")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("clips")
-          .select("*"),
-      ]);
+      try {
+        const [performanceResponse, usageResponse] = await Promise.all([
+          fetch(
+            `/api/performance/summary?sportType=${encodeURIComponent(sportType)}`,
+            { cache: "no-store" }
+          ),
+          fetch(
+            `/api/training/usage?sportType=${encodeURIComponent(sportType)}`,
+            { cache: "no-store" }
+          ).catch(() => null),
+        ]);
 
-      if (attemptsRes.error || examsRes.error || clipsRes.error) {
-        setLoadError(
-          "No se pudieron cargar todas las metricas. El dashboard no inventa datos."
-        );
+        if (!performanceResponse.ok) {
+          const payload = (await performanceResponse
+            .json()
+            .catch(() => null)) as { error?: string } | null;
+          setLoadError(
+            payload?.error === "identity_link_required"
+              ? "Tu identidad debe estar vinculada antes de consultar rendimiento."
+              : "No se pudieron cargar las metricas oficiales."
+          );
+          setData(null);
+          return;
+        }
+
+        const payload = (await performanceResponse.json()) as {
+          performance?: CanonicalPerformanceSummaryModel;
+        };
+        setData(payload.performance ?? null);
+
+        if (usageResponse?.ok) {
+          const usagePayload = (await usageResponse.json()) as {
+            usage?: { weeklyUsed?: number };
+          };
+          setWeeklyTrainingUsed(usagePayload.usage?.weeklyUsed ?? 0);
+        } else {
+          setWeeklyTrainingUsed(0);
+        }
+      } catch {
+        setLoadError("No se pudieron cargar las metricas oficiales.");
+        setData(null);
+      } finally {
+        setLoading(false);
       }
-
-      if (rulesRes.error) {
-        console.warn("Rules exam metrics unavailable:", rulesRes.error.message);
-      }
-
-      setData({
-        attempts: (attemptsRes.data ?? []) as AttemptRecord[],
-        examResults: (examsRes.data ?? []) as ExamResultRecord[],
-        rulesResults: rulesRes.error
-          ? []
-          : ((rulesRes.data ?? []) as RulesExamResultRecord[]),
-        clips: clipsRes.error ? [] : ((clipsRes.data ?? []) as DashboardClip[]),
-      });
-
-      setLoading(false);
     }
 
-    loadData();
-  }, [isLoaded, supabase, user]);
+    void loadData();
+  }, [isLoaded, sportType, user]);
 
-  const dataset = useMemo(
+  const emptyData = useMemo(
     () =>
-      buildSportPerformanceDataset({
-        attempts: data.attempts,
-        examResults: data.examResults,
-        rulesExamResults: data.rulesResults,
-        clips: data.clips,
+      buildCanonicalPerformanceSummary({
+        attempts: [],
+        examResults: [],
         sportType,
+        canonicalUserId: null,
       }),
-    [data.attempts, data.examResults, data.rulesResults, data.clips, sportType]
+    [sportType]
   );
-
-  const summary = useMemo(
-    () => getSportPerformanceSummary(dataset.items, dataset.sessions, sportType),
-    [dataset.items, dataset.sessions, sportType]
-  );
+  const performance = data?.sportType === sportType ? data : emptyData;
+  const summary = performance.summary;
   const technicalSummary = summary;
-  const topicMetrics = useMemo(
-    () => getSportTopicPerformance(dataset.items, sportType),
-    [dataset.items, sportType]
-  );
+  const topicMetrics = performance.topics;
   const topics = useMemo(() => topicMetrics.slice(0, 5), [topicMetrics]);
-  const radarAxes = useMemo(
-    () => getSportRadarData(dataset.items, sportType),
-    [dataset.items, sportType]
-  );
+  const radarAxes = performance.radarAxes;
   const playerTopicHasData = radarAxes.some((axis) => axis.accuracy !== null);
-  const criteria = useMemo(
-    () => getSportCriterionPerformance(dataset.items, sportType),
-    [dataset.items, sportType]
-  );
+  const criteria = performance.criteria;
   const plan = useMemo(
     () => getSportRecommendedPlan(technicalSummary, sportType),
     [technicalSummary, sportType]
@@ -164,11 +136,13 @@ function DashboardPageContent() {
   const freemiumUsage = useMemo(
     () =>
       getFreemiumUsage({
-        attempts: data.attempts,
-        examResults: data.examResults,
-        rulesResults: data.rulesResults,
+        attempts: Array.from({ length: weeklyTrainingUsed }, () => ({
+          created_at: new Date().toISOString(),
+        })),
+        examResults: performance.examResults,
+        rulesResults: [],
       }),
-    [data.attempts, data.examResults, data.rulesResults]
+    [performance.examResults, weeklyTrainingUsed]
   );
 
   if (!isLoaded || loading || loadingRole) {
@@ -388,7 +362,7 @@ function FreeDashboardSummary({
   summary,
   usage,
 }: {
-  summary: ReturnType<typeof getSportPerformanceSummary>;
+  summary: SportPerformanceSummary;
   usage: ReturnType<typeof getFreemiumUsage>;
 }) {
   return (

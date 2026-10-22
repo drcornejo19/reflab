@@ -4,6 +4,12 @@ import path from "node:path";
 import process from "node:process";
 
 const allowedTrackedEnvironmentFiles = new Set([".env.example"]);
+const legacySupabaseServiceRoleKeyName = [
+  "SUPABASE",
+  "SERVICE",
+  "ROLE",
+  "KEY",
+].join("_");
 const detectors = [
   {
     name: "JWT",
@@ -26,8 +32,10 @@ const detectors = [
   },
   {
     name: "Server secret assignment",
-    pattern:
-      /(?:^|\n)\s*(?:SUPABASE_SERVICE_ROLE_KEY|CLERK_SECRET_KEY)\s*=\s*([^\s#]+)/g,
+    pattern: new RegExp(
+      `(?:^|\\n)\\s*(?:SUPABASE_SECRET_KEY|${legacySupabaseServiceRoleKeyName}|CLERK_SECRET_KEY)\\s*=\\s*([^\\s#]+)`,
+      "g"
+    ),
     validate: (match) => !isPlaceholder(match[1]),
   },
 ];

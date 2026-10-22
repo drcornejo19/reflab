@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import {
   sendInstitutionalLeadEmails,
   type InstitutionalLeadEmailData,
@@ -7,6 +7,12 @@ import {
 import { activeInstitutionTypes, type InstitutionType } from "@/lib/institutionalExperience";
 
 export const dynamic = "force-dynamic";
+
+const publicErrors = {
+  insert: "No se pudo guardar la solicitud institucional en Supabase.",
+  email: "La solicitud se guardo, pero hubo un problema enviando emails.",
+  unexpected: "No se pudo procesar la solicitud institucional.",
+} as const;
 
 type LeadPayload = {
   fullName?: string;
@@ -50,26 +56,6 @@ function cleanInstitutionType(value: unknown): InstitutionType | null {
     : null;
 }
 
-function createLeadWriteClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error(
-      "Faltan NEXT_PUBLIC_SUPABASE_URL y la clave publica de Supabase."
-    );
-  }
-
-  return createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
-}
-
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as LeadPayload;
@@ -111,7 +97,7 @@ export async function POST(request: Request) {
       createdAt,
     };
 
-    const supabase = createLeadWriteClient();
+    const supabase = createSupabaseAdminClient();
     const { error } = await supabase.from("institutional_leads").insert({
       full_name: lead.fullName,
       role: lead.role,
@@ -134,30 +120,20 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          error: "No se pudo guardar la solicitud institucional en Supabase.",
-          technical: error.message,
+          error: publicErrors.insert,
         },
         { status: 500 }
       );
     }
 
     const emailResults = await sendInstitutionalLeadEmails(lead);
-    const failedEmailResults = [
-      { type: "internal", result: emailResults.internal },
-      { type: "confirmation", result: emailResults.confirmation },
-    ].filter(({ result }) => !result.ok);
-    const emailErrors = failedEmailResults
-      .map(({ type, result }) => `${type}: ${result.error}`)
-      .filter(Boolean);
+    const emailFailed = !emailResults.internal.ok || !emailResults.confirmation.ok;
 
-    if (failedEmailResults.length > 0) {
+    if (emailFailed) {
       console.error("Institutional lead emailError", {
-        lead: {
-          email: lead.email,
-          fullName: lead.fullName,
-          institutionName: lead.institutionName,
-        },
-        failures: failedEmailResults,
+        operation: "institutional_lead_submission",
+        stage: "email",
+        code: "EMAIL_DELIVERY_FAILED",
       });
     }
 
@@ -165,19 +141,13 @@ export async function POST(request: Request) {
       success: true,
       message:
         "Solicitud recibida. Te enviamos una confirmacion por email y nos pondremos en contacto para coordinar una demo institucional.",
-      warning:
-        emailErrors.length > 0
-          ? `La solicitud se guardo, pero hubo un problema enviando emails: ${emailErrors.join(
-              " | "
-            )}`
-          : null,
+      warning: emailFailed ? publicErrors.email : null,
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         success: false,
-        error: "No se pudo procesar la solicitud institucional.",
-        technical: error instanceof Error ? error.message : "Error desconocido",
+        error: publicErrors.unexpected,
       },
       { status: 500 }
     );

@@ -17,7 +17,8 @@ type ClipRow = Record<string, unknown> & { id: string };
 export async function loadCoachClipEvidence(
   supabase: SupabaseAdminClient,
   clipIds: string[],
-  sportType: SportType
+  sportType: SportType,
+  options: { requirePublishedActive?: boolean } = {}
 ): Promise<CoachEvidence[]> {
   const uniqueIds = [...new Set(clipIds.map((id) => id.trim()).filter(Boolean))].slice(
     0,
@@ -25,11 +26,15 @@ export async function loadCoachClipEvidence(
   );
   if (uniqueIds.length === 0) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("clips")
     .select("*")
     .in("id", uniqueIds)
     .eq("sport_type", sportType);
+  if (options.requirePublishedActive) {
+    query = query.eq("is_active", true).eq("status", "published");
+  }
+  const { data, error } = await query;
 
   if (error) {
     throw new CoachSetupError(`Coach evidence query failed: ${error.message}`);
